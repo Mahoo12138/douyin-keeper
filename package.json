@@ -1,0 +1,19 @@
+{
+  "name": "douyin-keeper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Douyin Keeper Next (抖音火花助手) — multi-account Douyin spark-maintenance tool",
+  "packageManager": "pnpm@10.22.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @douyin-keeper/web dev",
+    "dev:admin": "pnpm --filter @douyin-keeper/admin dev",
+    "build:web": "pnpm --filter @douyin-keeper/web build",
+    "build:admin": "pnpm --filter @douyin-keeper/admin build",
+    "build:spa": "pnpm build:web && pnpm build:admin",
+    "typecheck": "pnpm -r typecheck",
+    "contracts:check": "node packages/contracts/validate.mjs"
+  }
+}

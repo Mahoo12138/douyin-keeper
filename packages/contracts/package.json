@@ -1,0 +1,15 @@
+{
+  "name": "@douyin-keeper/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "node validate.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "yaml": "^2.6.1",
+    "typescript": "^5.8.3"
+  }
+}

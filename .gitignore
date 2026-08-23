@@ -1,0 +1,40 @@
+# Node / pnpm
+node_modules/
+dist/
+.output/
+*.tsbuildinfo
+.pnpm-store/
+
+# Turbo
+.turbo/
+
+# Go
+backend/bin/
+*.test
+*.exe
+
+# env — never commit real secrets
+.env
+.env.local
+.env.development.local
+
+# WeChat mini
+apps/mini/miniprogram_npm/
+apps/mini/.tem/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# CodeGraph index (local tooling artifact)
+.codegraph/
+
+# Playwright sidecar
+sidecars/playwright/.venv/
+sidecars/playwright/__pycache__/
+sidecars/protocol/node_modules/
+
+# Session scratch (never commit)
+*.storage_state.json

@@ -1,0 +1,40 @@
+{
+  "name": "@douyin-keeper/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev --port 5173",
+    "build": "vite build",
+    "preview": "vite preview",
+    "gen": "tsr generate",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@douyin-keeper/sdk-ts": "workspace:*",
+    "@douyin-keeper/ui-web": "workspace:*",
+    "@tanstack/react-query": "^5.66.0",
+    "@tanstack/react-router": "^1.120.0",
+    "lucide-react": "^0.484.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "react-hook-form": "^7.55.0",
+    "sonner": "^2.0.7",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@tailwindcss/vite": "^4.2.1",
+    "@tanstack/router-cli": "^1.120.0",
+    "@tanstack/router-plugin": "^1.120.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.1.4",
+    "tailwindcss": "^4.2.1",
+    "tw-animate-css": "^1.2.4",
+    "typescript": "^5.8.3",
+    "vite": "^7.3.1",
+    "vite-tsconfig-paths": "^5.1.4"
+  }
+}

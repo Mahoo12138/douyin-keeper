@@ -1,0 +1,99 @@
+// Package send owns the SendIntent / SendJob state machines (docs/15 §4–§7).
+// Scheduling and dispatch both dedupe; success requires verifiable platform
+// evidence — this package never invents "success".
+package send
+
+import (
+	"context"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type IntentType string
+
+const (
+	IntentScheduled IntentType = "scheduled"
+	IntentManual    IntentType = "manual"
+)
+
+type IntentStatus string
+
+const (
+	IntentPending   IntentStatus = "pending"
+	IntentQueued    IntentStatus = "queued"
+	IntentRunning   IntentStatus = "running"
+	IntentRetryWait IntentStatus = "retry_wait"
+	IntentSucceeded IntentStatus = "succeeded"
+	IntentFailed    IntentStatus = "failed"
+	IntentSkipped   IntentStatus = "skipped"
+	IntentCancelled IntentStatus = "cancelled"
+)
+
+func (s IntentStatus) Terminal() bool {
+	return s == IntentSucceeded || s == IntentFailed || s == IntentSkipped || s == IntentCancelled
+}
+
+type JobStatus string
+
+const (
+	JobQueued    JobStatus = "queued"
+	JobRunning   JobStatus = "running"
+	JobSucceeded JobStatus = "succeeded"
+	JobFailed    JobStatus = "failed"
+	JobCancelled JobStatus = "cancelled"
+)
+
+type SendIntent struct {
+	ID          int64
+	PublicID    uuid.UUID
+	IntentType  IntentType
+	RequestID   *uuid.UUID
+	TaskID      *int64
+	AccountID   int64
+	FriendID    int64
+	LocalDate   *string
+	ScheduledAt time.Time
+	Status      IntentStatus
+	ErrorCode   *string
+	NextAttemptAt *time.Time
+	LastJobID   *int64
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+
+	// Joined for API responses (repo fills them).
+	AccountPublicID uuid.UUID
+	FriendPublicID  uuid.UUID
+}
+
+type SendJob struct {
+	ID                int64
+	PublicID          uuid.UUID
+	IntentID          int64
+	AccountID         int64
+	FriendID          int64
+	Attempt           int
+	SelectedAdapter   *string
+	Status            JobStatus
+	ErrorCode         *string
+	Retryable         bool
+	PlatformMessageID *string
+	WorkerID          *string
+	HeartbeatAt       *time.Time
+	LeaseExpiresAt    *time.Time
+	StartedAt         *time.Time
+	FinishedAt        *time.Time
+	CreatedAt         time.Time
+
+	AccountPublicID uuid.UUID
+}
+
+type Repository interface {
+	CreateIntent(ctx context.Context, in *SendIntent) error
+	GetIntentOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*SendIntent, error)
+	ListIntentsByUser(ctx context.Context, userID int64) ([]*SendIntent, error)
+	CreateJob(ctx context.Context, j *SendJob) error
+	GetJobOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*SendJob, error)
+	SetIntentLastJob(ctx context.Context, intentID, jobID int64) error
+	CountJobsForIntent(ctx context.Context, intentID int64) (int, error)
+}

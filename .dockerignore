@@ -1,0 +1,25 @@
+# Vendored study material — never copy into build context (large).
+reference/
+
+# Node
+node_modules/
+**/node_modules/
+**/dist/
+.output/
+
+# Go
+backend/bin/
+
+# env / scratch
+.env
+**/.env
+*.storage_state.json
+sidecars/playwright/.venv/
+sidecars/playwright/__pycache__/
+
+# VCS / editor
+.git
+.gitignore
+.idea/
+.vscode/
+.claude/
