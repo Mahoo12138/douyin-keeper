@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # Next.js 应用
+  tinyship-next:
+    build:
+      context: .
+      dockerfile: apps/next-app/Dockerfile
+      args:
+        # Optional: Pass build args if needed (for CI/CD)
+        - NEXT_PUBLIC_TURNSTILE_SITE_KEY=${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
+        - NEXT_PUBLIC_WECHAT_APP_ID=${NEXT_PUBLIC_WECHAT_APP_ID:-}
+    image: tinyship-next
+    container_name: tinyship-next
+    ports:
+      - "7001:7001"
+    env_file:
+      - .env
+    restart: unless-stopped
+    profiles:
+      - next
+
+  # Nuxt.js 应用
+  tinyship-nuxt:
+    build:
+      context: .
+      dockerfile: apps/nuxt-app/Dockerfile
+      args:
+        # Optional: Pass build args if needed (for CI/CD)
+        - NEXT_PUBLIC_TURNSTILE_SITE_KEY=${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
+        - NEXT_PUBLIC_WECHAT_APP_ID=${NEXT_PUBLIC_WECHAT_APP_ID:-}
+    image: tinyship-nuxt
+    container_name: tinyship-nuxt
+    ports:
+      - "7001:7001"
+    env_file:
+      - .env
+    restart: unless-stopped
+    profiles:
+      - nuxt
+
+  # TanStack Start app
+  tinyship-tanstack:
+    build:
+      context: .
+      dockerfile: apps/tanstack-app/Dockerfile
+    image: tinyship-tanstack
+    container_name: tinyship-tanstack
+    ports:
+      - "7001:7001"
+    env_file:
+      - .env
+    restart: unless-stopped
+    profiles:
+      - tanstack
+
+# Usage:
+# Start Next.js:    docker-compose --profile next up -d
+# Start Nuxt.js:    docker-compose --profile nuxt up -d
+# Start TanStack:   docker-compose --profile tanstack up -d
+# Stop:             docker-compose down
+# Logs:             docker-compose logs -f
+# Rebuild:          docker-compose --profile next up -d --build 

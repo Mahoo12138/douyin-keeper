@@ -1,0 +1,64 @@
+---
+description: Project Structure Guidelines
+globs: 
+alwaysApply: false
+---
+shipeasy/
+├── apps/                       # Application directory
+│   ├── next-app/              # Next.js application (React, App Router)
+│   │   ├── app/               # App router directory
+│   │   │   ├── api/          # API routes (thin adapters to core logic)
+│   │   │   ├── auth/         # Authentication endpoints with Better-Auth
+│   │   │   ├── dashboard/    # User dashboard pages
+│   │   │   └── admin/        # Admin interface pages
+│   │   ├── components/        # Next-specific React components
+│   │   ├── lib/              # Utility functions and configurations
+│   │   └── public/           # Static assets
+│   ├── nuxt-app/              # Nuxt.js application (Vue)
+│   │   ├── components/        # Vue components
+│   │   ├── pages/            # Pages directory
+│   │   ├── server/           # Server APIs
+│   │   │   ├── api/         # API endpoints
+│   │   │   ├── auth/        # Auth endpoints
+│   │   │   ├── routes/      # Server routes
+│   │   │   └── middleware/  # Server middleware
+│   │   └── public/          # Static assets
+│   ├── tanstack-app/          # TanStack Start application (React, TanStack Router, Vite)
+│   │   ├── src/
+│   │   │   ├── routes/       # File-based routes ($lang param for i18n)
+│   │   │   │   ├── api/     # API routes (server handlers)
+│   │   │   │   └── $lang/   # Localized page routes
+│   │   │   ├── lib/         # Auth guards, utilities
+│   │   │   └── styles/      # CSS and Tailwind styles
+│   │   ├── app.config.ts     # TanStack Start app config
+│   │   └── vite.config.ts    # Vite configuration
+│   └── docs/                  # Documentation site
+├── libs/                      # Libraries directory
+│   ├── database/             # Database related code
+│   │   ├── migrations/      # Database migrations
+│   │   └── schema/         # Database schema definitions
+│   ├── auth/                 # Authentication library
+│   ├── email/                # Email service library
+│   ├── i18n/                 # Internationalization
+│   ├── permissions/          # Permission management
+│   ├── react-shared/         # Shared React components & hooks (Next + TanStack)
+│   │   ├── components/      # UI components, layouts
+│   │   ├── hooks/           # Shared React hooks
+│   │   └── ui/              # shadcn/ui components
+│   ├── sms/                  # SMS service
+│   ├── storage/              # Storage abstraction (S3/OSS/R2)
+│   ├── ui/                   # Framework-agnostic UI utilities
+│   └── validators/           # Data validation library
+├── docs/                      # Project documentation
+│   ├── arch.md              # Architecture documentation
+│   ├── database-schema.md   # Database schema documentation
+│   └── framework-setup.md   # Framework setup guide
+├── tests/                     # Test directory
+│   ├── e2e/                 # End-to-end tests
+│   └── unit/                # Unit tests
+├── public/                    # Public assets
+├── package.json              # Root package configuration
+├── pnpm-workspace.yaml       # PNPM workspace configuration
+├── tsconfig.json            # TypeScript configuration
+├── drizzle.config.ts        # Drizzle ORM configuration
+└── turbo.json               # Turborepo configuration

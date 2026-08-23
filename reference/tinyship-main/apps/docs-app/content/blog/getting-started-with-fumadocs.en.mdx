@@ -1,0 +1,50 @@
+---
+title: Getting Started with Fumadocs
+description: A quick guide to understanding how we built our documentation with Fumadocs.
+author: TinyShip Team
+authorRole: Engineering
+date: 2024-12-15
+category: Tutorial
+---
+
+## Introduction
+
+[Fumadocs](https://fumadocs.dev) is a powerful documentation framework for Next.js. In this post, we'll share our experience setting up and customizing Fumadocs for our project.
+
+### Why Fumadocs?
+
+We chose Fumadocs for several reasons:
+
+1. **Built for Next.js**: Native integration with the App Router
+2. **MDX Support**: Write documentation with React components
+3. **Internationalization**: Built-in i18n support for multiple languages
+4. **Search**: Integrated search functionality out of the box
+5. **Theming**: Customizable UI that matches our brand
+
+### Key Features We Use
+
+#### MDX Content
+
+Fumadocs uses MDX, which allows us to embed React components directly in our documentation:
+
+```tsx
+import { Callout } from 'fumadocs-ui/components/callout';
+
+<Callout title="Note">
+  This is an important callout!
+</Callout>
+```
+
+#### Internationalization
+
+Our documentation supports both English and Chinese, making it accessible to a wider audience.
+
+#### Static Export
+
+We can generate a fully static site, perfect for hosting on any CDN.
+
+### Conclusion
+
+Fumadocs has been an excellent choice for our documentation needs. Its flexibility and feature set make it ideal for projects of any size.
+
+If you're looking to build documentation for your Next.js project, we highly recommend giving Fumadocs a try!

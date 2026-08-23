@@ -1,0 +1,88 @@
+---
+title: API Reference
+description: Complete API documentation and reference
+---
+
+# API Reference
+
+This section provides comprehensive documentation for all available APIs.
+
+## Authentication
+
+All API endpoints require authentication using Bearer tokens.
+
+```typescript
+const response = await fetch('/api/endpoint', {
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  },
+});
+```
+
+## Endpoints
+
+### GET /api/users
+
+Retrieve a list of users.
+
+**Response**
+
+```json
+{
+  "data": [
+    {
+      "id": "1",
+      "name": "John Doe",
+      "email": "john@example.com"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 100
+  }
+}
+```
+
+### POST /api/users
+
+Create a new user.
+
+**Request Body**
+
+```json
+{
+  "name": "Jane Doe",
+  "email": "jane@example.com"
+}
+```
+
+**Response**
+
+```json
+{
+  "id": "2",
+  "name": "Jane Doe",
+  "email": "jane@example.com",
+  "createdAt": "2024-01-01T00:00:00Z"
+}
+```
+
+## Error Handling
+
+All API errors follow a consistent format:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid request parameters",
+    "details": []
+  }
+}
+```
+
+## Rate Limiting
+
+API requests are limited to 100 requests per minute per user.

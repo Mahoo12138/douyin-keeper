@@ -1,0 +1,503 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Internationalization (i18n) Guidelines
+
+## File Structure
+
+```
+libs/i18n/
+├── locales/
+│   ├── types.ts       # Simplified type definitions (auto-inferred from en.ts)
+│   ├── en.ts          # English translations (source of truth for types)
+│   ├── zh-CN.ts       # Chinese translations
+│   └── index.ts       # Exports all translations
+└── index.ts           # Main i18n configuration
+```
+
+## Framework-Specific Implementation
+
+This monorepo supports internationalization in **Next.js**, **Nuxt.js**, and **TanStack Start** applications, sharing the same translation data from `@libs/i18n`.
+
+### 🟢 Nuxt.js Implementation (@nuxtjs/i18n)
+
+For Nuxt.js applications, we use the `@nuxtjs/i18n` module which provides automatic route generation, built-in language detection, and seamless integration.
+
+#### Configuration Setup
+
+```typescript
+// nuxt.config.ts
+export default defineNuxtConfig({
+  modules: ['@nuxtjs/i18n'],
+  
+  i18n: {
+    locales: [
+      { code: 'en', name: 'English' },
+      { code: 'zh-CN', name: '简体中文' }
+    ],
+    defaultLocale: 'zh-CN',
+    strategy: 'prefix',  // All languages show prefix
+    
+    detectBrowserLanguage: {
+      useCookie: true,
+      cookieKey: 'NEXT_LOCALE',  // Compatible with Next.js
+      redirectOn: 'root',
+      alwaysRedirect: true,
+      fallbackLocale: 'zh-CN'
+    },
+    
+    vueI18n: './i18n.config.ts'
+  }
+})
+```
+
+```typescript
+// i18n.config.ts - Integration with libs/i18n
+import { translations } from '@libs/i18n'
+
+export default defineI18nConfig(() => ({
+  messages: translations,  // Use shared translation data
+  legacy: false,           // Vue 3 Composition API mode
+  fallbackLocale: 'zh-CN'
+}))
+```
+
+#### Usage in Vue Components
+
+```vue
+<template>
+  <div>
+    <!-- Direct template usage -->
+    <h1>{{ $t('common.welcome') }}</h1>
+    <p>{{ $t('navigation.home') }}</p>
+    
+    <!-- Language switching with NuxtLink -->
+    <NuxtLink :to="switchLocalePath('en')">English</NuxtLink>
+    <NuxtLink :to="switchLocalePath('zh-CN')">中文</NuxtLink>
+    
+    <!-- Localized internal routing -->
+    <NuxtLink :to="localePath('/dashboard')">
+      {{ $t('navigation.dashboard') }}
+    </NuxtLink>
+    
+    <!-- Current language info -->
+    <div class="debug-info">
+      <p>Current: {{ locale }}</p>
+      <p>Available: {{ locales.map(l => l.code).join(', ') }}</p>
+    </div>
+  </div>
+</template>
+
+<script setup>
+// Use @nuxtjs/i18n built-in composables
+const { t, locale, locales } = useI18n()
+const switchLocalePath = useSwitchLocalePath()
+const localePath = useLocalePath()
+
+// Reactive translations with computed
+const pageTitle = computed(() => t('page.title'))
+const buttonText = computed(() => t('common.buttons.submit'))
+
+// Programmatic language switching
+const changeLanguage = async (newLocale) => {
+  await navigateTo(switchLocalePath(newLocale))
+}
+</script>
+```
+
+#### Key Features & URL Structure
+
+- **URL Routes**: `/dashboard` (en), `/zh-CN/dashboard` (zh-CN)
+- **Auto Detection**: Browser language, cookie, header-based
+- **SEO Ready**: Automatic hreflang, meta tags, sitemap
+- **Cookie Compatible**: Uses `NEXT_LOCALE` key for Next.js compatibility
+- **Type Safe**: Full TypeScript support with translation key auto-completion
+
+#### Best Practices for Nuxt.js
+
+```vue
+<template>
+  <div>
+    <!-- ✅ Recommended: Direct $t usage in templates -->
+    <h1>{{ $t('page.title') }}</h1>
+    
+    <!-- ✅ Recommended: Computed properties for complex translations -->
+    <p>{{ pageDescription }}</p>
+    
+    <!-- ✅ Recommended: Use switchLocalePath for language switching -->
+    <button @click="changeLanguage('en')">English</button>
+    
+    <!-- ❌ Avoid: Calling t() function directly in templates -->
+    <span>{{ t('common.loading') }}</span>
+  </div>
+</template>
+
+<script setup>
+const { t } = useI18n()
+const switchLocalePath = useSwitchLocalePath()
+
+// ✅ Use computed for caching translations
+const pageDescription = computed(() => t('page.description'))
+
+// ✅ Use proper navigation methods
+const changeLanguage = async (locale) => {
+  await navigateTo(switchLocalePath(locale))
+}
+</script>
+```
+
+### 🔵 Next.js Implementation (Manual)
+
+For Next.js applications, we use a manual implementation based on file-system routing and custom middleware.
+
+## Implementation Methods
+
+Next.js supports two different implementation methods for internationalization, depending on whether your component is a **Server Component** or **Client Component**.
+
+### 🚀 Server Components (Recommended for Server-Side Rendering)
+
+For Server Components (default in Next.js App Router), directly import and use the translations object:
+
+```typescript
+// Server Component Example
+import { translations } from "@libs/i18n";
+
+export default async function ServerComponent({ params }: { params: { lang: string } }) {
+  // Extract language from URL params
+  const { lang } = await params;
+  
+  // Get translations for the current language
+  const t = translations[lang as keyof typeof translations];
+
+  // Fetch server-side data if needed
+  const data = await fetchSomeData();
+
+  return (
+    <div>
+      <h1>{t.admin.dashboard.title}</h1>
+      <p>{t.admin.dashboard.description}</p>
+      
+      {/* Use locale for date formatting */}
+      <time>
+        {t.admin.dashboard.lastUpdated}: {new Date().toLocaleString(lang === 'zh-CN' ? 'zh-CN' : 'en-US')}
+      </time>
+      
+      {/* Display server data with translations */}
+      <div>
+        <h2>{t.admin.dashboard.metrics.totalRevenue}</h2>
+        <span>¥{data.revenue}</span>
+      </div>
+    </div>
+  );
+}
+```
+
+**Key points for Server Components:**
+- Use `const { lang } = await params;` to extract language from URL
+- Import `translations` directly from `@libs/i18n`
+- Access translations with `translations[lang as keyof typeof translations]`
+- Perfect for SEO as content is rendered server-side
+- No JavaScript bundle overhead for translations
+
+### 🎯 Client Components (For Interactive Components)
+
+For Client Components that need interactivity, use the `useTranslation` hook:
+
+```typescript
+'use client';
+
+import { useTranslation } from "@/hooks/use-translation"
+
+export function ClientComponent() {
+  const { t, locale, changeLocale } = useTranslation()
+  
+  const handleSubmit = () => {
+    // Client-side logic with translations
+    alert(t.common.success)
+  }
+  
+  return (
+    <>
+      <h1>{t.newFeature.title}</h1>
+      <p>{t.newFeature.description}</p>
+      
+      {/* Interactive form with translations */}
+      <form onSubmit={handleSubmit}>
+        <label>{t.newFeature.form.labels.name}</label>
+        <input placeholder={t.newFeature.form.placeholders.name} />
+        <button type="submit">{t.newFeature.actions.submit}</button>
+      </form>
+      
+      {/* Language switcher */}
+      <button onClick={() => changeLocale('en')}>English</button>
+      <button onClick={() => changeLocale('zh-CN')}>中文</button>
+    </>
+  )
+}
+```
+
+**Key points for Client Components:**
+- Add `'use client';` directive at the top
+- Use `useTranslation()` hook for reactive translations
+- Access translations with `t.namespace.key`
+- Supports `changeLocale()` for language switching
+- Perfect for interactive features
+
+### 🔄 Hybrid Architecture (Best Practice)
+
+Combine both approaches for optimal performance:
+
+```typescript
+// Server Component (page.tsx)
+import { translations } from "@libs/i18n";
+import ClientInteractiveComponent from "./ClientComponent";
+
+export default async function HybridPage({ params }: { params: { lang: string } }) {
+  const { lang } = await params;
+  const t = translations[lang as keyof typeof translations];
+  
+  // Server-side data fetching
+  const serverData = await fetchData();
+
+  return (
+    <div>
+      {/* Server-rendered content for SEO */}
+      <h1>{t.page.title}</h1>
+      <p>{t.page.description}</p>
+      
+      {/* Static content with server translations */}
+      <section>
+        <h2>{t.page.sections.overview}</h2>
+        <p>{serverData.summary}</p>
+      </section>
+      
+      {/* Interactive client component */}
+      <ClientInteractiveComponent />
+    </div>
+  );
+}
+```
+
+```typescript
+// Client Component (ClientComponent.tsx)
+'use client';
+
+import { useTranslation } from "@/hooks/use-translation";
+
+export default function ClientInteractiveComponent() {
+  const { t } = useTranslation();
+  
+  return (
+    <div>
+      {/* Interactive features */}
+      <button>{t.actions.submit}</button>
+      <form>{/* Interactive form */}</form>
+    </div>
+  );
+}
+```
+
+## Framework Comparison
+
+| Feature | Next.js (Manual) | Nuxt.js (@nuxtjs/i18n) | TanStack Start |
+|---------|-----------------|----------------------|----------------|
+| **Setup Complexity** | High (custom middleware) | Low (module configuration) | Medium (file-based routing with `$lang` param) |
+| **Route Generation** | Manual `/[lang]/page` | Automatic `/lang/page` | Manual `/$lang/page` |
+| **Language Detection** | Custom implementation | Built-in strategies | Cookie + URL param |
+| **SEO Support** | Manual meta tags | Auto hreflang & meta | Manual meta tags |
+| **Bundle Size** | Smaller (manual) | Slightly larger (module) | Smallest (Vite-optimized) |
+| **Type Safety** | Full (direct import) | Full (@nuxtjs/i18n types) | Full (direct import) |
+| **Development DX** | More manual work | Better DX with auto-completion | Similar to Next.js client |
+| **Cookie Compatibility** | `NEXT_LOCALE` | `NEXT_LOCALE` (same) | `NEXT_LOCALE` (same) |
+| **Translation Source** | `@libs/i18n` | `@libs/i18n` (same) | `@libs/i18n` (same) |
+
+## When to Use Which Method
+
+### ✅ Use Server Components (Next.js) when:
+- Content needs to be SEO-friendly
+- Page contains mostly static content
+- You need server-side data fetching
+- Performance is critical (no client-side JS for translations)
+- Building admin dashboards, marketing pages, blog posts
+
+### ✅ Use Client Components (Next.js) when:
+- Component needs interactivity (forms, buttons, etc.)
+- You need language switching functionality
+- Component has complex state management
+- Building interactive widgets, forms, real-time features
+
+### ✅ Use @nuxtjs/i18n (Nuxt.js) when:
+- Building a full Nuxt.js application
+- Want automatic route generation and language detection
+- Need built-in SEO optimization
+- Prefer declarative configuration over manual implementation
+- Building SPA or SSG with multi-language support
+
+## Adding New Translations (Simplified Workflow)
+
+### 🎉 New Simple Process
+
+1. **Add to English translations first** (`libs/i18n/locales/en.ts`)
+   ```typescript
+   export const en = {
+     // ... existing translations ...
+     newFeature: {
+       title: "New Feature",
+       description: "This is a new feature",
+       form: {
+         labels: {
+           name: "Name",
+           email: "Email"
+         },
+         placeholders: {
+           name: "Enter your name",
+           email: "Enter your email"
+         },
+         errors: {
+           nameRequired: "Name is required",
+           emailInvalid: "Please enter a valid email"
+         }
+       },
+       actions: {
+         submit: "Submit",
+         submitting: "Submitting...",
+         cancel: "Cancel"
+       }
+     }
+   } as const;
+   ```
+
+2. **Add corresponding translations to other languages** (`libs/i18n/locales/zh-CN.ts`)
+   ```typescript
+   export const zhCN = {
+     // ... existing translations ...
+     newFeature: {
+       title: "新功能",
+       description: "这是一个新功能",
+       form: {
+         labels: {
+           name: "姓名",
+           email: "邮箱"
+         },
+         placeholders: {
+           name: "请输入您的姓名",
+           email: "请输入您的邮箱"
+         },
+         errors: {
+           nameRequired: "请输入姓名",
+           emailInvalid: "请输入有效的邮箱地址"
+         }
+       },
+       actions: {
+         submit: "提交",
+         submitting: "提交中...",
+         cancel: "取消"
+       }
+     }
+   } as const;
+   ```
+
+3. **Use in components based on framework**:
+   - **Next.js**: Follow Server/Client Component patterns above
+   - **Nuxt.js**: Use `$t('newFeature.title')` or `t('newFeature.title')`
+   - **TanStack Start**: Use `useTranslation()` hook from `@/hooks/use-translation` (same pattern as Next.js client components)
+
+### ❌ No Longer Needed
+
+- ~~Manual type definitions in `types.ts`~~
+- ~~Defining types before adding translations~~
+- ~~Complex type inference setup~~
+- ~~Repetitive type maintenance~~
+
+## Type System
+
+The new system uses TypeScript's automatic type inference:
+
+```typescript
+// types.ts - Now simplified!
+import type { en } from './en'
+
+// Types are automatically inferred from the English translations
+export type Translations = typeof en
+
+// Utility types for advanced use cases (optional)
+export type DeepKeys<T> = T extends object ? {
+  [K in keyof T]: K extends string
+    ? T[K] extends object
+      ? `${K}.${DeepKeys<T[K]>}`
+      : K
+    : never
+}[keyof T] : never
+```
+
+## Best Practices
+
+1. **Translation Organization**
+   - Group related translations under meaningful namespaces
+   - Keep nesting to a maximum of 4 levels for maintainability
+   - Use consistent naming patterns across different features
+   - English translations (`en.ts`) serve as the source of truth for structure
+
+2. **Common Patterns**
+   - Form fields: include `labels`, `placeholders`, and `errors` objects
+   - Buttons: include normal and loading states (e.g., `submit` and `submitting`)
+   - Error messages: group under `errors` object
+   - Actions: group under `actions` object
+
+3. **Reusable Translations**
+   - Put common/shared strings under `common` namespace
+   - Use action-related strings under `actions` namespace
+   - Keep form-related patterns consistent across features
+
+4. **Error Handling**
+   - Always include both required and invalid error states
+   - Use `common.unexpectedError` for unknown errors
+   - Follow the pattern: `namespace.feature.errors.errorType`
+
+5. **Loading States**
+   - Include loading state text for async actions
+   - Follow the pattern: `verb` and `verbIng` (e.g., `submit` and `submitting`)
+
+6. **Performance Considerations**
+   - **Next.js**: Prefer Server Components for static content (better SEO, no JS overhead)
+   - **Nuxt.js**: Use SSR/SSG for better initial loading, leverage auto-optimization
+   - Use Client Components/interactivity only when needed
+   - Consider hybrid architecture for complex pages
+
+## Migration Guide
+
+### From Next.js to Nuxt.js
+
+If migrating i18n usage from Next.js to Nuxt.js:
+
+```typescript
+// Next.js (Before)
+'use client';
+import { useTranslation } from "@/hooks/use-translation"
+
+const { t, locale, changeLocale } = useTranslation()
+```
+
+```vue
+<!-- Nuxt.js (After) -->
+<script setup>
+// Use @nuxtjs/i18n directly
+const { t, locale } = useI18n()
+const switchLocalePath = useSwitchLocalePath()
+
+// Language switching
+const changeLanguage = (newLocale) => {
+  navigateTo(switchLocalePath(newLocale))
+}
+</script>
+```
+
+### From Custom Implementation to @nuxtjs/i18n
+
+1. **Remove custom middleware** - @nuxtjs/i18n handles routing automatically
+2. **Update language switching** - Use `switchLocalePath` instead of manual navigation
+3. **Simplify configuration** - Move from imperative to declarative setup
+4. **Keep translation data** - Continue using `@libs/i18n` as the source of truth
+

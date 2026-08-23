@@ -1,0 +1,23 @@
+# Local-only vars for `wrangler dev`
+# Copy this file to `.dev.vars` (do not commit `.dev.vars`).
+
+# Use local Worker URL for local auth callbacks
+APP_BASE_URL=http://localhost:8788
+BETTER_AUTH_URL=http://localhost:8788
+
+# Minimal required backend variables for local startup
+DATABASE_URL=postgresql://username:password@localhost:5432/shipeasy_dev
+BETTER_AUTH_SECRET=replace-with-a-random-32-char-min-secret
+
+# Hyperdrive local connection is configured in `wrangler.jsonc` via
+# `hyperdrive[].localConnectionString`, so no extra env var is needed here.
+
+# Optional placeholders (fill only if you use these features)
+# STRIPE_SECRET_KEY=
+# OPENAI_API_KEY=
+
+# Required when testing R2 uploads through `wrangler dev`
+R2_PUBLIC_URL=https://your-r2-custom-domain.example
+
+# Enable when running affiliate E2E scenarios locally (disabled by default).
+AFFILIATE_ENABLED=true

@@ -1,0 +1,465 @@
+# Sidecar Protocol v1
+
+> Go 是控制面和唯一业务真源。Playwright / Protocol Sidecar 只实现平台 Adapter，不拥有用户、任务、数据库或调度逻辑。
+
+## 1. 传输
+
+MVP 推荐：**stdin/stdout NDJSON**。
+
+每行一条完整 JSON：
+
+```text
+Go Worker --stdin--> Sidecar
+Go Worker <--stdout-- Sidecar
+```
+
+约束：
+
+- stdout 只允许 Protocol 消息；
+- 普通日志输出 stderr；
+- 每个请求包含 `request_id`；
+- 一次启动可处理多条请求，但每条请求都必须独立完成；
+- Sidecar 不连接 PostgreSQL / Redis；
+- 不允许响应 Cookie、storage state、验证码、Authorization header 等 Secret。
+
+后续需要高并发时可迁移 Unix Domain Socket，但消息 Envelope 保持不变。
+
+## 2. Envelope
+
+### Request
+
+```json
+{
+  "protocol_version": 1,
+  "request_id": "0191b8a6-6f5f-7e42-8f57-2b4537c24401",
+  "op": "session.validate",
+  "deadline_ms": 30000,
+  "input": {}
+}
+```
+
+### Success
+
+```json
+{
+  "protocol_version": 1,
+  "request_id": "0191b8a6-6f5f-7e42-8f57-2b4537c24401",
+  "ok": true,
+  "result": {},
+  "meta": {
+    "adapter": "browser.consumer",
+    "adapter_version": "1.0.0",
+    "duration_ms": 842
+  }
+}
+```
+
+### Failure
+
+```json
+{
+  "protocol_version": 1,
+  "request_id": "0191b8a6-6f5f-7e42-8f57-2b4537c24401",
+  "ok": false,
+  "error": {
+    "code": "SESSION_EXPIRED",
+    "retryable": false,
+    "message": "session is no longer valid",
+    "detail": {}
+  },
+  "meta": {
+    "adapter": "browser.consumer",
+    "adapter_version": "1.0.0",
+    "duration_ms": 517
+  }
+}
+```
+
+`message/detail` 只用于内部诊断，API 对外只暴露稳定 `code` 和经过整理的用户文案。
+
+## 3. Secret 传递
+
+不要把完整 Session JSON 放在命令行参数、环境变量或 stdout。
+
+MVP：
+
+1. Worker 解密 Session；
+2. 写入权限 `0600` 的临时文件；
+3. Request 只传 `session_file`；
+4. Sidecar 读取；
+5. Worker 在请求结束后删除文件；
+6. Sidecar 不回传其内容。
+
+```json
+{
+  "session": {
+    "kind": "playwright_storage_state_file",
+    "path": "/run/douyin-keeper/session/abc.json"
+  }
+}
+```
+
+长期可换成匿名 pipe / memfd，而不改变业务协议。
+
+## 4. Operation 命名
+
+统一使用：
+
+```text
+<domain>.<verb>
+```
+
+v1：
+
+```text
+health.check
+login.qr.start
+login.qr.poll
+login.sms.start        # V1.1
+login.sms.verify       # V1.1
+session.validate
+friends.list
+conversations.list
+message.send_text
+message.send_sticker   # V1.1
+message.send_first     # V1.2
+```
+
+Go 不向 Sidecar 传 DOM selector / XPath / webpack module id。
+
+## 5. Health
+
+Request：
+
+```json
+{
+  "protocol_version": 1,
+  "request_id": "...",
+  "op": "health.check",
+  "deadline_ms": 5000,
+  "input": {}
+}
+```
+
+Result：
+
+```json
+{
+  "status": "healthy",
+  "adapter": "browser.consumer",
+  "version": "1.0.0",
+  "capabilities": [
+    "login.qr",
+    "session.validate",
+    "friends.sync",
+    "message.send.text.existing"
+  ]
+}
+```
+
+Protocol Adapter 额外返回 bundle/SDK compatibility 状态，但不返回下载路径或任何账号数据。
+
+## 6. QR Login
+
+QR 登录是交互式长任务，Sidecar 只负责页面会话，Go Job 负责 SSE。
+
+### `login.qr.start`
+
+Input：
+
+```json
+{
+  "profile_dir": "/run/douyin-keeper/login/job-public-id",
+  "locale": "zh-CN"
+}
+```
+
+Result：
+
+```json
+{
+  "login_handle": "qr_0191...",
+  "qr": {
+    "format": "data_url",
+    "value": "data:image/png;base64,...",
+    "expires_at": "2026-08-23T17:00:00+08:00"
+  }
+}
+```
+
+`login_handle` 只在该 Sidecar 实例/临时 profile 生命周期内有效。
+
+### `login.qr.poll`
+
+Input：
+
+```json
+{
+  "login_handle": "qr_0191...",
+  "export_session_file": "/run/douyin-keeper/session-export/job.json"
+}
+```
+
+可能结果：
+
+```json
+{"state":"waiting"}
+```
+
+```json
+{"state":"scanned"}
+```
+
+```json
+{
+  "state":"authenticated",
+  "identity": {
+    "platform_user_id":"123456789",
+    "nickname":"Miles",
+    "avatar_url":"https://..."
+  },
+  "session_exported": true
+}
+```
+
+遇到平台安全验证：
+
+```json
+{
+  "state":"challenge_required"
+}
+```
+
+此时必须停止自动流程，交由用户处理；Sidecar 不提供验证规避逻辑。
+
+## 7. Session Validate
+
+`session.validate`：
+
+```json
+{
+  "session": {
+    "kind": "playwright_storage_state_file",
+    "path": "/run/.../session.json"
+  },
+  "validation_level": "basic"
+}
+```
+
+Result：
+
+```json
+{
+  "valid": true,
+  "identity": {
+    "platform_user_id": "123456789",
+    "nickname": "Miles",
+    "avatar_url": "https://..."
+  },
+  "capability_hints": [
+    "friends.sync",
+    "message.send.text.existing"
+  ]
+}
+```
+
+`valid=false` 应通过标准错误码区分：
+
+- `SESSION_EXPIRED`
+- `CHALLENGE_REQUIRED`
+- `PLATFORM_RATE_LIMITED`
+
+## 8. Friends List
+
+Request：
+
+```json
+{
+  "protocol_version": 1,
+  "request_id": "...",
+  "op": "friends.list",
+  "deadline_ms": 60000,
+  "input": {
+    "session": {
+      "kind": "playwright_storage_state_file",
+      "path": "/run/.../session.json"
+    }
+  }
+}
+```
+
+Result：
+
+```json
+{
+  "friends": [
+    {
+      "platform_user_id": "987654321",
+      "display_name": "Jasmine",
+      "nickname": "Jasmine",
+      "short_id": "douyin_xxx",
+      "avatar_url": "https://...",
+      "streak_days": 128,
+      "conversation": {
+        "platform_conversation_id": "0:1:...",
+        "channel": "consumer"
+      }
+    }
+  ],
+  "complete": true
+}
+```
+
+如果无法稳定解析 `platform_user_id`：
+
+```json
+{
+  "platform_user_id": null,
+  "identity_status": "pending",
+  "display_name": "..."
+}
+```
+
+Go 可以展示该好友，但禁止自动发送。
+
+## 9. Conversations List
+
+用于 Protocol Adapter / 身份补全：
+
+```json
+{
+  "session": {...},
+  "cursor": null,
+  "limit": 100
+}
+```
+
+Result：
+
+```json
+{
+  "items": [
+    {
+      "platform_conversation_id": "0:1:...",
+      "peer_platform_user_id": "987654321",
+      "peer_display_name": "Jasmine",
+      "channel": "creator",
+      "last_message_at": "2026-08-23T08:30:00Z"
+    }
+  ],
+  "next_cursor": null
+}
+```
+
+`peer_display_name` 只能辅助展示/诊断，禁止作为消息目标唯一条件。
+
+## 10. Send Text
+
+Request：
+
+```json
+{
+  "protocol_version": 1,
+  "request_id": "...",
+  "op": "message.send_text",
+  "deadline_ms": 30000,
+  "input": {
+    "session": {...},
+    "target": {
+      "platform_user_id": "987654321",
+      "platform_conversation_id": "0:1:..."
+    },
+    "message": {
+      "text": "今天也记得续火花"
+    }
+  }
+}
+```
+
+目标规则：
+
+1. 已存在会话时优先使用 `platform_conversation_id`；
+2. 同时校验会话 peer 与 `platform_user_id` 一致；
+3. 不允许只有 nickname/display_name；
+4. 目标不一致返回 `TARGET_IDENTITY_MISMATCH`，不得尝试猜测。
+
+Success：
+
+```json
+{
+  "confirmed": true,
+  "platform_message_id": "739...",
+  "sent_at": "2026-08-23T08:31:10Z"
+}
+```
+
+只有平台明确确认后 `confirmed=true`。不能用固定 sleep 后假定成功。
+
+## 11. 错误码
+
+Sidecar 至少支持：
+
+```text
+INVALID_REQUEST
+UNSUPPORTED_PROTOCOL_VERSION
+UNSUPPORTED_OPERATION
+DEADLINE_EXCEEDED
+SIDECAR_INTERNAL_ERROR
+
+SESSION_EXPIRED
+CHALLENGE_REQUIRED
+PLATFORM_RATE_LIMITED
+
+FRIEND_NOT_FOUND
+FRIEND_AMBIGUOUS
+CONVERSATION_NOT_FOUND
+TARGET_IDENTITY_MISMATCH
+
+BROWSER_NAVIGATION_FAILED
+BROWSER_SELECTOR_CHANGED
+BROWSER_CONTEXT_FAILED
+
+ADAPTER_UNAVAILABLE
+ADAPTER_INCOMPATIBLE
+NETWORK_TIMEOUT
+NETWORK_ERROR
+```
+
+Sidecar 决定 `retryable`，Go 再结合业务规则决定是否真的重试。
+
+## 12. Capability 映射
+
+Sidecar operation 与领域 capability 分离：
+
+| Operation | Capability |
+|---|---|
+| `session.validate` | `session.validate` |
+| `friends.list` | `friends.sync` |
+| `conversations.list` | `conversations.sync` |
+| `message.send_text` | `message.send.text.existing` |
+| `message.send_sticker` | `message.send.sticker.existing` |
+| `message.send_first` | `message.send.text.first` |
+
+这样未来一个 capability 可以由不同 Adapter 实现。
+
+## 13. Protocol Sidecar 额外约束
+
+Protocol Sidecar 属于可选实验性能力：
+
+- 远端 Bundle 必须经过固定 manifest + SHA-256 校验；
+- 不兼容时返回 `ADAPTER_INCOMPATIBLE`；
+- 连续兼容性失败触发 Go 层全局 circuit breaker；
+- Sidecar 不得持有数据库、Redis、Session master key；
+- Protocol 失败不得直接修改 `DouyinAccount.session_status`；
+- 只有独立 `session.validate` 明确确认失效时，才能标记 Session expired。
+
+## 14. Protocol Versioning
+
+`protocol_version` 只在发生破坏性修改时递增。
+
+兼容性规则：
+
+- 增加可选字段：不升 major；
+- 增加新 op：不升 major；
+- 修改字段语义、删除字段、修改错误语义：升 major；
+- Sidecar 不认识请求版本时返回 `UNSUPPORTED_PROTOCOL_VERSION`。

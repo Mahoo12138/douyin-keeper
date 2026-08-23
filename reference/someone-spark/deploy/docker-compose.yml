@@ -1,0 +1,51 @@
+# 开发 / 备选。生产主路径见 docs/02-M0-设计冻结/09-宝塔部署.md
+# 本文件在 spark/deploy/。不要把 3306/6379/8080 映射到公网。
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: huohua
+      MYSQL_USER: huohua
+      MYSQL_PASSWORD: huohua
+      MYSQL_ROOT_PASSWORD: huohua_root_dev
+    ports:
+      - "127.0.0.1:3306:3306"
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--default-authentication-plugin=mysql_native_password"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uhuohua", "-phuohua"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - huohua_mysql:/var/lib/mysql
+  redis:
+    image: redis:7.2-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - huohua_redis:/data
+  playwright:
+    image: python:3.12-alpine
+    working_dir: /app
+    volumes:
+      - ../worker-py:/app
+    command: ["python", "main.py", "version"]
+    restart: "no"
+  protocol-node:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ../protocol-node:/app
+    command: ["node", "index.mjs", "version"]
+    restart: "no"
+
+volumes:
+  huohua_mysql:
+  huohua_redis:

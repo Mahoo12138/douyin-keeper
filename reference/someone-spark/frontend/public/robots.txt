@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /register
+Disallow: /dashboard
+Disallow: /wallet
+Disallow: /account
+Disallow: /douyin
+Disallow: /friends
+Disallow: /chat
+Disallow: /tasks
+Disallow: /logs
+Disallow: /admin

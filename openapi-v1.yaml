@@ -1,0 +1,962 @@
+openapi: 3.1.0
+info:
+  title: Douyin Keeper Next API
+  version: 1.0.0-draft
+servers:
+- url: /api/v1
+paths:
+  /me:
+    get:
+      operationId: getMe
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+  /accounts:
+    get:
+      operationId: listAccounts
+      responses:
+        '200':
+          description: Accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - next_cursor
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Account'
+                  next_cursor:
+                    type:
+                    - string
+                    - 'null'
+  /accounts/bindings:
+    post:
+      operationId: createAccountBinding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - method
+              properties:
+                method:
+                  type: string
+                  enum:
+                  - qr
+      responses:
+        '202':
+          description: Binding job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobRef'
+  /accounts/{accountId}/session-check:
+    post:
+      operationId: checkAccountSession
+      parameters:
+      - $ref: '#/components/parameters/AccountId'
+      responses:
+        '202':
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobRef'
+  /accounts/{accountId}/friends-sync:
+    post:
+      operationId: syncAccountFriends
+      parameters:
+      - $ref: '#/components/parameters/AccountId'
+      responses:
+        '202':
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobRef'
+  /accounts/{accountId}/capabilities:
+    get:
+      operationId: getAccountCapabilities
+      parameters:
+      - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200':
+          description: Capability snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Capability'
+  /accounts/{accountId}/friends:
+    get:
+      operationId: listFriends
+      parameters:
+      - $ref: '#/components/parameters/AccountId'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Friends
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - next_cursor
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Friend'
+                  next_cursor:
+                    type:
+                    - string
+                    - 'null'
+  /friends/{friendId}:
+    patch:
+      operationId: updateFriend
+      parameters:
+      - name: friendId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                spark_enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated friend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Friend'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /tasks:
+    get:
+      operationId: listTasks
+      responses:
+        '200':
+          description: Tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - next_cursor
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SparkTask'
+                  next_cursor:
+                    type:
+                    - string
+                    - 'null'
+    post:
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SparkTask'
+  /tasks/{taskId}/run-now:
+    post:
+      operationId: runTaskNow
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '202':
+          description: Send queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - intent_id
+                - job_id
+                - status
+                properties:
+                  intent_id:
+                    type: string
+                    format: uuid
+                  job_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum:
+                    - queued
+  /jobs/{jobId}:
+    get:
+      operationId: getJob
+      parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+  /jobs/{jobId}/cancel:
+    post:
+      operationId: cancelJob
+      parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '202':
+          description: Cancellation requested
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /auth/register:
+    post:
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /auth/login:
+    post:
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+  /auth/refresh:
+    post:
+      operationId: refreshSession
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type:
+                  - string
+                  - 'null'
+                  description: Required for mini clients; web uses HttpOnly refresh cookie.
+      responses:
+        '200':
+          description: Session rotated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+  /auth/logout:
+    post:
+      operationId: logout
+      responses:
+        '204':
+          description: Current session revoked
+  /auth/logout-all:
+    post:
+      operationId: logoutAll
+      responses:
+        '204':
+          description: All sessions revoked
+  /auth/link-codes:
+    post:
+      operationId: createWechatLinkCode
+      responses:
+        '201':
+          description: One-time link code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkCode'
+  /auth/wechat-mini/link:
+    post:
+      operationId: linkWechatMini
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WechatLinkRequest'
+      responses:
+        '200':
+          description: Linked and authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /auth/wechat-mini/login:
+    post:
+      operationId: loginWechatMini
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WechatLoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /me/entitlement:
+    get:
+      operationId: getMyEntitlement
+      responses:
+        '200':
+          description: Effective entitlement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveEntitlement'
+  /entitlements/redeem:
+    post:
+      operationId: redeemCardCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedeemCardRequest'
+      responses:
+        '200':
+          description: Redeemed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedeemResult'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /entitlements/redemptions:
+    get:
+      operationId: listMyEntitlementGrants
+      responses:
+        '200':
+          description: Grants
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EntitlementGrant'
+components:
+  parameters:
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+  schemas:
+    User:
+      type: object
+      required:
+      - id
+      - display_name
+      - role
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        role:
+          type: string
+          enum:
+          - user
+          - admin
+    Account:
+      type: object
+      required:
+      - id
+      - nickname
+      - binding_status
+      - session_status
+      - risk_status
+      properties:
+        id:
+          type: string
+          format: uuid
+        nickname:
+          type: string
+        avatar_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+        binding_status:
+          type: string
+          enum:
+          - unbound
+          - binding
+          - bound
+          - released
+        session_status:
+          type: string
+          enum:
+          - unknown
+          - valid
+          - expired
+          - challenge_required
+        risk_status:
+          type: string
+          enum:
+          - normal
+          - cooling_down
+          - paused
+        last_session_check_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        last_friend_sync_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    Capability:
+      type: object
+      required:
+      - capability
+      - status
+      - checked_at
+      properties:
+        capability:
+          type: string
+        status:
+          type: string
+          enum:
+          - available
+          - degraded
+          - unavailable
+          - unknown
+        adapter:
+          type:
+          - string
+          - 'null'
+        error_code:
+          type:
+          - string
+          - 'null'
+        checked_at:
+          type: string
+          format: date-time
+    Friend:
+      type: object
+      required:
+      - id
+      - platform_identity_status
+      - display_name
+      - streak_days
+      - has_conversation
+      - spark_enabled
+      properties:
+        id:
+          type: string
+          format: uuid
+        platform_identity_status:
+          type: string
+          enum:
+          - pending
+          - resolved
+          - ambiguous
+          - missing
+        display_name:
+          type: string
+        nickname:
+          type: string
+        short_id:
+          type:
+          - string
+          - 'null'
+        avatar_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+        streak_days:
+          type: integer
+          minimum: 0
+        has_conversation:
+          type: boolean
+        spark_enabled:
+          type: boolean
+        last_sent_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    SparkTask:
+      type: object
+      required:
+      - id
+      - account_id
+      - friend_id
+      - enabled
+      - timezone
+      - window_start
+      - window_end
+      - message
+      properties:
+        id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+        friend_id:
+          type: string
+          format: uuid
+        enabled:
+          type: boolean
+        timezone:
+          type: string
+        window_start:
+          type: string
+        window_end:
+          type: string
+        message:
+          type: object
+          required:
+          - kind
+          properties:
+            kind:
+              type: string
+              enum:
+              - text
+              - sticker
+            body:
+              type:
+              - string
+              - 'null'
+        allow_first_message:
+          type: boolean
+    CreateTaskRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - account_id
+      - friend_id
+      - enabled
+      - timezone
+      - window_start
+      - window_end
+      - message
+      properties:
+        account_id:
+          type: string
+          format: uuid
+        friend_id:
+          type: string
+          format: uuid
+        enabled:
+          type: boolean
+        timezone:
+          type: string
+        window_start:
+          type: string
+          pattern: ^([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d$
+        window_end:
+          type: string
+          pattern: ^([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d$
+        message:
+          type: object
+          required:
+          - kind
+          properties:
+            kind:
+              type: string
+              enum:
+              - text
+            body:
+              type: string
+              minLength: 1
+              maxLength: 500
+        allow_first_message:
+          type: boolean
+          default: false
+    JobRef:
+      type: object
+      required:
+      - job_id
+      properties:
+        job_id:
+          type: string
+          format: uuid
+    Job:
+      type: object
+      required:
+      - id
+      - type
+      - status
+      - cancelable
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        status:
+          type: string
+          enum:
+          - queued
+          - running
+          - waiting_user
+          - succeeded
+          - failed
+          - cancelled
+        cancelable:
+          type: boolean
+        error_code:
+          type:
+          - string
+          - 'null'
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        cancel_requested_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    ApiError:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          - request_id
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            request_id:
+              type: string
+            details:
+              type: object
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - username
+      - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 64
+        password:
+          type: string
+          minLength: 8
+          maxLength: 256
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - username
+      - password
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+    AuthResponse:
+      type: object
+      required:
+      - access_token
+      - expires_in
+      - user
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          type: integer
+          minimum: 1
+        refresh_token:
+          type:
+          - string
+          - 'null'
+          description: Returned for mini clients; web normally receives an HttpOnly refresh cookie.
+        user:
+          $ref: '#/components/schemas/User'
+    LinkCode:
+      type: object
+      required:
+      - code
+      - expires_at
+      properties:
+        code:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+    WechatLinkRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - wechat_code
+      - link_code
+      properties:
+        wechat_code:
+          type: string
+        link_code:
+          type: string
+    WechatLoginRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - wechat_code
+      properties:
+        wechat_code:
+          type: string
+    EffectiveEntitlement:
+      type: object
+      required:
+      - active
+      properties:
+        active:
+          type: boolean
+        grant_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        plan_code:
+          type:
+          - string
+          - 'null'
+        starts_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        account_quota:
+          type: integer
+          minimum: 0
+        task_quota:
+          type: integer
+          minimum: 0
+        daily_send_quota:
+          type: integer
+          minimum: 0
+        features:
+          type: object
+          additionalProperties:
+            type: boolean
+        usage:
+          type: object
+          properties:
+            accounts_used:
+              type: integer
+              minimum: 0
+            tasks_used:
+              type: integer
+              minimum: 0
+            daily_send_reserved:
+              type: integer
+              minimum: 0
+            quota_local_date:
+              type:
+              - string
+              - 'null'
+              format: date
+    RedeemCardRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      properties:
+        code:
+          type: string
+          minLength: 8
+          maxLength: 128
+    EntitlementGrant:
+      type: object
+      required:
+      - id
+      - source_type
+      - starts_at
+      - expires_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        plan_code:
+          type: string
+        source_type:
+          type: string
+          enum:
+          - card
+          - admin
+        starts_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    RedeemResult:
+      type: object
+      required:
+      - grant
+      - entitlement
+      properties:
+        grant:
+          $ref: '#/components/schemas/EntitlementGrant'
+        entitlement:
+          $ref: '#/components/schemas/EffectiveEntitlement'
+  responses:
+    Unauthenticated:
+      description: Not authenticated
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Conflict:
+      description: Resource state conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+- bearerAuth: []

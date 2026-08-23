@@ -1,0 +1,21 @@
+CREATE TABLE "pricing_plan" (
+	"id" text PRIMARY KEY NOT NULL,
+	"provider" text NOT NULL,
+	"amount" numeric NOT NULL,
+	"original_price" numeric,
+	"currency" text NOT NULL,
+	"duration_type" text NOT NULL,
+	"duration_months" integer,
+	"credits" integer,
+	"recommended" boolean DEFAULT false,
+	"sort_order" integer DEFAULT 0,
+	"is_active" boolean DEFAULT true NOT NULL,
+	"locales" jsonb,
+	"stripe_price_id" text,
+	"paypal_plan_id" text,
+	"creem_product_id" text,
+	"dodo_product_id" text,
+	"i18n" jsonb NOT NULL,
+	"created_at" timestamp DEFAULT now(),
+	"updated_at" timestamp DEFAULT now()
+);

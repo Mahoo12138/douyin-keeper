@@ -1,0 +1,164 @@
+---
+title: Getting Started
+description: Learn how to set up and use the documentation app
+---
+
+This guide will help you set up and run the documentation site for your project.
+
+## Prerequisites
+
+Before you begin, make sure you have the following installed:
+
+- Node.js 22.0 or later
+- pnpm 9.0 or later
+- Git
+
+## Quick Start
+
+### 1. Install Dependencies
+
+From the project root directory, install all dependencies:
+
+```bash
+pnpm install
+```
+
+### 2. Run the Development Server
+
+Start the docs development server:
+
+```bash
+pnpm dev:docs
+```
+
+The documentation site will be available at `http://localhost:3000`.
+
+### 3. Build for Production
+
+To build the static documentation site:
+
+```bash
+pnpm build:docs
+```
+
+The static files will be generated in `apps/docs-app/out/` directory.
+
+## Project Structure
+
+```
+apps/docs-app/
+├── app/                    # Next.js App Router
+│   ├── [lang]/            # i18n locale routes
+│   │   ├── (docs)/        # Documentation layout group
+│   │   │   ├── [[...slug]]/
+│   │   │   │   └── page.tsx   # Dynamic doc page
+│   │   │   └── layout.tsx     # Docs layout
+│   │   └── layout.tsx     # Root layout with providers
+│   ├── api/
+│   │   └── search/        # Search API route
+│   └── global.css         # Global styles
+├── components/            # React components
+├── content/
+│   └── docs/              # MDX documentation files
+│       ├── index.en.mdx   # English home page
+│       ├── index.zh-CN.mdx # Chinese home page
+│       └── ...            # Other doc pages
+├── lib/
+│   ├── i18n.ts           # i18n configuration
+│   └── source.ts         # Content source loader
+├── public/               # Static assets
+├── source.config.ts      # Fumadocs MDX config
+└── package.json
+```
+
+## Adding New Documentation
+
+### Create a New Page
+
+1. Create a new `.mdx` file in `content/docs/`:
+
+```bash
+# English version
+touch content/docs/my-page.en.mdx
+
+# Chinese version
+touch content/docs/my-page.zh-CN.mdx
+```
+
+2. Add frontmatter to your MDX file:
+
+```mdx
+---
+title: My Page Title
+description: A brief description of the page
+---
+
+# My Page
+
+Your content here...
+```
+
+3. Update `meta.json` to include the new page in navigation:
+
+```json
+{
+  "title": "Documentation",
+  "pages": [
+    "index",
+    "my-page",
+    "getting-started",
+    "api"
+  ]
+}
+```
+
+### Create a New Section
+
+1. Create a new folder in `content/docs/`:
+
+```bash
+mkdir content/docs/guides
+```
+
+2. Add documentation files and a `meta.json`:
+
+```json
+{
+  "title": "Guides",
+  "pages": [
+    "index",
+    "first-guide"
+  ]
+}
+```
+
+## Internationalization (i18n)
+
+The documentation supports multiple languages. To add translations:
+
+1. Create a file with the locale suffix (e.g., `.zh-CN.mdx`)
+2. The language switcher in the navbar will automatically show available languages
+
+## Customization
+
+### Styling
+
+Global styles are in `app/global.css`. The docs use:
+
+- Tailwind CSS v4
+- Fumadocs UI components
+- Shared theme system from `@libs/ui`
+
+### Navigation
+
+Edit `app/layout.config.tsx` to customize:
+
+- Logo
+- Navigation links
+- i18n settings
+
+## Next Steps
+
+- Explore the [API Reference](/api) for component documentation
+- Check the main project `config.ts` for app-wide settings
+- Review the fumadocs documentation at [fumadocs.dev](https://fumadocs.dev)

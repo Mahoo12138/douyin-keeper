@@ -1,0 +1,59 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "tinyship-tanstack",
+	"compatibility_date": "2026-03-17",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"main": "@tanstack/react-start/server-entry",
+	"observability": {
+		"enabled": true
+	},
+	"hyperdrive": [
+		{
+			"binding": "HYPERDRIVE",
+			"id": "d811cfad030643698c9c92f88f47ee34",
+			"localConnectionString": "postgresql://viking:unused@localhost:5432/shipeasy_dev"
+		}
+	],
+	// Non-sensitive environment variables
+	"vars": {
+		"DB_DIALECT": "d1",
+		"APP_BASE_URL": "http://localhost:7001",
+		"BETTER_AUTH_URL": "http://localhost:7001",
+		"VITE_STORAGE_PROVIDER": "r2"
+	},
+	"r2_buckets": [
+		{
+			"binding": "R2_BUCKET",
+			"bucket_name": "tinyship"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "tinyship-db",
+			"database_id": "87ee7e74-c45a-447a-aa14-1a66130c306f",
+			"migrations_dir": "../../libs/database/drizzle-sqlite"
+		}
+	],
+	// Database acceleration via Hyperdrive (requires `npx wrangler hyperdrive create`)
+	// Uncomment after creating a Hyperdrive config:
+	// "hyperdrive": [
+	//   {
+	//     "binding": "HYPERDRIVE",
+	//     "id": "<your-hyperdrive-config-id>"
+	//   }
+	// ]
+	// Cloudflare D1 database (alternative to Hyperdrive+PostgreSQL)
+	// Set DB_DIALECT=d1 in vars to activate D1 mode.
+	// Create a D1 database first: npx wrangler d1 create tinyship-db
+	// Then uncomment and fill in the database_id:
+	// "d1_databases": [
+	//   {
+	//     "binding": "DB",
+	//     "database_name": "tinyship-db",
+	//     "database_id": "<your-d1-database-id>"
+	//   }
+	// ]
+}

@@ -1,0 +1,164 @@
+---
+title: 快速开始
+description: 了解如何设置和使用文档应用
+---
+
+本指南将帮助您设置和运行项目的文档站点。
+
+## 前置条件
+
+在开始之前，请确保已安装以下工具：
+
+- Node.js 22.0 或更高版本
+- pnpm 9.0 或更高版本
+- Git
+
+## 快速开始
+
+### 1. 安装依赖
+
+在项目根目录安装所有依赖：
+
+```bash
+pnpm install
+```
+
+### 2. 运行开发服务器
+
+启动文档开发服务器：
+
+```bash
+pnpm dev:docs
+```
+
+文档站点将在 `http://localhost:3000` 可用。
+
+### 3. 构建生产版本
+
+构建静态文档站点：
+
+```bash
+pnpm build:docs
+```
+
+静态文件将生成在 `apps/docs-app/out/` 目录中。
+
+## 项目结构
+
+```
+apps/docs-app/
+├── app/                    # Next.js App Router
+│   ├── [lang]/            # i18n 语言路由
+│   │   ├── (docs)/        # 文档布局组
+│   │   │   ├── [[...slug]]/
+│   │   │   │   └── page.tsx   # 动态文档页面
+│   │   │   └── layout.tsx     # 文档布局
+│   │   └── layout.tsx     # 根布局和提供者
+│   ├── api/
+│   │   └── search/        # 搜索 API 路由
+│   └── global.css         # 全局样式
+├── components/            # React 组件
+├── content/
+│   └── docs/              # MDX 文档文件
+│       ├── index.en.mdx   # 英文首页
+│       ├── index.zh-CN.mdx # 中文首页
+│       └── ...            # 其他文档页面
+├── lib/
+│   ├── i18n.ts           # i18n 配置
+│   └── source.ts         # 内容源加载器
+├── public/               # 静态资源
+├── source.config.ts      # Fumadocs MDX 配置
+└── package.json
+```
+
+## 添加新文档
+
+### 创建新页面
+
+1. 在 `content/docs/` 中创建新的 `.mdx` 文件：
+
+```bash
+# 英文版本
+touch content/docs/my-page.en.mdx
+
+# 中文版本
+touch content/docs/my-page.zh-CN.mdx
+```
+
+2. 在 MDX 文件中添加 frontmatter：
+
+```mdx
+---
+title: 页面标题
+description: 页面的简短描述
+---
+
+# 我的页面
+
+您的内容...
+```
+
+3. 更新 `meta.json` 将新页面添加到导航中：
+
+```json
+{
+  "title": "文档",
+  "pages": [
+    "index",
+    "my-page",
+    "getting-started",
+    "api"
+  ]
+}
+```
+
+### 创建新章节
+
+1. 在 `content/docs/` 中创建新文件夹：
+
+```bash
+mkdir content/docs/guides
+```
+
+2. 添加文档文件和 `meta.json`：
+
+```json
+{
+  "title": "指南",
+  "pages": [
+    "index",
+    "first-guide"
+  ]
+}
+```
+
+## 国际化 (i18n)
+
+文档支持多种语言。添加翻译的方法：
+
+1. 创建带有语言后缀的文件（例如 `.zh-CN.mdx`）
+2. 导航栏中的语言切换器会自动显示可用语言
+
+## 自定义
+
+### 样式
+
+全局样式在 `app/global.css` 中。文档使用：
+
+- Tailwind CSS v4
+- Fumadocs UI 组件
+- 来自 `@libs/ui` 的共享主题系统
+
+### 导航
+
+编辑 `app/layout.config.tsx` 自定义：
+
+- Logo
+- 导航链接
+- i18n 设置
+
+## 下一步
+
+- 查看 [API 参考](/api) 获取组件文档
+- 检查主项目的 `config.ts` 了解全应用设置
+- 查阅 fumadocs 文档：[fumadocs.dev](https://fumadocs.dev)

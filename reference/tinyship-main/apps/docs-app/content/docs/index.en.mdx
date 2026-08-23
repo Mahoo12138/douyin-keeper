@@ -1,0 +1,33 @@
+---
+title: Documentation
+description: Welcome to the documentation center
+full: true
+---
+
+import { DynamicLink } from 'fumadocs-core/dynamic-link';
+
+This is your documentation home. Get started by exploring the guides below.
+
+<div className="flex flex-wrap gap-4 mt-8">
+  <Card className="flex-1 min-w-[300px]">
+    <CardHeader>
+      <CardTitle>
+        <DynamicLink href="/[lang]/docs/getting-started" className="hover:underline">Getting Started</DynamicLink>
+      </CardTitle>
+    </CardHeader>
+    <CardContent>
+      Learn how to set up and configure the project from scratch.
+    </CardContent>
+  </Card>
+
+  <Card className="flex-1 min-w-[300px]">
+    <CardHeader>
+      <CardTitle>
+        <DynamicLink href="/[lang]/docs/api" className="hover:underline">API Reference</DynamicLink>
+      </CardTitle>
+    </CardHeader>
+    <CardContent>
+      Explore the complete API reference with examples and usage patterns.
+    </CardContent>
+  </Card>
+</div>

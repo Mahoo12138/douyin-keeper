@@ -1,0 +1,50 @@
+---
+title: Fumadocs 入门指南
+description: 快速了解我们如何使用 Fumadocs 构建文档系统。
+author: TinyShip 团队
+authorRole: 工程团队
+date: 2024-12-15
+category: 教程
+---
+
+## 简介
+
+[Fumadocs](https://fumadocs.dev) 是一个强大的 Next.js 文档框架。在这篇文章中，我们将分享为项目设置和自定义 Fumadocs 的经验。
+
+### 为什么选择 Fumadocs？
+
+我们选择 Fumadocs 有几个原因：
+
+1. **为 Next.js 而生**：与 App Router 原生集成
+2. **MDX 支持**：使用 React 组件编写文档
+3. **国际化**：内置多语言 i18n 支持
+4. **搜索功能**：开箱即用的集成搜索
+5. **主题定制**：可自定义的 UI，匹配我们的品牌
+
+### 我们使用的关键功能
+
+#### MDX 内容
+
+Fumadocs 使用 MDX，允许我们直接在文档中嵌入 React 组件：
+
+```tsx
+import { Callout } from 'fumadocs-ui/components/callout';
+
+<Callout title="注意">
+  这是一个重要提示！
+</Callout>
+```
+
+#### 国际化
+
+我们的文档同时支持英文和中文，让更广泛的受众能够访问。
+
+#### 静态导出
+
+我们可以生成完全静态的站点，非常适合部署到任何 CDN。
+
+### 结论
+
+Fumadocs 是满足我们文档需求的绝佳选择。它的灵活性和功能集使其适合任何规模的项目。
+
+如果你正在为 Next.js 项目构建文档，我们强烈推荐尝试 Fumadocs！

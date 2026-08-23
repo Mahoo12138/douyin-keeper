@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.4.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Use Node.js 22.20+ LTS for Nuxt 4 oxc-parser compatibility
+          # See: https://github.com/nuxt/nuxt/issues/33480
+          node-version: '22.x'
+          cache: 'pnpm'
+
+      - name: Cache TurboRepo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ hashFiles('pnpm-lock.yaml', 'turbo.json') }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          BUILD_TIME: true
+
+      - name: Build Next.js app
+        run: NODE_OPTIONS="--max-old-space-size=4096" pnpm build:next
+        env:
+          # Add any required environment variables here
+          # These are typically set in GitHub Secrets for production
+          NODE_ENV: production
+          BUILD_TIME: true
+
+      - name: Build Nuxt.js app
+        run: NODE_OPTIONS="--max-old-space-size=4096" pnpm build:nuxt
+        env:
+          NODE_ENV: production
+          BUILD_TIME: true
+
+      - name: Build TanStack Start app
+        run: NODE_OPTIONS="--max-old-space-size=4096" pnpm build:tanstack
+        env:
+          NODE_ENV: production
+          BUILD_TIME: true
+
+      - name: Build Docs app
+        run: pnpm build:docs
+        env:
+          NODE_ENV: production
+
+  docker-build:
+    name: Docker Build Verification
+    runs-on: ubuntu-latest
+    # Run on both PRs and pushes to catch Docker-specific issues early
+    # Docker environment differs from native CI (pnpm hoisting, file structure, etc.)
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create .env file if missing
+        run: |
+          if [ ! -f .env ]; then
+            cp env.example .env 2>/dev/null || echo "BUILD_TIME=true" > .env
+          fi
+
+      - name: Build Nuxt.js Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./apps/nuxt-app/Dockerfile
+          # Specify target platform (linux/amd64 for CI compatibility)
+          platforms: linux/amd64
+          push: false
+          tags: tinyship-nuxt:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_TIME=true
+          # Increase shared memory size for large builds (Nuxt/Vite can be memory-intensive)
+          shm-size: 2g
+          
+      - name: Build Next.js Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./apps/next-app/Dockerfile
+          platforms: linux/amd64
+          push: false
+          tags: tinyship-next:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_TIME=true
+          shm-size: 2g
+
+      - name: Build TanStack Start Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./apps/tanstack-app/Dockerfile
+          platforms: linux/amd64
+          push: false
+          tags: tinyship-tanstack:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_TIME=true
+          shm-size: 2g

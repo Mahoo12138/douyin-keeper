@@ -1,0 +1,452 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Better-Auth Authentication Guidelines
+
+## Overview
+
+This project uses [Better Auth](https://www.better-auth.com/) for comprehensive authentication functionality. Better Auth provides built-in Vue and React hooks that eliminate the need for custom state management or wrapper composables.
+
+## Architecture
+
+```
+libs/auth/
+├── auth.ts           # Server-side Better Auth configuration
+├── authClient.ts     # Client-side auth clients (Vue & React)
+├── plugins/
+│   └── wechat.ts     # Custom WeChat login plugin
+└── index.ts          # Main exports
+```
+
+## Implementation Methods
+
+### 🎯 Direct API Usage (Recommended)
+
+Better Auth provides framework-specific clients with built-in hooks. **Always use these directly** instead of creating wrapper composables.
+
+#### Vue Components (Nuxt)
+
+```vue
+<script setup lang="ts">
+import { authClientVue } from '@libs/auth/authClient'
+
+// Use Better Auth hooks directly
+const session = authClientVue.useSession()
+</script>
+
+<template>
+  <div>
+    <!-- Loading state -->
+    <div v-if="session.isPending" class="loading">
+      Loading...
+    </div>
+    
+    <!-- Authenticated state -->
+    <div v-else-if="session.data?.user" class="authenticated">
+      <h1>Welcome, {{ session.data.user.name }}!</h1>
+      <button @click="authClientVue.signOut()">
+        Sign Out
+      </button>
+    </div>
+    
+    <!-- Unauthenticated state -->
+    <div v-else class="unauthenticated">
+      <button @click="authClientVue.signIn.email({ 
+        email: 'user@example.com', 
+        password: 'password' 
+      })">
+        Sign In with Email
+      </button>
+      
+      <button @click="authClientVue.signIn.social({ 
+        provider: 'github' 
+      })">
+        Sign In with GitHub
+      </button>
+      
+      <button @click="authClientVue.signIn.social({ 
+        provider: 'google' 
+      })">
+        Sign In with Google
+      </button>
+    </div>
+  </div>
+</template>
+```
+
+#### React Components (Next.js)
+
+```tsx
+'use client';
+
+import { authClientReact } from '@libs/auth/authClient';
+
+export function AuthComponent() {
+  const { data: session, isPending } = authClientReact.useSession();
+  
+  if (isPending) return <div>Loading...</div>;
+  
+  if (session?.user) {
+    return (
+      <div>
+        <h1>Welcome, {session.user.name}!</h1>
+        <button onClick={() => authClientReact.signOut()}>
+          Sign Out
+        </button>
+      </div>
+    );
+  }
+  
+  return (
+    <div>
+      <button onClick={() => authClientReact.signIn.email({
+        email: 'user@example.com',
+        password: 'password'
+      })}>
+        Sign In with Email
+      </button>
+      
+      <button onClick={() => authClientVue.signIn.social({
+        provider: 'github'
+      })}>
+        Sign In with GitHub
+      </button>
+    </div>
+  );
+}
+```
+
+### 🚫 What NOT to Do
+
+❌ **Don't create wrapper composables or stores:**
+```typescript
+// ❌ WRONG - Don't do this
+export const useAuth = () => {
+  const session = authClientVue.useSession()
+  // ... wrapper logic
+}
+
+// ❌ WRONG - Don't do this
+export const useAuthStore = defineStore('auth', () => {
+  // ... Pinia store wrapping Better Auth
+})
+```
+
+✅ **Do this instead:**
+```typescript
+// ✅ CORRECT - Use Better Auth directly
+import { authClientVue } from '@libs/auth/authClient'
+const session = authClientVue.useSession()
+```
+
+## Available Authentication Methods
+
+### 1. Email/Password Authentication
+
+```typescript
+// Sign up
+await authClientVue.signUp.email({
+  email: 'user@example.com',
+  password: 'securePassword123',
+  name: 'User Name'
+})
+
+// Sign in
+await authClientVue.signIn.email({
+  email: 'user@example.com',
+  password: 'securePassword123'
+})
+
+// Forget password
+await authClientVue.forgetPassword({
+  email: 'user@example.com'
+})
+
+// Reset password
+await authClientVue.resetPassword({
+  token: 'reset-token',
+  newPassword: 'newSecurePassword123'
+})
+```
+
+### 2. Social Authentication
+
+```typescript
+// GitHub
+await authClientVue.signIn.social({ provider: 'github' })
+
+// Google
+await authClientVue.signIn.social({ provider: 'google' })
+
+// WeChat (custom plugin)
+await authClientVue.signIn.social({ provider: 'wechat' })
+```
+
+### 3. Phone Number Authentication
+
+```typescript
+// Send OTP
+await authClientVue.phoneNumber.sendOtp({
+  phoneNumber: '+1234567890'
+})
+
+// Verify OTP
+await authClientVue.phoneNumber.verify({
+  phoneNumber: '+1234567890',
+  otp: '123456'
+})
+```
+
+## Session Management
+
+### Getting Session Data
+
+```typescript
+// In Vue components
+const session = authClientVue.useSession()
+
+// Access user data
+const user = session.data?.user
+const isAuthenticated = !!session.data?.user
+const isLoading = session.isPending
+```
+
+### Session Operations
+
+```typescript
+// List all sessions
+const sessions = await authClientVue.listSessions()
+
+// Revoke specific session
+await authClientVue.revokeSession({ token: 'session-token' })
+
+// Revoke all other sessions
+await authClientVue.revokeOtherSessions()
+
+// Revoke all sessions
+await authClientVue.revokeSessions()
+```
+
+## User Management
+
+### Update User Information
+
+```typescript
+await authClientVue.updateUser({
+  name: 'New Name',
+  image: 'https://example.com/avatar.jpg'
+})
+```
+
+### Password Management
+
+```typescript
+await authClientVue.changePassword({
+  newPassword: 'newPassword123',
+  currentPassword: 'currentPassword123',
+  revokeOtherSessions: true
+})
+```
+
+### Account Linking
+
+```typescript
+// Get linked accounts
+const accounts = await authClientVue.listAccounts()
+
+// Link additional social accounts (handled automatically during social sign-in)
+```
+
+### Account Deletion
+
+```typescript
+await authClientVue.deleteUser({})
+```
+
+## Error Handling
+
+Better Auth returns structured error responses:
+
+```typescript
+const { data, error } = await authClientVue.signIn.email({
+  email: 'user@example.com',
+  password: 'wrongpassword'
+})
+
+if (error) {
+  console.error('Sign in failed:', error.message)
+  // Handle specific error codes
+  if (error.code === 'INVALID_EMAIL_OR_PASSWORD') {
+    // Show user-friendly error message
+  }
+}
+```
+
+### Error Codes
+
+```typescript
+// Access error codes for translations
+const errorCodes = authClientVue.$ERROR_CODES
+
+// Example error handling with internationalization
+const getErrorMessage = (code: string, lang: 'en' | 'zh-CN') => {
+  const errorMessages = {
+    USER_ALREADY_EXISTS: {
+      en: "User already exists",
+      'zh-CN': "用户已存在"
+    },
+    INVALID_EMAIL_OR_PASSWORD: {
+      en: "Invalid email or password",
+      'zh-CN': "邮箱或密码错误"
+    }
+  }
+  
+  return errorMessages[code as keyof typeof errorMessages]?.[lang] || 'Unknown error'
+}
+```
+
+## Server-Side Usage
+
+### API Routes (Next.js)
+
+```typescript
+// app/api/auth/[...all]/route.ts
+import { auth } from '@libs/auth'
+import { toNextJsHandler } from "better-auth/next-js"
+
+export const { GET, POST } = toNextJsHandler(auth)
+```
+
+### API Routes (Nuxt)
+
+```typescript
+// server/api/auth/[...all].ts
+import { auth } from '@libs/auth'
+
+export default defineEventHandler((event) => {
+  return auth.handler(toWebRequest(event))
+})
+```
+
+### Middleware Authentication
+
+```typescript
+// Next.js middleware
+import { auth } from '@libs/auth'
+
+export async function authMiddleware(request: NextRequest) {
+  const session = await auth.api.getSession({
+    headers: request.headers
+  })
+  
+  if (!session) {
+    return NextResponse.redirect(new URL('/signin', request.url))
+  }
+  
+  return NextResponse.next()
+}
+```
+
+## Admin Operations
+
+For admin-specific operations, use the admin client:
+
+```typescript
+// Create user (admin only)
+await authClientVue.admin.createUser({
+  name: 'New User',
+  email: 'newuser@example.com',
+  password: 'password123',
+  role: 'user'
+})
+
+// Set user role (admin only)
+await authClientVue.admin.setRole({
+  userId: 'user-id',
+  role: 'admin'
+})
+
+// Ban user (admin only)
+await authClientVue.admin.banUser({
+  userId: 'user-id',
+  banReason: 'Violation of terms'
+})
+
+// Unban user (admin only)
+await authClientVue.admin.unbanUser({
+  userId: 'user-id'
+})
+```
+
+## Best Practices
+
+### 1. **Always Use Better Auth Directly**
+- Never create wrapper composables or stores
+- Better Auth's API is already optimized for Vue/React
+- Direct usage is more maintainable and follows framework conventions
+
+### 2. **Handle Loading States**
+```vue
+<template>
+  <div v-if="session.isPending">Loading...</div>
+  <div v-else-if="session.data?.user">
+    <!-- Authenticated content -->
+  </div>
+  <div v-else>
+    <!-- Unauthenticated content -->
+  </div>
+</template>
+```
+
+### 3. **Error Handling**
+- Always check for errors in authentication operations
+- Provide user-friendly error messages
+- Use error codes for internationalization
+
+### 4. **Security Considerations**
+- Never store sensitive data in client-side state
+- Use HTTPS in production
+- Implement proper CSRF protection
+- Validate all inputs on the server side
+
+### 5. **Performance**
+- Better Auth handles session caching automatically
+- Use server-side session checking for protected routes
+- Implement proper loading states for better UX
+
+## Configuration
+
+The authentication system is configured in `libs/auth/auth.ts` with:
+- Database adapter (Drizzle ORM)
+- Email verification settings
+- Social provider configurations
+- Plugin configurations (admin, phone number, etc.)
+
+Client configuration is in `libs/auth/authClient.ts` with framework-specific setups.
+
+## Testing
+
+When testing components that use Better Auth:
+```typescript
+// Mock Better Auth in tests
+vi.mock('@libs/auth/authClient', () => ({
+  authClientVue: {
+    useSession: () => ({
+      data: { user: { id: '1', email: 'test@example.com' } },
+      isPending: false,
+      error: null
+    }),
+    signOut: vi.fn(),
+    signIn: {
+      email: vi.fn(),
+      social: vi.fn()
+    }
+  }
+}))
+```
+
+---
+
+**Remember**: Better Auth provides everything you need out of the box. Resist the urge to create additional abstractions unless absolutely necessary for your specific use case. 

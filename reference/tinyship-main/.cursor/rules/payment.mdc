@@ -1,0 +1,257 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Payment Integration Guidelines
+
+## Overview
+The payment system supports WeChat Pay, Stripe, Creem, and Alipay, handling one-time payments, subscriptions, and **credit purchases** through a factory-based implementation. Includes a complete credit system for AI-powered features with consumption tracking.
+
+## Key Concepts
+
+### Provider Types
+- `stripe`: Stripe Checkout Session based implementation
+- `wechat`: WeChat Native QR code based implementation
+- `creem`: Creem payment integration
+- `alipay`: Alipay PC website payment (page redirect)
+
+### Payment Plan Types
+- `one_time`: Single payment (all providers)
+- `recurring`: Subscription billing (Stripe and Creem only)
+- `credits`: One-time credit purchase with automatic balance update (all providers)
+
+### Payment Flow
+1. Create order record in database
+2. Create payment provider instance using factory
+3. Initialize payment and get payment URL
+4. Handle webhook notifications for status updates
+
+## Implementation Guide
+
+### 1. Creating Payment Provider
+```typescript
+import { createPaymentProvider } from '@/libs/payment';
+
+// Create Stripe provider
+const stripeProvider = createPaymentProvider('stripe');
+// Or WeChat provider
+const wechatProvider = createPaymentProvider('wechat');
+// Or Alipay provider
+const alipayProvider = createPaymentProvider('alipay');
+```
+
+### 2. Initiating Payment
+```typescript
+const result = await provider.createPayment({
+  orderId: string,    // Unique order ID
+  userId: string,     // User ID
+  planId: string,     // Plan ID from config.payment.plans
+  amount: number,     // Payment amount
+  currency: string,   // Currency code (e.g., 'CNY', 'USD')
+  provider: string,   // 'stripe' or 'wechat'
+  metadata?: {        // Optional metadata
+    clientIp?: string,
+    [key: string]: any
+  }
+});
+
+// Result contains:
+// - paymentUrl: URL for payment (Stripe checkout URL or WeChat QR code URL)
+// - providerOrderId: Provider's order ID
+// - metadata: Additional provider-specific information
+```
+
+### 3. Handling Webhooks
+```typescript
+app.post('/api/webhook/:provider', async (req, res) => {
+  const provider = createPaymentProvider(req.params.provider);
+  const result = await provider.handleWebhook(
+    req.body,
+    req.headers['stripe-signature'] || req.headers['wechat-signature']
+  );
+  res.status(200).json(result);
+});
+```
+
+### 4. Querying Order Status
+```typescript
+const status = await provider.queryOrder(orderId);
+```
+
+### 5. Credit System Operations
+```typescript
+import { creditService, calculateCreditConsumption, safeNumber, TransactionTypeCode } from '@libs/credits';
+
+// Get user credit balance
+const balance = await creditService.getBalance(userId);
+
+// Add credits (called automatically on credit purchase via webhook)
+await creditService.addCredits({
+  userId: 'user_123',
+  amount: 100,
+  description: TransactionTypeCode.PURCHASE,
+  relatedOrderId: 'order_456'
+});
+
+// Consume credits (e.g., for AI chat)
+const totalTokens = safeNumber(usageData.totalTokens);
+const creditsToConsume = calculateCreditConsumption({
+  totalTokens,
+  model: 'qwen-turbo',
+  provider: 'qwen'
+});
+
+await creditService.consumeCredits({
+  userId: 'user_123',
+  amount: creditsToConsume,
+  description: TransactionTypeCode.AI_CHAT,
+  metadata: { model: 'qwen-turbo', tokens: totalTokens }
+});
+
+// Get transaction history
+const transactions = await creditService.getTransactions(userId, { page: 1, limit: 10 });
+```
+
+## Configuration Requirements
+
+### Environment Variables
+```env
+# Stripe Configuration
+STRIPE_SECRET_KEY=sk_...
+STRIPE_PUBLIC_KEY=pk_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# WeChat Pay Configuration
+WECHAT_PAY_APP_ID=wx...
+WECHAT_PAY_MCH_ID=...
+WECHAT_PAY_API_KEY=...
+WECHAT_PAY_NOTIFY_URL=...
+WECHAT_PAY_PUBLIC_KEY_PATH=...
+WECHAT_PAY_PRIVATE_KEY_PATH=...
+
+# Alipay Configuration (Base64 string format, no PEM headers)
+ALIPAY_APP_ID=2021...
+ALIPAY_APP_PRIVATE_KEY="MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC..."
+ALIPAY_PUBLIC_KEY="MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAgatiwfGM3RTw..."
+ALIPAY_NOTIFY_URL=https://yourdomain.com/api/payment/webhook/alipay
+ALIPAY_SANDBOX=false  # Set to "true" for sandbox testing
+```
+
+### Config File
+```typescript
+// config.ts
+export const config = {
+  payment: {
+    providers: {
+      stripe: {
+        secretKey: string,
+        publicKey: string,
+        webhookSecret: string
+      },
+      wechat: {
+        appId: string,
+        mchId: string,
+        apiKey: string,
+        notifyUrl: string
+      },
+      creem: {
+        apiKey: string,
+        serverUrl: string,
+        webhookSecret: string
+      },
+      alipay: {
+        appId: string,
+        appPrivateKey: string,
+        alipayPublicKey: string,
+        notifyUrl: string,
+        sandbox: boolean
+      }
+    },
+    plans: {
+      [planId: string]: {
+        id: string,
+        provider: 'stripe' | 'wechat' | 'creem' | 'alipay',
+        amount: number,
+        currency: string,
+        duration: {
+          type: 'recurring' | 'one_time' | 'credits',
+          months?: number,       // For recurring/one_time
+          credits?: number       // For credits type
+        },
+        stripePriceId?: string,
+        creemProductId?: string,
+        i18n: { [locale: string]: PlanI18n }
+      }
+    }
+  },
+  
+  // Credit consumption configuration
+  credits: {
+    consumptionMode: 'fixed' | 'dynamic',
+    fixedChatCost: number,              // Credits per chat (fixed mode)
+    dynamicChatCostPerKiloToken: number, // Credits per 1K tokens (dynamic mode)
+    modelMultipliers: {                  // Cost multipliers by AI model
+      [modelName: string]: number
+    }
+  }
+};
+```
+
+## Best Practices
+
+1. **Error Handling**
+   - Always wrap payment operations in try-catch blocks
+   - Log payment errors with order IDs for tracking
+   - Return appropriate error responses to clients
+
+2. **Webhook Security**
+   - Verify webhook signatures
+   - Process webhooks idempotently
+   - Return 200 status quickly
+
+3. **Order Management**
+   - Create order record before payment
+   - Update order status after webhook
+   - Handle payment timeouts
+
+4. **Testing**
+   - Use test mode configurations
+   - Test both success and failure scenarios
+   - Verify webhook handling
+
+## Common Issues
+
+1. **Webhook Handling**
+   - Ensure correct signature verification
+   - Handle all relevant event types
+   - Implement proper error handling
+
+2. **Payment Status**
+   - Handle payment timeout scenarios
+   - Implement status polling for WeChat Pay
+   - Update order status appropriately
+
+3. **Configuration**
+   - Verify all required environment variables
+   - Check certificate paths for WeChat Pay
+   - Validate webhook URLs
+
+4. **Credit System**
+   - Use `safeNumber()` to prevent NaN/Infinity in calculations
+   - Always validate token counts before credit consumption
+   - Use `TransactionTypeCode` constants for transaction descriptions
+   - Check credit balance before allowing AI operations
+
+## Credit System API Endpoints
+
+```typescript
+// Get user credit balance
+GET /api/credits/balance
+
+// Get transaction history
+GET /api/credits/transactions?page=1&limit=10
+
+// Get complete status (credits + subscription)
+GET /api/credits/status
+```

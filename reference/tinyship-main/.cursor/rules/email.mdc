@@ -1,0 +1,181 @@
+# Email Template Development Guidelines
+
+## File Structure
+
+```
+libs/email/
+├── templates/
+│   ├── index.ts         # Template generation functions and types
+│   ├── verification.mjml # Verification email template
+│   └── reset-password.mjml # Password reset template
+├── providers/
+│   ├── resend.ts       # Resend provider implementation
+│   └── types.ts        # Common provider types
+└── templates-sender.ts  # High-level sending functions
+```
+
+## Adding New Email Templates
+
+1. **Define Template Types First**
+   - Add new template parameters interface in `templates/index.ts`
+   - Follow the existing pattern for email parameters
+   - Include all required fields and optional configurations
+
+```typescript
+// Example structure in templates/index.ts
+export interface WelcomeEmailParams {
+  name: string;
+  welcome_url: string;
+  expiry_hours: number;
+  locale?: string; // Always include locale for i18n support
+}
+
+export interface EmailTemplate {
+  subject: string;
+  html: string;
+}
+```
+
+2. **Create MJML Template**
+   - Create new `.mjml` file in `templates/` directory
+   - Follow responsive design principles
+   - Use Handlebars syntax for dynamic content
+   - Test with MJML preview tool
+
+```mjml
+<mjml>
+  <mj-body>
+    <mj-section>
+      <mj-column>
+        <mj-text>
+          {{translations.email.welcome.greeting}}
+        </mj-text>
+        <!-- Add more content -->
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>
+```
+
+3. **Add i18n Support**
+   - Add translations to `i18n/locales/types.ts`
+   - Implement translations in language files
+   - Follow the email namespace pattern
+
+```typescript
+// In i18n/locales/types.ts
+export type Locale = {
+  email: {
+    welcome: {
+      subject: string
+      title: string
+      greeting: string
+      message: string
+      button: string
+      expiry: string
+      disclaimer: string
+      signature: string
+      copyright: string
+    }
+    // ... other email types
+  }
+}
+```
+
+4. **Implement Template Generation**
+   ```typescript
+   export function generateWelcomeEmail(params: WelcomeEmailParams): EmailTemplate {
+     const templatePath = path.resolve(__dirname, './welcome.mjml');
+     const mjmlTemplate = fs.readFileSync(templatePath, 'utf8');
+     
+     // Prepare translation data
+     const translationData = prepareTranslationData(params, 'welcome');
+     
+     // Compile MJML to HTML
+     const { html: mjmlHtml } = mjml2html(mjmlTemplate);
+     
+     // Apply Handlebars template
+     const template = Handlebars.compile(mjmlHtml);
+     const html = template({
+       ...params,
+       ...translationData
+     });
+     
+     // Get localized subject
+     const locale = params.locale && locales[params.locale] ? params.locale : defaultLocale;
+     const subject = locales[locale].email.welcome.subject;
+     
+     return { subject, html };
+   }
+   ```
+
+5. **Add Sender Function**
+   ```typescript
+   export async function sendWelcomeEmail(
+     to: string, 
+     params: WelcomeEmailParams,
+     options: Omit<SendEmailOptions, 'to' | 'subject' | 'html'> = {}
+   ): Promise<EmailResponse> {
+     const { subject, html } = templates.welcome(params);
+     
+     return sendEmail({
+       to,
+       subject,
+       html,
+       ...options
+     });
+   }
+   ```
+
+## Best Practices
+
+1. **Template Design**
+   - Use MJML components for responsive design
+   - Test on multiple email clients
+   - Keep templates simple and focused
+   - Use consistent branding elements
+
+2. **Internationalization**
+   - Always support multiple languages
+   - Use translation keys for all text content
+   - Include fallback to default language
+   - Test with different character sets
+
+3. **Error Handling**
+   - Implement proper error types
+   - Log email sending attempts
+   - Provide clear error messages
+   - Handle provider-specific errors
+
+4. **Security**
+   - Never include sensitive data in emails
+   - Use environment variables for credentials
+   - Validate email addresses
+   - Set appropriate expiry times for links
+
+5. **Testing**
+   - Preview templates before sending
+   - Test with different email clients
+   - Verify all dynamic content
+   - Check spam score
+
+## Common Patterns
+
+1. **Email Components**
+   - Header with logo
+   - Greeting with user's name
+   - Main content section
+   - Call-to-action button
+   - Footer with legal text
+
+2. **Variable Naming**
+   - Use snake_case for URL parameters
+   - Use camelCase for other variables
+   - Include type definitions
+   - Document all parameters
+
+3. **Provider Configuration**
+   - Support multiple providers
+   - Allow environment-based selection
+   - Implement retry logic
+   - Handle rate limits 

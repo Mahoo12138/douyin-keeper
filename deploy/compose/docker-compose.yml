@@ -1,0 +1,140 @@
+name: douyin-keeper
+
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-17-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-douyin_keeper}
+      POSTGRES_USER: ${POSTGRES_USER:-keeper}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-keeper} -d ${POSTGRES_DB:-douyin_keeper}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [keeper-internal]
+
+  redis:
+    image: redis:${REDIS_VERSION:-8-alpine}
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [keeper-internal]
+
+  migrate:
+    image: ${KEEPER_BACKEND_IMAGE:-douyin-keeper/backend:local}
+    command: ["/app/migrate", "up"]
+    restart: "no"
+    env_file: ../../.env
+    environment: &keeper-env
+      DATABASE_URL: postgres://${POSTGRES_USER:-keeper}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-douyin_keeper}?sslmode=disable
+      REDIS_ADDR: redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [keeper-internal]
+
+  backend:
+    image: ${KEEPER_BACKEND_IMAGE:-douyin-keeper/backend:local}
+    restart: unless-stopped
+    env_file: ../../.env
+    environment:
+      <<: *keeper-env
+      HTTP_ADDR: 0.0.0.0:8080
+    ports:
+      - "${KEEPER_HTTP_PORT:-8080}:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health/ready >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [keeper-internal]
+
+  scheduler:
+    image: ${KEEPER_WORKER_IMAGE:-douyin-keeper/worker:local}
+    command: ["/app/scheduler"]
+    restart: unless-stopped
+    env_file: ../../.env
+    environment: *keeper-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [keeper-internal]
+
+  worker-interactive:
+    image: ${KEEPER_WORKER_IMAGE:-douyin-keeper/worker:local}
+    command: ["/app/worker-interactive"]
+    restart: unless-stopped
+    env_file: ../../.env
+    environment: *keeper-env
+    shm_size: "1gb"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [keeper-internal]
+
+  worker-browser:
+    image: ${KEEPER_WORKER_IMAGE:-douyin-keeper/worker:local}
+    command: ["/app/worker-browser"]
+    restart: unless-stopped
+    env_file: ../../.env
+    environment: *keeper-env
+    shm_size: "2gb"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [keeper-internal]
+
+  worker-light:
+    image: ${KEEPER_WORKER_IMAGE:-douyin-keeper/worker:local}
+    command: ["/app/worker-light"]
+    restart: unless-stopped
+    env_file: ../../.env
+    environment: *keeper-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [keeper-internal]
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  keeper-internal:
+    driver: bridge

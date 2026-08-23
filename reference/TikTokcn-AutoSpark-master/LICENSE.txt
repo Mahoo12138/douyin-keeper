@@ -1,0 +1,106 @@
+MIT License
+
+Copyright (c) 2026 Kounva
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+=======================================================================
+# Supplementary Additional Terms (Supplementary to MIT License, Binding Effect Equally)
+# 附加补充条款（与MIT许可证具备同等约束力，使用软件即视为同意本条款）
+
+Disclaimer / 免责声明
+
+This software (TikTokcn-AutoSpark) is for personal learning and technical research only.
+This automated script operates the web version of Douyin to automatically
+maintain chat sparks and other interactive functions.
+
+本软件（TikTokcn-AutoSpark）仅供个人学习和技术研究使用，通过自动化脚本操作抖音网页端，实现自动续火花等交互功能。
+
+
+1. Risk Assumption / 风险自担
+
+All risks arising from the use of this software shall be borne solely by the user,
+including but not limited to account restrictions, permanent bans, platform risk
+control penalties, property losses, data loss, and related economic or legal liabilities.
+The developer shall not bear any associated responsibilities.
+
+使用者因使用本软件而产生的一切风险均由使用者本人承担，包括但不限于账号被限制、
+永久封号、平台风控处罚、财产损失、数据丢失以及相关经济或法律责任。开发者不承担
+任何关联责任。
+
+
+2. Platform Rule Compliance Reminder / 平台规则合规提醒
+
+Automated scripting operations may violate Douyin  China's User Agreement
+and community norms. Users shall independently judge and bear all consequences
+caused by violation of platform rules. The developer disclaims all liability for
+account penalties triggered by using this tool.
+
+自动化脚本操作可能违反抖音平台的《用户协议》及社区规范。使用者应自行判断
+并承担因违反平台规则而产生的一切后果。开发者对因使用本工具触发账号处罚不承担任何责任。
+
+
+3. No Availability Guarantee / 不保证可用性
+
+Douyin may adjust page styles, interface logic and verification rules at any time.
+The software does not guarantee stable operation under all environments and versions.
+The developer provides no warranty of usability, accuracy or stability.
+
+抖音 平台可能随时调整页面样式、接口逻辑及验证规则。本软件不保证在所有环境
+和版本下均能稳定运行。开发者不对软件的可用性、准确性或稳定性作任何保证。
+
+
+4. Strict Prohibited Usage Scenarios / 严格禁止的使用场景
+
+The software is FORBIDDEN to be used for the following behaviors; once violated,
+all rights granted by the MIT License will be automatically revoked:
+
+(1) Commercial exploitation: reselling, renting, providing paid agency services,
+    commercial training, or any form of paid derivative tools;
+(2) Malicious use of automated chat: sending spam, harassing, fraudulent, illegal,
+    or pornographic content via the automated messaging feature; using the tool to
+    impersonate others or access others' accounts without authorization;
+(3) Any illegal activity violating local national laws and regulations.
+
+本软件严禁用于以下行为，一经违反，MIT 许可证授予的全部权利自动撤销：
+
+(1) 商业牟利：转售、出租、提供付费代运营服务、商业培训及任何形式的付费衍生工具；
+(2) 恶意使用自动化聊天功能：通过自动发消息功能发送垃圾信息、骚扰、诈骗、违法或
+    色情内容；冒充他人身份或未经授权访问他人账号；
+(3) 任何违反所在国家/地区法律法规的非法活动。
+
+
+5. Legal Compliance Obligation / 法律合规义务
+
+Before downloading and running this software, users are obligated to confirm that
+their usage complies with local laws, regulations and network management rules.
+All legal liabilities arising from illegal use shall be fully borne by the user.
+
+使用者有义务在下载和运行本软件前确认其使用行为符合当地法律法规及网络管理规定。
+因违法使用产生的一切法律责任由使用者本人全部承担。
+
+
+By downloading, installing, copying or running this software, you fully acknowledge,
+understand and unconditionally agree to all terms of the MIT License and the above
+supplementary disclaimer. If you disagree with any clause, you must stop all use and
+completely delete all copies of the software immediately.
+
+下载、安装、复制或运行本软件即表示您充分知晓、理解并无条件同意 MIT 许可证及上述
+附加补充条款的全部内容。如不同意其中任何条款，您必须立即停止使用并彻底删除本软件
+的所有副本。

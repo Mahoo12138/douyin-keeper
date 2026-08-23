@@ -1,0 +1,88 @@
+---
+title: API 参考
+description: 完整的 API 文档和参考
+---
+
+# API 参考
+
+本节提供所有可用 API 的完整文档。
+
+## 身份验证
+
+所有 API 端点都需要使用 Bearer 令牌进行身份验证。
+
+```typescript
+const response = await fetch('/api/endpoint', {
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  },
+});
+```
+
+## 端点
+
+### GET /api/users
+
+获取用户列表。
+
+**响应**
+
+```json
+{
+  "data": [
+    {
+      "id": "1",
+      "name": "John Doe",
+      "email": "john@example.com"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 100
+  }
+}
+```
+
+### POST /api/users
+
+创建新用户。
+
+**请求体**
+
+```json
+{
+  "name": "Jane Doe",
+  "email": "jane@example.com"
+}
+```
+
+**响应**
+
+```json
+{
+  "id": "2",
+  "name": "Jane Doe",
+  "email": "jane@example.com",
+  "createdAt": "2024-01-01T00:00:00Z"
+}
+```
+
+## 错误处理
+
+所有 API 错误遵循一致的格式：
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "无效的请求参数",
+    "details": []
+  }
+}
+```
+
+## 速率限制
+
+API 请求限制为每用户每分钟 100 次请求。

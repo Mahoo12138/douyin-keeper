@@ -1,0 +1,83 @@
+/* TinyShip UI Styles */
+@import './themes/default.css';
+@import './themes/claude.css';
+@import './themes/cosmic-night.css';
+@import './themes/modern-minimal.css';
+@import './themes/ocean-breeze.css';
+@import './themes/perplexity.css';
+
+/* Typography / Prose overrides for @tailwindcss/typography */
+@import './prose.css';
+
+/* Utility Classes */
+.bg-gradient-chart-warm {
+  background: var(--gradient-chart-warm);
+}
+
+.bg-gradient-chart-cool {
+  background: var(--gradient-chart-cool);
+}
+
+.text-gradient-chart-warm {
+  background: var(--gradient-chart-warm);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-chart-cool {
+  background: var(--gradient-chart-cool);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Chart color utilities - using CSS variables */
+.bg-chart-1 { background: var(--chart-1); }
+.bg-chart-2 { background: var(--chart-2); }
+.bg-chart-3 { background: var(--chart-3); }
+.bg-chart-4 { background: var(--chart-4); }
+.bg-chart-5 { background: var(--chart-5); }
+
+.bg-chart-1-10 { background: var(--chart-1-bg-10); }
+.bg-chart-1-15 { background: var(--chart-1-bg-15); }
+.bg-chart-2-15 { background: var(--chart-2-bg-15); }
+.bg-chart-3-15 { background: var(--chart-3-bg-15); }
+.bg-chart-4-15 { background: var(--chart-4-bg-15); }
+.bg-chart-5-15 { background: var(--chart-5-bg-15); }
+
+.text-chart-1 { color: var(--chart-1); }
+.text-chart-2 { color: var(--chart-2); }
+.text-chart-3 { color: var(--chart-3); }
+.text-chart-4 { color: var(--chart-4); }
+.text-chart-5 { color: var(--chart-5); }
+
+
+
+/* Animation helpers */
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+} 

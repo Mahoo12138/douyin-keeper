@@ -1,0 +1,8 @@
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS site_settings;
+DROP TABLE IF EXISTS douyin_accounts;
+DROP TABLE IF EXISTS subscriptions;
+DROP TABLE IF EXISTS plans;
+DROP TABLE IF EXISTS email_codes;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS users;

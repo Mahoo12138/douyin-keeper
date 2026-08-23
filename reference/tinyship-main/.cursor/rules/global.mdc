@@ -1,0 +1,63 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Global Cursor Rules for ShipEasy Project
+
+## Code Comment Standards
+
+### Language Requirements
+- **All code comments MUST be written in English only**
+- **All variable names, function names, and identifiers MUST be in English**
+
+### Comment Guidelines
+- Add meaningful comments for complex logic
+- Use JSDoc comments for functions and components
+- Use descriptive variable and function names
+- Comments should explain WHY, not just WHAT
+- Keep comments concise but clear
+
+### Basic Code Style
+- Use TypeScript for all new code
+- Follow consistent naming conventions:
+  - camelCase for variables and functions
+  - PascalCase for components and classes
+  - kebab-case for file names and directories
+  - UPPER_SNAKE_CASE for constants
+
+## Examples
+
+### ✅ Good Comment (English)
+```typescript
+// Calculate the total price including tax and discounts
+const totalPrice = basePrice * (1 + taxRate) - discountAmount;
+
+/**
+ * Validates user input and returns sanitized data
+ * @param input - Raw user input
+ * @returns Sanitized and validated data
+ */
+function validateInput(input: string): string {
+  // Remove potentially dangerous characters
+  return input.replace(/[<>]/g, '');
+}
+```
+
+### ❌ Bad Comment (Non-English)
+```typescript
+// 计算包含税费和折扣的总价格
+const totalPrice = basePrice * (1 + taxRate) - discountAmount;
+
+/**
+ * 验证用户输入并返回清理后的数据
+ * @param input - 原始用户输入
+ * @returns 清理和验证后的数据
+ */
+function validateInput(input: string): string {
+  // 移除潜在危险字符
+  return input.replace(/[<>]/g, '');
+}
+```
+
+Remember: Code is read more often than it's written. Clear, English comments help maintain a consistent codebase that all team members can understand and contribute to effectively. 

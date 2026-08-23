@@ -1,0 +1,444 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Validator Development Rules for ShipEasy
+
+## 🌟 Modern Internationalized Validator System
+
+ShipEasy uses a Zod-based internationalized validator system that supports Vue.js (Nuxt), React (Next.js), and React (TanStack Start) frameworks.
+
+## 🎯 Core Principles
+
+### Internationalization First
+- **All validators must support internationalization** - Use translation keys instead of hardcoded error messages
+- **Parameter interpolation support** - Error messages support dynamic parameters (e.g., "Password must be at least {min} characters")
+- **Triple framework compatibility** - Vue.js uses `t` function directly, Next.js and TanStack Start use `createNextTranslationFunction`
+
+### Validator Factory Pattern
+```typescript
+// All validators must be created through factory functions
+export function createValidators(t: TranslationFunction) {
+  // Validator definitions...
+  return { userSchema, loginFormSchema, /* ... */ }
+}
+```
+
+## 📋 Complete Steps for Adding New Validators
+
+### 1️⃣ Prepare Translation Keys
+
+**Step 1**: Add error messages to translation files
+
+```typescript
+// libs/i18n/locales/en.ts
+export default {
+  validators: {
+    user: {
+      // Existing keys...
+    },
+    // New business domain
+    subscription: {
+      planId: {
+        required: "Please select a subscription plan",
+        invalid: "Invalid subscription plan"
+      },
+      billingCycle: {
+        required: "Please select billing cycle",
+        invalid: "Billing cycle must be monthly or yearly"
+      }
+    }
+  }
+}
+
+// libs/i18n/locales/zh-CN.ts 
+export default {
+  validators: {
+    user: {
+      // Existing keys...
+    },
+    subscription: {
+      planId: {
+        required: "请选择订阅计划",
+        invalid: "无效的订阅计划"
+      },
+      billingCycle: {
+        required: "请选择计费周期", 
+        invalid: "计费周期必须为月付或年付"
+      }
+    }
+  }
+}
+```
+
+### 2️⃣ Create Validator File
+
+**Step 2**: Create new validator file
+
+```typescript
+// libs/validators/subscription.ts
+import { z } from 'zod'
+
+// Translation function type
+type TranslationFunction = (key: string, params?: Record<string, any>) => string
+
+// Business constants (if needed)
+export const billingCycles = ['monthly', 'yearly'] as const
+export const planTypes = ['basic', 'pro', 'enterprise'] as const
+
+// Validator factory function
+export function createSubscriptionValidators(t: TranslationFunction) {
+  // Base subscription schema
+  const subscriptionSchema = z.object({
+    planId: z.string()
+      .min(1, t('validators.subscription.planId.required')),
+    billingCycle: z.enum(['monthly', 'yearly'], {
+      errorMap: () => ({ message: t('validators.subscription.billingCycle.invalid') })
+    }),
+    userId: z.string()
+      .min(1, t('validators.subscription.userId.required')),
+    status: z.enum(['active', 'inactive', 'cancelled']).default('active'),
+    startDate: z.date(),
+    endDate: z.date().optional(),
+  })
+
+  // Form validators
+  const createSubscriptionFormSchema = subscriptionSchema.pick({
+    planId: true,
+    billingCycle: true,
+  })
+
+  const updateSubscriptionSchema = subscriptionSchema.pick({
+    planId: true,
+    billingCycle: true,
+    status: true,
+  }).partial()
+
+  // Operation validators
+  const cancelSubscriptionSchema = z.object({
+    subscriptionId: z.string().min(1, t('validators.subscription.id.required')),
+    reason: z.string().optional(),
+  })
+
+  return {
+    subscriptionSchema,
+    createSubscriptionFormSchema,
+    updateSubscriptionSchema,
+    cancelSubscriptionSchema,
+  }
+}
+
+// Export types
+export type SubscriptionValidators = ReturnType<typeof createSubscriptionValidators>
+```
+
+### 3️⃣ Update Main Export File
+
+**Step 3**: Update `libs/validators/index.ts`
+
+```typescript
+// libs/validators/index.ts
+// Export user validators
+export { createValidators as createUserValidators, countryCodes, type CountryCode } from './user'
+
+// Export new subscription validators
+export { createSubscriptionValidators } from './subscription'
+
+// Next.js translation function factory
+export function createNextTranslationFunction(translations: any) {
+  return (key: string, params?: Record<string, any>) => {
+    const value = key.split('.').reduce((obj, path) => obj?.[path], translations)
+    if (!params || typeof value !== 'string') return value
+    return Object.entries(params).reduce((message, [key, value]) => {
+      return message.replace(`{${key}}`, String(value))
+    }, value)
+  }
+}
+```
+
+### 4️⃣ Vue.js (Nuxt) Usage
+
+**Step 4**: Use in Nuxt.js components
+
+```vue
+<script setup lang="ts">
+import { createUserValidators, createSubscriptionValidators } from '@libs/validators'
+import { toTypedSchema } from '@vee-validate/zod'
+import { useForm } from 'vee-validate'
+
+// Use Vue i18n's t function directly
+const { t } = useI18n()
+
+// Create validators
+const { loginFormSchema } = createUserValidators(t)
+const { createSubscriptionFormSchema } = createSubscriptionValidators(t)
+
+// Use in form
+const { handleSubmit, errors, defineField } = useForm({
+  validationSchema: toTypedSchema(createSubscriptionFormSchema),
+  mode: 'onBlur'
+})
+</script>
+```
+
+### 5️⃣ React (Next.js) Usage
+
+**Step 5**: Use in Next.js components
+
+```tsx
+'use client'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { createUserValidators, createSubscriptionValidators, createNextTranslationFunction } from '@libs/validators'
+import { useTranslation } from '@/hooks/use-translation'
+
+export function SubscriptionForm() {
+  // Get translation function
+  const { t } = useTranslation()
+  const tWithParams = createNextTranslationFunction(t)
+
+  // Create validators
+  const { createSubscriptionFormSchema } = createSubscriptionValidators(tWithParams)
+
+  // Form configuration
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    resolver: zodResolver(createSubscriptionFormSchema),
+    mode: 'onBlur',
+    defaultValues: {
+      planId: '',
+      billingCycle: 'monthly'
+    }
+  })
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      {/* Form fields */}
+    </form>
+  )
+}
+```
+
+### 6️⃣ Add Unit Tests
+
+**Step 6**: Create test file
+
+```typescript
+// tests/unit/validators/subscription.test.ts
+import { describe, expect, it } from 'vitest'
+import { createSubscriptionValidators } from '@libs/validators/subscription'
+
+// Mock translation function
+const mockT = (key: string, params?: Record<string, any>) => {
+  const messages: Record<string, string> = {
+    'validators.subscription.planId.required': 'Please select a subscription plan',
+    'validators.subscription.billingCycle.invalid': 'Billing cycle must be monthly or yearly'
+  }
+  let message = messages[key] || key
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      message = message.replace(`{${key}}`, String(value))
+    })
+  }
+  return message
+}
+
+describe('Subscription Validators', () => {
+  const validators = createSubscriptionValidators(mockT)
+
+  describe('createSubscriptionFormSchema', () => {
+    it('should validate valid subscription form', () => {
+      const result = validators.createSubscriptionFormSchema.safeParse({
+        planId: 'plan_123',
+        billingCycle: 'monthly'
+      })
+      expect(result.success).toBe(true)
+    })
+
+    it('should reject missing planId', () => {
+      const result = validators.createSubscriptionFormSchema.safeParse({
+        billingCycle: 'monthly'
+      })
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues[0].message).toBe('Please select a subscription plan')
+      }
+    })
+  })
+})
+```
+
+### 7️⃣ Update Documentation
+
+**Step 7**: Update README documentation
+
+```markdown
+# Add to libs/validators/README.md
+
+## Available Validators
+
+### Subscription Related Validators
+
+```typescript
+const {
+  // Base subscription validation
+  subscriptionSchema,           // Complete subscription info validation
+  createSubscriptionFormSchema, // Create subscription form validation
+  updateSubscriptionSchema,     // Update subscription validation
+  cancelSubscriptionSchema,     // Cancel subscription validation
+} = createSubscriptionValidators(translationFunction)
+```
+```
+
+## 🛠️ Validator Patterns and Best Practices
+
+### Naming Conventions
+- **Validator factories**: `create{Domain}Validators` (e.g., `createUserValidators`, `createSubscriptionValidators`)
+- **Base validators**: `{entity}Schema` (e.g., `userSchema`, `subscriptionSchema`)
+- **Form validators**: `{action}FormSchema` (e.g., `signupFormSchema`, `createSubscriptionFormSchema`)
+- **Operation validators**: `{action}Schema` (e.g., `changePasswordSchema`, `cancelSubscriptionSchema`)
+
+### Validator Patterns
+
+#### Base Entity Validator
+```typescript
+const entitySchema = z.object({
+  // Required fields first
+  id: z.string().min(1, t('validators.entity.id.required')),
+  name: z.string()
+    .min(2, t('validators.entity.name.minLength', { min: 2 }))
+    .max(50, t('validators.entity.name.maxLength', { max: 50 })),
+  
+  // Optional fields
+  description: z.string().optional(),
+  createdAt: z.date().default(() => new Date()),
+})
+```
+
+#### Form Validator Extension
+```typescript
+const createEntityFormSchema = entitySchema.pick({
+  name: true,
+  description: true,
+}).extend({
+  confirmAction: z.boolean().refine(val => val === true, {
+    message: t('validators.entity.confirmAction.required')
+  })
+})
+```
+
+#### Parameter Interpolation Example
+```typescript
+// Support dynamic parameters in error messages
+z.string()
+  .min(8, t('validators.user.password.minLength', { min: 8 }))
+  .max(100, t('validators.user.password.maxLength', { max: 100 }))
+```
+
+### Phone Validation
+```typescript
+// Use existing country code system
+import { countryCodes } from '@libs/validators'
+
+const phoneLoginSchema = z.object({
+  countryCode: z.enum(countryCodes.map(c => c.code) as [string, ...string[]], {
+    errorMap: () => ({ message: t('validators.user.countryCode.required') })
+  }),
+  phone: z.string()
+    .min(1, t('validators.user.phoneNumber.required'))
+    .refine((phone) => {
+      // Validate phone number length based on country code
+      return phone.length >= 8 && phone.length <= 15
+    }, t('validators.user.phoneNumber.invalid'))
+})
+```
+
+## 🧪 Testing Requirements
+
+### Required Test Coverage
+1. **Valid data validation** - Test correct data formats
+2. **Invalid data validation** - Test various error cases
+3. **Edge cases** - Test min/max values
+4. **Parameter interpolation** - Test translation parameters are correctly replaced
+5. **Internationalization** - Test error messages in different languages
+
+### Test Template
+```typescript
+describe('{Domain} Validators', () => {
+  const mockT = (key: string, params?: Record<string, any>) => {
+    // Mock translation logic
+    return `translated: ${key}${params ? ` with ${JSON.stringify(params)}` : ''}`
+  }
+  
+  const validators = create{Domain}Validators(mockT)
+  
+  describe('{schemaName}', () => {
+    it('should validate valid data', () => {
+      // Test valid data
+    })
+    
+    it('should reject invalid data with proper error message', () => {
+      // Test invalid data and error messages
+    })
+  })
+})
+```
+
+## 🎯 Form Integration Best Practices
+
+### Unified Form Configuration
+```typescript
+// Recommended form configuration - keep all forms consistent
+const form = useForm({
+  resolver: zodResolver(schema),
+  mode: 'onBlur',              // Blur validation
+  reValidateMode: 'onChange',  // Real-time validation after correction
+  defaultValues: { /* Provide defaults */ }
+})
+```
+
+### Error Message Display
+```tsx
+// Use validator error messages directly
+{errors.fieldName && (
+  <span className="error">{errors.fieldName.message}</span>
+)}
+```
+
+### Type Safety
+```typescript
+import type { z } from 'zod'
+
+// Automatically infer form data types
+type FormData = z.infer<typeof formSchema>
+type EntityData = z.infer<typeof entitySchema>
+```
+
+## 🚫 Don't Do
+
+- ❌ **Hardcode error messages** - Must use translation keys
+- ❌ **Skip internationalization** - All new validators must support i18n
+- ❌ **Inconsistent naming** - Must follow naming conventions
+- ❌ **Missing tests** - Validators must have complete test coverage
+- ❌ **Complex validation logic** - Keep validators simple and focused
+- ❌ **Ignore type safety** - Must provide complete TypeScript types
+
+## ✅ Do
+
+- ✅ **Use factory pattern** - All validators created through factory functions
+- ✅ **Support parameter interpolation** - Error messages support dynamic parameters
+- ✅ **Triple framework compatibility** - Ensure Vue.js (Nuxt), React (Next.js), and React (TanStack Start) all work properly
+- ✅ **Consistent validation experience** - Use `onBlur` mode
+- ✅ **Complete testing** - Cover all validation scenarios
+- ✅ **Clear documentation** - Update README and example code
+- ✅ **Type safety** - Export inferred type definitions
+
+## 📚 Related Resources
+
+- **Main documentation**: `libs/validators/README.md`
+- **English documentation**: `libs/validators/README.en.md`
+- **Test examples**: `tests/unit/validators/user.test.ts`
+- **Live examples**: 
+  - Next.js: `/test-validator-nextjs`
+  - Nuxt.js: `/test-validator`
+  - TanStack Start: same patterns as Next.js client components

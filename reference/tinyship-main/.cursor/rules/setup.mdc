@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+
+# 基本规则
+
+- [arch.md](mdc:docs/arch.md) 注意使用这里面的项目架构信息
+- 请记住生成的过程不要过度设计，不要实现任何代码，生成的文档中不要提供大段完整代码，只有简单示例即可。

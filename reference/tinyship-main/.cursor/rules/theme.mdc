@@ -1,0 +1,245 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# TinyShip UI Theme System Development Rules
+
+## Overview
+TinyShip UI uses a pure CSS-based multi-theme system with CSS variables and Tailwind CSS. The system supports multiple color schemes (Default, Claude, Cosmic Night) with automatic dark mode adaptation.
+
+## Theme System Architecture
+
+### Core Principles
+1. **Separation of Concerns**: UI Library (pure CSS) separate from Application (React components)
+2. **CSS-First**: Leverage native CSS features with CSS variables
+3. **Type Safety**: Full TypeScript support for theme management
+4. **Scalability**: Easy to add new themes via configuration
+
+### File Structure
+```
+libs/ui/styles/
+├── themes/
+│   ├── default.css      # Base theme (:root)
+│   ├── claude.css       # .theme-claude override
+│   ├── cosmic-night.css # .theme-cosmic-night override
+│   └── new-theme.css    # .theme-new-theme override
+└── index.css           # Main styles and utilities
+```
+
+## Adding a New Theme
+
+### Step 1: Create Theme CSS File
+Create `libs/ui/styles/themes/your-theme-name.css`:
+
+```css
+/* Your Theme Name - CSS Variables */
+.theme-your-theme-name {
+  /* Core colors */
+  --background: oklch(/* your values */);
+  --foreground: oklch(/* your values */);
+  --card: oklch(/* your values */);
+  --card-foreground: oklch(/* your values */);
+  --popover: oklch(/* your values */);
+  --popover-foreground: oklch(/* your values */);
+  --primary: oklch(/* your values */);
+  --primary-foreground: oklch(/* your values */);
+  --secondary: oklch(/* your values */);
+  --secondary-foreground: oklch(/* your values */);
+  --muted: oklch(/* your values */);
+  --muted-foreground: oklch(/* your values */);
+  --accent: oklch(/* your values */);
+  --accent-foreground: oklch(/* your values */);
+  --destructive: oklch(/* your values */);
+  --destructive-foreground: oklch(/* your values */);
+  --border: oklch(/* your values */);
+  --input: oklch(/* your values */);
+  --ring: oklch(/* your values */);
+  
+  /* Chart colors (5 colors required) */
+  --chart-1: oklch(/* your values */);
+  --chart-2: oklch(/* your values */);
+  --chart-3: oklch(/* your values */);
+  --chart-4: oklch(/* your values */);
+  --chart-5: oklch(/* your values */);
+  
+  /* Sidebar colors */
+  --sidebar: oklch(/* your values */);
+  --sidebar-foreground: oklch(/* your values */);
+  --sidebar-primary: oklch(/* your values */);
+  --sidebar-primary-foreground: oklch(/* your values */);
+  --sidebar-accent: oklch(/* your values */);
+  --sidebar-accent-foreground: oklch(/* your values */);
+  --sidebar-border: oklch(/* your values */);
+  --sidebar-ring: oklch(/* your values */);
+  
+  --radius: 0.5rem;
+
+  /* Chart color utilities - Light mode */
+  --chart-1-bg: var(--chart-1);
+  --chart-2-bg: var(--chart-2);
+  --chart-3-bg: var(--chart-3);
+  --chart-4-bg: var(--chart-4);
+  --chart-5-bg: var(--chart-5);
+  
+  --chart-1-bg-10: oklch(/* chart-1 with 0.1 alpha */);
+  --chart-1-bg-15: oklch(/* chart-1 with 0.15 alpha */);
+  --chart-2-bg-15: oklch(/* chart-2 with 0.15 alpha */);
+  --chart-3-bg-15: oklch(/* chart-3 with 0.15 alpha */);
+  --chart-4-bg-15: oklch(/* chart-4 with 0.15 alpha */);
+  --chart-5-bg-15: oklch(/* chart-5 with 0.15 alpha */);
+  
+  --chart-1-text: var(--chart-1);
+  --chart-2-text: var(--chart-2);
+  --chart-3-text: var(--chart-3);
+  --chart-4-text: var(--chart-4);
+  --chart-5-text: var(--chart-5);
+  
+  /* Gradients - Light mode */
+  --gradient-chart-warm: linear-gradient(to right, /* 2 colors */);
+  --gradient-chart-cool: linear-gradient(to right, /* 2 colors */);
+}
+
+.theme-your-theme-name.dark {
+  /* Dark mode overrides - repeat all variables with dark mode values */
+  /* Update chart colors and gradients for dark mode */
+}
+```
+
+### Step 2: Import Theme in Index
+Add to `libs/ui/styles/index.css`:
+```css
+@import './themes/your-theme-name.css';
+```
+
+### Step 3: Update TypeScript Types
+In the `use-theme.tsx` hook (shared in `libs/react-shared/hooks/` or app-specific):
+```typescript
+type ColorScheme = 'default' | 'claude' | 'cosmic-night' | 'your-theme-name'
+```
+
+### Step 4: Update Theme Configuration
+In the theme toggle component (shared in `libs/react-shared/components/` or app-specific):
+```typescript
+const THEME_CONFIG = {
+  // ... existing themes
+  'your-theme-name': {
+    name: 'Your Theme Display Name',
+    color: '#hexcolor' // Primary color of your theme
+  }
+} as const
+```
+
+### Step 5: Update Theme Logic
+In the `use-theme.tsx` hook, add to the classList management:
+```typescript
+root.classList.remove('light', 'dark', 'theme-default', 'theme-claude', 'theme-cosmic-night', 'theme-your-theme-name')
+
+// Add condition for your theme
+if (colorScheme === 'your-theme-name') {
+  root.classList.add('theme-your-theme-name')
+}
+```
+
+## Color Guidelines
+
+### OKLCH Color Format
+- Use OKLCH color format for all color values
+- Format: `oklch(lightness chroma hue)`
+- Lightness: 0-1 (0 = black, 1 = white)
+- Chroma: 0-0.4 (saturation intensity)
+- Hue: 0-360 (color wheel degrees)
+
+### Chart Color Requirements
+- Provide exactly 5 distinct chart colors
+- Ensure good contrast in both light and dark modes
+- Colors should be visually distinguishable
+- Consider accessibility (color blindness)
+
+### Gradient Guidelines
+- Provide 2 gradients: warm and cool
+- Use 2-color gradients for better harmony
+- Ensure gradients work in both light and dark modes
+
+## Testing Checklist
+
+### Visual Testing
+- [ ] Test all chart colors in light mode
+- [ ] Test all chart colors in dark mode
+- [ ] Verify gradient appearances
+- [ ] Check text readability on all backgrounds
+- [ ] Test component hover states
+- [ ] Verify border and input field visibility
+
+### Functional Testing
+- [ ] Theme switching works correctly
+- [ ] localStorage persistence works
+- [ ] CSS classes applied correctly
+- [ ] No console errors
+- [ ] TypeScript compilation passes
+
+### Accessibility Testing
+- [ ] Sufficient color contrast ratios
+- [ ] Color-blind friendly palette
+- [ ] Focus indicators visible
+- [ ] Screen reader compatibility
+
+## Best Practices
+
+### Color Selection
+1. Start with a primary color that defines your theme
+2. Generate a cohesive palette using color theory
+3. Test in both light and dark environments
+4. Ensure accessibility compliance (WCAG 2.1 AA)
+
+### Naming Conventions
+- Use kebab-case for theme names: `theme-my-theme`
+- Keep names descriptive but concise
+- Avoid special characters or numbers
+
+### Documentation
+- Update README.md with new theme information
+- Add theme description and color palette info
+- Include usage examples if theme has special characteristics
+
+## Common Pitfalls
+
+### Avoid These Mistakes
+1. **Inconsistent alpha values**: Use standard 0.1, 0.15 alpha values
+2. **Missing dark mode**: Always provide dark mode variants
+3. **Poor contrast**: Test readability thoroughly
+4. **Incomplete chart utilities**: Ensure all chart-*-bg and chart-*-text variables are defined
+5. **Gradient complexity**: Keep gradients simple (2 colors max)
+6. **CSS specificity issues**: Use consistent class naming patterns
+
+### Performance Considerations
+- CSS variables are efficient - no runtime overhead
+- Avoid complex gradients that may impact rendering
+- Test theme switching performance on slower devices
+
+## Integration Examples
+
+### Basic Usage
+```html
+<!-- Apply theme via CSS class -->
+<html class="theme-your-theme-name">
+<html class="theme-your-theme-name dark">
+```
+
+### React Integration
+```typescript
+// Theme switching
+const { setColorScheme } = useTheme()
+setColorScheme('your-theme-name')
+```
+
+### CSS Custom Properties
+```css
+.my-component {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: 1px solid var(--border);
+}
+```
+
+This rule ensures consistent theme development and helps maintain the quality and compatibility of the TinyShip UI theme system. 
