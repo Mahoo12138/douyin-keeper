@@ -30,12 +30,23 @@ func NewAdminRepo(pool *pgxpool.Pool, rdb *redis.Client) *AdminRepo {
 }
 
 func (r *AdminRepo) ListUserSummaries(ctx context.Context, limit int) ([]admin.UserSummary, error) {
-	return r.listUserSummaries(ctx, admin.UserListFilter{Limit: limit})
+	return r.listUserSummaries(ctx, admin.UserListFilter{Limit: limit}, nil)
 }
 
 func (r *AdminRepo) ListUserSummariesPage(ctx context.Context, filter admin.UserListFilter) ([]admin.UserSummary, error) {
 	filter.Limit++
-	return r.listUserSummaries(ctx, filter)
+	return r.listUserSummaries(ctx, filter, nil)
+}
+
+func (r *AdminRepo) GetUserSummary(ctx context.Context, publicID uuid.UUID) (admin.UserSummary, error) {
+	items, err := r.listUserSummaries(ctx, admin.UserListFilter{Limit: 1}, &publicID)
+	if err != nil {
+		return admin.UserSummary{}, err
+	}
+	if len(items) != 1 {
+		return admin.UserSummary{}, apperr.NotFound(apperr.CodeNotFound, "user not found")
+	}
+	return items[0], nil
 }
 
 func (r *AdminRepo) ListJobSummaries(ctx context.Context, filter admin.JobListFilter) ([]admin.JobSummary, error) {
@@ -99,7 +110,7 @@ func (r *AdminRepo) listJobSummaries(ctx context.Context, filter admin.JobListFi
 	return items, nil
 }
 
-func (r *AdminRepo) listUserSummaries(ctx context.Context, filter admin.UserListFilter) ([]admin.UserSummary, error) {
+func (r *AdminRepo) listUserSummaries(ctx context.Context, filter admin.UserListFilter, publicID *uuid.UUID) ([]admin.UserSummary, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT
 			u.id,
@@ -131,8 +142,9 @@ func (r *AdminRepo) listUserSummaries(ctx context.Context, filter admin.UserList
 		FROM users u
 		WHERE u.deleted_at IS NULL
 		  AND ($1::timestamptz IS NULL OR (u.created_at,u.id) < ($1::timestamptz,$2::bigint))
+		  AND ($3::uuid IS NULL OR u.public_id = $3)
 		ORDER BY u.created_at DESC, u.id DESC
-		LIMIT $3`, filter.AfterCreatedAt, filter.AfterID, filter.Limit)
+		LIMIT $4`, filter.AfterCreatedAt, filter.AfterID, publicID, filter.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -161,6 +173,65 @@ func (r *AdminRepo) listUserSummaries(ctx context.Context, filter admin.UserList
 		return nil, err
 	}
 	return items, nil
+}
+
+func (r *AdminRepo) SetUserStatus(ctx context.Context, actorID int64, publicID uuid.UUID, status string) (admin.UserSummary, error) {
+	if actorID <= 0 || publicID == uuid.Nil {
+		return admin.UserSummary{}, admin.ErrInvalidUser
+	}
+	if status != admin.UserStatusActive && status != admin.UserStatusDisabled {
+		return admin.UserSummary{}, admin.ErrInvalidUserStatus
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return admin.UserSummary{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var userID int64
+	var currentStatus string
+	if err := tx.QueryRow(ctx, `
+		SELECT id, status
+		FROM users
+		WHERE public_id=$1 AND deleted_at IS NULL
+		FOR UPDATE`, publicID).Scan(&userID, &currentStatus); err != nil {
+		return admin.UserSummary{}, mapNoRows(err, apperr.CodeNotFound, "user not found")
+	}
+
+	if currentStatus != status {
+		if _, err := tx.Exec(ctx, `UPDATE users SET status=$2, updated_at=now() WHERE id=$1`, userID, status); err != nil {
+			return admin.UserSummary{}, err
+		}
+		if status == admin.UserStatusDisabled {
+			if _, err := tx.Exec(ctx, `
+				UPDATE auth_sessions
+				SET revoked_at=COALESCE(revoked_at, now()), revoke_reason='user disabled'
+				WHERE user_id=$1 AND revoked_at IS NULL`, userID); err != nil {
+				return admin.UserSummary{}, err
+			}
+			if _, err := tx.Exec(ctx, `
+				UPDATE auth_refresh_tokens t
+				SET revoked_at=COALESCE(t.revoked_at, now())
+				FROM auth_sessions s
+				WHERE t.session_id=s.id AND s.user_id=$1 AND t.revoked_at IS NULL`, userID); err != nil {
+				return admin.UserSummary{}, err
+			}
+		}
+		action := "user.enable"
+		if status == admin.UserStatusDisabled {
+			action = "user.disable"
+		}
+		detail, _ := json.Marshal(map[string]any{"status": status})
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, detail_json)
+			VALUES ($1,$2,'user',$3,$4)`, actorID, action, publicID.String(), detail); err != nil {
+			return admin.UserSummary{}, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return admin.UserSummary{}, err
+	}
+	return r.GetUserSummary(ctx, publicID)
 }
 
 func (r *AdminRepo) ListAccountSummaries(ctx context.Context, limit int) ([]admin.AccountSummary, error) {

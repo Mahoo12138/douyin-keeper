@@ -36,6 +36,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/users/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAdminUser"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateAdminUser"];
+        trace?: never;
+    };
     "/admin/accounts": {
         parameters: {
             query?: never;
@@ -1042,6 +1058,10 @@ export interface components {
             /** Format: date-time */
             entitlement_expires_at?: string | null;
         };
+        AdminUpdateUserRequest: {
+            /** @enum {string} */
+            status: "active" | "disabled";
+        };
         AdminAccountCapability: {
             name: string;
             /** @enum {string} */
@@ -1703,6 +1723,7 @@ export interface components {
         AccountId: string;
         Limit: number;
         Cursor: string;
+        UserId: string;
     };
     requestBodies: never;
     headers: never;
@@ -1753,6 +1774,54 @@ export interface operations {
                         items: components["schemas"]["AdminUser"][];
                         next_cursor: string | null;
                     };
+                };
+            };
+        };
+    };
+    getAdminUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrator user detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"];
+                };
+            };
+        };
+    };
+    updateAdminUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUpdateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated administrator user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"];
                 };
             };
         };

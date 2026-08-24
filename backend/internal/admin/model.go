@@ -14,6 +14,8 @@ import (
 
 var ErrUnknownAdapter = errors.New("admin: unknown adapter")
 var ErrInvalidAccount = errors.New("admin: invalid account")
+var ErrInvalidUser = errors.New("admin: invalid user")
+var ErrInvalidUserStatus = errors.New("admin: invalid user status")
 var ErrInvalidSetting = errors.New("admin: invalid setting")
 
 const maxSettingValueBytes = 16 * 1024
@@ -55,6 +57,11 @@ type UserListFilter struct {
 	AfterCreatedAt *time.Time
 	AfterID        int64
 }
+
+const (
+	UserStatusActive   = "active"
+	UserStatusDisabled = "disabled"
+)
 
 type UserListPage struct {
 	Items         []UserSummary
@@ -292,6 +299,8 @@ type Setting struct {
 
 type Repository interface {
 	ListUserSummaries(ctx context.Context, limit int) ([]UserSummary, error)
+	GetUserSummary(ctx context.Context, publicID uuid.UUID) (UserSummary, error)
+	SetUserStatus(ctx context.Context, actorID int64, publicID uuid.UUID, status string) (UserSummary, error)
 	ListJobSummaries(ctx context.Context, filter JobListFilter) ([]JobSummary, error)
 	ListAccountSummaries(ctx context.Context, limit int) ([]AccountSummary, error)
 	GetRuntimeSummary(ctx context.Context) (RuntimeSummary, error)
@@ -335,6 +344,23 @@ func NewService(repo Repository) *Service {
 
 func (s *Service) ListUsers(ctx context.Context, limit int) ([]UserSummary, error) {
 	return s.repo.ListUserSummaries(ctx, normalizeLimit(limit))
+}
+
+func (s *Service) GetUser(ctx context.Context, publicID uuid.UUID) (UserSummary, error) {
+	if publicID == uuid.Nil {
+		return UserSummary{}, ErrInvalidUser
+	}
+	return s.repo.GetUserSummary(ctx, publicID)
+}
+
+func (s *Service) SetUserStatus(ctx context.Context, actorID int64, publicID uuid.UUID, status string) (UserSummary, error) {
+	if actorID <= 0 || publicID == uuid.Nil {
+		return UserSummary{}, ErrInvalidUser
+	}
+	if status != UserStatusActive && status != UserStatusDisabled {
+		return UserSummary{}, ErrInvalidUserStatus
+	}
+	return s.repo.SetUserStatus(ctx, actorID, publicID, status)
 }
 
 func (s *Service) ListJobsPage(ctx context.Context, filter JobListFilter) (JobListPage, error) {

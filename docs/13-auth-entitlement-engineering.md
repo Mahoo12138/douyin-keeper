@@ -63,6 +63,10 @@ deleted_at
 
 `disabled` 后所有现存 AuthSession 都视为无效。
 
+Admin 禁用用户时必须在同一事务中更新 `users.status`、撤销该用户全部 `auth_sessions` 和未使用
+Refresh Token，并写入 `user.disable` 审计日志；恢复用户只更新状态，不恢复旧会话，避免撤销后的
+凭据重新获得访问权。请求鉴权阶段仍需重新加载用户并拒绝 `status != active` 的访问令牌。
+
 ### 2.2 AuthIdentity
 
 MVP 建议只保留两种 Provider：

@@ -10,9 +10,17 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 )
+
+type middlewareUserStub struct{ user *auth.User }
+
+func (s middlewareUserStub) GetUserByPublicID(context.Context, uuid.UUID) (*auth.User, error) {
+	return s.user, nil
+}
 
 func requestThroughTrustedProxy(t *testing.T, r *http.Request) *http.Request {
 	t.Helper()
@@ -132,6 +140,23 @@ func TestForwardedHeadersRequireTrustedProxyPeer(t *testing.T) {
 	}
 	if got := clientIP(trusted); got != "198.51.100.7" {
 		t.Fatalf("trusted forwarded client IP = %q, want 198.51.100.7", got)
+	}
+}
+
+func TestAuthenticateRejectsDisabledUserBeforeHandler(t *testing.T) {
+	now := time.Date(2026, 8, 25, 9, 0, 0, 0, time.UTC)
+	user := &auth.User{PublicID: uuid.MustParse("99999999-9999-9999-9999-999999999999"), Role: auth.RoleUser, Status: auth.UserDisabled}
+	secret := []byte("test-signing-key")
+	token, err := auth.IssueAccess(secret, time.Minute, user, uuid.NewString(), auth.ClientWeb, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req = req.WithContext(context.Background())
+	_, err = authenticate(req, secret, middlewareUserStub{user: user})
+	if appErr, ok := apperr.As(err); !ok || appErr.Code != apperr.CodeUserDisabled || appErr.Kind != apperr.KindForbidden {
+		t.Fatalf("authenticate error = %v, want USER_DISABLED/forbidden", err)
 	}
 }
 

@@ -103,6 +103,8 @@ func (s *Server) Router() http.Handler {
 		})
 
 		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Get("/admin/users", s.handleAdminListUsers)
+		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Get("/admin/users/{userId}", s.handleAdminGetUser)
+		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Patch("/admin/users/{userId}", s.handleAdminUpdateUser)
 		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Get("/admin/accounts", s.handleAdminListAccounts)
 		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Post("/admin/accounts/{accountId}/pause", s.handleAdminPauseAccount)
 		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Post("/admin/accounts/{accountId}/resume", s.handleAdminResumeAccount)

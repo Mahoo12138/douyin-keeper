@@ -618,6 +618,10 @@ POST /admin/users/{id}/entitlement-grants
 
 `GET /admin/users` 默认返回 50 条、最多 100 条，按 `created_at DESC, id DESC`
 排序；通过 `cursor` 继续读取用户列表。
+`GET /admin/users/{id}` 返回用户基础信息、角色/状态、账号与任务使用量、最近登录和权益到期时间；
+`PATCH /admin/users/{id}` 请求体为 `{"status":"active"|"disabled"}`。禁用在同一事务中更新用户状态、
+撤销该用户全部 AuthSession 和 Refresh Token，并写入 `user.disable` 审计记录；恢复只恢复用户状态，
+不会复活旧会话，用户需重新登录。两个接口均不返回 Session、Cookie、密码或其他凭据。
 `GET /admin/accounts` 默认返回 50 条、最多 100 条，按 `created_at DESC, id DESC`
 排序；通过 `cursor` 继续读取账号列表。
 `GET /admin/risks` 默认返回 50 条、最多 100 条，按 `created_at DESC, id DESC`

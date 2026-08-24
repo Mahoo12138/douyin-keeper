@@ -7,8 +7,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/admin"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
 )
 
 type adminUserView struct {
@@ -21,6 +23,48 @@ type adminUserView struct {
 	AccountCount         int     `json:"account_count"`
 	TaskCount            int     `json:"task_count"`
 	EntitlementExpiresAt *string `json:"entitlement_expires_at"`
+}
+
+type adminUpdateUserRequest struct {
+	Status string `json:"status"`
+}
+
+func (s *Server) handleAdminGetUser(w http.ResponseWriter, r *http.Request) {
+	userID, err := uuid.Parse(pathParam(r, "userId"))
+	if err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid user id"))
+		return
+	}
+	user, err := s.admin.GetUser(r.Context(), userID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeOK(w, adminUserViewFrom(user))
+}
+
+func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
+	userID, err := uuid.Parse(pathParam(r, "userId"))
+	if err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid user id"))
+		return
+	}
+	var req adminUpdateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid user body"))
+		return
+	}
+	if req.Status != admin.UserStatusActive && req.Status != admin.UserStatusDisabled {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "status must be active or disabled"))
+		return
+	}
+	principal := auth.MustPrincipal(r.Context())
+	user, err := s.admin.SetUserStatus(r.Context(), principal.UserID, userID, req.Status)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeOK(w, adminUserViewFrom(user))
 }
 
 func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {

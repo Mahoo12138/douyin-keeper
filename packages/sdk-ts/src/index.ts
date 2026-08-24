@@ -46,6 +46,25 @@ export async function listAdminUsers(accessToken: string, options?: { limit?: nu
   return data
 }
 
+export async function getAdminUser(accessToken: string, userId: string) {
+  const { data, error } = await api.GET('/admin/users/{userId}', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { userId } },
+  })
+  if (error) throwApiError(error, 'admin user lookup failed')
+  return data
+}
+
+export async function updateAdminUser(accessToken: string, userId: string, body: components['schemas']['AdminUpdateUserRequest']) {
+  const { data, error } = await api.PATCH('/admin/users/{userId}', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { userId } },
+    body,
+  })
+  if (error) throwApiError(error, 'admin user update failed')
+  return data
+}
+
 export async function listAdminAccounts(accessToken: string, options?: { limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/admin/accounts', {
     headers: { Authorization: `Bearer ${accessToken}` },

@@ -14,6 +14,10 @@ type repositoryStub struct {
 	limit           int
 	userItems       []UserSummary
 	userFilter      UserListFilter
+	userDetail      UserSummary
+	userStatus      string
+	userActorID     int64
+	userPublicID    uuid.UUID
 	jobItems        []JobSummary
 	jobFilter       JobListFilter
 	accountItems    []AccountSummary
@@ -45,6 +49,17 @@ func (r *repositoryStub) ListUserSummaries(_ context.Context, limit int) ([]User
 func (r *repositoryStub) ListUserSummariesPage(_ context.Context, filter UserListFilter) ([]UserSummary, error) {
 	r.userFilter = filter
 	return r.userItems, nil
+}
+
+func (r *repositoryStub) GetUserSummary(_ context.Context, publicID uuid.UUID) (UserSummary, error) {
+	r.userPublicID = publicID
+	return r.userDetail, nil
+}
+
+func (r *repositoryStub) SetUserStatus(_ context.Context, actorID int64, publicID uuid.UUID, status string) (UserSummary, error) {
+	r.userActorID, r.userPublicID, r.userStatus = actorID, publicID, status
+	r.userDetail.Status = status
+	return r.userDetail, nil
 }
 
 func (r *repositoryStub) ListJobSummaries(_ context.Context, filter JobListFilter) ([]JobSummary, error) {
@@ -319,6 +334,32 @@ func TestServiceRejectsInvalidAccountPauseRequest(t *testing.T) {
 	_, err := NewService(&repositoryStub{}).SetAccountPaused(context.Background(), 42, uuid.Nil, true)
 	if !errors.Is(err, ErrInvalidAccount) {
 		t.Fatalf("error = %v, want ErrInvalidAccount", err)
+	}
+}
+
+func TestServiceGetsAndUpdatesUserStatus(t *testing.T) {
+	repo := &repositoryStub{userDetail: UserSummary{Status: UserStatusActive}}
+	service := NewService(repo)
+	publicID := uuid.MustParse("77777777-7777-7777-7777-777777777777")
+	if _, err := service.GetUser(context.Background(), publicID); err != nil {
+		t.Fatalf("GetUser() error = %v", err)
+	}
+	if got, err := service.SetUserStatus(context.Background(), 42, publicID, UserStatusDisabled); err != nil || got.Status != UserStatusDisabled {
+		t.Fatalf("SetUserStatus() = %+v, err = %v", got, err)
+	}
+	if repo.userActorID != 42 || repo.userPublicID != publicID || repo.userStatus != UserStatusDisabled {
+		t.Fatalf("status request = actor %d user %s status %s", repo.userActorID, repo.userPublicID, repo.userStatus)
+	}
+}
+
+func TestServiceRejectsInvalidUserStatusRequest(t *testing.T) {
+	service := NewService(&repositoryStub{})
+	publicID := uuid.MustParse("88888888-8888-8888-8888-888888888888")
+	if _, err := service.SetUserStatus(context.Background(), 42, publicID, "paused"); !errors.Is(err, ErrInvalidUserStatus) {
+		t.Fatalf("error = %v, want ErrInvalidUserStatus", err)
+	}
+	if _, err := service.SetUserStatus(context.Background(), 0, publicID, UserStatusActive); !errors.Is(err, ErrInvalidUser) {
+		t.Fatalf("error = %v, want ErrInvalidUser", err)
 	}
 }
 

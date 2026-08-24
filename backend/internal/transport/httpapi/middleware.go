@@ -409,6 +409,9 @@ func authenticate(r *http.Request, signingKey []byte, users authUserResolver) (a
 	if err != nil {
 		return auth.Principal{}, err
 	}
+	if !user.IsActive() {
+		return auth.Principal{}, apperr.New(apperr.CodeUserDisabled, apperr.KindForbidden, "account is disabled")
+	}
 	// ClientType from claims; if empty default web.
 	ct := auth.ClientType(claims.Client)
 	if ct == "" {

@@ -42,6 +42,35 @@ paths:
                     type:
                     - string
                     - 'null'
+  /admin/users/{userId}:
+    get:
+      operationId: getAdminUser
+      parameters:
+      - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Administrator user detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+    patch:
+      operationId: updateAdminUser
+      parameters:
+      - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUpdateUserRequest'
+      responses:
+        '200':
+          description: Updated administrator user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
   /admin/accounts:
     get:
       operationId: listAdminAccounts
@@ -1585,6 +1614,13 @@ components:
       in: query
       schema:
         type: string
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   schemas:
     User:
       type: object
@@ -1648,6 +1684,16 @@ components:
           - string
           - 'null'
           format: date-time
+    AdminUpdateUserRequest:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          enum:
+          - active
+          - disabled
     AdminAccountCapability:
       type: object
       required:
