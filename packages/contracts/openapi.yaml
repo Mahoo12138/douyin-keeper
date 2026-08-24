@@ -17,6 +17,30 @@ paths:
                 $ref: '#/components/schemas/User'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Administrator user summaries
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - next_cursor
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminUser'
+                  next_cursor:
+                    type:
+                    - string
+                    - 'null'
   /accounts:
     get:
       operationId: listAccounts
@@ -632,6 +656,51 @@ components:
           enum:
           - user
           - admin
+    AdminUser:
+      type: object
+      required:
+      - id
+      - display_name
+      - role
+      - status
+      - created_at
+      - account_count
+      - task_count
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        role:
+          type: string
+          enum:
+          - user
+          - admin
+        status:
+          type: string
+          enum:
+          - active
+          - disabled
+        created_at:
+          type: string
+          format: date-time
+        last_login_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        account_count:
+          type: integer
+          minimum: 0
+        task_count:
+          type: integer
+          minimum: 0
+        entitlement_expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
     Account:
       type: object
       required:

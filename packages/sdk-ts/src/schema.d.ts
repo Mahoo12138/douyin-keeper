@@ -20,6 +20,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAdminUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts": {
         parameters: {
             query?: never;
@@ -448,6 +464,23 @@ export interface components {
             /** @enum {string} */
             role: "user" | "admin";
         };
+        AdminUser: {
+            /** Format: uuid */
+            id: string;
+            display_name: string;
+            /** @enum {string} */
+            role: "user" | "admin";
+            /** @enum {string} */
+            status: "active" | "disabled";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_login_at?: string | null;
+            account_count: number;
+            task_count: number;
+            /** Format: date-time */
+            entitlement_expires_at?: string | null;
+        };
         Account: {
             /** Format: uuid */
             id: string;
@@ -499,6 +532,8 @@ export interface components {
             account_id: string;
             /** Format: uuid */
             friend_id: string;
+            /** Format: uuid */
+            task_id?: string | null;
             enabled: boolean;
             timezone: string;
             window_start: string;
@@ -743,6 +778,31 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+        };
+    };
+    listAdminUsers: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrator user summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminUser"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
         };
     };
     listAccounts: {

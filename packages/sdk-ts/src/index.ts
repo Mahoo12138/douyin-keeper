@@ -34,6 +34,15 @@ export async function me(accessToken: string) {
   return data
 }
 
+export async function listAdminUsers(accessToken: string, options?: { limit?: number }) {
+  const { data, error } = await api.GET('/admin/users', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { query: options },
+  })
+  if (error) throwApiError(error, 'admin users lookup failed')
+  return data
+}
+
 export async function redeemCardCode(accessToken: string, code: string) {
   const { data, error } = await api.POST('/entitlements/redeem', {
     headers: { Authorization: `Bearer ${accessToken}` },

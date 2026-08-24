@@ -15,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/admin"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/config"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
@@ -80,6 +81,7 @@ func main() {
 	taskRepo := postgres.NewTaskRepo(pool)
 	sendRepo := postgres.NewSendRepo(pool)
 	capRepo := postgres.NewCapabilityRepo(pool)
+	adminRepo := postgres.NewAdminRepo(pool)
 	outboxRepo := postgres.NewOutboxRepo(pool)
 
 	// ---- services ----
@@ -97,9 +99,10 @@ func main() {
 	tasksSvc := task.NewService(taskRepo, acctRepo, friendRepo, entSvc, userLock, tx)
 	sendsSvc := send.NewService(sendRepo, taskRepo, entSvc, entSvc, outboxRepo, tx)
 	jobsSvc := job.NewService(jobRepo)
+	adminSvc := admin.NewService(adminRepo)
 
 	srv := httpapi.NewServer(authSvc, entSvc, accountsSvc, friendsSvc, tasksSvc, sendsSvc, jobsSvc,
-		capRepo, []byte(cfg.AuthSigningKey), cfg.AuthRefreshTTL, pool, rdb)
+		capRepo, adminSvc, []byte(cfg.AuthSigningKey), cfg.AuthRefreshTTL, pool, rdb)
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

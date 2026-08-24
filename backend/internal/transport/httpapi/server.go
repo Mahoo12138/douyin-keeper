@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/admin"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
@@ -33,10 +34,11 @@ type Server struct {
 	tasks        *task.Service
 	sends        *send.Service
 	jobs         *job.Service
+	admin        *admin.Service
 	capabilities capability.Repository
 
-	signingKey  []byte
-	refreshTTL  time.Duration
+	signingKey []byte
+	refreshTTL time.Duration
 
 	pg    *pgxpool.Pool
 	redis *redis.Client
@@ -44,11 +46,11 @@ type Server struct {
 
 func NewServer(authSvc *auth.Service, ent *entitlement.Service, accounts *account.Service,
 	friends *friend.Service, tasks *task.Service, sends *send.Service, jobs *job.Service,
-	capabilities capability.Repository, signingKey []byte, refreshTTL time.Duration,
+	capabilities capability.Repository, adminSvc *admin.Service, signingKey []byte, refreshTTL time.Duration,
 	pg *pgxpool.Pool, redis *redis.Client) *Server {
 	return &Server{
 		auth: authSvc, entitlements: ent, accounts: accounts, friends: friends,
-		tasks: tasks, sends: sends, jobs: jobs, capabilities: capabilities,
+		tasks: tasks, sends: sends, jobs: jobs, admin: adminSvc, capabilities: capabilities,
 		signingKey: signingKey, refreshTTL: refreshTTL, pg: pg, redis: redis,
 	}
 }
@@ -72,6 +74,8 @@ func (s *Server) Router() http.Handler {
 			public.Post("/auth/wechat-mini/link", s.handleWechatLink)
 			public.Post("/auth/wechat-mini/login", s.handleWechatLogin)
 		})
+
+		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Get("/admin/users", s.handleAdminListUsers)
 
 		// Everything else requires authentication.
 		api.Group(func(private chi.Router) {
