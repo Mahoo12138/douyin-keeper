@@ -5,8 +5,10 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -15,6 +17,11 @@ type Config struct {
 	MetricsAddr string
 	DatabaseURL string
 	RedisAddr   string
+
+	// TrustedProxyCIDRs limits which peers may provide X-Forwarded-* headers.
+	// An empty value means direct TLS/RemoteAddr are used without trusting any
+	// forwarded proxy metadata.
+	TrustedProxyCIDRs string
 
 	// Auth (docs/13)
 	AuthAccessTTL     time.Duration
@@ -61,10 +68,11 @@ func env(key, def string) string {
 
 func Load() *Config {
 	return &Config{
-		HTTPAddr:    env("HTTP_ADDR", ":8080"),
-		MetricsAddr: env("METRICS_ADDR", ":9090"),
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		RedisAddr:   env("REDIS_ADDR", "localhost:6379"),
+		HTTPAddr:          env("HTTP_ADDR", ":8080"),
+		MetricsAddr:       env("METRICS_ADDR", ":9090"),
+		DatabaseURL:       os.Getenv("DATABASE_URL"),
+		RedisAddr:         env("REDIS_ADDR", "localhost:6379"),
+		TrustedProxyCIDRs: env("TRUSTED_PROXY_CIDRS", ""),
 
 		AuthAccessTTL:     dur("AUTH_ACCESS_TTL", 15*time.Minute),
 		AuthRefreshTTL:    dur("AUTH_REFRESH_TTL", 30*24*time.Hour),
@@ -94,6 +102,40 @@ func Load() *Config {
 		ScheduleBatchSize:  intEnv("SCHEDULE_BATCH_SIZE", 100),
 		ScheduleInterval:   dur("SCHEDULE_INTERVAL", 30*time.Second),
 	}
+}
+
+// TrustedProxyNetworks parses the configured peer networks used to trust
+// X-Forwarded-Proto and X-Forwarded-For. Both CIDR notation and single IPs
+// are accepted so local reverse-proxy deployments stay easy to configure.
+func (c *Config) TrustedProxyNetworks() ([]*net.IPNet, error) {
+	value := strings.TrimSpace(c.TrustedProxyCIDRs)
+	if value == "" {
+		return nil, nil
+	}
+
+	parts := strings.Split(value, ",")
+	networks := make([]*net.IPNet, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return nil, fmt.Errorf("invalid TRUSTED_PROXY_CIDRS: empty entry")
+		}
+		if ip := net.ParseIP(part); ip != nil {
+			bits := 128
+			if ip.To4() != nil {
+				ip = ip.To4()
+				bits = 32
+			}
+			networks = append(networks, &net.IPNet{IP: ip, Mask: net.CIDRMask(bits, bits)})
+			continue
+		}
+		_, network, err := net.ParseCIDR(part)
+		if err != nil {
+			return nil, fmt.Errorf("invalid TRUSTED_PROXY_CIDRS entry %q: %w", part, err)
+		}
+		networks = append(networks, network)
+	}
+	return networks, nil
 }
 
 func dur(key string, def time.Duration) time.Duration {

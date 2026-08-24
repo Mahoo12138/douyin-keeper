@@ -198,7 +198,7 @@ PC Web 推荐：
 
 - Access Token 仅保存在内存；
 - Refresh Token 使用 `HttpOnly + Secure + SameSite=Strict/Lax` Cookie；
-- 服务端根据直连 TLS 或反向代理传入的 `X-Forwarded-Proto=https` 设置 `Secure`；部署时反向代理必须覆盖并可信地传递该 Header，避免让客户端伪造协议判断；本地 HTTP 开发环境可不设置 `Secure`；
+- 服务端根据直连 TLS 或来自 `TRUSTED_PROXY_CIDRS` 中受信任反向代理的 `X-Forwarded-Proto=https` 设置 `Secure`；反向代理必须覆盖而不是追加该 Header，未配置可信代理时所有转发 Header 都会被忽略，避免客户端伪造协议判断；本地 HTTP 开发环境可不设置 `Secure`；
 - Refresh/Logout 检查 Origin：如果请求带有 Origin，必须与当前 Host 同源；小程序或非浏览器
   客户端不带 Origin 时可以使用请求体中的 Refresh Token；
 - 不把 Refresh Token 放入 localStorage。

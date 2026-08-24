@@ -4,6 +4,7 @@ package httpapi
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"time"
 
@@ -47,9 +48,10 @@ type Server struct {
 	signingKey []byte
 	refreshTTL time.Duration
 
-	pg      *pgxpool.Pool
-	redis   *redis.Client
-	metrics *telemetry.Metrics
+	pg                *pgxpool.Pool
+	redis             *redis.Client
+	metrics           *telemetry.Metrics
+	trustedProxyCIDRs []*net.IPNet
 }
 
 // WithMetrics attaches the process-local Prometheus registry. Keeping this
@@ -57,6 +59,13 @@ type Server struct {
 // telemetry package without depending on the HTTP server.
 func (s *Server) WithMetrics(metrics *telemetry.Metrics) *Server {
 	s.metrics = metrics
+	return s
+}
+
+// WithTrustedProxyCIDRs configures the peer networks allowed to provide
+// forwarded protocol and client-IP headers.
+func (s *Server) WithTrustedProxyCIDRs(networks []*net.IPNet) *Server {
+	s.trustedProxyCIDRs = networks
 	return s
 }
 
@@ -75,7 +84,7 @@ func NewServer(authSvc *auth.Service, ent *entitlement.Service, accounts *accoun
 func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
 
-	r.Use(RequestID, Recover, SecurityHeaders, Metrics(s.metrics), AccessLog)
+	r.Use(TrustedProxyHeaders(s.trustedProxyCIDRs), RequestID, Recover, SecurityHeaders, Metrics(s.metrics), AccessLog)
 	r.Get("/health/live", s.handleHealthLive)
 	r.Get("/health/ready", s.handleHealthReady)
 	if s.metrics != nil {

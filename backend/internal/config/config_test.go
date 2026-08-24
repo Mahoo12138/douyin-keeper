@@ -1,9 +1,32 @@
 package config
 
 import (
+	"net"
 	"testing"
 	"time"
 )
+
+func TestTrustedProxyNetworksParsesCIDRsAndIPs(t *testing.T) {
+	cfg := &Config{TrustedProxyCIDRs: "10.0.0.0/8, 192.0.2.10"}
+	networks, err := cfg.TrustedProxyNetworks()
+	if err != nil || len(networks) != 2 {
+		t.Fatalf("trusted proxy networks = %v, err = %v", networks, err)
+	}
+	if !networks[0].Contains(net.ParseIP("10.1.2.3")) || networks[0].Contains(net.ParseIP("11.1.2.3")) {
+		t.Fatal("CIDR network parsed incorrectly")
+	}
+	if !networks[1].Contains(net.ParseIP("192.0.2.10")) || networks[1].Contains(net.ParseIP("192.0.2.11")) {
+		t.Fatal("single IP network parsed incorrectly")
+	}
+}
+
+func TestTrustedProxyNetworksRejectsInvalidEntries(t *testing.T) {
+	for _, value := range []string{"not-an-ip", "10.0.0.0/", "10.0.0.0/8,,192.0.2.1"} {
+		if _, err := (&Config{TrustedProxyCIDRs: value}).TrustedProxyNetworks(); err == nil {
+			t.Fatalf("invalid proxy value %q should fail", value)
+		}
+	}
+}
 
 func TestLoadBrowserConcurrencyConfig(t *testing.T) {
 	t.Setenv("WORKER_BROWSER_CONCURRENCY", "5")

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,20 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 )
+
+func requestThroughTrustedProxy(t *testing.T, r *http.Request) *http.Request {
+	t.Helper()
+	_, network, err := net.ParseCIDR("10.0.0.0/8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var forwarded *http.Request
+	handler := TrustedProxyHeaders([]*net.IPNet{network})(http.HandlerFunc(func(_ http.ResponseWriter, got *http.Request) {
+		forwarded = got
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), r)
+	return forwarded
+}
 
 func TestLoggingWriterPreservesFlusher(t *testing.T) {
 	writer := &loggingWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
@@ -81,7 +96,9 @@ func TestRateLimitUserAndIPUsesAuthenticatedUserAndClientIP(t *testing.T) {
 
 func TestClientIPParsesForwardedAndIPv6Addresses(t *testing.T) {
 	forwarded := httptest.NewRequest(http.MethodGet, "/", nil)
+	forwarded.RemoteAddr = "10.0.0.2:8080"
 	forwarded.Header.Set("X-Forwarded-For", " 198.51.100.7, 10.0.0.1")
+	forwarded = requestThroughTrustedProxy(t, forwarded)
 	if got := clientIP(forwarded); got != "198.51.100.7" {
 		t.Fatalf("forwarded client IP = %q", got)
 	}
@@ -89,6 +106,32 @@ func TestClientIPParsesForwardedAndIPv6Addresses(t *testing.T) {
 	ipv6.RemoteAddr = "[2001:db8::1]:443"
 	if got := clientIP(ipv6); got != "2001:db8::1" {
 		t.Fatalf("IPv6 client IP = %q", got)
+	}
+}
+
+func TestForwardedHeadersRequireTrustedProxyPeer(t *testing.T) {
+	untrusted := httptest.NewRequest(http.MethodGet, "http://app.example.test/", nil)
+	untrusted.RemoteAddr = "203.0.113.10:8080"
+	untrusted.Header.Set("X-Forwarded-Proto", "https")
+	untrusted.Header.Set("X-Forwarded-For", "198.51.100.7")
+	untrusted = requestThroughTrustedProxy(t, untrusted)
+	if got := requestScheme(untrusted); got != "http" {
+		t.Fatalf("untrusted forwarded scheme = %q, want http", got)
+	}
+	if got := clientIP(untrusted); got != "203.0.113.10" {
+		t.Fatalf("untrusted forwarded client IP = %q, want peer IP", got)
+	}
+
+	trusted := httptest.NewRequest(http.MethodGet, "http://app.example.test/", nil)
+	trusted.RemoteAddr = "10.0.0.2:8080"
+	trusted.Header.Set("X-Forwarded-Proto", "https, http")
+	trusted.Header.Set("X-Forwarded-For", "198.51.100.7, 10.0.0.2")
+	trusted = requestThroughTrustedProxy(t, trusted)
+	if got := requestScheme(trusted); got != "https" {
+		t.Fatalf("trusted forwarded scheme = %q, want https", got)
+	}
+	if got := clientIP(trusted); got != "198.51.100.7" {
+		t.Fatalf("trusted forwarded client IP = %q, want 198.51.100.7", got)
 	}
 }
 
@@ -111,8 +154,10 @@ func TestValidateRequestOriginAllowsSameOriginAndNonBrowserRequests(t *testing.T
 	}
 
 	forwardedTLS := httptest.NewRequest(http.MethodPost, "http://app.example.test/api/v1/auth/refresh", nil)
+	forwardedTLS.RemoteAddr = "10.0.0.2:8080"
 	forwardedTLS.Header.Set("X-Forwarded-Proto", "https")
 	forwardedTLS.Header.Set("Origin", "https://app.example.test")
+	forwardedTLS = requestThroughTrustedProxy(t, forwardedTLS)
 	if err := validateRequestOrigin(forwardedTLS); err != nil {
 		t.Fatalf("same forwarded HTTPS Origin should be allowed: %v", err)
 	}

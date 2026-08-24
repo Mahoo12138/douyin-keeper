@@ -54,6 +54,11 @@ func main() {
 		log.Error("invalid config", "err", err)
 		os.Exit(1)
 	}
+	trustedProxyCIDRs, err := cfg.TrustedProxyNetworks()
+	if err != nil {
+		log.Error("invalid config", "err", err)
+		os.Exit(1)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -117,7 +122,7 @@ func main() {
 
 	srv := httpapi.NewServer(authSvc, entSvc, accountsSvc, friendsSvc, conversationSvc, messageTemplateSvc, tasksSvc, sendsSvc, jobsSvc,
 		capRepo, adminSvc, notificationSvc, []byte(cfg.AuthSigningKey), cfg.AuthRefreshTTL, pool, rdb)
-	srv.WithMetrics(telemetry.NewMetrics())
+	srv.WithMetrics(telemetry.NewMetrics()).WithTrustedProxyCIDRs(trustedProxyCIDRs)
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

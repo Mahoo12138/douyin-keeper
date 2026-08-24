@@ -23,6 +23,47 @@ import (
 
 type reqIDKey struct{}
 
+type trustedProxyHeadersKey struct{}
+
+// TrustedProxyHeaders marks requests whose peer is allowed to provide
+// X-Forwarded-Proto and X-Forwarded-For. Forwarded headers are client input
+// unless this middleware proves the immediate peer belongs to a configured
+// proxy network.
+func TrustedProxyHeaders(networks []*net.IPNet) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			trusted := proxyPeerInNetworks(r, networks)
+			ctx := context.WithValue(r.Context(), trustedProxyHeadersKey{}, trusted)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func proxyHeadersTrusted(r *http.Request) bool {
+	trusted, _ := r.Context().Value(trustedProxyHeadersKey{}).(bool)
+	return trusted
+}
+
+func proxyPeerInNetworks(r *http.Request, networks []*net.IPNet) bool {
+	if len(networks) == 0 {
+		return false
+	}
+	peer := strings.TrimSpace(r.RemoteAddr)
+	if host, _, err := net.SplitHostPort(peer); err == nil {
+		peer = host
+	}
+	ip := net.ParseIP(strings.Trim(peer, "[]"))
+	if ip == nil {
+		return false
+	}
+	for _, network := range networks {
+		if network != nil && network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 func newRequestID() string {
 	b := make([]byte, 12)
 	_, _ = rand.Read(b)
@@ -238,8 +279,10 @@ func RateLimitUserAndIP(limit int, window time.Duration) func(http.Handler) http
 }
 
 func clientIP(r *http.Request) string {
-	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
-		return strings.TrimSpace(strings.Split(ip, ",")[0])
+	if proxyHeadersTrusted(r) {
+		if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
+			return strings.TrimSpace(strings.Split(ip, ",")[0])
+		}
 	}
 	if host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr)); err == nil {
 		return host
@@ -290,8 +333,10 @@ func sameOriginHost(origin *url.URL, requestHost, requestScheme string) bool {
 }
 
 func requestScheme(r *http.Request) string {
-	if forwarded := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0]); forwarded != "" {
-		return strings.ToLower(forwarded)
+	if proxyHeadersTrusted(r) {
+		if forwarded := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0]); forwarded != "" {
+			return strings.ToLower(forwarded)
+		}
 	}
 	if r.TLS != nil {
 		return "https"

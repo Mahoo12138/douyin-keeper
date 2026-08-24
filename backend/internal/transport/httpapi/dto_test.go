@@ -76,8 +76,9 @@ func TestRefreshCookieSecureFollowsRequestScheme(t *testing.T) {
 			name: "forwarded HTTPS",
 			request: func() *http.Request {
 				r := httptest.NewRequest(http.MethodPost, "http://app.example.test/api/v1/auth/login", nil)
+				r.RemoteAddr = "10.0.0.2:8080"
 				r.Header.Set("X-Forwarded-Proto", "https")
-				return r
+				return requestThroughTrustedProxy(t, r)
 			}(),
 			wantSecure: true,
 			setCookieFunc: func(w http.ResponseWriter, r *http.Request) {

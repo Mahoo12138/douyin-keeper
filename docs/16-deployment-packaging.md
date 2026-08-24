@@ -352,6 +352,7 @@ Compose 运行时通过环境变量/secret 注入：
 ```text
 DATABASE_URL
 REDIS_ADDR
+TRUSTED_PROXY_CIDRS
 AUTH_SIGNING_KEY
 SESSION_MASTER_KEY
 CARD_CODE_PEPPER_DK1
@@ -366,6 +367,11 @@ WECHAT_NOTIFICATION_BODY_FIELD
 生产环境建议进一步使用 Docker Secrets、Portainer/平台 Secret 或外部 Secret Manager。
 
 Backend 与 Worker 可共享数据库/Redis连接信息，但 Sidecar 子进程本身不获得数据库主密码、Redis密码、Session Master Key。
+
+`TRUSTED_PROXY_CIDRS` 是逗号分隔的直接反向代理 peer IP/CIDR，例如
+`10.0.0.2/32,10.0.0.0/24`。只有来自这些 peer 的 `X-Forwarded-Proto` 和
+`X-Forwarded-For` 才会被使用；留空表示客户端直连，应用只使用 TLS 和 socket peer。
+反向代理必须覆盖（不能追加）这两个 Header，且 Backend 端口不应绕过代理暴露到公网。
 
 ## 10. 网络暴露
 
