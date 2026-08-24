@@ -1787,7 +1787,10 @@ export interface operations {
     };
     listAdminEntitlementPlans: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1802,6 +1805,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["AdminEntitlementPlan"][];
+                        next_cursor?: string | null;
                     };
                 };
             };

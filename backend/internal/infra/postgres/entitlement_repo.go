@@ -111,6 +111,34 @@ func (r *EntitlementRepo) ListPlans(ctx context.Context) ([]*entitlement.Plan, e
 	return out, rows.Err()
 }
 
+func (r *EntitlementRepo) ListPlansPage(ctx context.Context, filter entitlement.PlanListFilter) ([]*entitlement.Plan, error) {
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT `+planCols+` FROM entitlement_plans
+		WHERE id > $1
+		ORDER BY id ASC
+		LIMIT $2`, filter.AfterID, limit+1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*entitlement.Plan
+	for rows.Next() {
+		p, err := scanPlan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // ---- batches + codes ----
 
 const batchCols = `id, public_id, entitlement_plan_id, name, duration_days, quantity, status, code_version, redeem_not_before, redeem_before, created_by, COALESCE(note, ''), created_at, updated_at`
@@ -618,5 +646,6 @@ func (r *EntitlementRepo) Record(ctx context.Context, actorID *int64, action, re
 }
 
 var _ entitlement.AuditSink = (*EntitlementRepo)(nil)
+var _ entitlement.PlanPageRepository = (*EntitlementRepo)(nil)
 var _ entitlement.BatchPageRepository = (*EntitlementRepo)(nil)
 var _ entitlement.GrantPageRepository = (*EntitlementRepo)(nil)

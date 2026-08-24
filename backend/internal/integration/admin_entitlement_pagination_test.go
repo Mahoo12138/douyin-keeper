@@ -97,3 +97,30 @@ func TestAdminCardCodeListCursorPageIsStable(t *testing.T) {
 		t.Fatalf("second page = %+v", second)
 	}
 }
+
+func TestAdminPlanListCursorPageIsStable(t *testing.T) {
+	ctx := context.Background()
+	service := newEntSvc()
+	for i := 0; i < 3; i++ {
+		if _, err := service.CreatePlan(ctx, &entitlement.Plan{
+			Code: "cursor_" + randSuffix(), Name: "Cursor Plan", Status: entitlement.StatusActive,
+			AccountQuota: 1, TaskQuota: 1, DailySendQuota: 1,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, err := service.ListPlansPage(ctx, entitlement.PlanListFilter{Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Items) != 2 || first.NextAfterID == 0 {
+		t.Fatalf("first page = %+v", first)
+	}
+	second, err := service.ListPlansPage(ctx, entitlement.PlanListFilter{Limit: 2, AfterID: first.NextAfterID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Items) == 0 || second.Items[0].ID <= first.Items[1].ID {
+		t.Fatalf("second page = %+v", second)
+	}
+}

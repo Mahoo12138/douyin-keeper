@@ -73,9 +73,10 @@ export async function resumeAdminAccount(accessToken: string, accountId: string)
   return data
 }
 
-export async function listAdminEntitlementPlans(accessToken: string) {
+export async function listAdminEntitlementPlans(accessToken: string, options?: { limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/admin/entitlement-plans', {
     headers: { Authorization: `Bearer ${accessToken}` },
+    params: { query: options },
   })
   if (error) throwApiError(error, 'admin entitlement plans lookup failed')
   return data

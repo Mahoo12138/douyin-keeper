@@ -12,6 +12,23 @@ type paginationBatchStub struct {
 	items []CardBatchSummary
 }
 
+type paginationPlanStub struct {
+	items []*Plan
+}
+
+func (r paginationPlanStub) CreatePlan(context.Context, *Plan) error { return nil }
+func (r paginationPlanStub) GetPlanByID(context.Context, int64) (*Plan, error) {
+	return nil, nil
+}
+func (r paginationPlanStub) GetPlanByPublicID(context.Context, uuid.UUID) (*Plan, error) {
+	return nil, nil
+}
+func (r paginationPlanStub) ListPlans(context.Context) ([]*Plan, error) { return r.items, nil }
+func (r paginationPlanStub) ListPlansPage(context.Context, PlanListFilter) ([]*Plan, error) {
+	return r.items, nil
+}
+func (r paginationPlanStub) DisablePlan(context.Context, int64, uuid.UUID) error { return nil }
+
 func (r paginationBatchStub) CreateBatch(context.Context, *CardBatch) error         { return nil }
 func (r paginationBatchStub) InsertCodes(context.Context, int64, []*CardCode) error { return nil }
 func (r paginationBatchStub) ListSummaries(context.Context, int) ([]CardBatchSummary, error) {
@@ -52,6 +69,17 @@ func TestListBatchSummariesPageTrimsAndBuildsCursor(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(page.Items) != 2 || page.Items[0].ID != 3 || page.Items[1].ID != 2 || page.NextAfterID != 2 || page.NextCreatedAt == nil {
+		t.Fatalf("page = %+v", page)
+	}
+}
+
+func TestListPlansPageTrimsAndBuildsCursor(t *testing.T) {
+	service := &Service{plans: paginationPlanStub{items: []*Plan{{ID: 1}, {ID: 2}, {ID: 3}}}}
+	page, err := service.ListPlansPage(context.Background(), PlanListFilter{Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].ID != 1 || page.Items[1].ID != 2 || page.NextAfterID != 2 {
 		t.Fatalf("page = %+v", page)
 	}
 }

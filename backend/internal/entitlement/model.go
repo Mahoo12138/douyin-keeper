@@ -40,6 +40,16 @@ type Plan struct {
 	UpdatedAt      time.Time
 }
 
+type PlanListFilter struct {
+	Limit   int
+	AfterID int64
+}
+
+type PlanListPage struct {
+	Items       []*Plan
+	NextAfterID int64
+}
+
 type CardBatch struct {
 	ID                int64
 	PublicID          uuid.UUID

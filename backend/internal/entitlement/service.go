@@ -363,6 +363,50 @@ func (s *Service) ListPlans(ctx context.Context) ([]*Plan, error) {
 	return s.plans.ListPlans(ctx)
 }
 
+func (s *Service) ListPlansPage(ctx context.Context, filter PlanListFilter) (PlanListPage, error) {
+	filter.Limit = normalizeEntitlementLimit(filter.Limit, 50, 100)
+	if filter.AfterID < 0 {
+		filter.AfterID = 0
+	}
+	var (
+		items []*Plan
+		err   error
+	)
+	if repo, ok := s.plans.(PlanPageRepository); ok {
+		items, err = repo.ListPlansPage(ctx, filter)
+	} else {
+		items, err = s.plans.ListPlans(ctx)
+		items = filterPlanCursor(items, filter)
+	}
+	if err != nil {
+		return PlanListPage{}, err
+	}
+	page := PlanListPage{Items: items}
+	if len(items) <= filter.Limit {
+		return page, nil
+	}
+	page.Items = items[:filter.Limit]
+	page.NextAfterID = page.Items[len(page.Items)-1].ID
+	return page, nil
+}
+
+func filterPlanCursor(items []*Plan, filter PlanListFilter) []*Plan {
+	if filter.AfterID <= 0 {
+		return items
+	}
+	start := len(items)
+	for index, item := range items {
+		if item.ID > filter.AfterID {
+			start = index
+			break
+		}
+	}
+	if start >= len(items) {
+		return nil
+	}
+	return items[start:]
+}
+
 func (s *Service) GetPlanByPublicID(ctx context.Context, publicID uuid.UUID) (*Plan, error) {
 	return s.plans.GetPlanByPublicID(ctx, publicID)
 }

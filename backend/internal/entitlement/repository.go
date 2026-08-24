@@ -16,6 +16,10 @@ type PlanRepository interface {
 	DisablePlan(ctx context.Context, actorID int64, publicID uuid.UUID) error
 }
 
+type PlanPageRepository interface {
+	ListPlansPage(ctx context.Context, filter PlanListFilter) ([]*Plan, error)
+}
+
 // BatchRepository persists card batches and their codes.
 type BatchRepository interface {
 	CreateBatch(ctx context.Context, b *CardBatch) error

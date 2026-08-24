@@ -34,3 +34,13 @@ func TestAdminCardCodeFilterDecodesCursor(t *testing.T) {
 		t.Fatalf("filter = %+v", filter)
 	}
 }
+
+func TestAdminPlanFilterDecodesCursor(t *testing.T) {
+	filter, err := adminPlanFilter(httptest.NewRequest("GET", "/?limit=20&cursor="+encodeAdminPlanCursor(42), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filter.Limit != 20 || filter.AfterID != 42 {
+		t.Fatalf("filter = %+v", filter)
+	}
+}

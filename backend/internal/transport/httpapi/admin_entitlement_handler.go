@@ -115,16 +115,49 @@ type adminCardCodeView struct {
 }
 
 func (s *Server) handleAdminListEntitlementPlans(w http.ResponseWriter, r *http.Request) {
-	items, err := s.entitlements.ListPlans(r.Context())
+	filter, err := adminPlanFilter(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	views := make([]adminEntitlementPlanView, 0, len(items))
-	for _, item := range items {
+	page, err := s.entitlements.ListPlansPage(r.Context(), filter)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	views := make([]adminEntitlementPlanView, 0, len(page.Items))
+	for _, item := range page.Items {
 		views = append(views, adminEntitlementPlanViewFrom(*item))
 	}
-	writeOK(w, map[string]any{"items": views})
+	var nextCursor any
+	if page.NextAfterID > 0 {
+		nextCursor = encodeAdminPlanCursor(page.NextAfterID)
+	}
+	writeOK(w, map[string]any{"items": views, "next_cursor": nextCursor})
+}
+
+func encodeAdminPlanCursor(id int64) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(id, 10)))
+}
+
+func adminPlanFilter(r *http.Request) (entitlement.PlanListFilter, error) {
+	limit, err := adminListLimit(r)
+	if err != nil {
+		return entitlement.PlanListFilter{}, err
+	}
+	filter := entitlement.PlanListFilter{Limit: limit}
+	if value := r.URL.Query().Get("cursor"); value != "" {
+		decoded, err := base64.RawURLEncoding.DecodeString(value)
+		if err != nil {
+			return filter, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+		}
+		id, err := strconv.ParseInt(string(decoded), 10, 64)
+		if err != nil || id < 1 {
+			return filter, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+		}
+		filter.AfterID = id
+	}
+	return filter, nil
 }
 
 func (s *Server) handleAdminCreateEntitlementPlan(w http.ResponseWriter, r *http.Request) {
