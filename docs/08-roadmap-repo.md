@@ -219,7 +219,7 @@ Web 端通过“加载更多”读取后续页面。
 selector 联调。
 
 M7 的本地 Protocol 前置切片已完成 v1 envelope 加固和 `send.protocol` worker 控制面接线：
-Go/Python 双侧校验 deadline、输入对象和未知字段，失败响应透传 `error.detail`，发送
+Go/Python 双侧校验 deadline、输入对象和未知字段，Go ProcessClient 还严格校验响应 envelope 的必填字段与 `error.detail` 对象边界，失败响应透传 `error.detail`，发送
 outcome 未知时保持 fail-closed；真实 Protocol SDK 和平台 selector 仍不在本地猜测实现，
 未部署时由带 `protocol.im` 身份的 unavailable client fail-closed，不会由 stub handler ACK，
 也不会把协议任务误交给 Browser Sidecar。Creator 首聊已完成本地权益闸门：任务创建/编辑和

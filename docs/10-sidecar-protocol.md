@@ -83,6 +83,10 @@ Request 必须符合 v1 schema：`protocol_version=1`、`input` 为对象，`dea
 `error.detail` 必须保持为对象并透传 Adapter 提供的结果证据；尤其是发送失败时的
 `outcome=not_sent|unknown`，Go 才能决定是否允许 fallback 或重试，不能由 Worker 猜测。
 
+Go ProcessClient 对响应 envelope 采用严格解码：拒绝未知顶层字段、缺失必填的 `meta`/`result`/
+`error` 字段、负数 `duration_ms` 和非对象 `error.detail`，并在协议校验失败后销毁当前
+Sidecar 进程，不复用可能已失步的 NDJSON 流。
+
 ## 3. Secret 传递
 
 不要把完整 Session JSON 放在命令行参数、环境变量或 stdout。

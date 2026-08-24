@@ -2,6 +2,7 @@ package sidecar
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -141,12 +142,12 @@ func (c *ProcessClient) Call(ctx context.Context, req Request) (*Response, error
 			result <- responseResult{err: fmt.Errorf("sidecar: read response: %w", err)}
 			return
 		}
-		var response Response
-		if err := json.Unmarshal(line, &response); err != nil {
-			result <- responseResult{err: fmt.Errorf("sidecar: decode response: %w", err)}
+		response, err := decodeResponse(line)
+		if err != nil {
+			result <- responseResult{err: err}
 			return
 		}
-		result <- responseResult{response: &response}
+		result <- responseResult{response: response}
 	}(c.reader)
 
 	select {
@@ -184,6 +185,74 @@ func (c *ProcessClient) Call(ctx context.Context, req Request) (*Response, error
 		}
 		return got.response, nil
 	}
+}
+
+func decodeResponse(line []byte) (*Response, error) {
+	decoder := json.NewDecoder(bytes.NewReader(line))
+	decoder.DisallowUnknownFields()
+	var response Response
+	if err := decoder.Decode(&response); err != nil {
+		return nil, fmt.Errorf("sidecar: decode response: %w", err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return nil, errors.New("sidecar: response contains multiple JSON values")
+		}
+		return nil, fmt.Errorf("sidecar: decode trailing response data: %w", err)
+	}
+
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(line, &envelope); err != nil {
+		return nil, fmt.Errorf("sidecar: decode response envelope: %w", err)
+	}
+	for _, key := range []string{"protocol_version", "request_id", "ok", "meta"} {
+		if _, ok := envelope[key]; !ok {
+			return nil, fmt.Errorf("sidecar: response is missing %s", key)
+		}
+	}
+	if response.OK {
+		if _, ok := envelope["result"]; !ok {
+			return nil, errors.New("sidecar: successful response is missing result")
+		}
+	} else if _, ok := envelope["error"]; !ok {
+		return nil, errors.New("sidecar: failed response is missing error")
+	}
+
+	var meta map[string]json.RawMessage
+	if err := json.Unmarshal(envelope["meta"], &meta); err != nil || meta == nil {
+		return nil, errors.New("sidecar: response meta must be an object")
+	}
+	for _, key := range []string{"adapter", "adapter_version", "duration_ms"} {
+		if _, ok := meta[key]; !ok {
+			return nil, fmt.Errorf("sidecar: response meta is missing %s", key)
+		}
+	}
+	if response.Meta.DurationMS < 0 {
+		return nil, errors.New("sidecar: response duration_ms must not be negative")
+	}
+	if response.RequestID == "" {
+		return nil, errors.New("sidecar: response request_id is required")
+	}
+	if response.Error != nil {
+		if response.Error.Detail != nil && !isJSONObject(response.Error.Detail) {
+			return nil, errors.New("sidecar: response error detail must be a JSON object")
+		}
+		for _, key := range []string{"code", "retryable", "message"} {
+			if _, ok := mustObject(envelope["error"])[key]; !ok {
+				return nil, fmt.Errorf("sidecar: response error is missing %s", key)
+			}
+		}
+	}
+	return &response, nil
+}
+
+func mustObject(raw json.RawMessage) map[string]json.RawMessage {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return nil
+	}
+	return object
 }
 
 func isJSONObject(value any) bool {

@@ -76,11 +76,41 @@ func TestProcessClientNormalizesAndValidatesRequestEnvelope(t *testing.T) {
 }
 
 func TestProcessClientRejectsInconsistentResponseEnvelope(t *testing.T) {
-	script := `while IFS= read -r line; do printf '%s\n' '{"protocol_version":1,"request_id":"r1","ok":true,"error":{"code":"BAD"},"result":{},"meta":{"adapter":"test","adapter_version":"1","duration_ms":0}}'; done`
+	script := `while IFS= read -r line; do printf '%s\n' '{"protocol_version":1,"request_id":"r1","ok":true,"error":{"code":"BAD","retryable":false,"message":"bad"},"result":{},"meta":{"adapter":"test","adapter_version":"1","duration_ms":0}}'; done`
 	client := NewProcessClient("sh", "-c", script)
 	defer client.Close()
 	if _, err := client.Call(context.Background(), Request{RequestID: "r1", Op: OpsHealthCheck}); err == nil || !strings.Contains(err.Error(), "contains error") {
 		t.Fatalf("expected inconsistent response error, got %v", err)
+	}
+}
+
+func TestProcessClientRejectsUnknownResponseFields(t *testing.T) {
+	script := `while IFS= read -r line; do printf '%s\n' '{"protocol_version":1,"request_id":"r1","ok":true,"result":{},"meta":{"adapter":"test","adapter_version":"1","duration_ms":0},"unexpected":true}'; done`
+	client := NewProcessClient("sh", "-c", script)
+	defer client.Close()
+	_, err := client.Call(context.Background(), Request{RequestID: "r1", Op: OpsHealthCheck})
+	if err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("expected unknown-field error, got %v", err)
+	}
+}
+
+func TestProcessClientRejectsIncompleteResponseEnvelope(t *testing.T) {
+	script := `while IFS= read -r line; do printf '%s\n' '{"protocol_version":1,"request_id":"r1","ok":true,"result":{}}'; done`
+	client := NewProcessClient("sh", "-c", script)
+	defer client.Close()
+	_, err := client.Call(context.Background(), Request{RequestID: "r1", Op: OpsHealthCheck})
+	if err == nil || !strings.Contains(err.Error(), "missing meta") {
+		t.Fatalf("expected missing-meta error, got %v", err)
+	}
+}
+
+func TestProcessClientRejectsNonObjectErrorDetail(t *testing.T) {
+	script := `while IFS= read -r line; do printf '%s\n' '{"protocol_version":1,"request_id":"r1","ok":false,"error":{"code":"BAD","retryable":false,"message":"bad","detail":"secret"},"meta":{"adapter":"test","adapter_version":"1","duration_ms":0}}'; done`
+	client := NewProcessClient("sh", "-c", script)
+	defer client.Close()
+	_, err := client.Call(context.Background(), Request{RequestID: "r1", Op: OpsHealthCheck})
+	if err == nil || !strings.Contains(err.Error(), "detail must be a JSON object") {
+		t.Fatalf("expected detail validation error, got %v", err)
 	}
 }
 
