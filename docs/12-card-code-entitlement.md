@@ -385,6 +385,9 @@ enabled task count < entitlement.task_quota
 
 Scheduler 和 Manual Send 都检查；最终 Worker 执行前再次确认，防止并发穿透。
 
+配额计数或每日使用量读取失败时必须 fail-closed，返回系统错误并停止本次授权/调度；不能
+把读取失败当成 `0` 次使用继续放行。
+
 ## 11. C 端页面
 
 ### PC `/entitlement`

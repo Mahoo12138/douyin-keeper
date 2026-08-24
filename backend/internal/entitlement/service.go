@@ -89,21 +89,41 @@ func (s *Service) GetEffective(ctx context.Context, userID int64) (EffectiveEnti
 		AccountQuota: g.Plan.AccountQuota, TaskQuota: g.Plan.TaskQuota,
 		DailySendQuota: g.Plan.DailySendQuota, Features: g.Plan.Features,
 	}
-	// Quota usage.
-	if s.counters != nil {
-		if n, err := s.counters.CountAccountsOccupied(ctx, userID); err == nil {
-			eff.Usage.AccountsUsed = n
-		}
-		if n, err := s.counters.CountTasks(ctx, userID); err == nil {
-			eff.Usage.TasksUsed = n
-		}
+	usage, err := s.loadUsage(ctx, userID, EffectiveLocalDate(now))
+	if err != nil {
+		return EffectiveEntitlement{}, err
 	}
-	date := EffectiveLocalDate(now)
-	if d, err := s.usage.GetDailyUsage(ctx, userID, date); err == nil && d != nil {
-		eff.Usage.DailySendReserved = d.ReservedSendCount
-		eff.Usage.QuotaLocalDate = date
-	}
+	eff.Usage = usage
 	return eff, nil
+}
+
+func (s *Service) loadUsage(ctx context.Context, userID int64, localDate string) (EntitlementUsage, error) {
+	var usage EntitlementUsage
+	if s.counters != nil {
+		accounts, err := s.counters.CountAccountsOccupied(ctx, userID)
+		if err != nil {
+			return EntitlementUsage{}, fmt.Errorf("entitlement: count occupied accounts: %w", err)
+		}
+		usage.AccountsUsed = accounts
+
+		tasks, err := s.counters.CountTasks(ctx, userID)
+		if err != nil {
+			return EntitlementUsage{}, fmt.Errorf("entitlement: count tasks: %w", err)
+		}
+		usage.TasksUsed = tasks
+	}
+	if s.usage == nil {
+		return EntitlementUsage{}, fmt.Errorf("entitlement: daily usage repository is not configured")
+	}
+	daily, err := s.usage.GetDailyUsage(ctx, userID, localDate)
+	if err != nil {
+		return EntitlementUsage{}, fmt.Errorf("entitlement: load daily usage: %w", err)
+	}
+	if daily != nil {
+		usage.DailySendReserved = daily.ReservedSendCount
+		usage.QuotaLocalDate = localDate
+	}
+	return usage, nil
 }
 
 // Redeem consumes a card code and creates a grant. The business transaction
@@ -272,22 +292,14 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest) (Auth
 	}
 	switch req.Action {
 	case ActionAccountBind:
-		if s.counters != nil {
-			n, _ := s.counters.CountAccountsOccupied(ctx, req.UserID)
-			if n >= eff.AccountQuota {
-				dec.Allowed, dec.ReasonCode = false, apperr.CodeAccountQuotaExceeded
-				return dec, nil
-			}
+		if s.counters != nil && eff.Usage.AccountsUsed >= eff.AccountQuota {
+			dec.Allowed, dec.ReasonCode = false, apperr.CodeAccountQuotaExceeded
+			return dec, nil
 		}
 	case ActionTaskCreate:
-		if s.counters != nil {
-			// The caller re-checks with its own count; here we only protect
-			// when counters are available.
-			n, _ := s.counters.CountTasks(ctx, req.UserID)
-			if n >= eff.TaskQuota {
-				dec.Allowed, dec.ReasonCode = false, apperr.CodeTaskQuotaExceeded
-				return dec, nil
-			}
+		if s.counters != nil && eff.Usage.TasksUsed >= eff.TaskQuota {
+			dec.Allowed, dec.ReasonCode = false, apperr.CodeTaskQuotaExceeded
+			return dec, nil
 		}
 	}
 	dec.Allowed = true

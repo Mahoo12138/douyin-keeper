@@ -373,6 +373,10 @@ Features
 
 没有有效 Grant 时返回明确的 `None`，不是系统错误。
 
+只要存在有效 Grant，账号/任务占用计数和每日使用量都属于授权 Gate 的输入；任一计数
+读取失败必须返回错误并停止本次授权，不能用 `0` 或旧快照继续放行。`Authorize` 应复用
+同一次 `GetEffective` 读取出的 usage，资源服务在自己的事务中再做最终精确计数。
+
 ## 9. Entitlement Gate
 
 禁止 Handler 自己散落写：
