@@ -91,3 +91,75 @@ func TestClientIPParsesForwardedAndIPv6Addresses(t *testing.T) {
 		t.Fatalf("IPv6 client IP = %q", got)
 	}
 }
+
+func TestValidateRequestOriginAllowsSameOriginAndNonBrowserRequests(t *testing.T) {
+	withoutOrigin := httptest.NewRequest(http.MethodPost, "http://app.example.test/api/v1/auth/refresh", nil)
+	if err := validateRequestOrigin(withoutOrigin); err != nil {
+		t.Fatalf("missing Origin should be allowed: %v", err)
+	}
+
+	sameOrigin := httptest.NewRequest(http.MethodPost, "http://app.example.test/api/v1/auth/refresh", nil)
+	sameOrigin.Header.Set("Origin", "http://app.example.test")
+	if err := validateRequestOrigin(sameOrigin); err != nil {
+		t.Fatalf("same Origin should be allowed: %v", err)
+	}
+
+	defaultPort := httptest.NewRequest(http.MethodPost, "https://app.example.test/api/v1/auth/refresh", nil)
+	defaultPort.Header.Set("Origin", "https://app.example.test")
+	if err := validateRequestOrigin(defaultPort); err != nil {
+		t.Fatalf("same HTTPS Origin should be allowed: %v", err)
+	}
+
+	forwardedTLS := httptest.NewRequest(http.MethodPost, "http://app.example.test/api/v1/auth/refresh", nil)
+	forwardedTLS.Header.Set("X-Forwarded-Proto", "https")
+	forwardedTLS.Header.Set("Origin", "https://app.example.test")
+	if err := validateRequestOrigin(forwardedTLS); err != nil {
+		t.Fatalf("same forwarded HTTPS Origin should be allowed: %v", err)
+	}
+}
+
+func TestValidateRequestOriginRejectsCrossSiteAndMalformedOrigins(t *testing.T) {
+	tests := []string{
+		"https://evil.example.test",
+		"https://app.example.test/path",
+		"null",
+		"ftp://app.example.test",
+	}
+	for _, origin := range tests {
+		r := httptest.NewRequest(http.MethodPost, "https://app.example.test/api/v1/auth/logout", nil)
+		r.Header.Set("Origin", origin)
+		if err := validateRequestOrigin(r); err == nil {
+			t.Fatalf("Origin %q should be rejected", origin)
+		}
+	}
+
+	wrongPort := httptest.NewRequest(http.MethodPost, "http://app.example.test:8080/api/v1/auth/logout", nil)
+	wrongPort.Header.Set("Origin", "http://app.example.test:9090")
+	if err := validateRequestOrigin(wrongPort); err == nil {
+		t.Fatal("Origin with a different port should be rejected")
+	}
+
+	wrongScheme := httptest.NewRequest(http.MethodPost, "http://app.example.test/api/v1/auth/logout", nil)
+	wrongScheme.Header.Set("Origin", "https://app.example.test")
+	if err := validateRequestOrigin(wrongScheme); err == nil {
+		t.Fatal("Origin with a different scheme should be rejected")
+	}
+}
+
+func TestAuthMutationsRejectCrossOriginBeforeCallingServices(t *testing.T) {
+	server := &Server{}
+	handlers := []func(http.ResponseWriter, *http.Request){
+		server.handleRefresh,
+		server.handleLogout,
+		server.handleLogoutAll,
+	}
+	for _, handler := range handlers {
+		r := httptest.NewRequest(http.MethodPost, "https://app.example.test/api/v1/auth/mutation", nil)
+		r.Header.Set("Origin", "https://evil.example.test")
+		w := httptest.NewRecorder()
+		handler(w, r)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("cross-origin auth mutation status = %d, want %d", w.Code, http.StatusForbidden)
+		}
+	}
+}

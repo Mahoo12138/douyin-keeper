@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -244,6 +245,65 @@ func clientIP(r *http.Request) string {
 		return host
 	}
 	return strings.TrimSpace(r.RemoteAddr)
+}
+
+// validateRequestOrigin protects cookie-backed auth mutations from cross-site
+// requests (docs/13 §4). Requests without Origin remain valid for Mini clients
+// and non-browser callers that send the refresh token in the request body.
+func validateRequestOrigin(r *http.Request) error {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return nil
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.User != nil || parsed.Scheme == "" || parsed.Host == "" ||
+		parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" ||
+		(parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return apperr.New(apperr.CodeForbidden, apperr.KindForbidden, "request origin is not allowed")
+	}
+	if !sameOriginHost(parsed, r.Host, requestScheme(r)) {
+		return apperr.New(apperr.CodeForbidden, apperr.KindForbidden, "request origin is not allowed")
+	}
+	return nil
+}
+
+func sameOriginHost(origin *url.URL, requestHost, requestScheme string) bool {
+	originHost := strings.ToLower(origin.Hostname())
+	requestURL, err := url.Parse("http://" + strings.TrimSpace(requestHost))
+	if err != nil || originHost == "" || requestURL.Hostname() == "" ||
+		!strings.EqualFold(originHost, requestURL.Hostname()) ||
+		!strings.EqualFold(origin.Scheme, requestScheme) {
+		return false
+	}
+	originPort := origin.Port()
+	requestPort := requestURL.Port()
+	if originPort == "" && requestPort == "" {
+		return true
+	}
+	if originPort == "" {
+		originPort = defaultOriginPort(origin.Scheme)
+	}
+	if requestPort == "" {
+		requestPort = defaultOriginPort(origin.Scheme)
+	}
+	return originPort == requestPort
+}
+
+func requestScheme(r *http.Request) string {
+	if forwarded := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0]); forwarded != "" {
+		return strings.ToLower(forwarded)
+	}
+	if r.TLS != nil {
+		return "https"
+	}
+	return "http"
+}
+
+func defaultOriginPort(scheme string) string {
+	if scheme == "https" {
+		return "443"
+	}
+	return "80"
 }
 
 // RequireAuth authenticates the Bearer token and loads the user (docs/13 §7).

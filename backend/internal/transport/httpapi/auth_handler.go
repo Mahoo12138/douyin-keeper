@@ -69,6 +69,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 // handleRefresh rotates the refresh token. Web clients send the HttpOnly
 // cookie; the mini client sends the token in the body (docs/13 §4).
 func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
+	if err := validateRequestOrigin(r); err != nil {
+		writeError(w, r, err)
+		return
+	}
 	token := ""
 	if c, err := r.Cookie(RefreshCookieName); err == nil {
 		token = c.Value
@@ -90,6 +94,10 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if err := validateRequestOrigin(r); err != nil {
+		writeError(w, r, err)
+		return
+	}
 	p := auth.MustPrincipal(r.Context())
 	if err := s.auth.Logout(r.Context(), p.SessionID); err != nil {
 		writeError(w, r, err)
@@ -100,6 +108,10 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLogoutAll(w http.ResponseWriter, r *http.Request) {
+	if err := validateRequestOrigin(r); err != nil {
+		writeError(w, r, err)
+		return
+	}
 	p := auth.MustPrincipal(r.Context())
 	if err := s.auth.LogoutAll(r.Context(), p.UserID); err != nil {
 		writeError(w, r, err)

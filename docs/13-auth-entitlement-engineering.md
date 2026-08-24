@@ -198,7 +198,8 @@ PC Web 推荐：
 
 - Access Token 仅保存在内存；
 - Refresh Token 使用 `HttpOnly + Secure + SameSite=Strict/Lax` Cookie；
-- Refresh/Logout 检查 Origin；
+- Refresh/Logout 检查 Origin：如果请求带有 Origin，必须与当前 Host 同源；小程序或非浏览器
+  客户端不带 Origin 时可以使用请求体中的 Refresh Token；
 - 不把 Refresh Token 放入 localStorage。
 
 ### Mini Token 保存
