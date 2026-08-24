@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { getMe } from '../src/lib/api'
+import { getMe, myEntitlement, redeemCardCode } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -47,5 +47,20 @@ describe('mini API auth recovery', () => {
     await expect(getMe('expired-access')).rejects.toMatchObject({ code: 'UNAUTHENTICATED', statusCode: 401 })
     expect(getAccessToken()).toBeNull()
     expect(getRefreshToken()).toBeNull()
+  })
+
+  it('loads entitlement and submits a redeem code through the shared API client', async () => {
+    requestMock
+      .mockResolvedValueOnce({ statusCode: 200, data: { active: true, plan_code: 'standard' } })
+      .mockResolvedValueOnce({ statusCode: 200, data: { entitlement: { active: true, plan_code: 'standard' }, grant: { id: 'grant-1' } } })
+
+    const entitlement = await myEntitlement('access-1')
+    const result = await redeemCardCode('access-1', 'DK1-ABCD')
+
+    expect(entitlement.plan_code).toBe('standard')
+    expect(result.entitlement.active).toBe(true)
+    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/me/entitlement')
+    expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/entitlements/redeem')
+    expect(requestMock.mock.calls[1]?.[0]?.data).toEqual({ code: 'DK1-ABCD' })
   })
 })

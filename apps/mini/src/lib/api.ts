@@ -64,6 +64,16 @@ export function getNotificationPreferences(token: string) {
   return request<components['schemas']['NotificationPreferences']>('/notifications/preferences', { token })
 }
 
+export function myEntitlement(token: string) {
+  return request<components['schemas']['EffectiveEntitlement']>('/me/entitlement', { token })
+}
+
+export function redeemCardCode(token: string, code: string) {
+  return request<components['schemas']['RedeemResult']>('/entitlements/redeem', {
+    method: 'POST', token, data: { code },
+  })
+}
+
 export function updateNotificationPreferences(token: string, wechatEnabled: boolean) {
   return request<components['schemas']['NotificationPreferences']>('/notifications/preferences', {
     method: 'PATCH', token, data: { wechat_enabled: wechatEnabled },
