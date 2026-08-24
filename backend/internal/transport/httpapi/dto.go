@@ -53,6 +53,10 @@ type AccountView struct {
 	PausedAt           *time.Time `json:"paused_at"`
 	LastSessionCheckAt *time.Time `json:"last_session_check_at"`
 	LastFriendSyncAt   *time.Time `json:"last_friend_sync_at"`
+	FriendCount        int        `json:"friend_count"`
+	EnabledTaskCount   int        `json:"enabled_task_count"`
+	TodaySendSucceeded int        `json:"today_send_succeeded"`
+	TodaySendFailed    int        `json:"today_send_failed"`
 }
 
 func accountView(a *account.Account) AccountView {
@@ -62,6 +66,15 @@ func accountView(a *account.Account) AccountView {
 		RiskStatus: string(a.RiskStatus), PausedAt: a.PausedAt,
 		LastSessionCheckAt: a.LastSessionCheckAt, LastFriendSyncAt: a.LastFriendSyncAt,
 	}
+}
+
+func accountSummaryView(item *account.Summary) AccountView {
+	view := accountView(&item.Account)
+	view.FriendCount = item.FriendCount
+	view.EnabledTaskCount = item.EnabledTaskCount
+	view.TodaySendSucceeded = item.TodaySendSucceeded
+	view.TodaySendFailed = item.TodaySendFailed
+	return view
 }
 
 type CapabilityView struct {

@@ -2416,6 +2416,10 @@ components:
       - binding_status
       - session_status
       - risk_status
+      - friend_count
+      - enabled_task_count
+      - today_send_succeeded
+      - today_send_failed
       properties:
         id:
           type: string
@@ -2462,6 +2466,18 @@ components:
           - string
           - 'null'
           format: date-time
+        friend_count:
+          type: integer
+          minimum: 0
+        enabled_task_count:
+          type: integer
+          minimum: 0
+        today_send_succeeded:
+          type: integer
+          minimum: 0
+        today_send_failed:
+          type: integer
+          minimum: 0
     Capability:
       type: object
       required:

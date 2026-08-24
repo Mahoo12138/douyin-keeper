@@ -26,6 +26,12 @@ type Repository interface {
 	CountQuotaOccupied(ctx context.Context, userID int64) (int, error)
 }
 
+// SummaryRepository is an optional read projection used by the C-side account
+// list. Keeping it separate preserves the lean Account lookup used by workers.
+type SummaryRepository interface {
+	ListOwnedSummary(ctx context.Context, userID int64) ([]*Summary, error)
+}
+
 // SessionCheckTarget is a bound account that needs a periodic login-state
 // validation. Scheduler reads this projection so it does not depend on the
 // user-facing account list query.

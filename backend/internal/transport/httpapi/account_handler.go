@@ -21,14 +21,14 @@ var smsPhonePattern = regexp.MustCompile(`^\+?[0-9][0-9 ()-]{3,30}$`)
 
 func (s *Server) handleListAccounts(w http.ResponseWriter, r *http.Request) {
 	p := auth.MustPrincipal(r.Context())
-	accounts, err := s.accounts.ListOwned(r.Context(), p.UserID)
+	accounts, err := s.accounts.ListOwnedSummary(r.Context(), p.UserID)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 	items := make([]AccountView, 0, len(accounts))
 	for _, a := range accounts {
-		items = append(items, accountView(a))
+		items = append(items, accountSummaryView(a))
 	}
 	writeOK(w, map[string]any{"items": items, "next_cursor": nil})
 }

@@ -1344,6 +1344,10 @@ export interface components {
             last_friend_sync_at?: string | null;
             /** Format: date-time */
             paused_at?: string | null;
+            friend_count: number;
+            enabled_task_count: number;
+            today_send_succeeded: number;
+            today_send_failed: number;
         };
         Capability: {
             capability: string;

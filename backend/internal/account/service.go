@@ -53,6 +53,24 @@ func (s *Service) ListOwned(ctx context.Context, userID int64) ([]*Account, erro
 	return s.repo.ListOwned(ctx, userID)
 }
 
+func (s *Service) ListOwnedSummary(ctx context.Context, userID int64) ([]*Summary, error) {
+	if repo, ok := s.repo.(SummaryRepository); ok {
+		return repo.ListOwnedSummary(ctx, userID)
+	}
+	accounts, err := s.repo.ListOwned(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	summaries := make([]*Summary, 0, len(accounts))
+	for _, item := range accounts {
+		if item == nil {
+			continue
+		}
+		summaries = append(summaries, &Summary{Account: *item})
+	}
+	return summaries, nil
+}
+
 func (s *Service) GetOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*Account, error) {
 	return s.repo.GetOwned(ctx, userID, publicID)
 }

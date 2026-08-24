@@ -14,7 +14,12 @@ type releaseRepo struct {
 	status      BindingStatus
 }
 
-func (r *releaseRepo) ListOwned(context.Context, int64) ([]*Account, error) { return nil, nil }
+func (r *releaseRepo) ListOwned(_ context.Context, _ int64) ([]*Account, error) {
+	if r.account == nil {
+		return nil, nil
+	}
+	return []*Account{r.account}, nil
+}
 func (r *releaseRepo) GetOwned(context.Context, int64, uuid.UUID) (*Account, error) {
 	return r.account, nil
 }
@@ -57,5 +62,21 @@ func TestReleaseDelegatesToAtomicRepositoryCleanup(t *testing.T) {
 	}
 	if repo.status != BindingReleased {
 		t.Fatalf("binding status = %q, want %q", repo.status, BindingReleased)
+	}
+}
+
+func TestListOwnedSummaryFallsBackForLeanRepositories(t *testing.T) {
+	repo := &releaseRepo{account: &Account{ID: 42, PublicID: uuid.New(), Nickname: "账号"}}
+	service := NewService(repo, inlineReleaseTx{}, nil, nil, nil, nil)
+
+	summaries, err := service.ListOwnedSummary(context.Background(), 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 1 || summaries[0].Account.Nickname != "账号" {
+		t.Fatalf("summary account = %+v", summaries)
+	}
+	if summaries[0].FriendCount != 0 || summaries[0].EnabledTaskCount != 0 || summaries[0].TodaySendSucceeded != 0 || summaries[0].TodaySendFailed != 0 {
+		t.Fatalf("fallback counters = %+v", summaries[0])
 	}
 }

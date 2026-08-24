@@ -53,3 +53,14 @@ type Account struct {
 	UpdatedAt          time.Time
 	DeletedAt          *time.Time
 }
+
+// Summary is the user-facing account-list projection. Operational counters
+// are derived by the repository so the Web account list does not need one
+// request per account (docs/02 §1.3).
+type Summary struct {
+	Account            Account
+	FriendCount        int
+	EnabledTaskCount   int
+	TodaySendSucceeded int
+	TodaySendFailed    int
+}

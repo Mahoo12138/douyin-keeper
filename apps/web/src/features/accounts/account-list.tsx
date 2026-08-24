@@ -57,7 +57,14 @@ function AccountRow({ account, selected, busyAction, onSelect, onSession, onFrie
             <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <StatusBadge label={bindingLabel(account.binding_status)} variant={account.binding_status === 'bound' ? 'success' : 'muted'} />
               <StatusBadge label={sessionLabel(account.session_status)} variant={account.session_status === 'valid' ? 'success' : account.session_status === 'expired' ? 'destructive' : 'warning'} />
-              {account.risk_status !== 'normal' && <StatusBadge label={riskLabel(account.risk_status)} variant="warning" />}
+              <StatusBadge label={riskLabel(account.risk_status)} variant={account.risk_status === 'normal' ? 'success' : account.risk_status === 'paused' ? 'destructive' : 'warning'} />
+            </span>
+            <span className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <span>好友 {account.friend_count}</span>
+              <span>启用任务 {account.enabled_task_count}</span>
+              <span>今日成功 {account.today_send_succeeded}</span>
+              <span>失败 {account.today_send_failed}</span>
+              <span>检查 {formatDate(account.last_session_check_at)}</span>
             </span>
           </span>
         </button>

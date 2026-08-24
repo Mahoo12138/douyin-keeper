@@ -56,6 +56,53 @@ func (r *AccountRepo) ListOwned(ctx context.Context, userID int64) ([]*account.A
 	return out, rows.Err()
 }
 
+func (r *AccountRepo) ListOwnedSummary(ctx context.Context, userID int64) ([]*account.Summary, error) {
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		WITH site_day AS (
+			SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date AS local_date
+		)
+		SELECT `+accountCols+`,
+			(SELECT COUNT(*)::int FROM friends f
+			 WHERE f.account_id = a.id AND f.deleted_at IS NULL) AS friend_count,
+			(SELECT COUNT(*)::int FROM spark_tasks t
+			 WHERE t.account_id = a.id AND t.enabled AND t.deleted_at IS NULL) AS enabled_task_count,
+			(SELECT COUNT(*)::int FROM send_intents si, site_day d
+			 WHERE si.account_id = a.id
+			   AND si.scheduled_at >= (d.local_date::timestamp AT TIME ZONE 'Asia/Shanghai')
+			   AND si.scheduled_at < ((d.local_date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
+			   AND si.status = 'succeeded') AS today_send_succeeded,
+			(SELECT COUNT(*)::int FROM send_intents si, site_day d
+			 WHERE si.account_id = a.id
+			   AND si.scheduled_at >= (d.local_date::timestamp AT TIME ZONE 'Asia/Shanghai')
+			   AND si.scheduled_at < ((d.local_date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
+			   AND si.status = 'failed') AS today_send_failed
+		FROM douyin_accounts a
+		JOIN users u ON u.id = a.user_id
+		WHERE a.user_id=$1 AND a.deleted_at IS NULL
+		ORDER BY a.id DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]*account.Summary, 0)
+	for rows.Next() {
+		var item account.Summary
+		if err := rows.Scan(
+			&item.Account.ID, &item.Account.PublicID, &item.Account.UserID, &item.Account.UserPublicID,
+			&item.Account.PlatformUserID, &item.Account.Nickname, &item.Account.AvatarURL,
+			&item.Account.BindingStatus, &item.Account.SessionStatus, &item.Account.RiskStatus,
+			&item.Account.PausedAt, &item.Account.CooldownUntil, &item.Account.LastSessionCheckAt,
+			&item.Account.LastFriendSyncAt, &item.Account.CreatedAt, &item.Account.UpdatedAt,
+			&item.Account.DeletedAt, &item.FriendCount, &item.EnabledTaskCount,
+			&item.TodaySendSucceeded, &item.TodaySendFailed,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, &item)
+	}
+	return out, rows.Err()
+}
+
 func (r *AccountRepo) GetOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*account.Account, error) {
 	a, err := scanAccount(From(ctx, r.pool).QueryRow(ctx, `
 		SELECT `+accountCols+` FROM douyin_accounts a
