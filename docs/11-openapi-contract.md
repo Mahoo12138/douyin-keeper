@@ -627,7 +627,8 @@ POST /admin/users/{id}/entitlement-grants
 `GET /admin/risks` 默认返回 50 条、最多 100 条，按 `created_at DESC, id DESC`
 排序；`category`、`severity`、`code` 筛选条件随 `cursor` 继续读取风险列表。
 `GET /admin/audit-logs` 默认返回 50 条、最多 100 条，按 `created_at DESC, id DESC`
-排序；`action`、`resource_type`、`actor` 筛选条件随 `cursor` 继续读取审计列表。
+排序；`action`、`resource_type`、`resource_id`、`actor` 筛选条件随 `cursor` 继续读取审计列表。`resource_id`
+用于用户详情按用户资源展示脱敏审计时间线，不返回原始 `detail_json`。
 `GET /admin/jobs` 默认返回 50 条、最多 100 条，按 `created_at DESC, id DESC` 排序；支持
 `status`、`type` 筛选并随 `cursor` 继续读取。Job 列表只返回生命周期元数据，不返回
 `job_events.payload_json`、Session、Cookie 或消息正文。

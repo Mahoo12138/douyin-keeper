@@ -243,14 +243,14 @@ func TestServiceListsAuditCursorPage(t *testing.T) {
 		{ID: 2, CreatedAt: base.Add(time.Minute)},
 		{ID: 1, CreatedAt: base},
 	}}
-	page, err := NewService(repo).ListAuditLogsPage(context.Background(), AuditFilter{Action: "adapter.disable", ResourceType: "adapter", Actor: "admin", Limit: 2})
+	page, err := NewService(repo).ListAuditLogsPage(context.Background(), AuditFilter{Action: "adapter.disable", ResourceType: "adapter", ResourceID: "resource-1", Actor: "admin", Limit: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(page.Items) != 2 || page.Items[0].ID != 3 || page.Items[1].ID != 2 || page.NextAfterID != 2 || page.NextCreatedAt == nil {
 		t.Fatalf("page = %+v", page)
 	}
-	if repo.auditPageFilter.Limit != 2 || repo.auditPageFilter.Action != "adapter.disable" || repo.auditPageFilter.ResourceType != "adapter" || repo.auditPageFilter.Actor != "admin" {
+	if repo.auditPageFilter.Limit != 2 || repo.auditPageFilter.Action != "adapter.disable" || repo.auditPageFilter.ResourceType != "adapter" || repo.auditPageFilter.ResourceID != "resource-1" || repo.auditPageFilter.Actor != "admin" {
 		t.Fatalf("filter = %+v", repo.auditPageFilter)
 	}
 }
@@ -376,7 +376,7 @@ func TestServiceNormalizesRiskFilter(t *testing.T) {
 
 func TestServiceNormalizesAuditFilter(t *testing.T) {
 	repo := &repositoryStub{}
-	items, err := NewService(repo).ListAuditLogs(context.Background(), AuditFilter{Action: "adapter.disable", ResourceType: "adapter", Actor: "admin", Limit: 500})
+	items, err := NewService(repo).ListAuditLogs(context.Background(), AuditFilter{Action: "adapter.disable", ResourceType: "adapter", ResourceID: "resource-1", Actor: "admin", Limit: 500})
 	if err != nil || len(items) != 1 || items[0].Action != "adapter.disable" {
 		t.Fatalf("ListAuditLogs() = %+v, err = %v", items, err)
 	}

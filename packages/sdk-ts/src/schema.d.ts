@@ -2364,6 +2364,7 @@ export interface operations {
             query?: {
                 action?: string;
                 resource_type?: string;
+                resource_id?: string;
                 actor?: string;
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];

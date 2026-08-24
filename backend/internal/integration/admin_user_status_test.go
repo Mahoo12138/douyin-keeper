@@ -69,4 +69,8 @@ func TestAdminUserStatusRevokesSessionsAndWritesAudit(t *testing.T) {
 	if len(actions) != 2 || actions[0] != "user.disable" || actions[1] != "user.enable" {
 		t.Fatalf("audit actions = %v", actions)
 	}
+	logs, err := repo.ListAuditSummaries(ctx, admin.AuditFilter{ResourceType: "user", ResourceID: target.PublicID.String(), Limit: 10})
+	if err != nil || len(logs) != 2 {
+		t.Fatalf("resource audit filter = %d logs, err = %v", len(logs), err)
+	}
 }

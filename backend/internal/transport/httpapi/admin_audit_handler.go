@@ -46,15 +46,16 @@ func (s *Server) handleAdminListAuditLogs(w http.ResponseWriter, r *http.Request
 func adminAuditFilter(r *http.Request) (admin.AuditFilter, error) {
 	action := strings.TrimSpace(r.URL.Query().Get("action"))
 	resourceType := strings.TrimSpace(r.URL.Query().Get("resource_type"))
+	resourceID := strings.TrimSpace(r.URL.Query().Get("resource_id"))
 	actor := strings.TrimSpace(r.URL.Query().Get("actor"))
-	if len(action) > 100 || len(resourceType) > 100 || len(actor) > 100 {
+	if len(action) > 100 || len(resourceType) > 100 || len(resourceID) > 100 || len(actor) > 100 {
 		return admin.AuditFilter{}, apperr.Validation(apperr.CodeConflict, "audit filter is too long")
 	}
 	limit, err := listLimit(r)
 	if err != nil {
 		return admin.AuditFilter{}, err
 	}
-	filter := admin.AuditFilter{Action: action, ResourceType: resourceType, Actor: actor, Limit: limit}
+	filter := admin.AuditFilter{Action: action, ResourceType: resourceType, ResourceID: resourceID, Actor: actor, Limit: limit}
 	if value := r.URL.Query().Get("cursor"); value != "" {
 		decoded, err := base64.RawURLEncoding.DecodeString(value)
 		if err != nil {

@@ -7,7 +7,7 @@ import { useState, type FormEvent } from 'react'
 import { getToken } from '@/auth/session'
 import { AdminAuditTable } from '@/features/admin/admin-audit-table'
 
-type AuditFilters = { action?: string; resource_type?: string; actor?: string }
+type AuditFilters = { action?: string; resource_type?: string; resource_id?: string; actor?: string }
 
 export const Route = createFileRoute('/admin/audit')({ component: AdminAuditLogs })
 
@@ -15,6 +15,7 @@ function AdminAuditLogs() {
   const token = getToken()
   const [draftAction, setDraftAction] = useState('')
   const [draftResourceType, setDraftResourceType] = useState('')
+  const [draftResourceID, setDraftResourceID] = useState('')
   const [draftActor, setDraftActor] = useState('')
   const [filters, setFilters] = useState<AuditFilters>({})
   const auditQ = useInfiniteQuery({
@@ -31,6 +32,7 @@ function AdminAuditLogs() {
     setFilters({
       action: draftAction.trim() || undefined,
       resource_type: draftResourceType.trim() || undefined,
+      resource_id: draftResourceID.trim() || undefined,
       actor: draftActor.trim() || undefined,
     })
   }
@@ -38,11 +40,12 @@ function AdminAuditLogs() {
   function resetFilters() {
     setDraftAction('')
     setDraftResourceType('')
+    setDraftResourceID('')
     setDraftActor('')
     setFilters({})
   }
 
-  return <div className="space-y-8"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-medium text-primary">控制台 · 合规</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">审计日志</h1><p className="mt-2 text-sm text-muted-foreground">检索管理员与系统动作，详情内容只显示脱敏状态。</p></div><Button variant="outline" onClick={() => void auditQ.refetch()} disabled={auditQ.isFetching}>重新加载</Button></div><Card><CardContent className="p-4"><form className="grid gap-3 md:grid-cols-[1.2fr_1fr_1.2fr_auto_auto]" onSubmit={submitFilters}><Input aria-label="动作" placeholder="动作，例如 adapter.disable" value={draftAction} onChange={(event) => setDraftAction(event.target.value)} /><Input aria-label="资源类型" placeholder="资源类型，例如 adapter" value={draftResourceType} onChange={(event) => setDraftResourceType(event.target.value)} /><Input aria-label="操作者" placeholder="搜索操作者" value={draftActor} onChange={(event) => setDraftActor(event.target.value)} /><Button type="submit">筛选</Button><Button type="button" variant="ghost" onClick={resetFilters}>重置</Button></form></CardContent></Card>{auditQ.isPending ? <AuditLoading /> : auditQ.isError ? <Card><CardHeader><CardTitle>审计数据暂时不可用</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">请检查管理员权限、数据库或稍后重试。</p><Button className="mt-4" variant="outline" onClick={() => void auditQ.refetch()}>重试</Button></CardContent></Card> : logs.length ? <><p className="-mb-4 text-sm text-muted-foreground">共显示 {logs.length} 条记录，原始详情 JSON 不对管理员页面开放。</p><AdminAuditTable logs={logs} />{auditQ.hasNextPage && <div className="flex justify-center"><Button variant="outline" onClick={() => void auditQ.fetchNextPage()} disabled={auditQ.isFetchingNextPage}>{auditQ.isFetchingNextPage ? '加载中…' : '加载更多审计记录'}</Button></div>}</> : <Card><CardContent className="py-14 text-center text-sm text-muted-foreground">暂无匹配的审计记录。</CardContent></Card>}</div>
+  return <div className="space-y-8"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-medium text-primary">控制台 · 合规</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">审计日志</h1><p className="mt-2 text-sm text-muted-foreground">检索管理员与系统动作，详情内容只显示脱敏状态。</p></div><Button variant="outline" onClick={() => void auditQ.refetch()} disabled={auditQ.isFetching}>重新加载</Button></div><Card><CardContent className="p-4"><form className="grid gap-3 md:grid-cols-[1.2fr_1fr_1.2fr_1.2fr_auto_auto]" onSubmit={submitFilters}><Input aria-label="动作" placeholder="动作，例如 adapter.disable" value={draftAction} onChange={(event) => setDraftAction(event.target.value)} /><Input aria-label="资源类型" placeholder="资源类型，例如 adapter" value={draftResourceType} onChange={(event) => setDraftResourceType(event.target.value)} /><Input aria-label="资源 ID" placeholder="资源 ID" value={draftResourceID} onChange={(event) => setDraftResourceID(event.target.value)} /><Input aria-label="操作者" placeholder="搜索操作者" value={draftActor} onChange={(event) => setDraftActor(event.target.value)} /><Button type="submit">筛选</Button><Button type="button" variant="ghost" onClick={resetFilters}>重置</Button></form></CardContent></Card>{auditQ.isPending ? <AuditLoading /> : auditQ.isError ? <Card><CardHeader><CardTitle>审计数据暂时不可用</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">请检查管理员权限、数据库或稍后重试。</p><Button className="mt-4" variant="outline" onClick={() => void auditQ.refetch()}>重试</Button></CardContent></Card> : logs.length ? <><p className="-mb-4 text-sm text-muted-foreground">共显示 {logs.length} 条记录，原始详情 JSON 不对管理员页面开放。</p><AdminAuditTable logs={logs} />{auditQ.hasNextPage && <div className="flex justify-center"><Button variant="outline" onClick={() => void auditQ.fetchNextPage()} disabled={auditQ.isFetchingNextPage}>{auditQ.isFetchingNextPage ? '加载中…' : '加载更多审计记录'}</Button></div>}</> : <Card><CardContent className="py-14 text-center text-sm text-muted-foreground">暂无匹配的审计记录。</CardContent></Card>}</div>
 }
 
 function AuditLoading() {

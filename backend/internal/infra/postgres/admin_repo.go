@@ -486,10 +486,11 @@ func (r *AdminRepo) listAuditSummaries(ctx context.Context, filter admin.AuditFi
 		LEFT JOIN users u ON u.id = l.actor_user_id
 		WHERE ($1 = '' OR l.action = $1)
 		  AND ($2 = '' OR l.resource_type = $2)
-		  AND ($3 = '' OR COALESCE(u.display_name, '') ILIKE '%' || $3 || '%')
-		  AND ($4::timestamptz IS NULL OR (l.created_at,l.id) < ($4::timestamptz,$5::bigint))
+		  AND ($3 = '' OR l.resource_id = $3)
+		  AND ($4 = '' OR COALESCE(u.display_name, '') ILIKE '%' || $4 || '%')
+		  AND ($5::timestamptz IS NULL OR (l.created_at,l.id) < ($5::timestamptz,$6::bigint))
 		ORDER BY l.created_at DESC, l.id DESC
-		LIMIT $6`, filter.Action, filter.ResourceType, filter.Actor, filter.AfterCreatedAt, filter.AfterID, filter.Limit)
+		LIMIT $7`, filter.Action, filter.ResourceType, filter.ResourceID, filter.Actor, filter.AfterCreatedAt, filter.AfterID, filter.Limit)
 	if err != nil {
 		return nil, err
 	}

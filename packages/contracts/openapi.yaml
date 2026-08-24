@@ -570,6 +570,11 @@ paths:
         schema:
           type: string
           maxLength: 100
+      - name: resource_id
+        in: query
+        schema:
+          type: string
+          maxLength: 100
       - name: actor
         in: query
         schema:

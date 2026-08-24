@@ -260,7 +260,7 @@ export async function listAdminRisks(accessToken: string, options?: { category?:
   return data
 }
 
-export async function listAdminAuditLogs(accessToken: string, options?: { action?: string; resource_type?: string; actor?: string; limit?: number; cursor?: string }) {
+export async function listAdminAuditLogs(accessToken: string, options?: { action?: string; resource_type?: string; resource_id?: string; actor?: string; limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/admin/audit-logs', {
     headers: { Authorization: `Bearer ${accessToken}` },
     params: { query: options },

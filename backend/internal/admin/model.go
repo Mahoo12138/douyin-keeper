@@ -269,6 +269,7 @@ type RiskListPage struct {
 type AuditFilter struct {
 	Action         string
 	ResourceType   string
+	ResourceID     string
 	Actor          string
 	Limit          int
 	AfterCreatedAt *time.Time
