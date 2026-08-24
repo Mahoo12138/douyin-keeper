@@ -18,6 +18,7 @@ const (
 	KindAccountBindSMS      = "account.bind.sms" // future
 	KindSessionCheckBrowser = "account.session_check.browser"
 	KindFriendsSyncBrowser  = "account.friends_sync.browser"
+	KindConversationArchive = "conversation.archive.browser"
 	KindSendDispatch        = "send.dispatch"
 	KindSendBrowser         = "send.browser"
 	KindSendProtocol        = "send.protocol"
@@ -34,7 +35,7 @@ func QueueFor(kind string) string {
 	switch kind {
 	case KindAccountBindQR, KindAccountBindSMS:
 		return QueueInteractive
-	case KindSessionCheckBrowser, KindFriendsSyncBrowser, KindSendBrowser:
+	case KindSessionCheckBrowser, KindFriendsSyncBrowser, KindConversationArchive, KindSendBrowser:
 		return QueueBrowser
 	case KindSendDispatch, KindSendProtocol, KindCapabilityProbe, KindNotificationWechat:
 		return QueueLight

@@ -42,6 +42,10 @@ func TestConversationArchiveIsScopedReversibleAndHiddenByDefault(t *testing.T) {
 		t.Fatalf("active conversations = %+v, err=%v", items, err)
 	}
 	conversationPublicID := items[0].ID
+	target, err := conversations.GetPlatformArchiveTargetOwned(ctx, ownerID, acct.PublicID, conversationPublicID)
+	if err != nil || target == nil || target.AccountID != acct.ID || target.PlatformConversationID != conversationID || target.PlatformUserID == nil || *target.PlatformUserID != platformID {
+		t.Fatalf("platform archive target = %+v, err=%v", target, err)
+	}
 	updated, err := conversations.SetArchived(ctx, ownerID, acct.PublicID, conversationPublicID, true, time.Now())
 	if err != nil || updated.ArchivedAt == nil {
 		t.Fatalf("archive conversation = %+v, err=%v", updated, err)

@@ -37,6 +37,7 @@ type Server struct {
 	accounts         *account.Service
 	friends          *friend.Service
 	conversations    *conversation.Service
+	platformArchives *conversation.PlatformArchiveService
 	messageTemplates *messagetemplate.Service
 	tasks            *task.Service
 	sends            *send.Service
@@ -66,6 +67,14 @@ func (s *Server) WithMetrics(metrics *telemetry.Metrics) *Server {
 // forwarded protocol and client-IP headers.
 func (s *Server) WithTrustedProxyCIDRs(networks []*net.IPNet) *Server {
 	s.trustedProxyCIDRs = networks
+	return s
+}
+
+// WithPlatformArchiveService attaches the durable platform archive request
+// flow. Keeping it optional preserves lightweight handler tests and makes the
+// API fail closed if the worker pipeline is not wired by a deployment.
+func (s *Server) WithPlatformArchiveService(service *conversation.PlatformArchiveService) *Server {
+	s.platformArchives = service
 	return s
 }
 
@@ -161,6 +170,7 @@ func (s *Server) Router() http.Handler {
 			private.Get("/accounts/{accountId}/friends", s.handleListFriends)
 			private.Get("/accounts/{accountId}/conversations", s.handleListConversations)
 			private.Patch("/accounts/{accountId}/conversations/{conversationId}", s.handlePatchConversation)
+			private.Post("/accounts/{accountId}/conversations/{conversationId}/platform-archive", s.handleRequestPlatformArchive)
 			private.Get("/message-templates", s.handleListMessageTemplates)
 			private.Post("/message-templates", s.handleCreateMessageTemplate)
 			private.Patch("/message-templates/{templateId}", s.handlePatchMessageTemplate)

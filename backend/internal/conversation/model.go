@@ -50,6 +50,23 @@ type PageRepository interface {
 	ListByAccountOwnedPage(ctx context.Context, userID int64, accountPublicID uuid.UUID, filter ListFilter) ([]*Conversation, error)
 }
 
+// PlatformArchiveTarget is the internal, non-HTTP projection used to start a
+// platform archive Job. Platform identifiers stay inside the Job/Sidecar
+// boundary and are never returned by the user-facing conversation view.
+type PlatformArchiveTarget struct {
+	ConversationID         int64
+	ConversationPublicID   uuid.UUID
+	AccountID              int64
+	AccountPublicID        uuid.UUID
+	UserID                 int64
+	PlatformUserID         *string
+	PlatformConversationID string
+}
+
+type PlatformArchiveRepository interface {
+	GetPlatformArchiveTargetOwned(ctx context.Context, userID int64, accountPublicID, conversationPublicID uuid.UUID) (*PlatformArchiveTarget, error)
+}
+
 type Service struct {
 	repo Repository
 }

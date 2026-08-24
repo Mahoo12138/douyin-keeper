@@ -40,6 +40,7 @@ var outboxKinds = []string{
 	asynqqueue.KindAccountBindSMS,
 	asynqqueue.KindSessionCheckBrowser,
 	asynqqueue.KindFriendsSyncBrowser,
+	asynqqueue.KindConversationArchive,
 	asynqqueue.KindSendDispatch,
 	asynqqueue.KindSendBrowser,
 	asynqqueue.KindSendProtocol,
@@ -173,6 +174,10 @@ func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindD
 		}
 		if kind == asynqqueue.KindFriendsSyncBrowser && sessionDeps != nil && sessionDeps.Friends != nil {
 			register(kind, friendsSyncHandler(loader, *sessionDeps))
+			continue
+		}
+		if kind == asynqqueue.KindConversationArchive && sessionDeps != nil {
+			register(kind, platformArchiveHandler(loader, *sessionDeps))
 			continue
 		}
 		if kind == asynqqueue.KindSendDispatch && lightDeps != nil {

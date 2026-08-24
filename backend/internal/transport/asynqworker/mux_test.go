@@ -48,3 +48,11 @@ func TestNewMuxFailsClosedForUnconfiguredHandlers(t *testing.T) {
 		t.Fatalf("unconfigured handler should fail closed, got %v", err)
 	}
 }
+
+func TestNewBrowserMuxRegistersPlatformArchiveHandler(t *testing.T) {
+	mux := NewBrowserMux(nil, SessionCheckDeps{}, nil)
+	err := mux.ProcessTask(context.Background(), asynq.NewTask(asynqqueue.KindConversationArchive, nil))
+	if err == nil || !strings.Contains(err.Error(), "invalid outbox payload") {
+		t.Fatalf("platform archive should be registered as a browser handler, got %v", err)
+	}
+}

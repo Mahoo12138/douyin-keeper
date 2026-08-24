@@ -36,6 +36,7 @@ const (
 	KindAccountBindSMS      = "account.bind.sms"
 	KindSessionCheckBrowser = "account.session_check.browser"
 	KindFriendsSyncBrowser  = "account.friends_sync.browser"
+	KindConversationArchive = "conversation.archive.browser"
 	KindSendDispatch        = "send.dispatch"
 	KindSendBrowser         = "send.browser"
 	KindSendProtocol        = "send.protocol"

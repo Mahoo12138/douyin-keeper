@@ -452,6 +452,16 @@ export async function setConversationArchived(accessToken: string, accountId: st
   return data
 }
 
+export async function requestPlatformConversationArchive(accessToken: string, accountId: string, conversationId: string, archived: boolean) {
+  const { data, error } = await api.POST('/accounts/{accountId}/conversations/{conversationId}/platform-archive', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { accountId, conversationId } },
+    body: { archived },
+  })
+  if (error) throwApiError(error, 'platform conversation archive request failed')
+  return data
+}
+
 export type MessageTemplateInput = {
   name: string
   kind: 'text' | 'sticker'

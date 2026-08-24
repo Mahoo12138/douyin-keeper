@@ -43,11 +43,13 @@
 
 - `GET /api/accounts/:id/conversations`（默认只返回未归档会话；`include_archived=true` 用于管理查看）
 - `PATCH /api/accounts/:id/conversations/:conversationId`（设置用户侧归档标记）
+- `POST /api/accounts/:id/conversations/:conversationId/platform-archive`（创建平台侧归档 Job，body 为 `{"archived":true|false}`）
 
 会话归档当前只更新产品侧索引，不调用抖音平台操作。平台侧归档的
 `conversations.archive` Sidecar 输入契约已冻结，但真实 selector 尚未部署；在平台适配器可用
-前必须返回 `PLATFORM_ARCHIVE_UNAVAILABLE`。正式接入仍需新增 Job/Outbox 事件和账号锁定规则，
-不能复用此 API 假装平台操作成功。
+前必须返回 `PLATFORM_ARCHIVE_UNAVAILABLE`。平台归档请求现已进入通用 Job/Transactional
+Outbox、Browser Worker 和账号锁链路；Worker 只在 Sidecar 返回确认回执后将 Job 标记成功，
+不会修改本地 `conversations.archived_at` 或复用本地 API 假装平台操作成功。
 
 ### Tasks
 

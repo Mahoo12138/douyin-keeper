@@ -95,6 +95,35 @@ func (s *Server) handlePatchConversation(w http.ResponseWriter, r *http.Request)
 	writeOK(w, conversationView(item))
 }
 
+func (s *Server) handleRequestPlatformArchive(w http.ResponseWriter, r *http.Request) {
+	p := auth.MustPrincipal(r.Context())
+	accountID, err := uuid.Parse(pathParam(r, "accountId"))
+	if err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid account id"))
+		return
+	}
+	conversationID, err := uuid.Parse(pathParam(r, "conversationId"))
+	if err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid conversation id"))
+		return
+	}
+	var req patchConversationReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Archived == nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "archived is required"))
+		return
+	}
+	if s.platformArchives == nil {
+		writeError(w, r, apperr.New(apperr.CodeInternal, apperr.KindInternal, "platform archive is not configured"))
+		return
+	}
+	jobID, err := s.platformArchives.Request(r.Context(), p.UserID, accountID, conversationID, *req.Archived)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeAccepted(w, JobRef{JobID: jobID})
+}
+
 func conversationLimit(r *http.Request) (int, error) {
 	value := r.URL.Query().Get("limit")
 	if value == "" {

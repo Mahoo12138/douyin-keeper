@@ -113,6 +113,7 @@ func main() {
 	accountsSvc := account.NewService(acctRepo, tx, entSvc, userLock, jobRepo, outboxRepo)
 	friendsSvc := friend.NewService(friendRepo, entSvc)
 	conversationSvc := conversation.NewService(conversationRepo)
+	platformArchiveSvc := conversation.NewPlatformArchiveService(conversationRepo, tx, jobRepo, outboxRepo)
 	messageTemplateSvc := messagetemplate.NewService(messageTemplateRepo)
 	tasksSvc := task.NewService(taskRepo, acctRepo, friendRepo, entSvc, userLock, tx)
 	sendsSvc := send.NewService(sendRepo, taskRepo, entSvc, entSvc, outboxRepo, tx)
@@ -122,7 +123,7 @@ func main() {
 
 	srv := httpapi.NewServer(authSvc, entSvc, accountsSvc, friendsSvc, conversationSvc, messageTemplateSvc, tasksSvc, sendsSvc, jobsSvc,
 		capRepo, adminSvc, notificationSvc, []byte(cfg.AuthSigningKey), cfg.AuthRefreshTTL, pool, rdb)
-	srv.WithMetrics(telemetry.NewMetrics()).WithTrustedProxyCIDRs(trustedProxyCIDRs)
+	srv.WithPlatformArchiveService(platformArchiveSvc).WithMetrics(telemetry.NewMetrics()).WithTrustedProxyCIDRs(trustedProxyCIDRs)
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

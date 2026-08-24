@@ -412,7 +412,13 @@ MVP 允许：
 ```
 
 该操作只更新产品侧会话索引的归档状态，支持通过 `{"archived":false}` 恢复；不会
-伪造抖音平台侧归档结果。若未来接入平台归档，必须通过 Job/Outbox 和账号锁完成。
+伪造抖音平台侧归档结果。平台侧动作使用下方独立的 Job API，通过 Job/Outbox 和账号锁完成。
+
+### `POST /accounts/{account_id}/conversations/{conversation_id}/platform-archive`
+
+请求体同样使用 `{"archived": true|false}`，响应为 `202` 和 `JobRef`。该接口只创建平台
+归档 Job；Worker 会在获取账号锁、加载临时会话并收到 Sidecar 确认回执后结束 Job，未配置
+真实 selector 时以 `ADAPTER_UNAVAILABLE` 失败，不改变产品侧归档索引。
 
 ## 7.2 Message Templates
 

@@ -99,6 +99,28 @@ func (r *ConversationRepo) SetArchived(ctx context.Context, userID int64, accoun
 	return r.getByOwnedID(ctx, userID, accountPublicID, conversationPublicID, id)
 }
 
+func (r *ConversationRepo) GetPlatformArchiveTargetOwned(ctx context.Context, userID int64, accountPublicID, conversationPublicID uuid.UUID) (*conversation.PlatformArchiveTarget, error) {
+	var target conversation.PlatformArchiveTarget
+	err := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT c.id, c.public_id, a.id, a.public_id, a.user_id,
+			f.platform_user_id, c.platform_conversation_id
+		FROM conversations c
+		JOIN douyin_accounts a ON a.id = c.account_id
+		JOIN friends f ON f.id = c.friend_id AND f.account_id = c.account_id
+		WHERE c.public_id = $3 AND a.public_id = $1 AND a.user_id = $2
+		  AND a.deleted_at IS NULL AND a.binding_status = 'bound' AND f.deleted_at IS NULL`,
+		accountPublicID, userID, conversationPublicID).Scan(
+		&target.ConversationID, &target.ConversationPublicID, &target.AccountID, &target.AccountPublicID,
+		&target.UserID, &target.PlatformUserID, &target.PlatformConversationID)
+	if err == pgx.ErrNoRows {
+		return nil, apperr.NotFound(apperr.CodeConversationNotFound, "platform conversation not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &target, nil
+}
+
 func (r *ConversationRepo) getByOwnedID(ctx context.Context, userID int64, accountPublicID, conversationPublicID uuid.UUID, id int64) (*conversation.Conversation, error) {
 	var item conversation.Conversation
 	err := From(ctx, r.pool).QueryRow(ctx, `
@@ -125,3 +147,4 @@ func (r *ConversationRepo) getByOwnedID(ctx context.Context, userID int64, accou
 
 var _ conversation.Repository = (*ConversationRepo)(nil)
 var _ conversation.PageRepository = (*ConversationRepo)(nil)
+var _ conversation.PlatformArchiveRepository = (*ConversationRepo)(nil)

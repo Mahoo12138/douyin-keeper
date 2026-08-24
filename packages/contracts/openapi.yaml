@@ -933,6 +933,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Conversation'
+  /accounts/{accountId}/conversations/{conversationId}/platform-archive:
+    post:
+      operationId: requestPlatformConversationArchive
+      parameters:
+      - $ref: '#/components/parameters/AccountId'
+      - name: conversationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - archived
+              properties:
+                archived:
+                  type: boolean
+      responses:
+        '202':
+          description: Platform archive Job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobRef'
   /message-templates:
     get:
       operationId: listMessageTemplates

@@ -154,7 +154,8 @@ message.send_first     # V1.2
 
 真实 selector、菜单确认和平台回执尚未部署时，Sidecar 必须返回
 `PLATFORM_ARCHIVE_UNAVAILABLE`，不得返回成功 envelope；后续接入仍需由 Job/Outbox
-和账号锁控制执行与幂等。
+和账号锁控制执行与幂等。当前 Go Worker 已完成该链路接线，并要求成功响应同时确认目标
+会话 ID、目标归档状态和平台回执；本地 `conversations.archived_at` 仍不会被该操作写入。
 
 Go 不向 Sidecar 传 DOM selector / XPath / webpack module id。
 
