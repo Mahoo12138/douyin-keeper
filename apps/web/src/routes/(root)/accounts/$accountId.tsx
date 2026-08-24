@@ -3,10 +3,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { ArrowLeft, CheckCircle2, Clock3, History, ListChecks, RefreshCw, Send, ShieldCheck, Smartphone, UsersRound } from 'lucide-react'
-import { accountCapabilities, checkAccountSession, getJob, listAccounts, listFriends, listSendIntents, listTasks, syncAccountFriends, updateFriend, type components } from '@douyin-keeper/sdk-ts'
+import { accountCapabilities, checkAccountSession, listAccounts, listFriends, listSendIntents, listTasks, syncAccountFriends, updateFriend, type components } from '@douyin-keeper/sdk-ts'
 import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton } from '@douyin-keeper/ui-web'
 
 import { getToken } from '@/auth/session'
+import { waitForJobEvents } from '@/lib/job-progress'
 import { CapabilityPanel } from '@/features/accounts/capability-panel'
 import { bindingLabel, formatDate, riskLabel, sessionLabel, StatusBadge } from '@/features/accounts/account-status'
 import { type Account, type Capability } from '@/features/accounts/account-types'
@@ -46,7 +47,7 @@ function AccountDetailPage() {
 		setBusyAction(action)
 		try {
 			const job = action === 'session' ? await checkAccountSession(token, accountId) : await syncAccountFriends(token, accountId)
-			await waitForJob(token, job.job_id)
+			await waitForJobEvents(token, job.job_id)
 			toast.success(action === 'session' ? '会话检查已完成' : '好友同步已完成')
 			await Promise.all([
 				queryClient.invalidateQueries({ queryKey: ['accounts'] }),
@@ -160,14 +161,4 @@ function statusLabel(status: Intent['status']) {
 function statusVariant(status: Intent['status']): 'success' | 'warning' | 'destructive' | 'muted' | 'secondary' {
 	const variants: Record<Intent['status'], 'success' | 'warning' | 'destructive' | 'muted' | 'secondary'> = { pending: 'secondary', queued: 'warning', running: 'warning', retry_wait: 'warning', succeeded: 'success', failed: 'destructive', skipped: 'muted', cancelled: 'muted' }
 	return variants[status]
-}
-
-async function waitForJob(token: string, jobId: string) {
-	for (let attempt = 0; attempt < 60; attempt += 1) {
-		const job = await getJob(token, jobId)
-		if (job.status === 'succeeded') return
-		if (job.status === 'failed' || job.status === 'cancelled') throw new Error(job.error_code ?? '任务未完成')
-		await new Promise((resolve) => window.setTimeout(resolve, 1000))
-	}
-	throw new Error('任务执行超时，请稍后刷新状态')
 }

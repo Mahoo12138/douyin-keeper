@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Link } from '@tanstack/react-router'
-import { getJob, listAccounts, listFriends, listTasks, syncAccountFriends, updateFriend } from '@douyin-keeper/sdk-ts'
+import { listAccounts, listFriends, listTasks, syncAccountFriends, updateFriend } from '@douyin-keeper/sdk-ts'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton } from '@douyin-keeper/ui-web'
 import { Filter, RefreshCw, Search, Sparkles } from 'lucide-react'
 
 import { getToken } from '@/auth/session'
+import { waitForJobEvents } from '@/lib/job-progress'
 import { filterFriends } from './friend-filters'
 import type { Friend, SparkFilter, TaskFilter } from './friend-types'
 import { FriendTable } from './friend-table'
@@ -67,7 +68,7 @@ export function FriendsPage() {
     setIsSyncing(true)
     try {
       const job = await syncAccountFriends(token, accountId)
-      await waitForJob(token, job.job_id)
+      await waitForJobEvents(token, job.job_id)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['friends', accountId] }),
         queryClient.invalidateQueries({ queryKey: ['accounts'] }),
@@ -162,14 +163,4 @@ function FilterSelect({ label, value, onChange, options }: { label: string; valu
 
 function EmptyFriends({ hasFilters, onReset }: { hasFilters: boolean; onReset: () => void }) {
   return <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center"><Sparkles className="size-8 text-muted-foreground" /><p className="mt-3 font-medium">{hasFilters ? '没有符合条件的好友' : '还没有好友数据'}</p>{hasFilters ? <Button className="mt-4" variant="outline" onClick={onReset}>清除筛选</Button> : <p className="mt-1 text-sm text-muted-foreground">点击“同步好友”获取最新列表。</p>}</div>
-}
-
-async function waitForJob(token: string, jobId: string) {
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    const job = await getJob(token, jobId)
-    if (job.status === 'succeeded') return
-    if (job.status === 'failed' || job.status === 'cancelled') throw new Error(job.error_code ?? '任务未完成')
-    await new Promise((resolve) => window.setTimeout(resolve, 1000))
-  }
-  throw new Error('任务执行超时，请稍后刷新状态')
 }

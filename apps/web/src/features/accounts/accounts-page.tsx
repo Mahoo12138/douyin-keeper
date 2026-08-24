@@ -5,7 +5,6 @@ import {
   accountCapabilities,
   checkAccountSession,
   deleteAccount,
-  getJob,
   listAccounts,
   pauseAccount,
   resumeAccount,
@@ -14,6 +13,7 @@ import {
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton } from '@douyin-keeper/ui-web'
 
 import { getToken } from '@/auth/session'
+import { waitForJobEvents } from '@/lib/job-progress'
 import { AccountBindingFlow } from './account-binding-flow'
 import { AccountList, EmptyAccounts } from './account-list'
 import type { Account } from './account-types'
@@ -51,7 +51,7 @@ export function AccountsPage() {
       } else {
         const job = action === 'session' ? await checkAccountSession(token, account.id) : await syncAccountFriends(token, account.id)
         toast.success(action === 'session' ? '会话检查已开始' : '好友同步已开始')
-        await waitForJob(token, job.job_id)
+        await waitForJobEvents(token, job.job_id)
       }
       await queryClient.invalidateQueries({ queryKey: ['accounts'] })
       if (selectedAccountId === account.id) {
@@ -120,14 +120,4 @@ export function AccountsPage() {
       {selectedAccount && <CapabilityPanel account={selectedAccount} capabilities={capabilitiesQ.data?.items ?? []} loading={capabilitiesQ.isLoading} error={capabilitiesQ.isError} />}
     </div>
   )
-}
-
-async function waitForJob(token: string, jobId: string) {
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    const job = await getJob(token, jobId)
-    if (job.status === 'succeeded') return
-    if (job.status === 'failed' || job.status === 'cancelled') throw new Error(job.error_code ?? '任务未完成')
-    await new Promise((resolve) => window.setTimeout(resolve, 1000))
-  }
-  throw new Error('任务执行超时，请稍后刷新状态')
 }
