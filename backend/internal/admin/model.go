@@ -3,7 +3,10 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,6 +14,13 @@ import (
 
 var ErrUnknownAdapter = errors.New("admin: unknown adapter")
 var ErrInvalidAccount = errors.New("admin: invalid account")
+var ErrInvalidSetting = errors.New("admin: invalid setting")
+
+const maxSettingValueBytes = 16 * 1024
+
+var settingKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,63}$`)
+
+var sensitiveSettingFragments = []string{"password", "secret", "token", "cookie", "session", "credential", "private_key"}
 
 var KnownAdapters = []string{
 	"browser.consumer",
@@ -194,6 +204,12 @@ type AuditSummary struct {
 	CreatedAt        time.Time
 }
 
+type Setting struct {
+	Key       string
+	Value     json.RawMessage
+	UpdatedAt time.Time
+}
+
 type Repository interface {
 	ListUserSummaries(ctx context.Context, limit int) ([]UserSummary, error)
 	ListAccountSummaries(ctx context.Context, limit int) ([]AccountSummary, error)
@@ -204,6 +220,8 @@ type Repository interface {
 	SetAccountPaused(ctx context.Context, actorID int64, accountID uuid.UUID, paused bool) (AccountSummary, error)
 	ListRiskSummaries(ctx context.Context, filter RiskFilter) ([]RiskSummary, error)
 	ListAuditSummaries(ctx context.Context, filter AuditFilter) ([]AuditSummary, error)
+	ListSettings(ctx context.Context) ([]Setting, error)
+	SetSetting(ctx context.Context, actorID int64, key string, value json.RawMessage) (Setting, error)
 }
 
 type Service struct {
@@ -256,6 +274,36 @@ func (s *Service) ListRisks(ctx context.Context, filter RiskFilter) ([]RiskSumma
 func (s *Service) ListAuditLogs(ctx context.Context, filter AuditFilter) ([]AuditSummary, error) {
 	filter.Limit = normalizeLimit(filter.Limit)
 	return s.repo.ListAuditSummaries(ctx, filter)
+}
+
+func (s *Service) ListSettings(ctx context.Context) ([]Setting, error) {
+	return s.repo.ListSettings(ctx)
+}
+
+func (s *Service) SetSetting(ctx context.Context, actorID int64, key string, value json.RawMessage) (Setting, error) {
+	key = strings.TrimSpace(key)
+	if actorID <= 0 || !settingKeyPattern.MatchString(key) || containsSensitiveSettingFragment(key) {
+		return Setting{}, ErrInvalidSetting
+	}
+	if len(value) == 0 || len(value) > maxSettingValueBytes || !json.Valid(value) {
+		return Setting{}, ErrInvalidSetting
+	}
+	compact := make([]byte, 0, len(value))
+	compact, err := json.Marshal(json.RawMessage(value))
+	if err != nil {
+		return Setting{}, ErrInvalidSetting
+	}
+	return s.repo.SetSetting(ctx, actorID, key, compact)
+}
+
+func containsSensitiveSettingFragment(key string) bool {
+	lower := strings.ToLower(key)
+	for _, fragment := range sensitiveSettingFragments {
+		if strings.Contains(lower, fragment) {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeLimit(limit int) int {

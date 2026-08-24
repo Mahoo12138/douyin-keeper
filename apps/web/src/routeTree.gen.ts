@@ -30,6 +30,7 @@ import { Route as AdminAdaptersRouteImport } from './routes/admin/adapters'
 import { Route as AdminAuditRouteImport } from './routes/admin/audit'
 import { Route as AdminEntitlementRouteImport } from './routes/admin/entitlement'
 import { Route as AdminRisksRouteImport } from './routes/admin/risks'
+import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminWorkersRouteImport } from './routes/admin/workers'
 import { Route as rootAccountsAccountIdRouteImport } from './routes/(root)/accounts/$accountId'
@@ -139,6 +140,11 @@ const AdminRisksRoute = AdminRisksRouteImport.update({
   path: '/risks',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -185,6 +191,7 @@ export interface FileRoutesByFullPath {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/entitlement': typeof AdminEntitlementRouteWithChildren
   '/admin/risks': typeof AdminRisksRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRouteWithChildren
   '/admin/workers': typeof AdminWorkersRoute
   '/admin/': typeof AdminIndexRoute
@@ -210,6 +217,7 @@ export interface FileRoutesByTo {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/entitlement': typeof AdminEntitlementRouteWithChildren
   '/admin/risks': typeof AdminRisksRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRouteWithChildren
   '/admin/workers': typeof AdminWorkersRoute
   '/admin': typeof AdminIndexRoute
@@ -239,6 +247,7 @@ export interface FileRoutesById {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/entitlement': typeof AdminEntitlementRouteWithChildren
   '/admin/risks': typeof AdminRisksRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRouteWithChildren
   '/admin/workers': typeof AdminWorkersRoute
   '/admin/': typeof AdminIndexRoute
@@ -267,6 +276,7 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/entitlement'
     | '/admin/risks'
+    | '/admin/settings'
     | '/admin/users'
     | '/admin/workers'
     | '/admin/'
@@ -292,6 +302,7 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/entitlement'
     | '/admin/risks'
+    | '/admin/settings'
     | '/admin/users'
     | '/admin/workers'
     | '/admin'
@@ -320,6 +331,7 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/entitlement'
     | '/admin/risks'
+    | '/admin/settings'
     | '/admin/users'
     | '/admin/workers'
     | '/admin/'
@@ -484,6 +496,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRisksRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/users': {
       id: '/admin/users'
       path: '/users'
@@ -605,6 +624,7 @@ interface AdminRouteChildren {
   AdminAuditRoute: typeof AdminAuditRoute
   AdminEntitlementRoute: typeof AdminEntitlementRouteWithChildren
   AdminRisksRoute: typeof AdminRisksRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
   AdminUsersRoute: typeof AdminUsersRouteWithChildren
   AdminWorkersRoute: typeof AdminWorkersRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -616,6 +636,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAuditRoute: AdminAuditRoute,
   AdminEntitlementRoute: AdminEntitlementRouteWithChildren,
   AdminRisksRoute: AdminRisksRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
   AdminUsersRoute: AdminUsersRouteWithChildren,
   AdminWorkersRoute: AdminWorkersRoute,
   AdminIndexRoute: AdminIndexRoute,

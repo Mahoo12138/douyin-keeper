@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -19,6 +20,10 @@ type repositoryStub struct {
 	accountPaused  bool
 	riskFilter     RiskFilter
 	auditFilter    AuditFilter
+	setting        Setting
+	settingActorID int64
+	settingKey     string
+	settingValue   json.RawMessage
 }
 
 func (r *repositoryStub) ListUserSummaries(_ context.Context, limit int) ([]UserSummary, error) {
@@ -61,6 +66,15 @@ func (r *repositoryStub) ListRiskSummaries(_ context.Context, filter RiskFilter)
 func (r *repositoryStub) ListAuditSummaries(_ context.Context, filter AuditFilter) ([]AuditSummary, error) {
 	r.auditFilter = filter
 	return []AuditSummary{{Action: "adapter.disable"}}, nil
+}
+
+func (r *repositoryStub) ListSettings(context.Context) ([]Setting, error) {
+	return []Setting{r.setting}, nil
+}
+
+func (r *repositoryStub) SetSetting(_ context.Context, actorID int64, key string, value json.RawMessage) (Setting, error) {
+	r.settingActorID, r.settingKey, r.settingValue = actorID, key, value
+	return Setting{Key: key, Value: value}, nil
 }
 
 func TestServiceClampsUserListLimit(t *testing.T) {
@@ -187,5 +201,34 @@ func TestServiceNormalizesAuditFilter(t *testing.T) {
 	}
 	if repo.auditFilter.Action != "adapter.disable" || repo.auditFilter.ResourceType != "adapter" || repo.auditFilter.Actor != "admin" || repo.auditFilter.Limit != 100 {
 		t.Fatalf("audit filter = %+v", repo.auditFilter)
+	}
+}
+
+func TestServiceValidatesAndSavesSetting(t *testing.T) {
+	repo := &repositoryStub{}
+	setting, err := NewService(repo).SetSetting(context.Background(), 42, "feature.notice", json.RawMessage(`{"enabled":true}`))
+	if err != nil {
+		t.Fatalf("SetSetting() error = %v", err)
+	}
+	if setting.Key != "feature.notice" || repo.settingActorID != 42 || string(repo.settingValue) != `{"enabled":true}` {
+		t.Fatalf("setting = %+v, actor = %d, value = %s", setting, repo.settingActorID, repo.settingValue)
+	}
+}
+
+func TestServiceRejectsInvalidOrSensitiveSetting(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		key   string
+		value string
+	}{
+		{name: "bad key", key: "Bad Key", value: `true`},
+		{name: "secret key", key: "wechat.secret", value: `"nope"`},
+		{name: "invalid json", key: "feature.notice", value: `{`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := NewService(&repositoryStub{}).SetSetting(context.Background(), 42, test.key, json.RawMessage(test.value)); !errors.Is(err, ErrInvalidSetting) {
+				t.Fatalf("error = %v, want ErrInvalidSetting", err)
+			}
+		})
 	}
 }

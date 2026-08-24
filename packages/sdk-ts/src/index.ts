@@ -240,6 +240,24 @@ export async function listAdminAuditLogs(accessToken: string, options?: { action
   return data
 }
 
+export async function listAdminSettings(accessToken: string) {
+  const { data, error } = await api.GET('/admin/settings', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (error) throwApiError(error, 'admin settings lookup failed')
+  return data
+}
+
+export async function updateAdminSetting(accessToken: string, key: string, value: components['schemas']['AdminSettingUpdate']['value']) {
+  const { data, error } = await api.PATCH('/admin/settings/{key}', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { key } },
+    body: { value },
+  })
+  if (error) throwApiError(error, 'admin setting update failed')
+  return data
+}
+
 export async function redeemCardCode(accessToken: string, code: string) {
   const { data, error } = await api.POST('/entitlements/redeem', {
     headers: { Authorization: `Bearer ${accessToken}` },

@@ -503,6 +503,46 @@ paths:
                     type:
                     - string
                     - 'null'
+  /admin/settings:
+    get:
+      operationId: listAdminSettings
+      responses:
+        '200':
+          description: Administrator site settings without raw audit detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminSetting'
+  /admin/settings/{key}:
+    patch:
+      operationId: updateAdminSetting
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[a-z][a-z0-9_.-]{0,63}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminSettingUpdate'
+      responses:
+        '200':
+          description: Updated site setting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSetting'
   /accounts:
     get:
       operationId: listAccounts
@@ -2324,6 +2364,26 @@ components:
         created_at:
           type: string
           format: date-time
+    AdminSetting:
+      type: object
+      required:
+      - key
+      - value
+      - updated_at
+      properties:
+        key:
+          type: string
+          pattern: '^[a-z][a-z0-9_.-]{0,63}$'
+        value: {}
+        updated_at:
+          type: string
+          format: date-time
+    AdminSettingUpdate:
+      type: object
+      required:
+      - value
+      properties:
+        value: {}
     Account:
       type: object
       required:

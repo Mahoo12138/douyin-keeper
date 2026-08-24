@@ -337,6 +337,65 @@ func (r *AdminRepo) ListAuditSummaries(ctx context.Context, filter admin.AuditFi
 	return items, nil
 }
 
+func (r *AdminRepo) ListSettings(ctx context.Context) ([]admin.Setting, error) {
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT key, value_json, updated_at
+		FROM site_settings
+		ORDER BY key`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]admin.Setting, 0)
+	for rows.Next() {
+		var item admin.Setting
+		var value []byte
+		if err := rows.Scan(&item.Key, &value, &item.UpdatedAt); err != nil {
+			return nil, err
+		}
+		item.Value = append([]byte(nil), value...)
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *AdminRepo) SetSetting(ctx context.Context, actorID int64, key string, value json.RawMessage) (admin.Setting, error) {
+	if actorID <= 0 {
+		return admin.Setting{}, admin.ErrInvalidSetting
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return admin.Setting{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var item admin.Setting
+	var storedValue []byte
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO site_settings (key, value_json, updated_at)
+		VALUES ($1, $2::jsonb, now())
+		ON CONFLICT (key) DO UPDATE
+		SET value_json=EXCLUDED.value_json, updated_at=now()
+		RETURNING key, value_json, updated_at`, key, []byte(value)).Scan(&item.Key, &storedValue, &item.UpdatedAt); err != nil {
+		return admin.Setting{}, err
+	}
+	item.Value = append([]byte(nil), storedValue...)
+	detail, _ := json.Marshal(map[string]any{"key": key})
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, detail_json)
+		VALUES ($1, 'site_setting.update', 'site_setting', $2, $3)`, actorID, key, detail); err != nil {
+		return admin.Setting{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return admin.Setting{}, err
+	}
+	return item, nil
+}
+
 func (r *AdminRepo) ListAdapterHealth(ctx context.Context) ([]admin.AdapterHealthSummary, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT catalog.adapter, catalog.executable,

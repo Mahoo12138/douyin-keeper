@@ -356,6 +356,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAdminSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/settings/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateAdminSetting"];
+        trace?: never;
+    };
     "/accounts": {
         parameters: {
             query?: never;
@@ -1236,6 +1268,15 @@ export interface components {
             has_detail: boolean;
             /** Format: date-time */
             created_at: string;
+        };
+        AdminSetting: {
+            key: string;
+            value: unknown;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AdminSettingUpdate: {
+            value: unknown;
         };
         Account: {
             /** Format: uuid */
@@ -2140,6 +2181,54 @@ export interface operations {
                         items: components["schemas"]["AdminAuditLog"][];
                         next_cursor: string | null;
                     };
+                };
+            };
+        };
+    };
+    listAdminSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrator site settings without raw audit detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminSetting"][];
+                    };
+                };
+            };
+        };
+    };
+    updateAdminSetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSettingUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated site setting */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSetting"];
                 };
             };
         };

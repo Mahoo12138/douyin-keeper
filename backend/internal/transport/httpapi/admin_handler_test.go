@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -168,5 +169,15 @@ func TestAdminAuditFilterRejectsOverlongValue(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/v1/admin/audit-logs?action="+strings.Repeat("x", 101), nil)
 	if _, err := adminAuditFilter(req); err == nil {
 		t.Fatal("overlong audit filter should be rejected")
+	}
+}
+
+func TestAdminSettingViewPreservesJSONValueAndFormatsDate(t *testing.T) {
+	updatedAt := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	view := adminSettingViewFrom(admin.Setting{
+		Key: "feature.notice", Value: json.RawMessage(`{"enabled":true}`), UpdatedAt: updatedAt,
+	})
+	if view.Key != "feature.notice" || string(view.Value) != `{"enabled":true}` || view.UpdatedAt != "2026-08-24T09:00:00Z" {
+		t.Fatalf("setting view = %+v", view)
 	}
 }

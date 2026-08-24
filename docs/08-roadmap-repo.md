@@ -172,7 +172,7 @@ M2 当前实现还提供独立的会话列表 API 和 `/conversations` 页面：
 - 风险；
 - Audit。
 
-当前已完成 M5 的运营概览、用户、账号、Worker/队列、Adapter、风险、审计以及权益与卡密管理：统一 Web Admin 页面通过管理员角色保护的 `/admin/overview`、`/admin/users`、`/admin/accounts`、`/admin/workers`、`/admin/adapters`、`/admin/risks`、`/admin/audit-logs`、`/admin/entitlement-plans`、`/admin/card-batches`、`/admin/redemptions`、`/admin/users/{id}/entitlements` API 展示 DAU、发送成功率、失败码 Top、风险账号、队列/Worker 运行态、用户资源、账号状态、Capability、Adapter 健康、审计、卡密摘要和用户授权时间线；Adapter 启停、账号暂停/恢复、方案/批次创建与停用、人工 Grant/Revoke、未使用卡密撤销等动作写入审计日志。
+当前已完成 M5 的运营概览、用户、账号、Worker/队列、Adapter、风险、审计、站点设置以及权益与卡密管理：统一 Web Admin 页面通过管理员角色保护的 `/admin/overview`、`/admin/users`、`/admin/accounts`、`/admin/workers`、`/admin/adapters`、`/admin/risks`、`/admin/settings`、`/admin/audit-logs`、`/admin/entitlement-plans`、`/admin/card-batches`、`/admin/redemptions`、`/admin/users/{id}/entitlements` API 展示 DAU、发送成功率、失败码 Top、风险账号、队列/Worker 运行态、用户资源、账号状态、Capability、Adapter 健康、受约束站点配置、审计、卡密摘要和用户授权时间线；Adapter 启停、账号暂停/恢复、站点配置更新、方案/批次创建与停用、人工 Grant/Revoke、未使用卡密撤销等动作写入审计日志，配置值本身不写入审计详情。
 
 ### M6 — V1.1
 
