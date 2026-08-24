@@ -12,6 +12,7 @@ export type TaskDraft = {
   timezone: string
   windowStart: string
   windowEnd: string
+  messageKind: 'text' | 'sticker'
   message: string
   allowFirstMessage: boolean
 }

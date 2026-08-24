@@ -32,8 +32,13 @@ func TestSparkTaskValidation(t *testing.T) {
 		},
 		{
 			name:        "invalid timezone is rejected",
-			task:        SparkTask{WindowStart: "19:30:00", WindowEnd: "22:30:00", Timezone: "Mars/Olympus", MessageKind: "sticker"},
+			task:        SparkTask{WindowStart: "19:30:00", WindowEnd: "22:30:00", Timezone: "Mars/Olympus", MessageKind: "sticker", MessageBody: stringPtr("sticker_001")},
 			validWindow: true, validMessage: true, validTimezone: false,
+		},
+		{
+			name:        "blank sticker id is rejected",
+			task:        SparkTask{WindowStart: "19:30:00", WindowEnd: "22:30:00", Timezone: "Asia/Shanghai", MessageKind: "sticker", MessageBody: stringPtr("  ")},
+			validWindow: true, validMessage: false, validTimezone: true,
 		},
 	}
 

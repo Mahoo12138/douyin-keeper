@@ -356,7 +356,7 @@ export type UpdateTaskInput = {
   timezone?: string
   window_start?: string
   window_end?: string
-  message?: { kind: 'text' | 'sticker'; body?: string | null }
+  message?: { kind: 'text' | 'sticker'; body: string }
   allow_first_message?: boolean
 }
 

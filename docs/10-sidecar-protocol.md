@@ -395,6 +395,35 @@ Success：
 
 只有平台明确确认后 `confirmed=true`。不能用固定 sleep 后假定成功。
 
+## 10.1 Send Sticker（V1.1）
+
+请求与文字发送使用相同的 `session`、`target` 和确认结果结构，`op` 改为
+`message.send_sticker`：
+
+```json
+{
+  "protocol_version": 1,
+  "request_id": "...",
+  "op": "message.send_sticker",
+  "deadline_ms": 30000,
+  "input": {
+    "session": {...},
+    "target": {
+      "platform_user_id": "987654321",
+      "platform_conversation_id": "0:1:..."
+    },
+    "message": {
+      "sticker_id": "sticker_001"
+    }
+  }
+}
+```
+
+`sticker_id` 必须是当前账号/Sidecar 能识别的稳定平台资源标识。任务中的
+`message.body` 只保存这个 ID，不保存图片 URL、展示名称或 Cookie。成功时仍必须
+返回 `confirmed=true` 和 `platform_message_id`；贴纸能力不可用时返回稳定错误码，
+Go worker 会 fail-closed。
+
 ## 11. 错误码
 
 Sidecar 至少支持：

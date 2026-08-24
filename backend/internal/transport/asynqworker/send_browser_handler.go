@@ -20,9 +20,39 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
 )
 
-type sendTextResult struct {
+type sendMessageResult struct {
 	Confirmed         bool   `json:"confirmed"`
 	PlatformMessageID string `json:"platform_message_id"`
+}
+
+type messageSendPlan struct {
+	Capability string
+	Operation  string
+	Message    map[string]string
+}
+
+// messageSendSpec keeps task payload semantics at the worker boundary. A
+// sticker body is a stable platform sticker_id, never a display name or URL.
+func messageSendSpec(kind, body string) (messageSendPlan, error) {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return messageSendPlan{}, fmt.Errorf("message body is empty")
+	}
+	switch kind {
+	case "text":
+		return messageSendPlan{Capability: capability.NameMessageTextExisting, Operation: sidecar.OpsMessageSendText, Message: map[string]string{"text": body}}, nil
+	case "sticker":
+		return messageSendPlan{Capability: capability.NameMessageSticker, Operation: sidecar.OpsMessageSendSticker, Message: map[string]string{"sticker_id": body}}, nil
+	default:
+		return messageSendPlan{}, fmt.Errorf("unsupported message kind %q", kind)
+	}
+}
+
+func valueOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(context.Context, *asynq.Task) error {
@@ -103,8 +133,19 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		if acct.SessionStatus == account.SessionChallengeRequired {
 			return failWithQuota(apperr.CodeChallengeRequired)
 		}
+		if intent.TaskID == nil {
+			return failWithQuota(apperr.CodeAdapterIncompatible)
+		}
+		tk, err := deps.Tasks.GetByID(ctx, *intent.TaskID)
+		if err != nil || tk.AccountID != claimed.AccountID || tk.FriendID != claimed.FriendID {
+			return failWithQuota(apperr.CodeAdapterIncompatible)
+		}
+		spec, err := messageSendSpec(tk.MessageKind, valueOrEmpty(tk.MessageBody))
+		if err != nil {
+			return failWithQuota(apperr.CodeAdapterIncompatible)
+		}
 		if deps.Capabilities != nil {
-			snapshot, capabilityErr := deps.Capabilities.GetByAccountAndName(ctx, acct.ID, capability.NameMessageTextExisting)
+			snapshot, capabilityErr := deps.Capabilities.GetByAccountAndName(ctx, acct.ID, spec.Capability)
 			if capabilityErr != nil {
 				return failWithQuota(apperr.CodeInternal)
 			}
@@ -139,13 +180,6 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 			return failWithQuota(apperr.CodeAccountBusy)
 		}
 		defer func() { _ = lock.Release(context.Background()) }()
-		if intent.TaskID == nil {
-			return failWithQuota(apperr.CodeAdapterIncompatible)
-		}
-		tk, err := deps.Tasks.GetByID(ctx, *intent.TaskID)
-		if err != nil || tk.AccountID != claimed.AccountID || tk.FriendID != claimed.FriendID || tk.MessageKind != "text" || tk.MessageBody == nil || strings.TrimSpace(*tk.MessageBody) == "" {
-			return failWithQuota(apperr.CodeAdapterIncompatible)
-		}
 		target, err := deps.Targets.GetSendTarget(ctx, claimed.AccountID, claimed.FriendID)
 		if err != nil {
 			code := apperr.CodeAdapterIncompatible
@@ -158,11 +192,11 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		err = deps.Sessions.WithTempFile(ctx, acct.ID, acct.UserPublicID, acct.PublicID, func(path string) error {
 			response, err = deps.Sidecar.Call(ctx, sidecar.Request{
 				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
-				Op: sidecar.OpsMessageSendText, DeadlineMS: 30_000,
+				Op: spec.Operation, DeadlineMS: 30_000,
 				Input: map[string]any{
 					"session": map[string]any{"kind": "playwright_storage_state_file", "path": path},
 					"target":  map[string]string{"platform_user_id": target.PlatformUserID, "platform_conversation_id": target.PlatformConversationID},
-					"message": map[string]string{"text": *tk.MessageBody},
+					"message": spec.Message,
 				},
 			})
 			return err
@@ -209,7 +243,7 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 			}
 			return failWithQuota(mapped)
 		}
-		var result sendTextResult
+		var result sendMessageResult
 		if err := decodeResult(response, &result); err != nil || !result.Confirmed || result.PlatformMessageID == "" {
 			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 			if deps.Health != nil {

@@ -1,10 +1,12 @@
 package asynqworker
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
 )
 
@@ -47,5 +49,33 @@ func TestMapSendSidecarErrors(t *testing.T) {
 func TestSendSidecarErrorCodeTreatsMalformedResponseAsUnavailable(t *testing.T) {
 	if got := sendSidecarErrorCode(nil); got != sidecar.ErrAdapterUnavailable {
 		t.Fatalf("nil response code = %q", got)
+	}
+}
+
+func TestMessageSendSpecSelectsOperationAndPayload(t *testing.T) {
+	tests := []struct {
+		name, kind, body, capability, operation, key string
+	}{
+		{name: "text", kind: "text", body: "  晚安  ", capability: capability.NameMessageTextExisting, operation: sidecar.OpsMessageSendText, key: "text"},
+		{name: "sticker", kind: "sticker", body: "  sticker_001  ", capability: capability.NameMessageSticker, operation: sidecar.OpsMessageSendSticker, key: "sticker_id"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := messageSendSpec(tt.kind, tt.body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Capability != tt.capability || got.Operation != tt.operation || got.Message[tt.key] != strings.TrimSpace(tt.body) {
+				t.Fatalf("unexpected message spec: %+v", got)
+			}
+		})
+	}
+}
+
+func TestMessageSendSpecRejectsUnsupportedOrEmptyPayload(t *testing.T) {
+	for _, tt := range []struct{ kind, body string }{{kind: "sticker", body: "  "}, {kind: "voice", body: "voice_001"}} {
+		if _, err := messageSendSpec(tt.kind, tt.body); err == nil {
+			t.Errorf("messageSendSpec(%q, %q) should fail", tt.kind, tt.body)
+		}
 	}
 }

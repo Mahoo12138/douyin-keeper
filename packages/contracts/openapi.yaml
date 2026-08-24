@@ -762,6 +762,7 @@ paths:
                   additionalProperties: false
                   required:
                   - kind
+                  - body
                   properties:
                     kind:
                       type: string
@@ -769,9 +770,9 @@ paths:
                       - text
                       - sticker
                     body:
-                      type:
-                      - string
-                      - 'null'
+                      type: string
+                      minLength: 1
+                      maxLength: 500
                 allow_first_message:
                   type: boolean
       responses:
@@ -2335,11 +2336,13 @@ components:
           type: object
           required:
           - kind
+          - body
           properties:
             kind:
               type: string
               enum:
               - text
+              - sticker
             body:
               type: string
               minLength: 1

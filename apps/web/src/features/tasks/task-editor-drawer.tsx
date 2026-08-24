@@ -54,9 +54,21 @@ export function TaskEditorDrawer({
           </div>
           <div className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">时区：{draft.timezone}。时间窗口不支持跨午夜。</div>
           <div className="space-y-1.5">
-            <Label htmlFor="task-message">消息内容</Label>
-            <textarea id="task-message" value={draft.message} onChange={(event) => onChange({ message: event.target.value })} maxLength={500} rows={5} placeholder="输入每天要发送的文字" className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring" />
-            <p className="text-right text-xs text-muted-foreground">{draft.message.length} / 500</p>
+            <Label htmlFor="task-message-kind">消息类型</Label>
+            <select id="task-message-kind" value={draft.messageKind} onChange={(event) => onChange({ messageKind: event.target.value as TaskDraft['messageKind'], message: '' })} className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+              <option value="text">文字消息</option>
+              <option value="sticker">贴纸消息</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="task-message">{draft.messageKind === 'sticker' ? '贴纸 ID' : '消息内容'}</Label>
+            {draft.messageKind === 'sticker' ? (
+              <Input id="task-message" value={draft.message} onChange={(event) => onChange({ message: event.target.value })} maxLength={200} placeholder="输入 Sidecar 返回的稳定 sticker_id" />
+            ) : (
+              <textarea id="task-message" value={draft.message} onChange={(event) => onChange({ message: event.target.value })} maxLength={500} rows={5} placeholder="输入每天要发送的文字" className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring" />
+            )}
+            <p className="text-xs text-muted-foreground">{draft.messageKind === 'sticker' ? '仅支持已在账号能力中识别的贴纸 ID，不支持图片 URL 或展示名称。' : '文字会在发送前去除首尾空格。'}</p>
+            <p className="text-right text-xs text-muted-foreground">{draft.message.length} / {draft.messageKind === 'sticker' ? 200 : 500}</p>
           </div>
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div className="pr-4"><Label htmlFor="task-enabled">每日启用</Label><p className="mt-1 text-xs text-muted-foreground">关闭后保留配置，但调度器不会创建发送任务。</p></div>

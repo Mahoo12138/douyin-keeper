@@ -66,11 +66,11 @@ export function TasksPage() {
       toast.error('请先同步一个已确认身份的好友')
       return
     }
-    setEditor({ mode: 'create', draft: { accountId: account.id, friendId: friend.id, enabled: true, timezone: 'Asia/Shanghai', windowStart: '19:30', windowEnd: '22:30', message: '', allowFirstMessage: false } })
+    setEditor({ mode: 'create', draft: { accountId: account.id, friendId: friend.id, enabled: true, timezone: 'Asia/Shanghai', windowStart: '19:30', windowEnd: '22:30', messageKind: 'text', message: '', allowFirstMessage: false } })
   }
 
   function openEdit(task: Task) {
-    setEditor({ mode: 'edit', draft: { id: task.id, accountId: task.account_id, friendId: task.friend_id, enabled: task.enabled, timezone: task.timezone, windowStart: task.window_start.slice(0, 5), windowEnd: task.window_end.slice(0, 5), message: task.message.body ?? '', allowFirstMessage: task.allow_first_message ?? false } })
+    setEditor({ mode: 'edit', draft: { id: task.id, accountId: task.account_id, friendId: task.friend_id, enabled: task.enabled, timezone: task.timezone, windowStart: task.window_start.slice(0, 5), windowEnd: task.window_end.slice(0, 5), messageKind: task.message.kind, message: task.message.body ?? '', allowFirstMessage: task.allow_first_message ?? false } })
   }
 
   function changeEditorAccount(accountId: string) {
@@ -82,10 +82,10 @@ export function TasksPage() {
     if (!token || !editor) return
     const { draft } = editor
     if (!draft.windowStart || !draft.windowEnd) { toast.error('请选择完整的发送时间窗口'); return }
-    if (!draft.message.trim()) { toast.error('请填写消息内容'); return }
+    if (!draft.message.trim()) { toast.error(draft.messageKind === 'sticker' ? '请填写贴纸 ID' : '请填写消息内容'); return }
     if (draft.windowStart >= draft.windowEnd) { toast.error('结束时间必须晚于开始时间'); return }
     setBusyTaskId(draft.id ?? 'new')
-    const body = { enabled: draft.enabled, timezone: draft.timezone, window_start: `${draft.windowStart}:00`, window_end: `${draft.windowEnd}:00`, message: { kind: 'text' as const, body: draft.message.trim() }, allow_first_message: draft.allowFirstMessage }
+    const body = { enabled: draft.enabled, timezone: draft.timezone, window_start: `${draft.windowStart}:00`, window_end: `${draft.windowEnd}:00`, message: { kind: draft.messageKind, body: draft.message.trim() }, allow_first_message: draft.allowFirstMessage }
     try {
       if (editor.mode === 'create') await createTask(token, { ...body, account_id: draft.accountId, friend_id: draft.friendId })
       else await updateTask(token, draft.id!, body)

@@ -74,13 +74,15 @@ func isTimeSpec(s string) bool {
 	return err == nil
 }
 
-// ValidMessage enforces the text-task body requirement (docs/09 §6).
+// ValidMessage enforces the message payload requirement (docs/09 §6). For a
+// sticker task, MessageBody stores the stable sticker_id understood by the
+// sidecar; a display name or image URL is not a sendable target.
 func (t *SparkTask) ValidMessage() bool {
 	switch t.MessageKind {
 	case "text":
 		return t.MessageBody != nil && strings.TrimSpace(*t.MessageBody) != ""
 	case "sticker":
-		return true
+		return t.MessageBody != nil && strings.TrimSpace(*t.MessageBody) != ""
 	default:
 		return false
 	}
@@ -176,7 +178,7 @@ func (s *Service) Create(ctx context.Context, userID int64, in CreateInput) (*Sp
 		return nil, apperr.Validation(apperr.CodeConflict, "timezone must be a valid IANA timezone")
 	}
 	if !probe.ValidMessage() {
-		return nil, apperr.Validation(apperr.CodeConflict, "text tasks require a message body")
+		return nil, apperr.Validation(apperr.CodeConflict, "message tasks require a non-empty body")
 	}
 	dec, err := s.gate.Authorize(ctx, entitlement.AuthorizationRequest{
 		UserID: userID, Action: entitlement.ActionTaskCreate,
@@ -247,7 +249,7 @@ func (s *Service) Update(ctx context.Context, userID int64, publicID uuid.UUID, 
 		return nil, apperr.Validation(apperr.CodeConflict, "timezone must be a valid IANA timezone")
 	}
 	if !existing.ValidMessage() {
-		return nil, apperr.Validation(apperr.CodeConflict, "text tasks require a message body")
+		return nil, apperr.Validation(apperr.CodeConflict, "message tasks require a non-empty body")
 	}
 	existing.UpdatedAt = s.now()
 	if err := s.repo.Update(ctx, existing); err != nil {

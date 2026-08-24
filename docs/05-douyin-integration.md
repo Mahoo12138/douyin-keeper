@@ -26,7 +26,8 @@
 ### MessageAdapter
 
 - `SendText()`
-- `SendSticker()`
+- `SendSticker()`：接收 `sticker_id`，仅在已有会话和 `message.send.sticker.existing`
+  capability 可用时发送；任务不会上传或持久化图片文件。
 - `SendFirstText()`
 
 Adapter 通过 Capability 声明支持范围。

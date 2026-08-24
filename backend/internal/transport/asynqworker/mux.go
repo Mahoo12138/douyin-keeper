@@ -1,6 +1,6 @@
-// Package asynqworker wires Asynq handlers to the outbox kinds. Session check
-// friends sync and confirmed text sends are real browser operations; remaining
-// platform adapters are kept explicit until their contracts are implemented.
+// Package asynqworker wires Asynq handlers to the outbox kinds. Session check,
+// friends sync and confirmed browser message sends are wired here; the actual
+// platform behavior remains behind the Sidecar contract.
 package asynqworker
 
 import (
@@ -49,8 +49,8 @@ func NewMux(loader PayloadLoader, log *slog.Logger) *asynq.ServeMux {
 	return newMux(loader, nil, nil, nil, log)
 }
 
-// SessionCheckDeps wires the session-check and friends-sync browser jobs.
-// Other browser jobs stay on the stub handler until their adapters land.
+// SessionCheckDeps wires the session-check, friends-sync and browser-send jobs.
+// Sidecar availability/capability checks remain the final execution gate.
 type SessionCheckDeps struct {
 	Jobs     job.Repository
 	Accounts account.Repository

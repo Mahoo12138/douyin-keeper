@@ -1237,8 +1237,8 @@ export interface components {
             window_end: string;
             message: {
                 /** @enum {string} */
-                kind: "text";
-                body?: string;
+                kind: "text" | "sticker";
+                body: string;
             };
             /** @default false */
             allow_first_message: boolean;
@@ -2335,7 +2335,7 @@ export interface operations {
                     message?: {
                         /** @enum {string} */
                         kind: "text" | "sticker";
-                        body?: string | null;
+                        body: string;
                     };
                     allow_first_message?: boolean;
                 };
