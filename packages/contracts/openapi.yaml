@@ -1148,6 +1148,14 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: Last-Event-ID
+        in: header
+        required: false
+        description: Resume after a disconnect; only events with a larger sequence are replayed.
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
       responses:
         '200':
           description: Job event stream. Each SSE frame carries event, id, and a JSON payload in data.

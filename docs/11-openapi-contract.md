@@ -561,6 +561,10 @@ cancelled
 ```
 
 SSE 支持 `Last-Event-ID`：服务端只重放序号更大的已持久化事件，随后继续轮询新事件。
+`packages/sdk-ts` 的 `streamJobEvents` 在连接正常结束、网络读失败或 408/425/429/5xx
+响应后自动按指数退避重连，并把最近收到的事件序号作为 `Last-Event-ID` 发送；401/403
+等不可重试错误直接返回。调用方仍通过原有第四参数 `AbortSignal` 取消，也可以传入
+`maxReconnectAttempts`、退避参数和 `onReconnect`。
 
 ### `POST /jobs/{job_id}/cancel`
 

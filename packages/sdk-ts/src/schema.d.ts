@@ -2807,7 +2807,10 @@ export interface operations {
     streamJobEvents: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Resume after a disconnect; only events with a larger sequence are replayed. */
+                "Last-Event-ID"?: number;
+            };
             path: {
                 jobId: string;
             };
