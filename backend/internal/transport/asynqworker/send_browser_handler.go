@@ -16,6 +16,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/redislock"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/send"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
 )
@@ -116,10 +117,10 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		}
 		intent, err := deps.Sends.GetIntentByID(ctx, claimed.IntentID)
 		if err != nil {
-			return finishSend(ctx, deps, claimed, send.JobFailed, apperr.CodeInternal, false, nil, send.IntentFailed, now)
+			return finishSend(ctx, deps, claimed, send.JobFailed, apperr.CodeInternal, false, nil, send.IntentFailed, now, adapterConfig.adapter)
 		}
 		fail := func(code string) error {
-			return finishSend(ctx, deps, claimed, send.JobFailed, code, false, nil, send.IntentFailed, now)
+			return finishSend(ctx, deps, claimed, send.JobFailed, code, false, nil, send.IntentFailed, now, adapterConfig.adapter)
 		}
 		if err := deps.Sends.SetIntentStatus(ctx, intent.ID, send.IntentRunning, nil, nil, now()); err != nil {
 			return fail(apperr.CodeInternal)
@@ -136,7 +137,7 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		}
 		failWithQuota := func(code string) error {
 			return finishSendWithQuota(ctx, deps, claimed, send.JobFailed, code, false, nil, send.IntentFailed,
-				acct.UserID, intent.LocalDate, now)
+				acct.UserID, intent.LocalDate, now, adapterConfig.adapter)
 		}
 		if acct.BindingStatus != account.BindingBound {
 			return failWithQuota(apperr.CodeConflict)
@@ -232,7 +233,7 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 			if errors.Is(err, sidecar.ErrProcessStart) {
 				observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, adapterConfig.adapter, claimed.PublicID.String())
 				nextAttemptAt := now().Add(sendRetryDelay(claimed.Attempt))
-				return finishSendRetry(ctx, deps, claimed, apperr.CodeAdapterUnavailable, nextAttemptAt, now)
+				return finishSendRetry(ctx, deps, claimed, apperr.CodeAdapterUnavailable, nextAttemptAt, now, adapterConfig.adapter)
 			}
 			if app, ok := apperr.As(err); ok && app.Code == apperr.CodeSessionExpired {
 				if deps.Risk != nil {
@@ -255,7 +256,7 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 			}
 			if shouldRetrySend(response) {
 				nextAttemptAt := now().Add(sendRetryDelay(claimed.Attempt))
-				return finishSendRetry(ctx, deps, claimed, mapped, nextAttemptAt, now)
+				return finishSendRetry(ctx, deps, claimed, mapped, nextAttemptAt, now, adapterConfig.adapter)
 			}
 			if deps.Risk == nil {
 				switch mapped {
@@ -283,7 +284,7 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		}
 		messageID := result.PlatformMessageID
 		if err := finishSendWithQuota(ctx, deps, claimed, send.JobSucceeded, "", false, &messageID, send.IntentSucceeded,
-			acct.UserID, intent.LocalDate, now); err != nil {
+			acct.UserID, intent.LocalDate, now, adapterConfig.adapter); err != nil {
 			return err
 		}
 		return nil
@@ -309,17 +310,21 @@ func capabilitySendError(snapshot *capability.Capability) string {
 	return apperr.CodeAdapterUnavailable
 }
 
-func finishSend(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, jobStatus send.JobStatus, code string, retryable bool, messageID *string, intentStatus send.IntentStatus, now func() time.Time) error {
-	return deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
+func finishSend(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, jobStatus send.JobStatus, code string, retryable bool, messageID *string, intentStatus send.IntentStatus, now func() time.Time, adapter string) error {
+	err := deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
 		if err := deps.Sends.FinishJob(tctx, claimed.ID, jobStatus, &code, retryable, messageID, now()); err != nil {
 			return err
 		}
 		return deps.Sends.SetIntentStatus(tctx, claimed.IntentID, intentStatus, &code, nil, now())
 	})
+	if err == nil {
+		observeSendMetric(deps.Metrics, adapter, string(intentStatus))
+	}
+	return err
 }
 
-func finishSendWithQuota(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, jobStatus send.JobStatus, code string, retryable bool, messageID *string, intentStatus send.IntentStatus, userID int64, localDate *string, now func() time.Time) error {
-	return deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
+func finishSendWithQuota(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, jobStatus send.JobStatus, code string, retryable bool, messageID *string, intentStatus send.IntentStatus, userID int64, localDate *string, now func() time.Time, adapter string) error {
+	err := deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
 		var errorCode *string
 		if code != "" {
 			errorCode = &code
@@ -346,6 +351,14 @@ func finishSendWithQuota(ctx context.Context, deps SessionCheckDeps, claimed *se
 		}
 		return deps.Quota.IncrFailed(tctx, userID, *localDate)
 	})
+	if err == nil {
+		observeSendMetric(deps.Metrics, adapter, string(intentStatus))
+	}
+	return err
+}
+
+func observeSendMetric(metrics *telemetry.Metrics, adapter, status string) {
+	metrics.AddCounter("send_total", 1, telemetry.Label{Name: "adapter", Value: adapter}, telemetry.Label{Name: "status", Value: status})
 }
 
 func sendSidecarErrorCode(response *sidecar.Response) string {
@@ -407,12 +420,16 @@ func sendRetryDelay(attempt int) time.Duration {
 }
 
 func finishSendRetry(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, code string,
-	nextAttemptAt time.Time, now func() time.Time) error {
-	return deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
+	nextAttemptAt time.Time, now func() time.Time, adapter string) error {
+	err := deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
 		errorCode := code
 		if err := deps.Sends.FinishJob(tctx, claimed.ID, send.JobFailed, &errorCode, true, nil, now()); err != nil {
 			return err
 		}
 		return deps.Sends.SetIntentStatus(tctx, claimed.IntentID, send.IntentRetryWait, &errorCode, &nextAttemptAt, now())
 	})
+	if err == nil {
+		observeSendMetric(deps.Metrics, adapter, string(send.IntentRetryWait))
+	}
+	return err
 }

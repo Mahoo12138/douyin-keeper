@@ -8,6 +8,8 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/send"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
 )
 
@@ -23,6 +25,14 @@ func TestShouldRetrySendRequiresSidecarProofAndAllowlist(t *testing.T) {
 	}
 	if shouldRetrySend(&sidecar.Response{OK: false, Error: &sidecar.Error{Code: sidecar.ErrAdapterIncompatible, Retryable: true}}) {
 		t.Fatal("adapter incompatibility must not retry")
+	}
+}
+
+func TestObserveSendMetricUsesTerminalStatus(t *testing.T) {
+	metrics := telemetry.NewMetrics()
+	observeSendMetric(metrics, capability.AdapterBrowserConsumer, string(send.IntentSucceeded))
+	if !strings.Contains(metrics.Render(), `send_total{adapter="browser.consumer",status="succeeded"} 1`) {
+		t.Fatalf("send metric missing terminal status:\n%s", metrics.Render())
 	}
 }
 

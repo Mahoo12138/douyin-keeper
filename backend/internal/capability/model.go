@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 )
 
 const (
@@ -228,9 +230,10 @@ func DefaultHealthPolicy() HealthPolicy {
 }
 
 type HealthService struct {
-	store  HealthRepository
-	policy HealthPolicy
-	now    func() time.Time
+	store   HealthRepository
+	policy  HealthPolicy
+	now     func() time.Time
+	metrics *telemetry.Metrics
 }
 
 func NewHealthService(store HealthRepository, policy HealthPolicy) *HealthService {
@@ -244,6 +247,11 @@ func NewHealthService(store HealthRepository, policy HealthPolicy) *HealthServic
 }
 
 func (s *HealthService) SetNow(now func() time.Time) { s.now = now }
+
+func (s *HealthService) WithMetrics(metrics *telemetry.Metrics) *HealthService {
+	s.metrics = metrics
+	return s
+}
 
 func (s *HealthService) Allow(ctx context.Context, adapter string) (bool, error) {
 	if s == nil || s.store == nil {
@@ -278,7 +286,11 @@ func (s *HealthService) ObserveSuccess(ctx context.Context, adapter, version str
 	if s == nil || s.store == nil {
 		return fmt.Errorf("capability health: repository is not configured")
 	}
-	return s.store.RecordAdapterSuccess(ctx, adapter, version, checkedAt)
+	err := s.store.RecordAdapterSuccess(ctx, adapter, version, checkedAt)
+	if err == nil {
+		s.metrics.SetGauge("adapter_health", 1, telemetry.Label{Name: "adapter", Value: adapter})
+	}
+	return err
 }
 
 func (s *HealthService) ObserveFailure(ctx context.Context, adapter, version, errorCode string, checkedAt time.Time) error {
@@ -286,8 +298,12 @@ func (s *HealthService) ObserveFailure(ctx context.Context, adapter, version, er
 		return fmt.Errorf("capability health: repository is not configured")
 	}
 	openUntil := checkedAt.Add(s.policy.OpenFor)
-	return s.store.RecordAdapterFailure(ctx, adapter, version, errorCode,
+	err := s.store.RecordAdapterFailure(ctx, adapter, version, errorCode,
 		s.policy.FailureThreshold, openUntil, checkedAt)
+	if err == nil {
+		s.metrics.SetGauge("adapter_health", 0, telemetry.Label{Name: "adapter", Value: adapter})
+	}
+	return err
 }
 
 func IsCircuitFailureCode(code string) bool {

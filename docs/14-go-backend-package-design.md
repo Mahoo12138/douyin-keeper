@@ -51,6 +51,11 @@ douyin-keeper/
 └─ docs/
 ```
 
+`infra/telemetry` 同时承载 JSON 结构化日志和进程级 Prometheus 指标。API 的
+`GET /metrics` 与 Scheduler/Worker 的 `METRICS_ADDR` 只输出受控低基数标签；业务模块
+通过可选的 Metrics 注入记录 Job、Send、风险、Adapter 健康、浏览器槽位、微信通知和
+队列延迟，不把观测依赖反向耦合到领域层。
+
 相比 `services/api` 与 `services/worker` 两个独立 Go 项目，单 Module 更适合当前规模：业务模型和 Repository Contract 只维护一份，但可编译成多个独立二进制。
 
 

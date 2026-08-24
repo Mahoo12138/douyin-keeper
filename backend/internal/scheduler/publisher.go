@@ -12,6 +12,7 @@ import (
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 )
 
 // Publisher drains queue_outbox into Asynq using SKIP LOCKED claims
@@ -24,6 +25,12 @@ type Publisher struct {
 	interval   time.Duration
 	instanceID string
 	log        *slog.Logger
+	metrics    *telemetry.Metrics
+}
+
+func (p *Publisher) WithMetrics(metrics *telemetry.Metrics) *Publisher {
+	p.metrics = metrics
+	return p
 }
 
 func NewPublisher(outbox *postgres.OutboxRepo, producer *asynqqueue.Client,
@@ -65,6 +72,13 @@ func (p *Publisher) Pump(ctx context.Context) error {
 }
 
 func (p *Publisher) relay(ctx context.Context, m postgres.PendingMessage) error {
+	if !m.AvailableAt.IsZero() {
+		latency := time.Since(m.AvailableAt).Seconds()
+		if latency < 0 {
+			latency = 0
+		}
+		p.metrics.Observe("queue_latency_seconds", latency, telemetry.Label{Name: "type", Value: m.Kind})
+	}
 	payload := map[string]any{"outbox_id": m.PublicID}
 	err := p.producer.Enqueue(ctx, asynqqueue.Message{
 		ID: m.PublicID, Kind: m.Kind, WorkerPayload: payload,

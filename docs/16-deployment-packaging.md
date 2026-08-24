@@ -25,6 +25,10 @@ redis
 - PostgreSQL：业务状态真相；
 - Redis：Asynq transport、delay queue、Account Lock 等临时协调状态。
 
+Backend 暴露业务 HTTP 端口与 `/metrics` 抓取端点；Scheduler/Worker 使用
+`METRICS_ADDR`（默认 `:9090`）提供仅供 Compose 内部网络访问的指标端口，生产环境不应
+将该端口映射到公网。
+
 不同 Worker Pool 仍然保持进程隔离，但复用同一个 `keeper-worker` 镜像：
 
 ```text

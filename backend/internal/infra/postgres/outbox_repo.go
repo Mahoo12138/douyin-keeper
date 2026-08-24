@@ -44,11 +44,12 @@ func (r *OutboxRepo) Add(ctx context.Context, msg outbox.Message) error {
 
 // PendingMessage is a claimed outbox row handed to the publisher.
 type PendingMessage struct {
-	ID       int64
-	PublicID string
-	Kind     string
-	Payload  []byte
-	Attempts int
+	ID          int64
+	PublicID    string
+	Kind        string
+	Payload     []byte
+	Attempts    int
+	AvailableAt time.Time
 }
 
 // ClaimPending atomically claims up to n due messages (SKIP LOCKED).
@@ -68,7 +69,7 @@ func (r *OutboxRepo) ClaimPending(ctx context.Context, n int, lockedBy string, l
 			LIMIT $3
 			FOR UPDATE SKIP LOCKED
 		)
-		RETURNING id, public_id, kind, payload_json, attempts
+		RETURNING id, public_id, kind, payload_json, attempts, available_at
 	`, lockedBy, lockTTL.Seconds(), n)
 	if err != nil {
 		return nil, err
@@ -77,7 +78,7 @@ func (r *OutboxRepo) ClaimPending(ctx context.Context, n int, lockedBy string, l
 	var out []PendingMessage
 	for rows.Next() {
 		var m PendingMessage
-		if err := rows.Scan(&m.ID, &m.PublicID, &m.Kind, &m.Payload, &m.Attempts); err != nil {
+		if err := rows.Scan(&m.ID, &m.PublicID, &m.Kind, &m.Payload, &m.Attempts, &m.AvailableAt); err != nil {
 			return nil, err
 		}
 		out = append(out, m)

@@ -10,6 +10,7 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
 )
 
@@ -92,6 +93,11 @@ func capabilityProbeHandler(loader PayloadLoader, deps CapabilityProbeDeps) func
 				}
 			}
 		}
+		healthValue := float64(1)
+		if failureCode != "" {
+			healthValue = 0
+		}
+		deps.Metrics.SetGauge("adapter_health", healthValue, telemetry.Label{Name: "adapter", Value: adapter})
 		return deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
 			if deps.Health != nil {
 				if failureCode != "" {

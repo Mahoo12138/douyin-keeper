@@ -21,6 +21,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/redislock"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 	wechatinfra "github.com/mahoo12138/douyin-keeper/backend/internal/infra/wechat"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/notification"
@@ -49,7 +50,7 @@ var outboxKinds = []string{
 // NewMux registers a stub handler for every outbox kind. The handler pulls
 // the payload by stable id only — never secrets (docs/14 §10).
 func NewMux(loader PayloadLoader, log *slog.Logger) *asynq.ServeMux {
-	return newMux(loader, nil, nil, nil, log)
+	return newMux(loader, nil, nil, nil, nil, log)
 }
 
 // SessionCheckDeps wires the session-check, friends-sync and browser-send jobs.
@@ -85,14 +86,15 @@ type SessionCheckDeps struct {
 	WorkerID string
 	LockTTL  time.Duration
 	Now      func() time.Time
+	Metrics  *telemetry.Metrics
 }
 
 func NewBrowserMux(loader PayloadLoader, deps SessionCheckDeps, log *slog.Logger) *asynq.ServeMux {
-	return newMux(loader, &deps, nil, nil, log)
+	return newMux(loader, &deps, nil, nil, deps.Metrics, log)
 }
 
 func NewInteractiveMux(loader PayloadLoader, deps QRBindDeps, log *slog.Logger) *asynq.ServeMux {
-	return newMux(loader, nil, &deps, nil, log)
+	return newMux(loader, nil, &deps, nil, deps.Metrics, log)
 }
 
 type SendDispatchDeps struct {
@@ -118,6 +120,7 @@ type CapabilityProbeDeps struct {
 	Health    capability.HealthObserver
 	Adapter   string
 	Now       func() time.Time
+	Metrics   *telemetry.Metrics
 }
 
 type WechatSubscriptionSender interface {
@@ -132,9 +135,11 @@ type WechatNotificationDeps struct {
 	TitleField string
 	BodyField  string
 	Now        func() time.Time
+	Metrics    *telemetry.Metrics
 }
 
 type LightMuxDeps struct {
+	Metrics  *telemetry.Metrics
 	Dispatch SendDispatchDeps
 	Probe    CapabilityProbeDeps
 	Wechat   WechatNotificationDeps
@@ -142,50 +147,53 @@ type LightMuxDeps struct {
 }
 
 func NewLightMux(loader PayloadLoader, deps LightMuxDeps, log *slog.Logger) *asynq.ServeMux {
-	return newMux(loader, nil, nil, &deps, log)
+	return newMux(loader, nil, nil, &deps, deps.Metrics, log)
 }
 
-func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindDeps, lightDeps *LightMuxDeps, log *slog.Logger) *asynq.ServeMux {
+func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindDeps, lightDeps *LightMuxDeps, metrics *telemetry.Metrics, log *slog.Logger) *asynq.ServeMux {
 	mux := asynq.NewServeMux()
+	register := func(kind string, handler func(context.Context, *asynq.Task) error) {
+		mux.HandleFunc(kind, instrumentedHandler(kind, handler, metrics))
+	}
 	for _, kind := range outboxKinds {
 		kind := kind
 		if kind == asynqqueue.KindAccountBindQR && qrDeps != nil {
-			mux.HandleFunc(kind, qrBindHandler(loader, *qrDeps))
+			register(kind, qrBindHandler(loader, *qrDeps))
 			continue
 		}
 		if kind == asynqqueue.KindAccountBindSMS && qrDeps != nil {
-			mux.HandleFunc(kind, smsBindHandler(loader, *qrDeps))
+			register(kind, smsBindHandler(loader, *qrDeps))
 			continue
 		}
 		if kind == asynqqueue.KindSessionCheckBrowser && sessionDeps != nil {
-			mux.HandleFunc(kind, sessionCheckHandler(loader, *sessionDeps, log))
+			register(kind, sessionCheckHandler(loader, *sessionDeps, log))
 			continue
 		}
 		if kind == asynqqueue.KindFriendsSyncBrowser && sessionDeps != nil && sessionDeps.Friends != nil {
-			mux.HandleFunc(kind, friendsSyncHandler(loader, *sessionDeps))
+			register(kind, friendsSyncHandler(loader, *sessionDeps))
 			continue
 		}
 		if kind == asynqqueue.KindSendDispatch && lightDeps != nil {
-			mux.HandleFunc(kind, sendDispatchHandler(loader, lightDeps.Dispatch))
+			register(kind, sendDispatchHandler(loader, lightDeps.Dispatch))
 			continue
 		}
 		if kind == asynqqueue.KindCapabilityProbe && lightDeps != nil && lightDeps.Probe.Snapshots != nil && lightDeps.Probe.Sidecar != nil && lightDeps.Probe.Tx != nil {
-			mux.HandleFunc(kind, capabilityProbeHandler(loader, lightDeps.Probe))
+			register(kind, capabilityProbeHandler(loader, lightDeps.Probe))
 			continue
 		}
 		if kind == asynqqueue.KindNotificationWechat && lightDeps != nil && lightDeps.Wechat.Deliveries != nil {
-			mux.HandleFunc(kind, wechatNotificationHandler(loader, lightDeps.Wechat))
+			register(kind, wechatNotificationHandler(loader, lightDeps.Wechat))
 			continue
 		}
 		if kind == asynqqueue.KindSendBrowser && sessionDeps != nil && sessionDeps.Sends != nil {
-			mux.HandleFunc(kind, sendBrowserHandler(loader, *sessionDeps))
+			register(kind, sendBrowserHandler(loader, *sessionDeps))
 			continue
 		}
 		if kind == asynqqueue.KindSendProtocol && lightDeps != nil && lightDeps.Protocol != nil && lightDeps.Protocol.Sends != nil {
-			mux.HandleFunc(kind, sendProtocolHandler(loader, *lightDeps.Protocol))
+			register(kind, sendProtocolHandler(loader, *lightDeps.Protocol))
 			continue
 		}
-		mux.HandleFunc(kind, func(ctx context.Context, t *asynq.Task) error {
+		register(kind, func(ctx context.Context, t *asynq.Task) error {
 			var env struct {
 				OutboxID string `json:"outbox_id"`
 			}
@@ -205,6 +213,20 @@ func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindD
 		})
 	}
 	return mux
+}
+
+func instrumentedHandler(kind string, handler func(context.Context, *asynq.Task) error, metrics *telemetry.Metrics) func(context.Context, *asynq.Task) error {
+	return func(ctx context.Context, task *asynq.Task) error {
+		started := time.Now()
+		err := handler(ctx, task)
+		status := "success"
+		if err != nil {
+			status = "error"
+		}
+		metrics.AddCounter("job_total", 1, telemetry.Label{Name: "type", Value: kind}, telemetry.Label{Name: "status", Value: status})
+		metrics.Observe("job_duration_seconds", time.Since(started).Seconds(), telemetry.Label{Name: "type", Value: kind})
+		return err
+	}
 }
 
 func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.Logger) func(context.Context, *asynq.Task) error {

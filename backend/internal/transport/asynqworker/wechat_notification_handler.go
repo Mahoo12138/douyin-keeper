@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/wechat"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/notification"
 )
@@ -47,7 +48,11 @@ func wechatNotificationHandler(loader PayloadLoader, deps WechatNotificationDeps
 			now = deps.Now()
 		}
 		skip := func(reason string) error {
-			return deps.Deliveries.MarkWechatDeliverySkipped(ctx, publicID, reason, now)
+			err := deps.Deliveries.MarkWechatDeliverySkipped(ctx, publicID, reason, now)
+			if err == nil {
+				deps.Metrics.AddCounter("wechat_notification_delivery_total", 1, telemetry.Label{Name: "status", Value: string(notification.DeliverySkipped)})
+			}
+			return err
 		}
 		if deps.Sender == nil || deps.TemplateID == "" {
 			return skip("WECHAT_NOTIFICATION_NOT_CONFIGURED")
@@ -71,8 +76,13 @@ func wechatNotificationHandler(loader PayloadLoader, deps WechatNotificationDeps
 			},
 		}); err != nil {
 			_ = deps.Deliveries.MarkWechatDeliveryFailed(ctx, publicID, "WECHAT_NOTIFICATION_SEND_FAILED", now)
+			deps.Metrics.AddCounter("wechat_notification_delivery_total", 1, telemetry.Label{Name: "status", Value: string(notification.DeliveryFailed)})
 			return err
 		}
-		return deps.Deliveries.MarkWechatDeliverySent(ctx, publicID, now)
+		err = deps.Deliveries.MarkWechatDeliverySent(ctx, publicID, now)
+		if err == nil {
+			deps.Metrics.AddCounter("wechat_notification_delivery_total", 1, telemetry.Label{Name: "status", Value: string(notification.DeliverySent)})
+		}
+		return err
 	}
 }

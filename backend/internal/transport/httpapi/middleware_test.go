@@ -4,10 +4,13 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 )
 
 func TestLoggingWriterPreservesFlusher(t *testing.T) {
@@ -16,6 +19,27 @@ func TestLoggingWriterPreservesFlusher(t *testing.T) {
 		t.Fatal("loggingWriter must preserve http.Flusher for SSE")
 	}
 	writer.Flush()
+}
+
+func TestMetricsUsesChiRoutePatternInsteadOfRawIDs(t *testing.T) {
+	metrics := telemetry.NewMetrics()
+	router := chi.NewRouter()
+	router.Use(Metrics(metrics))
+	router.Get("/jobs/{jobId}", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/jobs/abc-123", nil))
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d", recorder.Code)
+	}
+	rendered := metrics.Render()
+	if !strings.Contains(rendered, `route="/jobs/{jobId}"`) {
+		t.Fatalf("metrics should use route pattern:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "abc-123") {
+		t.Fatalf("raw job id leaked into metrics:\n%s", rendered)
+	}
 }
 
 func TestRateLimiterRequiresAllDimensionsAndDoesNotPartiallyConsume(t *testing.T) {

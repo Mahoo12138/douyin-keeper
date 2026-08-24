@@ -16,6 +16,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/redislock"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/outbox"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
@@ -43,6 +44,7 @@ type QRBindDeps struct {
 	LockTTL     time.Duration
 	PollEvery   time.Duration
 	Now         func() time.Time
+	Metrics     *telemetry.Metrics
 }
 
 type qrStartResult struct {

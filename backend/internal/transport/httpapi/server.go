@@ -19,6 +19,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/conversation"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/friend"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/messagetemplate"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/notification"
@@ -46,8 +47,17 @@ type Server struct {
 	signingKey []byte
 	refreshTTL time.Duration
 
-	pg    *pgxpool.Pool
-	redis *redis.Client
+	pg      *pgxpool.Pool
+	redis   *redis.Client
+	metrics *telemetry.Metrics
+}
+
+// WithMetrics attaches the process-local Prometheus registry. Keeping this
+// optional preserves lightweight handler tests and lets workers use the same
+// telemetry package without depending on the HTTP server.
+func (s *Server) WithMetrics(metrics *telemetry.Metrics) *Server {
+	s.metrics = metrics
+	return s
 }
 
 func NewServer(authSvc *auth.Service, ent *entitlement.Service, accounts *account.Service,
@@ -65,9 +75,12 @@ func NewServer(authSvc *auth.Service, ent *entitlement.Service, accounts *accoun
 func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
 
-	r.Use(RequestID, Recover, SecurityHeaders, AccessLog)
+	r.Use(RequestID, Recover, SecurityHeaders, Metrics(s.metrics), AccessLog)
 	r.Get("/health/live", s.handleHealthLive)
 	r.Get("/health/ready", s.handleHealthReady)
+	if s.metrics != nil {
+		r.Get("/metrics", s.metrics.Handler().ServeHTTP)
+	}
 
 	// ---- API v1 ----
 	r.Route("/api/v1", func(api chi.Router) {

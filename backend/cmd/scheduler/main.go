@@ -38,6 +38,8 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	metrics := telemetry.NewMetrics()
+	telemetry.StartMetricsServer(ctx, cfg.MetricsAddr, metrics, log)
 
 	pool, err := postgres.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -92,7 +94,7 @@ func main() {
 	riskCooldown := scheduler.NewRiskCooldownReaper(accountRepo, cfg.ScheduleBatchSize)
 
 	publisher := scheduler.NewPublisher(outboxRepo, producer, cfg.OutboxBatchSize,
-		cfg.OutboxPollInterval, log)
+		cfg.OutboxPollInterval, log).WithMetrics(metrics)
 
 	// Leader renewal in the background.
 	go func() {

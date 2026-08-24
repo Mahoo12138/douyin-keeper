@@ -40,6 +40,8 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	metrics := telemetry.NewMetrics()
+	telemetry.StartMetricsServer(ctx, cfg.MetricsAddr, metrics, log)
 
 	pool, err := postgres.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -61,13 +63,13 @@ func main() {
 	sendRepo := postgres.NewSendRepo(pool)
 	notificationRepo := postgres.NewNotificationRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
-	healthService := capability.NewHealthService(capabilityRepo, capability.DefaultHealthPolicy())
+	healthService := capability.NewHealthService(capabilityRepo, capability.DefaultHealthPolicy()).WithMetrics(metrics)
 	// Protocol remains a control-plane route for first-message jobs, but it is
 	// not an executable adapter until its real SDK is configured. The resolver
 	// therefore only registers the Browser runtime here; protocol jobs still
 	// land in the light worker and fail closed through protocolClient below.
 	resolver := capability.NewResolver(capabilityRepo, healthService, capability.AdapterBrowserConsumer)
-	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown).WithNotifier(notificationRepo)
+	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown).WithNotifier(notificationRepo).WithMetrics(metrics)
 	entitlementRepo := postgres.NewEntitlementRepo(pool)
 	entitlementSvc := entitlement.NewService(entitlementRepo, entitlementRepo, entitlementRepo, entitlementRepo,
 		postgres.NewUserLockRepo(pool), workerTx, nil)
@@ -97,7 +99,7 @@ func main() {
 		Accounts: accountRepo, Sessions: sessionSvc, Sidecar: protocolClient, Redis: rdb,
 		Targets: friendRepo, Tasks: taskRepo, Sends: sendRepo, Capabilities: capabilityRepo,
 		Health: healthService, Risk: riskService, Entitlement: entitlementSvc, Quota: entitlementSvc,
-		Tx: workerTx, WorkerID: protocolWorkerID, LockTTL: 2 * time.Minute,
+		Tx: workerTx, WorkerID: protocolWorkerID, LockTTL: 2 * time.Minute, Metrics: metrics,
 	}
 	var wechatSender *wechatinfra.Client
 	if cfg.WechatAppID != "" && cfg.WechatAppSecret != "" {
@@ -105,7 +107,7 @@ func main() {
 	}
 
 	srv := asynqqueue.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr}, asynqworker.ServerConfig("light"))
-	mux := asynqworker.NewLightMux(postgres.NewOutboxRepo(pool), asynqworker.LightMuxDeps{
+	mux := asynqworker.NewLightMux(postgres.NewOutboxRepo(pool), asynqworker.LightMuxDeps{Metrics: metrics,
 		Dispatch: asynqworker.SendDispatchDeps{
 			Sends: postgres.NewSendRepo(pool), Outbox: postgres.NewOutboxRepo(pool), Tx: workerTx,
 			Tasks: postgres.NewTaskRepo(pool), Resolver: resolver,
@@ -114,11 +116,13 @@ func main() {
 		Probe: asynqworker.CapabilityProbeDeps{
 			Snapshots: capabilityRepo, Sidecar: browserSidecarClient, Tx: workerTx,
 			Health: healthService, Adapter: capability.AdapterBrowserConsumer,
+			Metrics: metrics,
 		},
 		Wechat: asynqworker.WechatNotificationDeps{
 			Deliveries: notificationRepo, Sender: wechatSender,
 			TemplateID: cfg.WechatNotificationTemplateID, Page: cfg.WechatNotificationPage,
 			TitleField: cfg.WechatNotificationTitleField, BodyField: cfg.WechatNotificationBodyField,
+			Metrics: metrics,
 		},
 		Protocol: protocolDeps,
 	}, log)

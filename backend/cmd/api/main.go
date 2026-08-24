@@ -117,6 +117,7 @@ func main() {
 
 	srv := httpapi.NewServer(authSvc, entSvc, accountsSvc, friendsSvc, conversationSvc, messageTemplateSvc, tasksSvc, sendsSvc, jobsSvc,
 		capRepo, adminSvc, notificationSvc, []byte(cfg.AuthSigningKey), cfg.AuthRefreshTTL, pool, rdb)
+	srv.WithMetrics(telemetry.NewMetrics())
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

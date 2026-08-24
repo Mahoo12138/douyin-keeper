@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
@@ -88,6 +89,46 @@ func (w *loggingWriter) WriteHeader(code int) {
 // Flush preserves streaming responses such as Job SSE through AccessLog.
 // Wrapping ResponseWriter must not accidentally make http.Flusher disappear.
 func (w *loggingWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+// Metrics records bounded HTTP request dimensions and latency. The route
+// label uses chi's route pattern, never the raw URL, so IDs cannot create an
+// unbounded time series.
+func Metrics(metrics *telemetry.Metrics) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if metrics == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			start := time.Now()
+			mw := &metricsWriter{ResponseWriter: w, status: http.StatusOK}
+			next.ServeHTTP(mw, r)
+			route := chi.RouteContext(r.Context()).RoutePattern()
+			if route == "" {
+				route = "unknown"
+			}
+			labels := []telemetry.Label{{Name: "method", Value: r.Method}, {Name: "route", Value: route}, {Name: "status", Value: strconv.Itoa(mw.status)}}
+			metrics.AddCounter("http_requests_total", 1, labels...)
+			metrics.Observe("http_request_duration_seconds", time.Since(start).Seconds(), telemetry.Label{Name: "method", Value: r.Method}, telemetry.Label{Name: "route", Value: route})
+		})
+	}
+}
+
+type metricsWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *metricsWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *metricsWriter) Flush() {
 	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
 		flusher.Flush()
 	}

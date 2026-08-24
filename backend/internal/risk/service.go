@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 )
 
 const DefaultCooldown = 10 * time.Minute
@@ -65,6 +66,7 @@ type Service struct {
 	notifier Notifier
 	cooldown time.Duration
 	now      func() time.Time
+	metrics  *telemetry.Metrics
 }
 
 type Notifier interface {
@@ -82,6 +84,11 @@ func (s *Service) SetNow(now func() time.Time) { s.now = now }
 
 func (s *Service) WithNotifier(notifier Notifier) *Service {
 	s.notifier = notifier
+	return s
+}
+
+func (s *Service) WithMetrics(metrics *telemetry.Metrics) *Service {
+	s.metrics = metrics
 	return s
 }
 
@@ -111,7 +118,7 @@ func (s *Service) Apply(ctx context.Context, accountID int64, code, sourceAdapte
 		action := classification.Action
 		event.Action = &action
 	}
-	return s.tx.WithinTx(ctx, func(tctx context.Context) error {
+	err := s.tx.WithinTx(ctx, func(tctx context.Context) error {
 		if classification.SessionStatus != nil {
 			if err := s.accounts.SetSessionStatus(tctx, accountID, *classification.SessionStatus, now); err != nil {
 				return err
@@ -134,4 +141,13 @@ func (s *Service) Apply(ctx context.Context, accountID int64, code, sourceAdapte
 		}
 		return nil
 	})
+	if err == nil {
+		s.metrics.AddCounter("risk_event_total", 1,
+			telemetry.Label{Name: "category", Value: string(classification.Category)},
+			telemetry.Label{Name: "code", Value: code})
+		if classification.Action == "session_expired" {
+			s.metrics.AddCounter("session_expired_total", 1)
+		}
+	}
+	return err
 }

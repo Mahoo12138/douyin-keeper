@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/redislock"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 )
 
 // SemaphoreClient limits calls made by one worker pool through a global
@@ -16,16 +17,22 @@ import (
 // a transient capacity error to the job handler, while renewing the lease for
 // calls whose sidecar deadline exceeds the initial TTL.
 type SemaphoreClient struct {
-	inner Client
-	redis *redis.Client
-	key   string
-	limit int
-	ttl   time.Duration
-	poll  time.Duration
+	inner   Client
+	redis   *redis.Client
+	key     string
+	limit   int
+	ttl     time.Duration
+	poll    time.Duration
+	metrics *telemetry.Metrics
 }
 
 func NewSemaphoreClient(inner Client, client *redis.Client, key string, limit int, ttl time.Duration) *SemaphoreClient {
 	return &SemaphoreClient{inner: inner, redis: client, key: key, limit: limit, ttl: ttl, poll: 100 * time.Millisecond}
+}
+
+func (c *SemaphoreClient) WithMetrics(metrics *telemetry.Metrics) *SemaphoreClient {
+	c.metrics = metrics
+	return c
 }
 
 func (c *SemaphoreClient) Call(ctx context.Context, req Request) (*Response, error) {
@@ -40,6 +47,8 @@ func (c *SemaphoreClient) Call(ctx context.Context, req Request) (*Response, err
 	if err != nil {
 		return nil, err
 	}
+	c.metrics.AddGauge("browser_slots_in_use", 1)
+	defer c.metrics.AddGauge("browser_slots_in_use", -1)
 
 	callCtx, cancelCall := context.WithCancel(ctx)
 	defer cancelCall()

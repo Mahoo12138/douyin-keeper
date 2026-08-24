@@ -43,6 +43,8 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	metrics := telemetry.NewMetrics()
+	telemetry.StartMetricsServer(ctx, cfg.MetricsAddr, metrics, log)
 
 	pool, err := postgres.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -68,10 +70,10 @@ func main() {
 	taskRepo := postgres.NewTaskRepo(pool)
 	sendRepo := postgres.NewSendRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
-	healthService := capability.NewHealthService(postgres.NewCapabilityRepo(pool), capability.DefaultHealthPolicy())
+	healthService := capability.NewHealthService(postgres.NewCapabilityRepo(pool), capability.DefaultHealthPolicy()).WithMetrics(metrics)
 	outboxRepo := postgres.NewOutboxRepo(pool)
 	notificationRepo := postgres.NewNotificationRepo(pool, outboxRepo)
-	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown).WithNotifier(notificationRepo)
+	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown).WithNotifier(notificationRepo).WithMetrics(metrics)
 	entitlementRepo := postgres.NewEntitlementRepo(pool)
 	entitlementSvc := entitlement.NewService(entitlementRepo, entitlementRepo, entitlementRepo, entitlementRepo,
 		postgres.NewUserLockRepo(pool), workerTx, nil)
@@ -86,7 +88,7 @@ func main() {
 	processClient := sidecar.NewProcessClient(cfg.PlaywrightSidecarCommand, sidecarScript)
 	defer processClient.Close()
 	sidecarClient := sidecar.NewSemaphoreClient(processClient, rdb, redislock.BrowserSemaphoreKey,
-		cfg.MaxGlobalBrowsers, cfg.BrowserSemaphoreTTL)
+		cfg.MaxGlobalBrowsers, cfg.BrowserSemaphoreTTL).WithMetrics(metrics)
 	workerID, _ := os.Hostname()
 	if workerID == "" {
 		workerID = "worker-browser"
@@ -99,7 +101,7 @@ func main() {
 		Health:       healthService,
 		Risk:         riskService,
 		Entitlement:  entitlementSvc, Quota: entitlementSvc, Tx: workerTx,
-		WorkerID: workerID, LockTTL: 2 * time.Minute,
+		WorkerID: workerID, LockTTL: 2 * time.Minute, Metrics: metrics,
 	}, log)
 	srv := asynqqueue.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr}, asynqworker.ServerConfig("browser", cfg.BrowserConcurrency))
 	log.Info("worker-browser starting")

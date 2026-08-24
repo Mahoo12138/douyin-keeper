@@ -12,6 +12,7 @@ import (
 
 type Config struct {
 	HTTPAddr    string
+	MetricsAddr string
 	DatabaseURL string
 	RedisAddr   string
 
@@ -61,6 +62,7 @@ func env(key, def string) string {
 func Load() *Config {
 	return &Config{
 		HTTPAddr:    env("HTTP_ADDR", ":8080"),
+		MetricsAddr: env("METRICS_ADDR", ":9090"),
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		RedisAddr:   env("REDIS_ADDR", "localhost:6379"),
 

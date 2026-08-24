@@ -131,6 +131,12 @@ Prometheus/OpenTelemetry 指标：
 - `risk_event_total{category,code}`
 - `wechat_notification_delivery_total{status}`
 
+当前实现由 `backend/internal/infra/telemetry` 提供进程级 Prometheus 文本注册器：API
+通过 `GET /metrics` 暴露，Scheduler/Worker 通过内部 `METRICS_ADDR`（默认
+`:9090`）暴露。标签只使用受控的任务类型、Adapter、状态和风险分类/代码，禁止把
+用户 ID、账号 ID、URL 参数或任何凭据写入时间序列。HTTP 请求使用 chi 路由模板，避免
+动态 ID 造成高基数；队列延迟从 Outbox 的 `available_at` 到发布时刻观测。
+
 核心 SLO：
 
 - API 可用性；

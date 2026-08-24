@@ -38,6 +38,8 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	metrics := telemetry.NewMetrics()
+	telemetry.StartMetricsServer(ctx, cfg.MetricsAddr, metrics, log)
 
 	pool, err := postgres.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -59,10 +61,10 @@ func main() {
 	jobRepo := postgres.NewJobRepo(pool)
 	accountRepo := postgres.NewAccountRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
-	healthService := capability.NewHealthService(postgres.NewCapabilityRepo(pool), capability.DefaultHealthPolicy())
+	healthService := capability.NewHealthService(postgres.NewCapabilityRepo(pool), capability.DefaultHealthPolicy()).WithMetrics(metrics)
 	outboxRepo := postgres.NewOutboxRepo(pool)
 	notificationRepo := postgres.NewNotificationRepo(pool, outboxRepo)
-	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown).WithNotifier(notificationRepo)
+	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown).WithNotifier(notificationRepo).WithMetrics(metrics)
 	sessionSvc := session.NewService(postgres.NewSessionRepo(pool), workerTx, cipher, cfg.SessionTempDir)
 	sidecarScript := cfg.PlaywrightSidecarScript
 	if _, statErr := os.Stat(sidecarScript); os.IsNotExist(statErr) {
@@ -83,7 +85,7 @@ func main() {
 	mux := asynqworker.NewInteractiveMux(outboxRepo, asynqworker.QRBindDeps{
 		Jobs: jobRepo, Accounts: accountRepo, Sessions: sessionSvc, Sidecar: sidecarClient,
 		Redis: rdb, Tx: workerTx, Outbox: outboxRepo, Health: healthService, Risk: riskService,
-		WorkerID: workerID, ProfileRoot: cfg.LoginProfileDir, LockTTL: 6 * time.Minute,
+		WorkerID: workerID, ProfileRoot: cfg.LoginProfileDir, LockTTL: 6 * time.Minute, Metrics: metrics,
 	}, log)
 	log.Info("worker-interactive starting")
 	if err := asynqqueue.RunServer(srv, mux, ctx); err != nil {
