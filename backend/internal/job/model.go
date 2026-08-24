@@ -59,6 +59,7 @@ type Repository interface {
 	Claim(ctx context.Context, publicID uuid.UUID, workerID string, lease time.Duration) (*Job, error)
 	MarkWaiting(ctx context.Context, jobID int64, lease time.Duration) error
 	Finish(ctx context.Context, jobID int64, status Status, errorCode *string, at time.Time) error
+	IsCancelRequested(ctx context.Context, jobID int64) (bool, error)
 	ListEvents(ctx context.Context, jobID int64) ([]JobEvent, error)
 	AppendEvent(ctx context.Context, jobID int64, event JobEvent) error
 	RequestCancel(ctx context.Context, jobID int64, at time.Time) error

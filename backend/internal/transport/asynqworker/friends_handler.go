@@ -71,6 +71,9 @@ func friendsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		if err != nil || claimed == nil {
 			return err
 		}
+		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, now); cancelled || err != nil {
+			return err
+		}
 		fail := func(code string) error {
 			_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "error", Payload: mustJSON(map[string]string{"code": code}), CreatedAt: now()})
 			return deps.Jobs.Finish(ctx, claimed.ID, job.StatusFailed, &code, now())
@@ -90,6 +93,9 @@ func friendsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 			return fail(apperr.CodeAccountBusy)
 		}
 		defer func() { _ = lock.Release(context.Background()) }()
+		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, now); cancelled || err != nil {
+			return err
+		}
 
 		var result friendsListResult
 		err = deps.Sessions.WithTempFile(ctx, acct.ID, acct.UserPublicID, acct.PublicID, func(path string) error {
@@ -129,6 +135,9 @@ func friendsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 				_ = deps.Accounts.SetRiskStatus(ctx, acct.ID, account.RiskCoolingDown, &cooldown)
 			}
 			return fail(code)
+		}
+		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, now); cancelled || err != nil {
+			return err
 		}
 		if !result.Complete {
 			return fail(apperr.CodeAdapterIncompatible)

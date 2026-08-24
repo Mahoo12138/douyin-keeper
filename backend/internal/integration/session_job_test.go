@@ -102,3 +102,35 @@ func TestAccountSessionRoundTripAndJobClaim(t *testing.T) {
 		t.Fatalf("finish failed: err=%v job=%+v", err, finished)
 	}
 }
+
+func TestJobCancelRequestIsConsumedAsCancelledTerminalState(t *testing.T) {
+	ctx := context.Background()
+	jobs := postgres.NewJobRepo(pool)
+	created := time.Now().UTC().Truncate(time.Microsecond)
+	j := &job.Job{PublicID: uuid.New(), Type: "account.session_check.browser",
+		Status: job.StatusQueued, Cancelable: true, CreatedAt: created}
+	if err := jobs.CreateJob(ctx, j); err != nil {
+		t.Fatal(err)
+	}
+	if err := jobs.RequestCancel(ctx, j.ID, created); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := jobs.Claim(ctx, j.PublicID, "cancel-integration-worker", time.Minute)
+	if err != nil || claimed == nil {
+		t.Fatalf("claim: err=%v job=%+v", err, claimed)
+	}
+	requested, err := jobs.IsCancelRequested(ctx, j.ID)
+	if err != nil || !requested {
+		t.Fatalf("cancel request not visible: requested=%t err=%v", requested, err)
+	}
+	if err := jobs.AppendEvent(ctx, j.ID, job.JobEvent{EventType: "cancelled", Payload: json.RawMessage(`{"reason":"user_requested"}`), CreatedAt: created}); err != nil {
+		t.Fatal(err)
+	}
+	if err := jobs.Finish(ctx, j.ID, job.StatusCancelled, nil, created.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	finished, err := jobs.GetOwned(ctx, nil, j.PublicID)
+	if err != nil || finished.Status != job.StatusCancelled || finished.FinishedAt == nil {
+		t.Fatalf("cancelled job mismatch: err=%v job=%+v", err, finished)
+	}
+}

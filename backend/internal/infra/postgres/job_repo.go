@@ -77,6 +77,16 @@ func (r *JobRepo) Finish(ctx context.Context, jobID int64, status job.Status, er
 	return err
 }
 
+func (r *JobRepo) IsCancelRequested(ctx context.Context, jobID int64) (bool, error) {
+	var requested bool
+	err := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT cancel_requested_at IS NOT NULL FROM jobs WHERE id=$1`, jobID).Scan(&requested)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, apperr.New(apperr.CodeNotFound, apperr.KindNotFound, "job not found")
+	}
+	return requested, err
+}
+
 func (r *JobRepo) MarkWaiting(ctx context.Context, jobID int64, lease time.Duration) error {
 	_, err := From(ctx, r.pool).Exec(ctx, `
 		UPDATE jobs SET status='waiting_user', heartbeat_at=now(),

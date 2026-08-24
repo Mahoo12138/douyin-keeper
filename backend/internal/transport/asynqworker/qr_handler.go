@@ -94,6 +94,9 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		if err != nil || claimed == nil {
 			return err
 		}
+		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+			return err
+		}
 		fail := func(code string) error {
 			_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{
 				EventType: "error", Payload: mustJSON(map[string]string{"code": code}), CreatedAt: deps.Now(),
@@ -115,6 +118,9 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			return fail(apperr.CodeAccountBusy)
 		}
 		defer func() { _ = lock.Release(context.Background()) }()
+		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+			return err
+		}
 
 		if deps.ProfileRoot == "" {
 			deps.ProfileRoot = "/tmp/douyin-keeper/login"
@@ -145,6 +151,9 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		if err := decodeResult(startResponse, &started); err != nil || started.LoginHandle == "" || started.QR.Value == "" {
 			return fail(apperr.CodeAdapterIncompatible)
 		}
+		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+			return err
+		}
 		if err := deps.Jobs.MarkWaiting(ctx, claimed.ID, deps.LockTTL); err != nil {
 			return err
 		}
@@ -163,6 +172,9 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		lastState := "waiting"
 		for deps.Now().Before(deadline) {
 			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
 				return err
 			}
 			response, callErr := deps.Sidecar.Call(ctx, sidecar.Request{
@@ -192,6 +204,9 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 				lastState = "scanned"
 			}
 			if polled.State == "authenticated" && polled.SessionExported {
+				if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+					return err
+				}
 				return completeQRBind(ctx, deps, claimed, acct, exportPath, polled)
 			}
 			if polled.State != "waiting" && polled.State != "scanned" {
@@ -206,6 +221,9 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 }
 
 func completeQRBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *account.Account, exportPath string, result qrPollResult) error {
+	if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+		return err
+	}
 	if result.Identity.PlatformUserID == "" {
 		return finishQRFailure(ctx, deps, claimed, apperr.CodeAccountIdentityUnresolved)
 	}
@@ -217,6 +235,9 @@ func completeQRBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct
 		return finishQRFailure(ctx, deps, claimed, apperr.CodeAdapterIncompatible)
 	}
 	_ = os.Remove(exportPath)
+	if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+		return err
+	}
 	if err := deps.Sessions.Store(ctx, acct.ID, acct.UserPublicID, acct.PublicID, plaintext); err != nil {
 		return finishQRFailure(ctx, deps, claimed, apperr.CodeInternal)
 	}
@@ -242,6 +263,9 @@ func completeQRBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct
 	}); err != nil {
 		_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, deps.Now())
 		return finishQRFailure(ctx, deps, claimed, apperr.CodeSessionExpired)
+	}
+	if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+		return err
 	}
 	if deps.Tx == nil || deps.Outbox == nil {
 		return finishQRFailure(ctx, deps, claimed, apperr.CodeInternal)

@@ -173,6 +173,9 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 		if err != nil || claimed == nil {
 			return err
 		}
+		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+			return err
+		}
 		fail := func(code string) error {
 			_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "error", Payload: json.RawMessage(fmt.Sprintf(`{"code":%q}`, code)), CreatedAt: deps.Now()})
 			return deps.Jobs.Finish(ctx, claimed.ID, job.StatusFailed, &code, deps.Now())
@@ -194,6 +197,9 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 			return fail(apperr.CodeAccountBusy)
 		}
 		defer func() { _ = lock.Release(context.Background()) }()
+		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+			return err
+		}
 		var response *sidecar.Response
 		err = deps.Sessions.WithTempFile(ctx, acct.ID, acct.UserPublicID, acct.PublicID, func(path string) error {
 			requestID := uuid.New().String()
@@ -229,6 +235,9 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 			default:
 				return fail(code)
 			}
+		}
+		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+			return err
 		}
 		var result struct {
 			Valid bool `json:"valid"`

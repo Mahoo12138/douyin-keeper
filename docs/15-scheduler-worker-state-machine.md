@@ -503,7 +503,7 @@ cancel_requested_at = now()
 
 Worker：
 
-- heartbeat 时检查；
+- claim 后、平台调用前，以及长轮询/同步落库前重新读取 `cancel_requested_at`；
 - Sidecar 支持 cancel 时发 cancel；
 - 清理临时文件/profile；
 - 最终写 `cancelled`。
