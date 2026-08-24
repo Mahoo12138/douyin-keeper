@@ -1,5 +1,6 @@
 # Node / pnpm
 node_modules/
+**/.tanstack/tmp/
 dist/
 .output/
 *.tsbuildinfo
