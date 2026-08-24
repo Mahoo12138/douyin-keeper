@@ -32,9 +32,9 @@ type AuthResponse struct {
 	User         UserView `json:"user"`
 }
 
-func authResponse(s auth.SessionResult) AuthResponse {
+func authResponse(s auth.SessionResult, includeRefreshToken bool) AuthResponse {
 	var rt *string
-	if s.RefreshToken != "" {
+	if includeRefreshToken && s.RefreshToken != "" {
 		rt = &s.RefreshToken
 	}
 	return AuthResponse{

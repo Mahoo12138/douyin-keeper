@@ -1,10 +1,13 @@
 import Taro from '@tarojs/taro'
 import type { components } from '@douyin-keeper/sdk-ts'
 
+import { clearSession, getRefreshToken, setSession } from './session'
+
 const API_BASE_URL = (process.env.TARO_APP_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 
 type Collection<T> = { items: T[]; next_cursor?: string | null }
 type ApiErrorBody = { error?: { code?: string; message?: string } }
+type RequestOptions = { token?: string | null; method?: 'GET' | 'POST' | 'PATCH'; data?: unknown; skipRefresh?: boolean }
 
 export class MiniApiError extends Error {
   constructor(public readonly code: string, message: string, public readonly statusCode: number) {
@@ -13,7 +16,7 @@ export class MiniApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options: { token?: string | null; method?: 'GET' | 'POST' | 'PATCH'; data?: unknown } = {}) {
+async function request<T>(path: string, options: RequestOptions = {}) {
   const response = await Taro.request<T | ApiErrorBody>({
     url: `${API_BASE_URL}${path}`,
     method: options.method ?? 'GET',
@@ -24,11 +27,29 @@ async function request<T>(path: string, options: { token?: string | null; method
       ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
     },
   })
+  if (response.statusCode === 401 && options.token && !options.skipRefresh) {
+    const refreshToken = getRefreshToken()
+    if (refreshToken) {
+      try {
+        const session = await refreshMiniSession(refreshToken)
+        setSession(session)
+        return request<T>(path, { ...options, token: session.access_token, skipRefresh: true })
+      } catch {
+        clearSession()
+      }
+    }
+  }
   if (response.statusCode < 200 || response.statusCode >= 300) {
     const body = response.data as ApiErrorBody
     throw new MiniApiError(body.error?.code ?? `HTTP_${response.statusCode}`, body.error?.message ?? '请求失败', response.statusCode)
   }
   return response.data as T
+}
+
+export function refreshMiniSession(refreshToken: string) {
+  return request<components['schemas']['AuthResponse']>('/auth/refresh', {
+    method: 'POST', data: { refresh_token: refreshToken }, skipRefresh: true,
+  })
 }
 
 export function loginWechatMini(wechatCode: string) {

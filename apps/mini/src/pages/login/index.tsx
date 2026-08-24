@@ -3,7 +3,7 @@ import { Button, Input, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 
 import { getNotificationPreferences, linkWechatMini, loginWechatMini, MiniApiError, updateNotificationPreferences } from '@/lib/api'
-import { clearAccessToken, getAccessToken, setAccessToken } from '@/lib/session'
+import { clearSession, getAccessToken, setSession } from '@/lib/session'
 
 const notificationTemplateId = process.env.TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID || ''
 
@@ -33,7 +33,7 @@ export default function Login() {
     try {
       const result = await Taro.login()
       const session = await loginWechatMini(result.code)
-      setAccessToken(session.access_token)
+      setSession(session)
       setWechatNotificationsEnabled(false)
       setHasToken(true)
       await Taro.showToast({ title: '登录成功', icon: 'success' })
@@ -52,7 +52,7 @@ export default function Login() {
     try {
       const result = await Taro.login()
       const session = await linkWechatMini(result.code, linkCode.trim().toUpperCase())
-      setAccessToken(session.access_token)
+      setSession(session)
       setWechatNotificationsEnabled(false)
       setHasToken(true)
       await Taro.showToast({ title: '绑定成功', icon: 'success' })
@@ -65,7 +65,7 @@ export default function Login() {
   }
 
   function logout() {
-    clearAccessToken()
+    clearSession()
     setHasToken(false)
     setWechatNotificationsEnabled(false)
     setMessage('已清除本机登录态')

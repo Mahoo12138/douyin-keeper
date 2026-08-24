@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
@@ -48,7 +49,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setRefreshCookie(w, res)
-	writeCreated(w, authResponse(res))
+	writeCreated(w, authResponse(res, false))
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +64,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setRefreshCookie(w, res)
-	writeOK(w, authResponse(res))
+	writeOK(w, authResponse(res, false))
 }
 
 // handleRefresh rotates the refresh token. Web clients send the HttpOnly
@@ -73,24 +74,37 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	token := ""
-	if c, err := r.Cookie(RefreshCookieName); err == nil {
-		token = c.Value
-	}
-	var req refreshReq
-	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&req)
-	}
-	if req.RefreshToken != nil && *req.RefreshToken != "" {
-		token = *req.RefreshToken
-	}
-	res, err := s.auth.Refresh(r.Context(), token, auth.ClientWeb)
+	token, client, err := refreshInput(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	s.setRefreshCookie(w, res)
-	writeOK(w, authResponse(res))
+	res, err := s.auth.Refresh(r.Context(), token, client)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if client == auth.ClientWeb {
+		s.setRefreshCookie(w, res)
+	}
+	writeOK(w, authResponse(res, client == auth.ClientMini))
+}
+
+func refreshInput(r *http.Request) (string, auth.ClientType, error) {
+	if c, err := r.Cookie(RefreshCookieName); err == nil && c.Value != "" {
+		return c.Value, auth.ClientWeb, nil
+	}
+	var req refreshReq
+	if r.Body != nil {
+		err := json.NewDecoder(r.Body).Decode(&req)
+		if err != nil && err != io.EOF {
+			return "", "", apperr.Validation(apperr.CodeConflict, "invalid refresh body")
+		}
+	}
+	if req.RefreshToken != nil && *req.RefreshToken != "" {
+		return *req.RefreshToken, auth.ClientMini, nil
+	}
+	return "", auth.ClientWeb, nil
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +169,7 @@ func (s *Server) handleWechatLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeOK(w, authResponse(res))
+	writeOK(w, authResponse(res, true))
 }
 
 func (s *Server) handleWechatLogin(w http.ResponseWriter, r *http.Request) {
@@ -169,7 +183,7 @@ func (s *Server) handleWechatLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	writeOK(w, authResponse(res))
+	writeOK(w, authResponse(res, true))
 }
 
 func (s *Server) setRefreshCookie(w http.ResponseWriter, res auth.SessionResult) {

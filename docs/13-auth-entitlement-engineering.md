@@ -604,6 +604,12 @@ entitlement_grants
 IP fixed-window limiter；需要身份的 Link Code 与 Card Redeem 同时按 `user_id` 和客户端
 IP 限制，两个维度任一达到上限都会拒绝请求，避免只轮换 IP 或只切换账号绕过限制。
 
+当前认证响应按客户端区分 Refresh Token 传输边界：Web Register/Login/Refresh 只通过
+HttpOnly Cookie 交付或轮换 Refresh Token，不把明文 Refresh Token 放进 JSON；微信小程序
+Link/Login 与 body token Refresh 使用 `client_type=mini`，在响应体返回 Refresh Token。小程序
+客户端同时保存 Access/Refresh Token，并在业务请求收到 401 时只执行一次 rotation 与原请求重试，
+rotation 失败则清理本机两类 Token。
+
 ## 16. 测试冻结项
 
 必须有以下集成测试：
