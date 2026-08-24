@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { getMe, listMyEntitlementGrants, myEntitlement, redeemCardCode } from '../src/lib/api'
+import { getMe, listMyEntitlementGrants, listNotifications, markAllNotificationsRead, markNotificationRead, myEntitlement, redeemCardCode } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -71,5 +71,22 @@ describe('mini API auth recovery', () => {
 
     expect(result.next_cursor).toBe('cursor-2')
     expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/entitlements/redemptions?limit=10&cursor=cursor-1')
+  })
+
+  it('loads notifications and supports marking one or all as read', async () => {
+    requestMock
+      .mockResolvedValueOnce({ statusCode: 200, data: { items: [], unread_count: 2, next_cursor: null } })
+      .mockResolvedValueOnce({ statusCode: 204, data: undefined })
+      .mockResolvedValueOnce({ statusCode: 200, data: { marked_count: 2 } })
+
+    const notifications = await listNotifications('access-1', { limit: 3 })
+    await markNotificationRead('access-1', 'notification-1')
+    const result = await markAllNotificationsRead('access-1')
+
+    expect(notifications.unread_count).toBe(2)
+    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/notifications?limit=3')
+    expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/notifications/notification-1/read')
+    expect(requestMock.mock.calls[2]?.[0]?.url).toBe('/api/v1/notifications/read-all')
+    expect(result.marked_count).toBe(2)
   })
 })

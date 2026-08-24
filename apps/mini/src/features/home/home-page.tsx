@@ -2,20 +2,25 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 
-import { getMe, listAccounts, listSendIntents, listTasks, MiniApiError } from '@/lib/api'
+import { getMe, listAccounts, listNotifications, listSendIntents, listTasks, markAllNotificationsRead, markNotificationRead, MiniApiError } from '@/lib/api'
 import { getAccessToken } from '@/lib/session'
+import { notificationPriorityLabel, notificationReadLabel } from '@/features/notification/notification-utils'
 
 type HomeData = {
   user: Awaited<ReturnType<typeof getMe>>
   accounts: Awaited<ReturnType<typeof listAccounts>>['items']
   tasks: Awaited<ReturnType<typeof listTasks>>['items']
   history: Awaited<ReturnType<typeof listSendIntents>>['items']
+  notifications: Awaited<ReturnType<typeof listNotifications>>['items']
+  unreadNotificationCount: number
+  notificationsAvailable: boolean
 }
 
 export function HomePage() {
   const [state, setState] = useState<'loading' | 'guest' | 'ready' | 'error'>('loading')
   const [data, setData] = useState<HomeData | null>(null)
   const [error, setError] = useState('')
+  const [notificationBusy, setNotificationBusy] = useState<string | 'all' | null>(null)
 
   const load = useCallback(async () => {
     const token = getAccessToken()
@@ -26,13 +31,17 @@ export function HomePage() {
     setState('loading')
     setError('')
     try {
-      const [user, accountsResponse, tasksResponse, historyResponse] = await Promise.all([
-        getMe(token),
-        listAccounts(token),
-        listTasks(token),
-        listSendIntents(token, todayRange()),
-      ])
-      setData({ user, accounts: accountsResponse.items, tasks: tasksResponse.items, history: historyResponse.items })
+      const [user, accountsResponse, tasksResponse, historyResponse] = await Promise.all([getMe(token), listAccounts(token), listTasks(token), listSendIntents(token, todayRange())])
+      const notificationsResponse = await listNotifications(token, { limit: 3 }).catch(() => null)
+      setData({
+        user,
+        accounts: accountsResponse.items,
+        tasks: tasksResponse.items,
+        history: historyResponse.items,
+        notifications: notificationsResponse?.items ?? [],
+        unreadNotificationCount: notificationsResponse?.unread_count ?? 0,
+        notificationsAvailable: notificationsResponse !== null,
+      })
       setState('ready')
     } catch (cause) {
       if (cause instanceof MiniApiError && cause.statusCode === 401) {
@@ -57,7 +66,36 @@ export function HomePage() {
   const account = data.accounts[0]
   const nextTask = data.tasks.find((task) => task.enabled)
 
-  return <View className="mini-page"><View className="mini-hero card"><Text className="eyebrow">M4 · 移动控制台</Text><Text className="title mini-hero-title">晚上好，{data.user.display_name || '火花助手'}</Text><Text className="muted">今天的火花维护状态，一眼就能看到。</Text></View><View className="section-title"><Text>今日状态</Text><Text className="muted">{formatToday()}</Text></View><View className="metric-grid"><Metric label="已成功" value={successful} tone="success" /><Metric label="待处理" value={pending} tone="warning" /><Metric label="失败" value={failed} tone={failed ? 'danger' : 'neutral'} /></View><View className="card status-card"><View className="card-heading"><Text className="card-title">账号状态</Text><Text className={`status-dot ${account?.binding_status === 'bound' ? 'status-dot-success' : 'status-dot-warning'}`}>{account ? accountStatus(account.binding_status) : '未绑定'}</Text></View>{account ? <View><Text className="account-name">{account.nickname || '未命名账号'}</Text><Text className="muted">会话：{sessionStatus(account.session_status)} · 风险：{riskStatus(account.risk_status)}</Text></View> : <View><Text className="muted">绑定抖音账号后，才能开始维护好友火花。</Text><Button className="mini-button secondary-button" onClick={() => Taro.switchTab({ url: '/pages/login/index' })}>去绑定账号</Button></View>}</View><View className="card next-task-card"><View className="card-heading"><Text className="card-title">下一次任务</Text><Text className="muted">{nextTask ? '每日启用' : '暂无'}</Text></View>{nextTask ? <View><Text className="task-message">{nextTask.message.body || (nextTask.message.kind === 'sticker' ? '贴纸消息' : '未填写消息')}</Text><Text className="muted">{nextTask.window_start.slice(0, 5)}–{nextTask.window_end.slice(0, 5)} · {nextTask.timezone}</Text><Button className="mini-button primary-button" onClick={() => Taro.switchTab({ url: '/pages/spark/index' })}>前往火花</Button></View> : <Text className="muted">还没有启用中的任务配置。</Text>}</View></View>
+  async function markRead(notificationId: string) {
+    const token = getAccessToken()
+    if (!token || notificationBusy) return
+    setNotificationBusy(notificationId)
+    try {
+      await markNotificationRead(token, notificationId)
+      setData((current) => current ? { ...current, notifications: current.notifications.map((item) => item.id === notificationId ? { ...item, read_at: new Date().toISOString() } : item), unreadNotificationCount: Math.max(0, current.unreadNotificationCount - (current.notifications.find((item) => item.id === notificationId)?.read_at ? 0 : 1)) } : current)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '通知状态更新失败')
+    } finally {
+      setNotificationBusy(null)
+    }
+  }
+
+  async function markAllRead() {
+    const token = getAccessToken()
+    if (!token || notificationBusy || data?.unreadNotificationCount === 0) return
+    setNotificationBusy('all')
+    try {
+      await markAllNotificationsRead(token)
+      const now = new Date().toISOString()
+      setData((current) => current ? { ...current, notifications: current.notifications.map((item) => ({ ...item, read_at: item.read_at ?? now })), unreadNotificationCount: 0 } : current)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '通知状态更新失败')
+    } finally {
+      setNotificationBusy(null)
+    }
+  }
+
+  return <View className="mini-page"><View className="mini-hero card"><Text className="eyebrow">M4 · 移动控制台</Text><Text className="title mini-hero-title">晚上好，{data.user.display_name || '火花助手'}</Text><Text className="muted">今天的火花维护状态，一眼就能看到。</Text></View><View className="section-title"><Text>今日状态</Text><Text className="muted">{formatToday()}</Text></View><View className="metric-grid"><Metric label="已成功" value={successful} tone="success" /><Metric label="待处理" value={pending} tone="warning" /><Metric label="失败" value={failed} tone={failed ? 'danger' : 'neutral'} /></View><View className="card status-card"><View className="card-heading"><Text className="card-title">账号状态</Text><Text className={`status-dot ${account?.binding_status === 'bound' ? 'status-dot-success' : 'status-dot-warning'}`}>{account ? accountStatus(account.binding_status) : '未绑定'}</Text></View>{account ? <View><Text className="account-name">{account.nickname || '未命名账号'}</Text><Text className="muted">会话：{sessionStatus(account.session_status)} · 风险：{riskStatus(account.risk_status)}</Text></View> : <View><Text className="muted">绑定抖音账号后，才能开始维护好友火花。</Text><Button className="mini-button secondary-button" onClick={() => Taro.switchTab({ url: '/pages/login/index' })}>去绑定账号</Button></View>}</View><View className="card next-task-card"><View className="card-heading"><Text className="card-title">下一次任务</Text><Text className="muted">{nextTask ? '每日启用' : '暂无'}</Text></View>{nextTask ? <View><Text className="task-message">{nextTask.message.body || (nextTask.message.kind === 'sticker' ? '贴纸消息' : '未填写消息')}</Text><Text className="muted">{nextTask.window_start.slice(0, 5)}–{nextTask.window_end.slice(0, 5)} · {nextTask.timezone}</Text><Button className="mini-button primary-button" onClick={() => Taro.switchTab({ url: '/pages/spark/index' })}>前往火花</Button></View> : <Text className="muted">还没有启用中的任务配置。</Text>}</View><View className="card notification-card"><View className="card-heading"><Text className="card-title">风险提醒</Text><Text className={`status-dot ${data.unreadNotificationCount ? 'status-dot-warning' : 'status-dot-success'}`}>{data.unreadNotificationCount ? `${data.unreadNotificationCount} 条未读` : '暂无未读'}</Text></View>{!data.notificationsAvailable ? <Text className="muted">通知暂时不可用，不影响任务执行；可稍后重试首页。</Text> : data.notifications.length === 0 ? <Text className="muted">暂无风险通知。</Text> : <View>{data.notifications.map((item) => <View className={`notification-row ${item.read_at ? 'notification-row-read' : 'notification-row-unread'}`} key={item.id}><View className="notification-heading"><Text className="notification-title">{item.title}</Text><Text className={`notification-priority notification-priority-${item.priority}`}>{notificationPriorityLabel(item.priority)}</Text></View><Text className="muted notification-body">{item.body}</Text><View className="notification-footer"><Text className="muted">{formatTime(item.created_at)} · {notificationReadLabel(item.read_at)}</Text>{!item.read_at && <Button className="notification-read-button" disabled={notificationBusy !== null} onClick={() => void markRead(item.id)}>{notificationBusy === item.id ? '处理中…' : '标为已读'}</Button>}</View></View>)}</View>}{data.unreadNotificationCount > 0 && <Button className="mini-button secondary-button" disabled={notificationBusy !== null} onClick={() => void markAllRead()}>{notificationBusy === 'all' ? '处理中…' : '全部标为已读'}</Button>}</View></View>
 }
 
 function Metric({ label, value, tone }: { label: string; value: number; tone: 'success' | 'warning' | 'danger' | 'neutral' }) {
@@ -85,6 +123,10 @@ function todayRange() {
 
 function formatToday() {
   return new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric' }).format(new Date())
+}
+
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
 }
 
 function accountStatus(value: string) { return value === 'bound' ? '已绑定' : value === 'binding' ? '绑定中' : '未绑定' }

@@ -44,6 +44,20 @@ page {
 .auth-card .muted { margin-top: 10rpx; }
 .quota-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12rpx; margin-top: 24rpx; padding-top: 20rpx; border-top: 1rpx solid #eeeeee; }
 .quota-value { display: block; font-size: 30rpx; font-weight: 600; }
+.notification-card { padding-bottom: 12rpx; }
+.notification-row { padding: 18rpx 0; border-bottom: 1rpx solid #eeeeee; }
+.notification-row:last-child { border-bottom: 0; }
+.notification-row-unread { border-left: 6rpx solid #c27a16; padding-left: 16rpx; }
+.notification-row-read { padding-left: 22rpx; }
+.notification-heading, .notification-footer { display: flex; justify-content: space-between; align-items: center; gap: 16rpx; }
+.notification-title { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 27rpx; font-weight: 600; }
+.notification-priority { flex: 0 0 auto; border-radius: 999rpx; padding: 5rpx 12rpx; font-size: 21rpx; }
+.notification-priority-critical { color: #b52d2d; background: #fff1f1; }
+.notification-priority-warning { color: #9a5f0e; background: #fff3d9; }
+.notification-priority-info { color: #3767d6; background: #edf3ff; }
+.notification-body { margin-top: 8rpx; }
+.notification-footer { margin-top: 12rpx; }
+.notification-read-button { flex: 0 0 auto; margin: 0; padding: 0; border: 0; color: #1f5bd8; background: transparent; font-size: 23rpx; line-height: 1.5; }
 .grant-row { padding: 18rpx 0; border-bottom: 1rpx solid #eeeeee; }
 .grant-row:last-child { padding-bottom: 0; border-bottom: 0; }
 .grant-title { display: flex; justify-content: space-between; align-items: center; gap: 16rpx; }

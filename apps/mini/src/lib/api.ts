@@ -88,6 +88,23 @@ export function updateNotificationPreferences(token: string, wechatEnabled: bool
   })
 }
 
+export function listNotifications(token: string, options: { unread_only?: boolean; limit?: number; cursor?: string } = {}) {
+  const query = new URLSearchParams()
+  if (options.unread_only !== undefined) query.set('unread_only', String(options.unread_only))
+  if (options.limit) query.set('limit', String(options.limit))
+  if (options.cursor) query.set('cursor', options.cursor)
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return request<components['schemas']['NotificationList']>(`/notifications${suffix}`, { token })
+}
+
+export function markNotificationRead(token: string, notificationId: string) {
+  return request<void>(`/notifications/${notificationId}/read`, { method: 'POST', token })
+}
+
+export function markAllNotificationsRead(token: string) {
+  return request<{ marked_count: number }>('/notifications/read-all', { method: 'POST', token })
+}
+
 export function getMe(token: string) {
   return request<components['schemas']['User']>('/me', { token })
 }
