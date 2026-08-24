@@ -435,6 +435,11 @@ MVP 允许：
 
 建议 UI 中“好友火花开关”和 SparkTask 保持一一对应，但 API 仍保留显式 Task 资源。
 
+### `GET /tasks`
+
+任务列表使用统一游标分页：`limit` 默认 50、最大 100，后续请求把响应中的 `next_cursor`
+作为 `cursor` 传回。任务结果只返回当前用户拥有且未删除的任务。
+
 ### `POST /tasks`
 
 ```json

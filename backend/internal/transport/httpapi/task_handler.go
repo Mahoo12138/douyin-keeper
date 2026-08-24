@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/google/uuid"
 
@@ -12,14 +14,14 @@ import (
 )
 
 type createTaskReq struct {
-	AccountID         uuid.UUID `json:"account_id"`
-	FriendID          uuid.UUID `json:"friend_id"`
-	Enabled           bool      `json:"enabled"`
-	Timezone          string    `json:"timezone"`
-	WindowStart       string    `json:"window_start"`
-	WindowEnd         string    `json:"window_end"`
+	AccountID         uuid.UUID   `json:"account_id"`
+	FriendID          uuid.UUID   `json:"friend_id"`
+	Enabled           bool        `json:"enabled"`
+	Timezone          string      `json:"timezone"`
+	WindowStart       string      `json:"window_start"`
+	WindowEnd         string      `json:"window_end"`
 	Message           *messageReq `json:"message"`
-	AllowFirstMessage bool      `json:"allow_first_message"`
+	AllowFirstMessage bool        `json:"allow_first_message"`
 }
 
 type messageReq struct {
@@ -28,26 +30,72 @@ type messageReq struct {
 }
 
 type patchTaskReq struct {
-	Enabled           *bool      `json:"enabled"`
-	Timezone          *string    `json:"timezone"`
-	WindowStart       *string    `json:"window_start"`
-	WindowEnd         *string    `json:"window_end"`
+	Enabled           *bool       `json:"enabled"`
+	Timezone          *string     `json:"timezone"`
+	WindowStart       *string     `json:"window_start"`
+	WindowEnd         *string     `json:"window_end"`
 	Message           *messageReq `json:"message"`
-	AllowFirstMessage *bool      `json:"allow_first_message"`
+	AllowFirstMessage *bool       `json:"allow_first_message"`
 }
 
 func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	p := auth.MustPrincipal(r.Context())
-	tasks, err := s.tasks.ListForUser(r.Context(), p.UserID)
+	limit, err := taskLimit(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	items := make([]TaskView, 0, len(tasks))
-	for _, t := range tasks {
+	afterID, err := taskCursor(r)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	page, err := s.tasks.ListPageForUser(r.Context(), p.UserID, task.ListFilter{Limit: limit, AfterID: afterID})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	items := make([]TaskView, 0, len(page.Items))
+	for _, t := range page.Items {
 		items = append(items, taskView(t))
 	}
-	writeOK(w, map[string]any{"items": items, "next_cursor": nil})
+	var nextCursor any
+	if page.NextAfterID > 0 {
+		nextCursor = encodeTaskCursor(page.NextAfterID)
+	}
+	writeOK(w, map[string]any{"items": items, "next_cursor": nextCursor})
+}
+
+func taskLimit(r *http.Request) (int, error) {
+	value := r.URL.Query().Get("limit")
+	if value == "" {
+		return 50, nil
+	}
+	limit, err := strconv.Atoi(value)
+	if err != nil || limit < 1 || limit > 100 {
+		return 0, apperr.Validation(apperr.CodeConflict, "invalid limit")
+	}
+	return limit, nil
+}
+
+func taskCursor(r *http.Request) (int64, error) {
+	value := r.URL.Query().Get("cursor")
+	if value == "" {
+		return 0, nil
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return 0, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+	}
+	id, err := strconv.ParseInt(string(decoded), 10, 64)
+	if err != nil || id < 1 {
+		return 0, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+	}
+	return id, nil
+}
+
+func encodeTaskCursor(id int64) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(id, 10)))
 }
 
 func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {

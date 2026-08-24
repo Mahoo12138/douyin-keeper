@@ -475,9 +475,10 @@ export async function updateFriend(accessToken: string, friendId: string, sparkE
   return data
 }
 
-export async function listTasks(accessToken: string) {
+export async function listTasks(accessToken: string, options?: { limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/tasks', {
     headers: { Authorization: `Bearer ${accessToken}` },
+    params: { query: options },
   })
   if (error) throwApiError(error, 'tasks failed')
   return data

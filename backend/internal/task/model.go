@@ -109,6 +109,22 @@ type Repository interface {
 	CountTasks(ctx context.Context, userID int64) (int, error)
 }
 
+type ListFilter struct {
+	Limit   int
+	AfterID int64
+}
+
+type ListPage struct {
+	Items       []*SparkTask
+	NextAfterID int64
+}
+
+// PageRepository is the API-facing cursor projection. The legacy list method
+// remains available to internal callers that need the complete task snapshot.
+type PageRepository interface {
+	ListByUserPage(ctx context.Context, userID int64, filter ListFilter) ([]*SparkTask, error)
+}
+
 // DueRepository is the scheduler-facing read slice. The database query
 // applies the account/friend gates that are safe to evaluate without a
 // platform call; entitlement is checked again in the scheduler transaction.
@@ -156,6 +172,61 @@ func NewService(repo Repository, accounts AccountLookup, friends FriendLookup,
 
 func (s *Service) ListForUser(ctx context.Context, userID int64) ([]*SparkTask, error) {
 	return s.repo.ListByUser(ctx, userID)
+}
+
+func (s *Service) ListPageForUser(ctx context.Context, userID int64, filter ListFilter) (ListPage, error) {
+	filter = normalizeListFilter(filter)
+	if repo, ok := s.repo.(PageRepository); ok {
+		items, err := repo.ListByUserPage(ctx, userID, filter)
+		if err != nil {
+			return ListPage{}, err
+		}
+		return trimListPage(items, filter.Limit), nil
+	}
+	items, err := s.repo.ListByUser(ctx, userID)
+	if err != nil {
+		return ListPage{}, err
+	}
+	if filter.AfterID > 0 {
+		start := len(items)
+		for index, item := range items {
+			if item != nil && item.ID < filter.AfterID {
+				start = index
+				break
+			}
+		}
+		if start < len(items) {
+			items = items[start:]
+		} else {
+			items = nil
+		}
+	}
+	return trimListPage(items, filter.Limit), nil
+}
+
+func normalizeListFilter(filter ListFilter) ListFilter {
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.AfterID < 0 {
+		filter.AfterID = 0
+	}
+	return filter
+}
+
+func trimListPage(items []*SparkTask, limit int) ListPage {
+	page := ListPage{Items: items}
+	if len(items) <= limit {
+		return page
+	}
+	page.Items = items[:limit]
+	if last := page.Items[len(page.Items)-1]; last != nil {
+		page.NextAfterID = last.ID
+	}
+	return page
 }
 
 func (s *Service) GetOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*SparkTask, error) {

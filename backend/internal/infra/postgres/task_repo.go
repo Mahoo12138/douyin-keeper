@@ -56,6 +56,30 @@ func (r *TaskRepo) ListByUser(ctx context.Context, userID int64) ([]*task.SparkT
 	return out, rows.Err()
 }
 
+func (r *TaskRepo) ListByUserPage(ctx context.Context, userID int64, filter task.ListFilter) ([]*task.SparkTask, error) {
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT `+taskCols+` FROM spark_tasks t
+		JOIN douyin_accounts a ON a.id = t.account_id
+		JOIN friends f ON f.id = t.friend_id
+		WHERE t.user_id=$1 AND t.deleted_at IS NULL AND a.deleted_at IS NULL
+		  AND ($2::bigint = 0 OR t.id < $2)
+		ORDER BY t.id DESC
+		LIMIT $3`, userID, filter.AfterID, filter.Limit+1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]*task.SparkTask, 0, filter.Limit+1)
+	for rows.Next() {
+		t, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 func (r *TaskRepo) GetByID(ctx context.Context, taskID int64) (*task.SparkTask, error) {
 	t, err := scanTask(From(ctx, r.pool).QueryRow(ctx, `
 		SELECT `+taskCols+` FROM spark_tasks t
@@ -156,3 +180,4 @@ func (r *TaskRepo) CountTasks(ctx context.Context, userID int64) (int, error) {
 }
 
 var _ task.Repository = (*TaskRepo)(nil)
+var _ task.PageRepository = (*TaskRepo)(nil)

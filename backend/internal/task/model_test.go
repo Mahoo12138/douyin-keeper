@@ -158,13 +158,18 @@ func (g *taskGateStub) Authorize(_ context.Context, req entitlement.Authorizatio
 }
 
 type taskRepoStub struct {
-	task    *SparkTask
-	created *SparkTask
-	updated *SparkTask
+	task       *SparkTask
+	created    *SparkTask
+	updated    *SparkTask
+	listFilter ListFilter
 }
 
 func (r *taskRepoStub) ListByUser(context.Context, int64) ([]*SparkTask, error) { return nil, nil }
-func (r *taskRepoStub) GetByID(context.Context, int64) (*SparkTask, error)      { return r.task, nil }
+func (r *taskRepoStub) ListByUserPage(_ context.Context, _ int64, filter ListFilter) ([]*SparkTask, error) {
+	r.listFilter = filter
+	return []*SparkTask{{ID: 3}, {ID: 2}, {ID: 1}}, nil
+}
+func (r *taskRepoStub) GetByID(context.Context, int64) (*SparkTask, error) { return r.task, nil }
 func (r *taskRepoStub) GetOwned(context.Context, int64, uuid.UUID) (*SparkTask, error) {
 	return r.task, nil
 }
@@ -209,3 +214,29 @@ func newTaskService(repo Repository, gate Gate, accountID, friendID uuid.UUID) *
 func stringPtr(value string) *string { return &value }
 
 func boolPtr(value bool) *bool { return &value }
+
+func TestListPageNormalizesAndTrimsCursorResults(t *testing.T) {
+	repo := &taskRepoStub{}
+	service := NewService(repo, nil, nil, nil, nil, nil)
+	page, err := service.ListPageForUser(context.Background(), 7, ListFilter{Limit: 2, AfterID: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].ID != 3 || page.Items[1].ID != 2 || page.NextAfterID != 2 {
+		t.Fatalf("page = %+v", page)
+	}
+	if repo.listFilter.Limit != 2 || repo.listFilter.AfterID != 3 {
+		t.Fatalf("filter = %+v", repo.listFilter)
+	}
+}
+
+func TestListPageClampsTaskLimit(t *testing.T) {
+	repo := &taskRepoStub{}
+	service := NewService(repo, nil, nil, nil, nil, nil)
+	if _, err := service.ListPageForUser(context.Background(), 7, ListFilter{Limit: 500}); err != nil {
+		t.Fatal(err)
+	}
+	if repo.listFilter.Limit != 100 {
+		t.Fatalf("limit = %d, want 100", repo.listFilter.Limit)
+	}
+}

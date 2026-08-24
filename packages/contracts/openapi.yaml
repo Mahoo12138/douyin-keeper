@@ -973,6 +973,9 @@ paths:
   /tasks:
     get:
       operationId: listTasks
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Tasks

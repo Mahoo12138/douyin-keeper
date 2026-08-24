@@ -159,6 +159,8 @@ Web 端通过“加载更多”读取后续页面。
 - History；
 - Risk Event。
 
+任务列表已接入统一 cursor pagination，默认 50 条、最多 100 条，Web 端通过“加载更多”读取后续页面。
+
 ### M4 — 小程序
 
 - 首页；
