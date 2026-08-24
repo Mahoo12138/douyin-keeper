@@ -124,29 +124,29 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		defer stopHeartbeat()
 		intent, err := deps.Sends.GetIntentByID(ctx, claimed.IntentID)
 		if err != nil {
-			return finishSend(ctx, deps, claimed, send.JobFailed, apperr.CodeInternal, false, nil, send.IntentFailed, now, adapterConfig.adapter)
+			return fmt.Errorf("%s: load intent: %w", adapterConfig.name, err)
 		}
 		if intent == nil {
-			return finishSend(ctx, deps, claimed, send.JobFailed, apperr.CodeInternal, false, nil, send.IntentFailed, now, adapterConfig.adapter)
+			return fmt.Errorf("%s: load intent returned nil", adapterConfig.name)
 		}
 		if intent.Status.Terminal() {
 			return finishTerminalIntentJob(ctx, deps, claimed, intent, now)
 		}
-		fail := func(code string) error {
-			return finishSend(ctx, deps, claimed, send.JobFailed, code, false, nil, send.IntentFailed, now, adapterConfig.adapter)
-		}
 		if err := deps.Sends.SetIntentStatus(ctx, intent.ID, send.IntentRunning, nil, nil, now()); err != nil {
-			return fail(apperr.CodeInternal)
+			return fmt.Errorf("%s: mark intent running: %w", adapterConfig.name, err)
 		}
 		if deps.Accounts == nil || deps.Sessions == nil || deps.Sidecar == nil || deps.Redis == nil || deps.Entitlement == nil {
-			return fail(apperr.CodeInternal)
+			return fmt.Errorf("%s: execution dependencies are not configured", adapterConfig.name)
 		}
 		acct, err := deps.Accounts.GetByID(ctx, claimed.AccountID)
-		if err != nil || intent.AccountID != claimed.AccountID {
-			return fail(apperr.CodeNotFound)
+		if err != nil {
+			return fmt.Errorf("%s: load account: %w", adapterConfig.name, err)
+		}
+		if acct == nil || intent.AccountID != claimed.AccountID {
+			return fmt.Errorf("%s: account does not match send intent", adapterConfig.name)
 		}
 		if deps.Quota == nil {
-			return fail(apperr.CodeInternal)
+			return fmt.Errorf("%s: quota dependency is not configured", adapterConfig.name)
 		}
 		failWithQuota := func(code string) error {
 			return finishSendWithQuota(ctx, deps, claimed, send.JobFailed, code, false, nil, send.IntentFailed,
@@ -387,19 +387,6 @@ func browserFallbackAvailable(ctx context.Context, deps SessionCheckDeps, accoun
 		return true, nil
 	}
 	return deps.Health.Allow(ctx, capability.AdapterBrowserConsumer)
-}
-
-func finishSend(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, jobStatus send.JobStatus, code string, retryable bool, messageID *string, intentStatus send.IntentStatus, now func() time.Time, adapter string) error {
-	err := deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
-		if err := deps.Sends.FinishJob(tctx, claimed.ID, jobStatus, &code, retryable, messageID, now()); err != nil {
-			return err
-		}
-		return deps.Sends.SetIntentStatus(tctx, claimed.IntentID, intentStatus, &code, nil, now())
-	})
-	if err == nil {
-		observeSendMetric(deps.Metrics, adapter, string(intentStatus))
-	}
-	return err
 }
 
 // finishTerminalIntentJob closes a queued attempt whose intent was finalized

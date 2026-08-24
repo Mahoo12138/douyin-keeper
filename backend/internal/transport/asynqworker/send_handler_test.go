@@ -3,20 +3,25 @@ package asynqworker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/friend"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/outbox"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/send"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/task"
 )
 
 func TestShouldRetrySendRequiresSidecarProofAndAllowlist(t *testing.T) {
@@ -204,6 +209,54 @@ func (o *fallbackOutbox) Add(_ context.Context, message outbox.Message) error {
 type fallbackTx struct{}
 
 func (fallbackTx) WithinTx(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) }
+
+type sendTaskStub struct{}
+
+func (sendTaskStub) GetByID(context.Context, int64) (*task.SparkTask, error) { return nil, nil }
+
+type sendTargetStub struct{}
+
+func (sendTargetStub) GetSendTarget(context.Context, int64, int64) (*friend.SendTarget, error) {
+	return nil, nil
+}
+func (sendTargetStub) MarkLastSent(context.Context, int64, time.Time) error { return nil }
+
+type intentLoadFailureRepo struct {
+	*fallbackSendRepo
+	claimed *send.SendJob
+	loadErr error
+}
+
+func (r *intentLoadFailureRepo) ClaimJob(context.Context, uuid.UUID, string, time.Duration) (*send.SendJob, error) {
+	return r.claimed, nil
+}
+func (r *intentLoadFailureRepo) HeartbeatJob(context.Context, int64, string, time.Duration) error {
+	return nil
+}
+func (r *intentLoadFailureRepo) GetIntentByID(context.Context, int64) (*send.SendIntent, error) {
+	return nil, r.loadErr
+}
+
+func TestSendHandlerDefersInfrastructureFinalizationToLeaseReaper(t *testing.T) {
+	wantErr := context.DeadlineExceeded
+	repo := &intentLoadFailureRepo{
+		fallbackSendRepo: &fallbackSendRepo{},
+		claimed:          &send.SendJob{ID: 31, IntentID: 41, AccountID: 51, FriendID: 61, Status: send.JobRunning},
+		loadErr:          wantErr,
+	}
+	loader := probeLoader{message: &postgres.PendingMessage{Payload: []byte(`{"job_id":"00000000-0000-0000-0000-000000000001"}`)}}
+	handler := sendBrowserHandler(loader, SessionCheckDeps{
+		Sends: repo, Tasks: sendTaskStub{}, Targets: sendTargetStub{}, Tx: fallbackTx{},
+		Capabilities: fallbackCapabilityRepo{}, Health: fallbackHealth{allowed: true}, WorkerID: "test-worker",
+	})
+	task := asynq.NewTask("send.browser", []byte(`{"outbox_id":"outbox-1"}`))
+	if err := handler(context.Background(), task); !errors.Is(err, wantErr) {
+		t.Fatalf("handler error = %v, want %v", err, wantErr)
+	}
+	if repo.finished.id != 0 || len(repo.statuses) != 0 {
+		t.Fatalf("infrastructure error was finalized prematurely: finished=%+v statuses=%v", repo.finished, repo.statuses)
+	}
+}
 
 type fallbackCapabilityRepo struct {
 	capability.Repository

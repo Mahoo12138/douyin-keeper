@@ -718,6 +718,8 @@ Scheduler 周期任务：
 ### Worker Lease Reaper
 
 - running lease expired -> outcome reconcile / fail closed。
+- Worker 在无法可靠读取 Intent/Account 或提交最终状态时，不直接写入未结算的 `failed`；保留
+  `running` 并返回错误，由 Reaper 统一写入 `OUTCOME_UNKNOWN`、终结 Intent 并释放 quota。
 - Generic Job 的 `running/waiting_user` lease 过期后写入 `OUTCOME_UNKNOWN` 并追加 `error`
   事件；若 API 已请求取消，则最终写 `cancelled` 和 `cancelled` 事件。
 - `account.bind.qr` / `account.bind.sms` 超时回收时，若账号仍为 `binding`，恢复为
