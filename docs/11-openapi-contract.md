@@ -614,6 +614,9 @@ POST /admin/card-batches/{id}/disable
 GET  /admin/redemptions
 GET  /admin/users/{id}/entitlements
 POST /admin/users/{id}/entitlement-grants
+
+`GET /admin/users` 默认返回 50 条、最多 100 条，按 `created_at DESC, id DESC`
+排序；通过 `cursor` 继续读取用户列表。
 POST /admin/entitlement-grants/{id}/revoke
 GET  /admin/card-batches/{id}/codes
 POST /admin/card-batches/{id}/codes/{code_id}/revoke

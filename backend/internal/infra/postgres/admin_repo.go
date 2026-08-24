@@ -30,8 +30,18 @@ func NewAdminRepo(pool *pgxpool.Pool, rdb *redis.Client) *AdminRepo {
 }
 
 func (r *AdminRepo) ListUserSummaries(ctx context.Context, limit int) ([]admin.UserSummary, error) {
+	return r.listUserSummaries(ctx, admin.UserListFilter{Limit: limit})
+}
+
+func (r *AdminRepo) ListUserSummariesPage(ctx context.Context, filter admin.UserListFilter) ([]admin.UserSummary, error) {
+	filter.Limit++
+	return r.listUserSummaries(ctx, filter)
+}
+
+func (r *AdminRepo) listUserSummaries(ctx context.Context, filter admin.UserListFilter) ([]admin.UserSummary, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT
+			u.id,
 			u.public_id,
 			u.display_name,
 			u.role,
@@ -59,8 +69,9 @@ func (r *AdminRepo) ListUserSummaries(ctx context.Context, limit int) ([]admin.U
 			) AS entitlement_expires_at
 		FROM users u
 		WHERE u.deleted_at IS NULL
-		ORDER BY u.created_at DESC
-		LIMIT $1`, limit)
+		  AND ($1::timestamptz IS NULL OR (u.created_at,u.id) < ($1::timestamptz,$2::bigint))
+		ORDER BY u.created_at DESC, u.id DESC
+		LIMIT $3`, filter.AfterCreatedAt, filter.AfterID, filter.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -70,6 +81,7 @@ func (r *AdminRepo) ListUserSummaries(ctx context.Context, limit int) ([]admin.U
 	for rows.Next() {
 		var item admin.UserSummary
 		if err := rows.Scan(
+			&item.ID,
 			&item.PublicID,
 			&item.DisplayName,
 			&item.Role,
@@ -723,3 +735,4 @@ func runtimePoolIndex(queues map[string]int) int {
 }
 
 var _ admin.Repository = (*AdminRepo)(nil)
+var _ admin.UserPageRepository = (*AdminRepo)(nil)
