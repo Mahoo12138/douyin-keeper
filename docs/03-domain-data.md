@@ -60,6 +60,9 @@ MVP 续期采用顺延规则：新 Grant 从 `max(now, last_unrevoked_grant.expi
 Grant 时，只有相同 Plan 才能顺延；不同 Plan 返回 `ENTITLEMENT_PLAN_CONFLICT`。过期
 授权之后切换 Plan 仍允许，升级/降级的剩余时间折算暂未实现。
 
+卡密重复提交已具备幂等边界：原兑换用户返回原 Grant，其他用户收到稳定的
+`CODE_ALREADY_REDEEMED`，不泄露授权归属。
+
 详见 `12-card-code-entitlement.md`。
 
 ## 3. DouyinAccount

@@ -35,6 +35,7 @@ type GrantRepository interface {
 	CreateGrant(ctx context.Context, g *Grant) error
 	GetLastNonRevokedGrant(ctx context.Context, userID int64) (*Grant, error)
 	GetEffectiveGrant(ctx context.Context, userID int64, now time.Time) (*Grant, bool, error)
+	GetGrantBySourceCardID(ctx context.Context, cardID int64) (*Grant, error)
 	RevokeGrant(ctx context.Context, grantID int64, byUserID int64, reason string) error
 	ListRedemptionSummaries(ctx context.Context, limit int) ([]RedemptionSummary, error)
 	ListUserGrantSummaries(ctx context.Context, userID int64, limit int) ([]RedemptionSummary, error)

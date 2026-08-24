@@ -382,6 +382,21 @@ func (r *EntitlementRepo) GetEffectiveGrant(ctx context.Context, userID int64, n
 	return g, true, nil
 }
 
+func (r *EntitlementRepo) GetGrantBySourceCardID(ctx context.Context, cardID int64) (*entitlement.Grant, error) {
+	g, err := scanGrant(From(ctx, r.pool).QueryRow(ctx,
+		`SELECT `+grantCols+` FROM entitlement_grants g WHERE g.source_card_id=$1`, cardID))
+	if err != nil {
+		return nil, mapNoRows(err, apperr.CodeNotFound, "entitlement grant not found")
+	}
+	plan, err := scanPlan(From(ctx, r.pool).QueryRow(ctx,
+		`SELECT `+planCols+` FROM entitlement_plans WHERE id=$1`, g.EntitlementPlanID))
+	if err != nil {
+		return nil, err
+	}
+	g.Plan = plan
+	return g, nil
+}
+
 func (r *EntitlementRepo) RevokeGrant(ctx context.Context, grantID, byUserID int64, reason string) error {
 	_, err := From(ctx, r.pool).Exec(ctx, `
 		UPDATE entitlement_grants SET revoked_at=now(), revoked_by=$2, revoke_reason=$3

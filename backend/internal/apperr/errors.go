@@ -61,6 +61,7 @@ const (
 	CodeEntitlementRequired     = "ENTITLEMENT_REQUIRED"
 	CodeEntitlementExpired      = "ENTITLEMENT_EXPIRED"
 	CodeEntitlementPlanConflict = "ENTITLEMENT_PLAN_CONFLICT"
+	CodeCardAlreadyRedeemed     = "CODE_ALREADY_REDEEMED"
 	CodeFeatureNotEntitled      = "FEATURE_NOT_ENTITLED"
 	CodeAccountQuotaExceeded    = "ACCOUNT_QUOTA_EXCEEDED"
 	CodeTaskQuotaExceeded       = "TASK_QUOTA_EXCEEDED"

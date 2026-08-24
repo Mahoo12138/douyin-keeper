@@ -149,8 +149,22 @@ func (s *Service) Redeem(ctx context.Context, userID int64, rawCode string) (Gra
 			}
 			return err
 		}
-		if err := validateCodeForRedeem(code, now); err != nil {
-			return err
+		if code.Status != "unused" {
+			if code.Status == "redeemed" {
+				if code.RedeemedBy != nil && *code.RedeemedBy == userID {
+					original, err := s.grants.GetGrantBySourceCardID(tctx, code.ID)
+					if err != nil {
+						return err
+					}
+					if original == nil {
+						return fmt.Errorf("entitlement: redeemed card code has no grant")
+					}
+					grant = *original
+					return nil
+				}
+				return apperr.Conflict(apperr.CodeCardAlreadyRedeemed, "card code already redeemed")
+			}
+			return validateCodeForRedeem(code, now)
 		}
 		var last *Grant
 		if last, err = s.grants.GetLastNonRevokedGrant(tctx, userID); err != nil {

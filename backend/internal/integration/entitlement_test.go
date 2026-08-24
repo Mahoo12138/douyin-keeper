@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
@@ -83,9 +84,19 @@ func TestRedeemOnceThenConflict(t *testing.T) {
 		t.Fatalf("bad grant window")
 	}
 
-	// A second redeem of the same code must conflict.
-	if _, _, err := ent.Redeem(ctx, user, code); err == nil {
-		t.Fatalf("expected conflict on second redeem")
+	// Replaying the same code for the same user is idempotent and returns the
+	// original grant instead of extending it a second time.
+	replayed, replayedEff, err := ent.Redeem(ctx, user, code)
+	if err != nil || replayed.PublicID != grant.PublicID || !replayed.ExpiresAt.Equal(grant.ExpiresAt) || replayedEff.PlanCode != eff.PlanCode {
+		t.Fatalf("replayed redeem = %+v effective=%+v err=%v", replayed, replayedEff, err)
+	}
+
+	// A different user receives a stable conflict and cannot learn the grant.
+	otherUser := newUser(t)
+	if _, _, err := ent.Redeem(ctx, otherUser, code); err == nil {
+		t.Fatalf("expected conflict for another user")
+	} else if app, ok := apperr.As(err); !ok || app.Code != apperr.CodeCardAlreadyRedeemed {
+		t.Fatalf("other-user redeem error = %v, want %s", err, apperr.CodeCardAlreadyRedeemed)
 	}
 }
 

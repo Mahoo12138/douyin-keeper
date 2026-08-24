@@ -54,6 +54,9 @@ func (r entitlementGrantStub) GetLastNonRevokedGrant(context.Context, int64) (*G
 func (r entitlementGrantStub) GetEffectiveGrant(context.Context, int64, time.Time) (*Grant, bool, error) {
 	return r.grant, true, nil
 }
+func (r entitlementGrantStub) GetGrantBySourceCardID(context.Context, int64) (*Grant, error) {
+	return r.grant, nil
+}
 func (r entitlementGrantStub) RevokeGrant(context.Context, int64, int64, string) error { return nil }
 func (r entitlementGrantStub) ListRedemptionSummaries(context.Context, int) ([]RedemptionSummary, error) {
 	return nil, nil
