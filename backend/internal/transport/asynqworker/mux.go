@@ -69,6 +69,7 @@ type SessionCheckDeps struct {
 		GetByID(context.Context, int64) (*task.SparkTask, error)
 	}
 	Sends        send.Repository
+	Outbox       outbox.Outbox
 	Capabilities interface {
 		GetByAccountAndName(context.Context, int64, string) (*capability.Capability, error)
 	}

@@ -97,6 +97,7 @@ func main() {
 	mux := asynqworker.NewBrowserMux(outboxRepo, asynqworker.SessionCheckDeps{
 		Jobs: jobRepo, Accounts: accountRepo, Sessions: sessionSvc, Sidecar: sidecarClient,
 		Redis: rdb, Friends: friendRepo, Targets: friendRepo, Tasks: taskRepo, Sends: sendRepo,
+		Outbox:       outboxRepo,
 		Capabilities: postgres.NewCapabilityRepo(pool),
 		Health:       healthService,
 		Risk:         riskService,

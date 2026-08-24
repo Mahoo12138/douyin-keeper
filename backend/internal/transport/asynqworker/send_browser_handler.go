@@ -269,6 +269,16 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 					_ = deps.Accounts.SetRiskStatus(ctx, acct.ID, account.RiskCoolingDown, &cooldown)
 				}
 			}
+			if !tk.AllowFirstMessage && claimed.Attempt < send.MaxSendAttempts && deps.Outbox != nil &&
+				send.CanFallback(adapterConfig.adapter, capability.AdapterBrowserConsumer, code, failureEvidenceFromResponse(response)) {
+				available, availabilityErr := browserFallbackAvailable(ctx, deps, acct.ID, spec.Capability)
+				if availabilityErr != nil {
+					return failWithQuota(apperr.CodeInternal)
+				}
+				if available {
+					return finishSendFallback(ctx, deps, claimed, mapped, now, adapterConfig.adapter)
+				}
+			}
 			return failWithQuota(mapped)
 		}
 		var result sendMessageResult
@@ -308,6 +318,41 @@ func capabilitySendError(snapshot *capability.Capability) string {
 		}
 	}
 	return apperr.CodeAdapterUnavailable
+}
+
+func failureEvidenceFromResponse(response *sidecar.Response) send.FailureEvidence {
+	if response == nil || response.Error == nil {
+		return send.FailureEvidence{}
+	}
+	evidence := send.FailureEvidence{}
+	detail, ok := response.Error.Detail.(map[string]any)
+	if !ok {
+		return evidence
+	}
+	if outcome, ok := detail["outcome"].(string); ok {
+		evidence.Outcome = send.Outcome(outcome)
+	}
+	if accepted, ok := detail["platform_write_accepted"].(bool); ok {
+		evidence.PlatformWriteAccepted = &accepted
+	}
+	return evidence
+}
+
+func browserFallbackAvailable(ctx context.Context, deps SessionCheckDeps, accountID int64, capabilityName string) (bool, error) {
+	if deps.Capabilities == nil {
+		return false, nil
+	}
+	snapshot, err := deps.Capabilities.GetByAccountAndName(ctx, accountID, capabilityName)
+	if err != nil {
+		return false, err
+	}
+	if snapshot == nil || snapshot.Status != capability.StatusAvailable || snapshot.Adapter == nil || *snapshot.Adapter != capability.AdapterBrowserConsumer {
+		return false, nil
+	}
+	if deps.Health == nil {
+		return true, nil
+	}
+	return deps.Health.Allow(ctx, capability.AdapterBrowserConsumer)
 }
 
 func finishSend(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, jobStatus send.JobStatus, code string, retryable bool, messageID *string, intentStatus send.IntentStatus, now func() time.Time, adapter string) error {
@@ -430,6 +475,41 @@ func finishSendRetry(ctx context.Context, deps SessionCheckDeps, claimed *send.S
 	})
 	if err == nil {
 		observeSendMetric(deps.Metrics, adapter, string(send.IntentRetryWait))
+	}
+	return err
+}
+
+func finishSendFallback(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, code string,
+	now func() time.Time, adapter string) error {
+	if deps.Sends == nil || deps.Outbox == nil || deps.Tx == nil || claimed == nil || claimed.Attempt >= send.MaxSendAttempts {
+		return fmt.Errorf("send fallback: dependencies are not configured or attempt limit reached")
+	}
+	if now == nil {
+		now = time.Now
+	}
+	browser := capability.AdapterBrowserConsumer
+	err := deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
+		errorCode := code
+		if err := deps.Sends.FinishJob(tctx, claimed.ID, send.JobFailed, &errorCode, false, nil, now()); err != nil {
+			return err
+		}
+		job := &send.SendJob{
+			PublicID: uuid.New(), IntentID: claimed.IntentID, AccountID: claimed.AccountID, FriendID: claimed.FriendID,
+			Attempt: claimed.Attempt + 1, SelectedAdapter: &browser, Status: send.JobQueued, CreatedAt: now(),
+		}
+		if err := deps.Sends.CreateJob(tctx, job); err != nil {
+			return err
+		}
+		if err := deps.Sends.SetIntentLastJob(tctx, claimed.IntentID, job.ID); err != nil {
+			return err
+		}
+		if err := deps.Sends.SetIntentStatus(tctx, claimed.IntentID, send.IntentQueued, nil, nil, now()); err != nil {
+			return err
+		}
+		return deps.Outbox.Add(tctx, outboxMessageForSendAdapter(job.PublicID, browser, now()))
+	})
+	if err == nil {
+		observeSendMetric(deps.Metrics, adapter, string(send.IntentQueued))
 	}
 	return err
 }

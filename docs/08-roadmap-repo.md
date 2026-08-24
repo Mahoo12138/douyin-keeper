@@ -210,6 +210,8 @@ outcome 未知时保持 fail-closed；真实 Protocol SDK 和平台 selector 仍
 协议路由；真实平台首聊动作仍等待 Sidecar 契约与 selector 联调。
 Resolver 的 fallback 也会检查全局 Adapter health；Browser 被禁用或熔断时返回无 Adapter
 的不可用计划，首聊则继续保留 `protocol.im` 路由身份并 fail-closed。
+Protocol 发送在明确收到 `outcome=not_sent`（或 `platform_write_accepted=false`）且 Browser
+能力可用时，会在同一 Intent 下创建 Browser attempt 2；未知结果不会自动重发。
 
 多 Worker 扩展已补齐 Browser Semaphore 首个闭环：`worker-browser` 使用 Redis
 `semaphore:browser` 共享全局容量，配置 `WORKER_BROWSER_CONCURRENCY` 与

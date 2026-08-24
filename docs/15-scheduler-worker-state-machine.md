@@ -480,7 +480,10 @@ Sidecar failure 的 `error.detail` 必须携带明确的发送结果证据；`ou
 当前 worker registry 已由 `worker-light` 接收 `send.protocol` 并执行统一 preflight；
 但 `protocol.im` 仍要求有效的协议能力快照和真实 SDK，缺失时由显式 unavailable client
 直接失败；首聊计划不会误调用 Browser Sidecar，也不会由 stub handler ACK。协议适配器返回失败后，只有 `error.detail.outcome=not_sent`（或明确的
-`platform_write_accepted=false`）才可创建 attempt 2 browser。
+`platform_write_accepted=false`）才可创建 attempt 2 browser。当前实现会在同一事务中将
+Protocol attempt 标记失败、创建 `selected_adapter=browser.consumer` 的新 queued Job，并
+写入 `send.browser` outbox；未知结果、首聊任务、Browser capability 不可用或 Browser
+health 被禁用/熔断时均不创建 fallback。
 
 ## 13. Generic Job 状态机
 

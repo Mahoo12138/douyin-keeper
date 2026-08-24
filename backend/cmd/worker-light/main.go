@@ -61,6 +61,7 @@ func main() {
 	friendRepo := postgres.NewFriendRepo(pool)
 	taskRepo := postgres.NewTaskRepo(pool)
 	sendRepo := postgres.NewSendRepo(pool)
+	outboxRepo := postgres.NewOutboxRepo(pool)
 	notificationRepo := postgres.NewNotificationRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
 	healthService := capability.NewHealthService(capabilityRepo, capability.DefaultHealthPolicy()).WithMetrics(metrics)
@@ -98,6 +99,7 @@ func main() {
 	protocolDeps := &asynqworker.SessionCheckDeps{
 		Accounts: accountRepo, Sessions: sessionSvc, Sidecar: protocolClient, Redis: rdb,
 		Targets: friendRepo, Tasks: taskRepo, Sends: sendRepo, Capabilities: capabilityRepo,
+		Outbox: outboxRepo,
 		Health: healthService, Risk: riskService, Entitlement: entitlementSvc, Quota: entitlementSvc,
 		Tx: workerTx, WorkerID: protocolWorkerID, LockTTL: 2 * time.Minute, Metrics: metrics,
 	}
@@ -107,9 +109,9 @@ func main() {
 	}
 
 	srv := asynqqueue.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr}, asynqworker.ServerConfig("light"))
-	mux := asynqworker.NewLightMux(postgres.NewOutboxRepo(pool), asynqworker.LightMuxDeps{Metrics: metrics,
+	mux := asynqworker.NewLightMux(outboxRepo, asynqworker.LightMuxDeps{Metrics: metrics,
 		Dispatch: asynqworker.SendDispatchDeps{
-			Sends: postgres.NewSendRepo(pool), Outbox: postgres.NewOutboxRepo(pool), Tx: workerTx,
+			Sends: sendRepo, Outbox: outboxRepo, Tx: workerTx,
 			Tasks: postgres.NewTaskRepo(pool), Resolver: resolver,
 			Friends: postgres.NewFriendRepo(pool),
 		},
