@@ -35,6 +35,7 @@ import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminWorkersRouteImport } from './routes/admin/workers'
 import { Route as rootAccountsAccountIdRouteImport } from './routes/(root)/accounts/$accountId'
+import { Route as rootAccountsNewRouteImport } from './routes/(root)/accounts/new'
 import { Route as AdminUsersUserIdRouteImport } from './routes/admin/users/$userId'
 import { Route as AdminEntitlementBatchesBatchIdRouteImport } from './routes/admin/entitlement/batches/$batchId'
 
@@ -166,6 +167,11 @@ const rootAccountsAccountIdRoute = rootAccountsAccountIdRouteImport.update({
   path: '/$accountId',
   getParentRoute: () => rootAccountsRoute,
 } as any)
+const rootAccountsNewRoute = rootAccountsNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => rootAccountsRoute,
+} as any)
 const AdminUsersUserIdRoute = AdminUsersUserIdRouteImport.update({
   id: '/$userId',
   path: '/$userId',
@@ -203,6 +209,7 @@ export interface FileRoutesByFullPath {
   '/admin/workers': typeof AdminWorkersRoute
   '/admin/': typeof AdminIndexRoute
   '/accounts/$accountId': typeof rootAccountsAccountIdRoute
+  '/accounts/new': typeof rootAccountsNewRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/admin/entitlement/batches/$batchId': typeof AdminEntitlementBatchesBatchIdRoute
 }
@@ -230,6 +237,7 @@ export interface FileRoutesByTo {
   '/admin/workers': typeof AdminWorkersRoute
   '/admin': typeof AdminIndexRoute
   '/accounts/$accountId': typeof rootAccountsAccountIdRoute
+  '/accounts/new': typeof rootAccountsNewRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/admin/entitlement/batches/$batchId': typeof AdminEntitlementBatchesBatchIdRoute
 }
@@ -261,6 +269,7 @@ export interface FileRoutesById {
   '/admin/workers': typeof AdminWorkersRoute
   '/admin/': typeof AdminIndexRoute
   '/(root)/accounts/$accountId': typeof rootAccountsAccountIdRoute
+  '/(root)/accounts/new': typeof rootAccountsNewRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/admin/entitlement/batches/$batchId': typeof AdminEntitlementBatchesBatchIdRoute
 }
@@ -291,6 +300,7 @@ export interface FileRouteTypes {
     | '/admin/workers'
     | '/admin/'
     | '/accounts/$accountId'
+    | '/accounts/new'
     | '/admin/users/$userId'
     | '/admin/entitlement/batches/$batchId'
   fileRoutesByTo: FileRoutesByTo
@@ -318,6 +328,7 @@ export interface FileRouteTypes {
     | '/admin/workers'
     | '/admin'
     | '/accounts/$accountId'
+    | '/accounts/new'
     | '/admin/users/$userId'
     | '/admin/entitlement/batches/$batchId'
   id:
@@ -348,6 +359,7 @@ export interface FileRouteTypes {
     | '/admin/workers'
     | '/admin/'
     | '/(root)/accounts/$accountId'
+    | '/(root)/accounts/new'
     | '/admin/users/$userId'
     | '/admin/entitlement/batches/$batchId'
   fileRoutesById: FileRoutesById
@@ -543,6 +555,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof rootAccountsAccountIdRouteImport
       parentRoute: typeof rootAccountsRoute
     }
+    '/(root)/accounts/new': {
+      id: '/(root)/accounts/new'
+      path: '/new'
+      fullPath: '/accounts/new'
+      preLoaderRoute: typeof rootAccountsNewRouteImport
+      parentRoute: typeof rootAccountsRoute
+    }
     '/admin/users/$userId': {
       id: '/admin/users/$userId'
       path: '/$userId'
@@ -576,10 +595,12 @@ const authRouteRouteWithChildren = authRouteRoute._addFileChildren(
 
 interface rootAccountsRouteChildren {
   rootAccountsAccountIdRoute: typeof rootAccountsAccountIdRoute
+  rootAccountsNewRoute: typeof rootAccountsNewRoute
 }
 
 const rootAccountsRouteChildren: rootAccountsRouteChildren = {
   rootAccountsAccountIdRoute: rootAccountsAccountIdRoute,
+  rootAccountsNewRoute: rootAccountsNewRoute,
 }
 
 const rootAccountsRouteWithChildren = rootAccountsRoute._addFileChildren(

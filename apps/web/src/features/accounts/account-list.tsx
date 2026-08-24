@@ -93,13 +93,13 @@ function AccountRow({ account, selected, busyAction, onSelect, onSession, onFrie
   )
 }
 
-export function EmptyAccounts({ onBind }: { onBind: () => void }) {
+export function EmptyAccounts() {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center">
       <div className="flex size-11 items-center justify-center rounded-full bg-muted"><Smartphone className="size-5 text-muted-foreground" /></div>
       <div className="mt-3 font-medium">还没有抖音账号</div>
       <p className="mt-1 max-w-sm text-sm text-muted-foreground">绑定后可检查登录状态、同步好友并维护火花任务。</p>
-      <Button className="mt-4" variant="outline" onClick={onBind}>开始绑定</Button>
+      <Button asChild className="mt-4" variant="outline"><Link to="/accounts/new">开始绑定</Link></Button>
     </div>
   )
 }
