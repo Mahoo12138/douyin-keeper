@@ -99,16 +99,20 @@ func (r *OutboxRepo) FetchByPublicID(ctx context.Context, publicID string) (*Pen
 	return &m, nil
 }
 
-// MarkPublished records a successful relay (docs/15 §2.2).
-func (r *OutboxRepo) MarkPublished(ctx context.Context, id int64) error {
+// MarkPublished records a successful relay only while the caller still owns
+// the publishing lease. A stale publisher becomes a no-op after reconciliation
+// hands the row to another publisher.
+func (r *OutboxRepo) MarkPublished(ctx context.Context, id int64, lockedBy string) error {
 	_, err := r.pool.Exec(ctx, `
 		UPDATE queue_outbox SET status='published', published_at=now(), locked_by=NULL, locked_until=NULL
-		WHERE id=$1`, id)
+		WHERE id=$1 AND status='publishing' AND locked_by=$2`, id, lockedBy)
 	return err
 }
 
-// MarkFailed records a relay failure with backoff. On expiry the row goes dead.
-func (r *OutboxRepo) MarkFailed(ctx context.Context, id int64, attempts int, nextAttemptAt time.Time, errCode string) error {
+// MarkFailed records a relay failure with backoff only for the current lease
+// owner. On expiry the row goes dead; a stale publisher cannot rewind a newer
+// claim or a published row.
+func (r *OutboxRepo) MarkFailed(ctx context.Context, id int64, attempts int, nextAttemptAt time.Time, errCode, lockedBy string) error {
 	_, err := r.pool.Exec(ctx, `
 		UPDATE queue_outbox SET
 			status = CASE WHEN $2 > $3 THEN 'dead' ELSE 'pending' END,
@@ -117,8 +121,8 @@ func (r *OutboxRepo) MarkFailed(ctx context.Context, id int64, attempts int, nex
 			last_error_code = $5,
 			locked_by = NULL,
 			locked_until = NULL
-		WHERE id = $1
-	`, id, attempts, MaxOutboxAttempts, nextAttemptAt, errCode)
+		WHERE id = $1 AND status='publishing' AND locked_by=$6
+	`, id, attempts, MaxOutboxAttempts, nextAttemptAt, errCode, lockedBy)
 	return err
 }
 

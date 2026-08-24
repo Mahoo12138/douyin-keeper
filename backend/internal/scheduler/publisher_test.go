@@ -15,6 +15,7 @@ import (
 
 type publisherOutboxStub struct {
 	published      []int64
+	publishedBy    []string
 	failed         []publisherFailure
 	claimErr       error
 	markPublishErr error
@@ -24,19 +25,21 @@ type publisherFailure struct {
 	id       int64
 	attempts int
 	errCode  string
+	lockedBy string
 }
 
 func (s *publisherOutboxStub) ClaimPending(context.Context, int, string, time.Duration) ([]postgres.PendingMessage, error) {
 	return nil, s.claimErr
 }
 
-func (s *publisherOutboxStub) MarkPublished(_ context.Context, id int64) error {
+func (s *publisherOutboxStub) MarkPublished(_ context.Context, id int64, lockedBy string) error {
 	s.published = append(s.published, id)
+	s.publishedBy = append(s.publishedBy, lockedBy)
 	return s.markPublishErr
 }
 
-func (s *publisherOutboxStub) MarkFailed(_ context.Context, id int64, attempts int, _ time.Time, errCode string) error {
-	s.failed = append(s.failed, publisherFailure{id: id, attempts: attempts, errCode: errCode})
+func (s *publisherOutboxStub) MarkFailed(_ context.Context, id int64, attempts int, _ time.Time, errCode, lockedBy string) error {
+	s.failed = append(s.failed, publisherFailure{id: id, attempts: attempts, errCode: errCode, lockedBy: lockedBy})
 	return nil
 }
 
@@ -53,7 +56,7 @@ func (s *publisherProducerStub) Enqueue(_ context.Context, message asynqqueue.Me
 func TestPublisherRelayTreatsTaskIDConflictAsPublished(t *testing.T) {
 	outbox := &publisherOutboxStub{}
 	producer := &publisherProducerStub{err: fmt.Errorf("wrapped: %w", asynq.ErrTaskIDConflict)}
-	publisher := &Publisher{outbox: outbox, producer: producer}
+	publisher := &Publisher{outbox: outbox, producer: producer, instanceID: "scheduler-test"}
 
 	err := publisher.relay(context.Background(), postgres.PendingMessage{
 		ID:          42,
@@ -68,6 +71,9 @@ func TestPublisherRelayTreatsTaskIDConflictAsPublished(t *testing.T) {
 	if len(outbox.published) != 1 || outbox.published[0] != 42 {
 		t.Fatalf("published calls = %#v, want [42]", outbox.published)
 	}
+	if len(outbox.publishedBy) != 1 || outbox.publishedBy[0] != "scheduler-test" {
+		t.Fatalf("published owners = %#v, want [scheduler-test]", outbox.publishedBy)
+	}
 	if len(outbox.failed) != 0 {
 		t.Fatalf("failed calls = %#v, want none", outbox.failed)
 	}
@@ -76,7 +82,7 @@ func TestPublisherRelayTreatsTaskIDConflictAsPublished(t *testing.T) {
 func TestPublisherRelayBacksOffTransientEnqueueFailure(t *testing.T) {
 	outbox := &publisherOutboxStub{}
 	producer := &publisherProducerStub{err: errors.New("redis unavailable")}
-	publisher := &Publisher{outbox: outbox, producer: producer}
+	publisher := &Publisher{outbox: outbox, producer: producer, instanceID: "scheduler-test"}
 
 	err := publisher.relay(context.Background(), postgres.PendingMessage{
 		ID:       7,
@@ -90,7 +96,7 @@ func TestPublisherRelayBacksOffTransientEnqueueFailure(t *testing.T) {
 	if len(outbox.published) != 0 {
 		t.Fatalf("published calls = %#v, want none", outbox.published)
 	}
-	if len(outbox.failed) != 1 || outbox.failed[0].attempts != 3 || outbox.failed[0].errCode != "enqueue_failed" {
+	if len(outbox.failed) != 1 || outbox.failed[0].attempts != 3 || outbox.failed[0].errCode != "enqueue_failed" || outbox.failed[0].lockedBy != "scheduler-test" {
 		t.Fatalf("failed calls = %#v, want attempt 3 enqueue_failed", outbox.failed)
 	}
 }

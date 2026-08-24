@@ -128,6 +128,10 @@ Task ID 冲突，表示相同 Outbox 消息已由此前的投递写入队列（�
 回写 `published` 前进程崩溃）；该结果按成功处理并回写 `published`，不得增加
 attempts 或进入失败退避。
 
+`published` / 失败退避的回写必须带上本次 claim 的 `locked_by`，并只允许更新仍处于
+`publishing` 且锁所有者匹配的记录。这样锁过期并被 Reconciler 重新分配后，旧 Publisher
+的迟到成功或失败都不会覆盖新 Publisher 的状态。
+
 Asynq Task 本身仍可设置 Unique/Dedupe，作为第二道保险，但业务正确性不依赖它。
 
 ## 3. Scheduler Tick

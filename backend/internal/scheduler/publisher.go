@@ -32,8 +32,8 @@ type Publisher struct {
 
 type publisherOutbox interface {
 	ClaimPending(context.Context, int, string, time.Duration) ([]postgres.PendingMessage, error)
-	MarkPublished(context.Context, int64) error
-	MarkFailed(context.Context, int64, int, time.Time, string) error
+	MarkPublished(context.Context, int64, string) error
+	MarkFailed(context.Context, int64, int, time.Time, string, string) error
 }
 
 type publisherProducer interface {
@@ -100,13 +100,13 @@ func (p *Publisher) relay(ctx context.Context, m postgres.PendingMessage) error 
 		// already present, a previous relay succeeded but likely crashed before
 		// recording the outbox state. Treat the conflict as idempotent success.
 		if errors.Is(err, asynq.ErrTaskIDConflict) {
-			return p.outbox.MarkPublished(ctx, m.ID)
+			return p.outbox.MarkPublished(ctx, m.ID, p.instanceID)
 		}
 		// Backoff + dead-letter after MaxOutboxAttempts (docs/15 §2.2).
 		attempts := m.Attempts + 1
 		backoff := time.Duration(1<<min(attempts-1, 5)) * time.Second
-		_ = p.outbox.MarkFailed(ctx, m.ID, attempts, time.Now().Add(backoff), "enqueue_failed")
+		_ = p.outbox.MarkFailed(ctx, m.ID, attempts, time.Now().Add(backoff), "enqueue_failed", p.instanceID)
 		return fmt.Errorf("relay %s: %w", m.Kind, err)
 	}
-	return p.outbox.MarkPublished(ctx, m.ID)
+	return p.outbox.MarkPublished(ctx, m.ID, p.instanceID)
 }

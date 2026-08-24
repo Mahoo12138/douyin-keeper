@@ -32,7 +32,7 @@ func TestOutboxClaimPublishRoundTrip(t *testing.T) {
 	if len(pending) != 1 || pending[0].Kind != outbox.KindSendDispatch {
 		t.Fatalf("expected exactly one pending message, got %d", len(pending))
 	}
-	if err := repo.MarkPublished(ctx, pending[0].ID); err != nil {
+	if err := repo.MarkPublished(ctx, pending[0].ID, "tester"); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
 	// A second claim must not re-claim the published row.
