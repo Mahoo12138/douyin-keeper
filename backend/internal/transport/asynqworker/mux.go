@@ -96,7 +96,16 @@ type SendDispatchDeps struct {
 	Sends  send.Repository
 	Outbox outbox.Outbox
 	Tx     job.TxManager
-	Now    func() time.Time
+	Tasks  interface {
+		GetByID(context.Context, int64) (*task.SparkTask, error)
+	}
+	Friends interface {
+		HasConversation(context.Context, int64, int64) (bool, error)
+	}
+	Resolver interface {
+		Resolve(context.Context, int64, capability.ResolveRequest) (capability.Route, error)
+	}
+	Now func() time.Time
 }
 
 type CapabilityProbeDeps struct {

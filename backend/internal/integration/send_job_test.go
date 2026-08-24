@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/friend"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/send"
@@ -63,7 +64,9 @@ func TestSendJobClaimAndFinishPreserveTargetState(t *testing.T) {
 	if err := sends.CreateIntent(ctx, in); err != nil {
 		t.Fatal(err)
 	}
-	j := &send.SendJob{PublicID: uuid.New(), IntentID: in.ID, AccountID: acct.ID, FriendID: list[0].ID, Attempt: 1, Status: send.JobQueued, CreatedAt: when}
+	adapter := capability.AdapterBrowserConsumer
+	j := &send.SendJob{PublicID: uuid.New(), IntentID: in.ID, AccountID: acct.ID, FriendID: list[0].ID, Attempt: 1,
+		SelectedAdapter: &adapter, Status: send.JobQueued, CreatedAt: when}
 	if err := sends.CreateJob(ctx, j); err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +87,8 @@ func TestSendJobClaimAndFinishPreserveTargetState(t *testing.T) {
 		t.Fatal(err)
 	}
 	finished, err := sends.GetJobByPublicID(ctx, j.PublicID)
-	if err != nil || finished.Status != send.JobSucceeded || finished.PlatformMessageID == nil || *finished.PlatformMessageID != messageID {
+	if err != nil || finished.Status != send.JobSucceeded || finished.PlatformMessageID == nil || *finished.PlatformMessageID != messageID ||
+		finished.SelectedAdapter == nil || *finished.SelectedAdapter != adapter {
 		t.Fatalf("finished job mismatch: err=%v job=%+v", err, finished)
 	}
 	intent, err := sends.GetIntentByPublicID(ctx, in.PublicID)

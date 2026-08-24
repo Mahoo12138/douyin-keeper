@@ -156,10 +156,16 @@ func scanSendJob(row rowScanner) (*send.SendJob, error) {
 
 func (r *SendRepo) CreateJob(ctx context.Context, j *send.SendJob) error {
 	return From(ctx, r.pool).QueryRow(ctx, `
-		INSERT INTO send_jobs (public_id, intent_id, account_id, friend_id, attempt, status, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
+		INSERT INTO send_jobs (public_id, intent_id, account_id, friend_id, attempt, selected_adapter, status, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
 		RETURNING id
-	`, j.PublicID, j.IntentID, j.AccountID, j.FriendID, j.Attempt, j.Status, j.CreatedAt).Scan(&j.ID)
+	`, j.PublicID, j.IntentID, j.AccountID, j.FriendID, j.Attempt, j.SelectedAdapter, j.Status, j.CreatedAt).Scan(&j.ID)
+}
+
+func (r *SendRepo) SetSelectedAdapter(ctx context.Context, jobID int64, adapter string) error {
+	_, err := From(ctx, r.pool).Exec(ctx,
+		`UPDATE send_jobs SET selected_adapter=$2 WHERE id=$1 AND status='queued'`, jobID, adapter)
+	return err
 }
 
 func (r *SendRepo) GetJobOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*send.SendJob, error) {

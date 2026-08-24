@@ -106,6 +106,16 @@ func (r *FriendRepo) GetSendTarget(ctx context.Context, accountID, friendID int6
 	return &target, nil
 }
 
+func (r *FriendRepo) HasConversation(ctx context.Context, accountID, friendID int64) (bool, error) {
+	var exists bool
+	err := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM conversations
+			WHERE account_id=$1 AND friend_id=$2
+		)`, accountID, friendID).Scan(&exists)
+	return exists, err
+}
+
 func (r *FriendRepo) MarkLastSent(ctx context.Context, friendID int64, at time.Time) error {
 	_, err := From(ctx, r.pool).Exec(ctx, `
 		UPDATE friends SET last_sent_at=$2, updated_at=$2 WHERE id=$1 AND deleted_at IS NULL`, friendID, at)

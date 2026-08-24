@@ -258,6 +258,12 @@ internal/transport/httpapi/entitlement_handler.go
 后清零失败计数。Scheduler 每 10 分钟扫描过期 snapshot，通过 outbox 投递新的
 `capability.probe`。`disabled` 状态只允许管理策略显式恢复。
 
+发送 dispatch 已接入 Resolver：按消息类型、会话存在性和
+`allow_first_message` 生成候选路由，并把实际可执行 Adapter 写入
+`send_jobs.selected_adapter`；当前部署只注册 `browser.consumer`，因此不会把
+尚未实现的 `protocol.im` 路由到 stub worker。Resolver 的健康/能力判断只是计划
+路由，Browser Worker 的 preflight 仍是最后一道门。
+
 ### `risk`
 
 拥有：
@@ -654,6 +660,10 @@ Session plaintext/ciphertext
 - state transition；
 - retry classifier；
 - adapter resolver。
+
+Adapter fallback 只接受适配器明确提供的 `outcome=not_sent`（或等价的
+`platform_write_accepted=false`）证据；超时、进程读写失败和 lease 过期都属于
+未知结果，不允许创建下一次发送。
 
 ### Repository Integration
 

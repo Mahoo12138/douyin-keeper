@@ -429,6 +429,11 @@ NETWORK_ERROR
 
 Sidecar 决定 `retryable`，Go 再结合业务规则决定是否真的重试。
 
+涉及 Adapter fallback 的错误必须在 `error.detail` 中提供明确结果证据：
+`{"outcome":"not_sent"}` 或等价的 `{"platform_write_accepted":false}`。
+缺少证据、`outcome=unknown` 或任何超时/读写中断都表示平台结果未知，Go
+不得回落到另一个 Adapter 重发。
+
 ## 12. Capability 映射
 
 Sidecar operation 与领域 capability 分离：

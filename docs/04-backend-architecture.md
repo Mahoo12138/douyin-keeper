@@ -236,6 +236,10 @@ first message
   creator capability only
 ```
 
+Resolver 只会把路由交给已注册的可执行 Adapter；当前部署注册的是
+`browser.consumer`，`protocol.im` 仍处于实验/未接线状态。Adapter fallback
+还必须收到明确的 `not_sent` 证据，结果未知时保持 fail-closed。
+
 ## 7. 部署
 
 生产环境使用一个 Docker Compose 项目统一部署：

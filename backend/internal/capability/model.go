@@ -15,10 +15,13 @@ const (
 	NameSessionValidate     = "session.validate"
 	NameFriendsSync         = "friends.sync"
 	NameMessageTextExisting = "message.send.text.existing"
+	NameMessageTextFirst    = "message.send.text.first"
+	NameMessageSticker      = "message.send.sticker.existing"
 )
 
 const (
 	AdapterBrowserConsumer = "browser.consumer"
+	AdapterProtocolIM      = "protocol.im"
 )
 
 const (
@@ -35,7 +38,8 @@ const (
 	StatusUnknown     = "unknown"
 )
 
-var KnownNames = []string{NameLoginQR, NameSessionValidate, NameFriendsSync, NameMessageTextExisting}
+var KnownNames = []string{NameLoginQR, NameSessionValidate, NameFriendsSync, NameMessageTextExisting,
+	NameMessageTextFirst, NameMessageSticker}
 
 type Capability struct {
 	AccountID int64
@@ -44,6 +48,126 @@ type Capability struct {
 	Adapter   *string
 	ErrorCode *string
 	CheckedAt time.Time
+}
+
+// ResolveRequest describes the platform message shape without exposing task
+// or friend persistence to the resolver.
+type ResolveRequest struct {
+	MessageKind       string
+	HasConversation   bool
+	AllowFirstMessage bool
+}
+
+// Route is a planning result. Available is deliberately separate from
+// Adapter: dispatch may persist the safest executable route even when the
+// account snapshot is stale or unavailable; the worker remains the final
+// capability gate before touching the platform.
+type Route struct {
+	Adapter    string
+	Capability string
+	Available  bool
+	Reason     string
+}
+
+type routeCandidate struct {
+	adapter    string
+	capability string
+}
+
+// Resolver selects an adapter using account snapshots, global adapter health,
+// and an explicit executable-adapter allowlist. The allowlist prevents a
+// protocol snapshot from routing work to an adapter whose worker is still a
+// stub in the current deployment.
+type Resolver struct {
+	snapshots  Repository
+	health     HealthObserver
+	executable map[string]struct{}
+}
+
+func NewResolver(snapshots Repository, health HealthObserver, executable ...string) *Resolver {
+	allowed := make(map[string]struct{}, len(executable))
+	for _, adapter := range executable {
+		if adapter != "" {
+			allowed[adapter] = struct{}{}
+		}
+	}
+	return &Resolver{snapshots: snapshots, health: health, executable: allowed}
+}
+
+func (r *Resolver) Resolve(ctx context.Context, accountID int64, req ResolveRequest) (Route, error) {
+	candidates, fallback, err := routeCandidates(req)
+	if err != nil {
+		return Route{}, err
+	}
+	if r == nil || r.snapshots == nil {
+		return fallback, nil
+	}
+	snapshots, err := r.snapshots.ListByAccount(ctx, accountID)
+	if err != nil {
+		return Route{}, fmt.Errorf("capability resolver: list snapshots: %w", err)
+	}
+	byCapability := make(map[string]Capability, len(snapshots))
+	for _, snapshot := range snapshots {
+		byCapability[snapshot.Name] = snapshot
+	}
+	for _, candidate := range candidates {
+		if !r.isExecutable(candidate.adapter) {
+			continue
+		}
+		snapshot, ok := byCapability[candidate.capability]
+		if !ok || snapshot.Status != StatusAvailable || snapshot.Adapter == nil || *snapshot.Adapter != candidate.adapter {
+			continue
+		}
+		if r.health != nil {
+			allowed, err := r.health.Allow(ctx, candidate.adapter)
+			if err != nil {
+				return Route{}, fmt.Errorf("capability resolver: adapter health %s: %w", candidate.adapter, err)
+			}
+			if !allowed {
+				continue
+			}
+		}
+		return Route{Adapter: candidate.adapter, Capability: candidate.capability, Available: true}, nil
+	}
+	if !r.isExecutable(fallback.Adapter) {
+		fallback.Adapter = ""
+		fallback.Reason = "no_executable_adapter"
+	}
+	return fallback, nil
+}
+
+func (r *Resolver) isExecutable(adapter string) bool {
+	if len(r.executable) == 0 {
+		return true
+	}
+	_, ok := r.executable[adapter]
+	return ok
+}
+
+func routeCandidates(req ResolveRequest) ([]routeCandidate, Route, error) {
+	switch req.MessageKind {
+	case "text":
+		if req.HasConversation {
+			return []routeCandidate{
+				{adapter: AdapterProtocolIM, capability: NameMessageTextExisting},
+				{adapter: AdapterBrowserConsumer, capability: NameMessageTextExisting},
+			}, Route{Adapter: AdapterBrowserConsumer, Capability: NameMessageTextExisting, Reason: "capability_unavailable"}, nil
+		}
+		if req.AllowFirstMessage {
+			return []routeCandidate{
+				{adapter: AdapterProtocolIM, capability: NameMessageTextFirst},
+			}, Route{Adapter: AdapterProtocolIM, Capability: NameMessageTextFirst, Reason: "first_message_adapter_unavailable"}, nil
+		}
+		return nil, Route{Capability: NameMessageTextExisting, Reason: "conversation_required"}, nil
+	case "sticker":
+		if !req.HasConversation {
+			return nil, Route{Capability: NameMessageSticker, Reason: "conversation_required"}, nil
+		}
+		return []routeCandidate{{adapter: AdapterBrowserConsumer, capability: NameMessageSticker}},
+			Route{Adapter: AdapterBrowserConsumer, Capability: NameMessageSticker, Reason: "capability_unavailable"}, nil
+	default:
+		return nil, Route{}, fmt.Errorf("capability resolver: unsupported message kind %q", req.MessageKind)
+	}
 }
 
 type Repository interface {

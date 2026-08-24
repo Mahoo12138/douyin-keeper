@@ -465,6 +465,11 @@ attempt 2 browser queued
 
 如果结果未知，不允许 fallback 重发。
 
+当前 worker registry 只启用 `browser.consumer`；`protocol.im` 尚未有可执行
+worker，因此 Resolver 即使看到协议快照也不会投递 `send.protocol`。协议适配器
+接线后，只有 `error.detail.outcome=not_sent`（或明确的
+`platform_write_accepted=false`）才可创建 attempt 2 browser。
+
 ## 13. Generic Job 状态机
 
 QR Login/Friends Sync/Session Check 使用 `jobs`。

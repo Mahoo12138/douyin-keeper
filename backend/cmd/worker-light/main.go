@@ -44,6 +44,7 @@ func main() {
 	capabilityRepo := postgres.NewCapabilityRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
 	healthService := capability.NewHealthService(capabilityRepo, capability.DefaultHealthPolicy())
+	resolver := capability.NewResolver(capabilityRepo, healthService, capability.AdapterBrowserConsumer)
 	sidecarScript := cfg.PlaywrightSidecarScript
 	if _, statErr := os.Stat(sidecarScript); os.IsNotExist(statErr) {
 		candidate := filepath.Join("..", sidecarScript)
@@ -58,6 +59,8 @@ func main() {
 	mux := asynqworker.NewLightMux(postgres.NewOutboxRepo(pool), asynqworker.LightMuxDeps{
 		Dispatch: asynqworker.SendDispatchDeps{
 			Sends: postgres.NewSendRepo(pool), Outbox: postgres.NewOutboxRepo(pool), Tx: workerTx,
+			Tasks: postgres.NewTaskRepo(pool), Resolver: resolver,
+			Friends: postgres.NewFriendRepo(pool),
 		},
 		Probe: asynqworker.CapabilityProbeDeps{
 			Snapshots: capabilityRepo, Sidecar: sidecarClient, Tx: workerTx,
