@@ -224,7 +224,7 @@ cursor 分页和“加载更多模板”；任务编辑抽屉也可继续加载�
 
 `scheduled → started → adapter_selected → sent/failed`
 
-当前实现使用 `GET /send-intents` 列表与 `GET /send-jobs/:id` 诊断信息；列表优先展示任务摘要，已删除任务回退到任务 ID。时间线由已持久化的 scheduled、started、adapter 和 finished 字段还原，平台消息 ID 不在用户界面展示。记录列表默认按 `id DESC` 加载 50 条，使用统一 cursor 和“加载更多记录”读取后续结果；账号、好友、状态和日期筛选会随分页请求保持不变。
+当前实现使用 `GET /send-intents` 列表与 `GET /send-jobs/:id` 诊断信息；列表优先展示任务摘要，已删除任务回退到任务 ID。时间线由已持久化的 scheduled、started、adapter 和 finished 字段还原，平台消息 ID 不在用户界面展示。记录列表默认按 `id DESC` 加载 50 条，使用统一 cursor 和“加载更多记录”读取后续结果；账号、好友、状态和日期筛选会随分页请求保持不变。好友筛选选项独立从当前用户账号的好友索引按 cursor 读取，不受首屏 50 条发送记录限制；切换账号筛选时会重置好友筛选。
 
 ### 1.9 通知 `/notifications`
 

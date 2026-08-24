@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQueries } from '@tanstack/react-query'
 import { CalendarDays, ChevronRight, Filter, Search, X } from 'lucide-react'
 import { listSendIntents, type components } from '@douyin-keeper/sdk-ts'
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@douyin-keeper/ui-web'
 
 import { getToken } from '@/auth/session'
 import { HistoryDetailDrawer } from './history-detail-drawer'
+import { friendOptionsFromFriends, listAllFriendsForAccount } from './history-utils'
 import { useAccountsQuery } from '../accounts/use-accounts-query'
 
 type HistoryItem = components['schemas']['SendIntent']
@@ -45,6 +46,14 @@ export function HistoryPage() {
   const invalidDateRange = !!fromDate && !!toDate && fromDate > toDate
 
   const accountsQ = useAccountsQuery(token, { loadAll: true })
+  const friendAccounts = accountFilter === 'all' ? accountsQ.accounts : accountsQ.accounts.filter((account) => account.id === accountFilter)
+  const friendQueries = useQueries({
+    queries: friendAccounts.map((account) => ({
+      queryKey: ['history-friend-options', account.id],
+      queryFn: () => listAllFriendsForAccount(token as string, account.id),
+      enabled: !!token,
+    })),
+  })
   const filters = useMemo(() => ({
     account_id: accountFilter === 'all' ? undefined : accountFilter,
     friend_id: friendFilter === 'all' ? undefined : friendFilter,
@@ -61,11 +70,8 @@ export function HistoryPage() {
   })
 
   const items = historyQ.data?.pages.flatMap((page) => page.items) ?? []
-  const friendOptions = useMemo(() => {
-    const friends = new Map<string, string>()
-    items.forEach((item) => friends.set(item.friend.id, item.friend.display_name))
-    return [...friends.entries()].sort((a, b) => a[1].localeCompare(b[1], 'zh-CN'))
-  }, [items])
+  const friendOptions = friendOptionsFromFriends(friendQueries.flatMap((query) => query.data ?? []))
+  const friendOptionsLoading = friendQueries.some((query) => query.isPending)
   const visibleItems = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('zh-CN')
     if (!query) return items
@@ -89,6 +95,11 @@ export function HistoryPage() {
     setStatusFilter('all')
     setFromDate('')
     setToDate('')
+  }
+
+  function changeAccountFilter(value: string) {
+    setAccountFilter(value)
+    setFriendFilter('all')
   }
 
   if (accountsQ.isLoading || historyQ.isLoading) return <HistoryLoading />
@@ -118,7 +129,7 @@ export function HistoryPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <HistoryFilters search={search} onSearch={setSearch} account={accountFilter} onAccount={setAccountFilter} friend={friendFilter} onFriend={setFriendFilter} status={statusFilter} onStatus={setStatusFilter} fromDate={fromDate} onFromDate={setFromDate} toDate={toDate} onToDate={setToDate} accounts={accountsQ.accounts} friends={friendOptions} />
+          <HistoryFilters search={search} onSearch={setSearch} account={accountFilter} onAccount={changeAccountFilter} friend={friendFilter} onFriend={setFriendFilter} status={statusFilter} onStatus={setStatusFilter} fromDate={fromDate} onFromDate={setFromDate} toDate={toDate} onToDate={setToDate} accounts={accountsQ.accounts} friends={friendOptions} friendsLoading={friendOptionsLoading} />
           {invalidDateRange ? (
             <div className="rounded-lg border border-amber-300 bg-amber-50/60 px-4 py-10 text-center dark:border-amber-900 dark:bg-amber-950/20"><p className="font-medium">日期范围无效</p><p className="mt-1 text-sm text-muted-foreground">结束日期需要晚于或等于开始日期。</p></div>
           ) : historyQ.isError ? (
@@ -139,7 +150,7 @@ export function HistoryPage() {
   )
 }
 
-function HistoryFilters({ search, onSearch, account, onAccount, friend, onFriend, status, onStatus, fromDate, onFromDate, toDate, onToDate, accounts, friends }: {
+function HistoryFilters({ search, onSearch, account, onAccount, friend, onFriend, status, onStatus, fromDate, onFromDate, toDate, onToDate, accounts, friends, friendsLoading }: {
   search: string
   onSearch: (value: string) => void
   account: string
@@ -154,19 +165,20 @@ function HistoryFilters({ search, onSearch, account, onAccount, friend, onFriend
   onToDate: (value: string) => void
   accounts: { id: string; nickname?: string | null }[]
   friends: [string, string][]
+  friendsLoading: boolean
 }) {
   return <div className="grid gap-3 border-b pb-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.4fr)_repeat(2,minmax(140px,1fr))_repeat(2,minmax(135px,1fr))]">
     <div className="space-y-1.5"><Label htmlFor="history-search">搜索记录</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="history-search" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="账号、好友、通道或错误码" className="pl-9" /></div></div>
     <HistorySelect id="history-account" label="账号" value={account} onChange={onAccount} options={[{ value: 'all', label: '全部账号' }, ...accounts.map((item) => ({ value: item.id, label: item.nickname || '未命名账号' }))]} />
-    <HistorySelect id="history-friend" label="好友" value={friend} onChange={onFriend} options={[{ value: 'all', label: '全部好友' }, ...friends.map(([value, label]) => ({ value, label }))]} />
+    <HistorySelect id="history-friend" label="好友" value={friend} disabled={friendsLoading} onChange={onFriend} options={friendsLoading ? [{ value: 'all', label: '加载好友中…' }] : [{ value: 'all', label: '全部好友' }, ...friends.map(([value, label]) => ({ value, label }))]} />
     <HistorySelect id="history-status" label="状态" value={status} onChange={(value) => onStatus(value as HistoryStatus | 'all')} options={statusOptions} />
     <div className="space-y-1.5"><Label htmlFor="history-from">开始日期</Label><Input id="history-from" type="date" value={fromDate} onChange={(event) => onFromDate(event.target.value)} /></div>
     <div className="space-y-1.5"><Label htmlFor="history-to">结束日期</Label><Input id="history-to" type="date" value={toDate} onChange={(event) => onToDate(event.target.value)} /></div>
   </div>
 }
 
-function HistorySelect({ id, label, value, onChange, options }: { id: string; label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
-  return <div className="space-y-1.5"><Label htmlFor={id}>{label}</Label><select id={id} value={value} onChange={(event) => onChange(event.target.value)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+function HistorySelect({ id, label, value, onChange, options, disabled }: { id: string; label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; disabled?: boolean }) {
+  return <div className="space-y-1.5"><Label htmlFor={id}>{label}</Label><select id={id} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
 }
 
 function HistoryTable({ items, onSelect }: { items: HistoryItem[]; onSelect: (item: HistoryItem) => void }) {
