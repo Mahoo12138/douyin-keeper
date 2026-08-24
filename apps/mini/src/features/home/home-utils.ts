@@ -1,3 +1,14 @@
+export type AccountOption = { id: string }
+
+export function selectAccountId(accounts: readonly AccountOption[], preferredId = '') {
+  if (preferredId && accounts.some((account) => account.id === preferredId)) return preferredId
+  return accounts[0]?.id ?? ''
+}
+
+export function nextEnabledTask<T extends { account_id: string; enabled: boolean }>(tasks: readonly T[], accountId: string) {
+  return tasks.find((task) => task.account_id === accountId && task.enabled)
+}
+
 export function createIdempotencyKey() {
   const segment = () => Math.floor(Math.random() * 0x100000000).toString(16).padStart(8, '0')
   const first = segment()

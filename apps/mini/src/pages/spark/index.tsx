@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, Input, Switch, Text, Textarea, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 
 import { getAccessToken } from '@/lib/session'
 import { listAccounts, listFriends, listTasks, MiniApiError, updateFriend, updateTask } from '@/lib/api'
+import { AccountTabs } from '@/components/account-tabs'
 import { enabledTaskCount, replaceFriend, replaceTask, taskDraftError, taskForFriend, taskTimeInput, taskTimePayload } from '@/features/spark/spark-utils'
 
 type SparkData = {
@@ -144,14 +145,6 @@ export default function Spark() {
   const visibleTasks = data.tasks.filter((task) => task.account_id === selectedAccountId)
 
   return <View className="mini-page"><View className="mini-hero card"><Text className="eyebrow">M4 · 好友与火花</Text><Text className="title mini-hero-title">维护好友火花</Text><Text className="muted">按账号查看好友状态，分别控制火花维护和每日任务。</Text></View><AccountTabs accounts={data.accounts} selectedId={selectedAccountId} onSelect={(id) => void chooseAccount(id)} /><View className="section-title"><Text>{selectedAccount?.nickname || '当前账号'}</Text><Text className="muted">{data.friends.length} 位好友 · {enabledTaskCount(visibleTasks)} 个任务启用</Text></View>{error && <View className="card error-card"><Text>{error}</Text></View>}{data.friends.length === 0 ? <View className="card empty-card"><Text className="card-title">还没有好友</Text><Text className="muted">请先在 PC 端同步好友，再回来管理火花。</Text></View> : <View>{data.friends.map((friend) => { const task = taskForFriend(visibleTasks, friend.id); return <FriendCard key={friend.id} friend={friend} task={task} busyKey={busyKey} editingTaskId={editingTaskId} taskDraft={taskDraft} onFriendToggle={(enabled) => void toggleFriend(friend.id, enabled)} onTaskToggle={task ? (enabled) => void toggleTask(task.id, enabled) : undefined} onEditTask={task ? () => openTaskEditor(task) : undefined} onDraftChange={setTaskDraft} onSaveTask={task ? () => void saveTask(task) : undefined} onCancelTask={closeTaskEditor} /> })}</View>}</View>
-}
-
-function AccountTabs({ accounts, selectedId, onSelect }: { accounts: SparkData['accounts']; selectedId: string; onSelect: (id: string) => void }) {
-  return <ScrollViewTabs>{accounts.map((account) => <Button key={account.id} className={`account-tab ${account.id === selectedId ? 'account-tab-active' : ''}`} onClick={() => onSelect(account.id)}>{account.nickname || '未命名账号'}</Button>)}</ScrollViewTabs>
-}
-
-function ScrollViewTabs({ children }: { children: ReactNode }) {
-  return <View className="account-tabs">{children}</View>
 }
 
 function FriendCard({ friend, task, busyKey, editingTaskId, taskDraft, onFriendToggle, onTaskToggle, onEditTask, onDraftChange, onSaveTask, onCancelTask }: { friend: SparkData['friends'][number]; task?: SparkData['tasks'][number]; busyKey: string; editingTaskId: string; taskDraft: TaskDraft | null; onFriendToggle: (enabled: boolean) => void; onTaskToggle?: (enabled: boolean) => void; onEditTask?: () => void; onDraftChange: (draft: TaskDraft | null) => void; onSaveTask?: () => void; onCancelTask: () => void }) {
