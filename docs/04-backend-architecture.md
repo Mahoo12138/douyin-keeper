@@ -167,6 +167,7 @@ Scheduler Tick、Retry Scan、Lease Reaper 独立为 `scheduler` 进程，不占
 `send.protocol` 已接入 `worker-light` 的真实发送 preflight：它与 Browser Send 共享账号锁、
 Session 临时文件、Capability/Adapter Health、Entitlement 和 fail-closed 结果校验；真实
 Protocol SDK 未部署或能力快照不可用时，任务以稳定错误结束，不会被 stub handler 直接 ACK。
+Worker 对未配置或误投递的 outbox kind 也返回错误并保留队列重试/告警路径，不静默 ACK。
 
 ## 4. Account Lock
 

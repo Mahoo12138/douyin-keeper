@@ -40,3 +40,11 @@ func TestInstrumentedHandlerRecordsJobAndSendMetrics(t *testing.T) {
 		}
 	}
 }
+
+func TestNewMuxFailsClosedForUnconfiguredHandlers(t *testing.T) {
+	mux := NewMux(nil, nil)
+	err := mux.ProcessTask(context.Background(), asynq.NewTask(asynqqueue.KindSendBrowser, []byte(`{"outbox_id":"unused"}`)))
+	if err == nil || !strings.Contains(err.Error(), "not configured") {
+		t.Fatalf("unconfigured handler should fail closed, got %v", err)
+	}
+}

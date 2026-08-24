@@ -47,8 +47,9 @@ var outboxKinds = []string{
 	asynqqueue.KindNotificationWechat,
 }
 
-// NewMux registers a stub handler for every outbox kind. The handler pulls
-// the payload by stable id only — never secrets (docs/14 §10).
+// NewMux registers fail-closed handlers for every outbox kind. It is kept for
+// callers that need a queue surface before wiring real dependencies; an
+// unconfigured kind must be retried/alerted instead of being ACKed as success.
 func NewMux(loader PayloadLoader, log *slog.Logger) *asynq.ServeMux {
 	return newMux(loader, nil, nil, nil, nil, log)
 }
@@ -194,26 +195,15 @@ func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindD
 			register(kind, sendProtocolHandler(loader, *lightDeps.Protocol))
 			continue
 		}
-		register(kind, func(ctx context.Context, t *asynq.Task) error {
-			var env struct {
-				OutboxID string `json:"outbox_id"`
-			}
-			_ = json.Unmarshal(t.Payload(), &env)
-			// Remaining handlers are intentionally stubbed until their platform
-			// adapters land; read the payload to prove
-			// the relay works, then ACK.
-			if env.OutboxID != "" {
-				if m, err := loader.FetchByPublicID(ctx, env.OutboxID); err == nil && log != nil {
-					log.Info("worker dispatch (stub)", "kind", kind, "outbox_id", env.OutboxID,
-						"aggregate_kind_hint", string(m.Payload))
-				}
-			} else if log != nil {
-				log.Warn("worker task without outbox_id", "type", t.Type())
-			}
-			return nil
-		})
+		register(kind, unconfiguredHandler(kind))
 	}
 	return mux
+}
+
+func unconfiguredHandler(kind string) func(context.Context, *asynq.Task) error {
+	return func(context.Context, *asynq.Task) error {
+		return fmt.Errorf("worker handler for %s is not configured", kind)
+	}
 }
 
 func instrumentedHandler(kind string, handler func(context.Context, *asynq.Task) error, metrics *telemetry.Metrics) func(context.Context, *asynq.Task) error {

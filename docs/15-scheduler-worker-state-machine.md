@@ -491,6 +491,7 @@ Sidecar failure 的 `error.detail` 必须携带明确且相互一致的发送结
 Protocol attempt 标记失败、创建 `selected_adapter=browser.consumer` 的新 queued Job，并
 写入 `send.browser` outbox；未知结果、首聊任务、Browser capability 不可用或 Browser
 health 被禁用/熔断时均不创建 fallback。
+Worker 对未配置或误投递的 outbox kind 返回错误，不以 stub 成功 ACK。
 
 ## 13. Generic Job 状态机
 
