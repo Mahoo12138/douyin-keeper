@@ -1,10 +1,11 @@
 import { Outlet, createFileRoute, redirect } from '@tanstack/react-router'
 import { AdminShell } from '@/features/admin/admin-shell'
-import { canActivateAdmin } from '@/lib/admin-guard'
+import { adminRedirectTarget, resolveAdminAccess } from '@/lib/admin-guard'
 
 export const Route = createFileRoute('/admin')({
   beforeLoad: async () => {
-    if (!(await canActivateAdmin())) throw redirect({ to: '/signin' })
+    const target = adminRedirectTarget(await resolveAdminAccess())
+    if (target) throw redirect({ to: target })
   },
   component: () => <AdminShell><Outlet /></AdminShell>,
 })

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import { getToken, setToken, signOut } from '../src/auth/session'
 import { canActivate } from '../src/lib/auth-guard'
+import { adminRedirectTarget, clearAdminRole, resolveAdminAccess } from '../src/lib/admin-guard'
 
 test('signOut revokes the backend session and clears the in-memory token', async () => {
   const originalFetch = globalThis.fetch
@@ -80,6 +81,27 @@ test('canActivate rejects when refresh cannot recover a session', async () => {
     assert.equal(getToken(), null)
   } finally {
     globalThis.fetch = originalFetch
+    setToken(null)
+  }
+})
+
+test('admin access distinguishes authentication from authorization', async () => {
+  assert.equal(adminRedirectTarget('allowed'), null)
+  assert.equal(adminRedirectTarget('forbidden'), '/dashboard')
+  assert.equal(adminRedirectTarget('unauthenticated'), '/signin')
+
+  try {
+    clearAdminRole()
+    assert.equal(await resolveAdminAccess({
+      authenticate: async () => 'user-session-token',
+      getIdentity: async () => ({
+        id: '00000000-0000-0000-0000-000000000001',
+        display_name: '普通用户',
+        role: 'user',
+      }),
+    }), 'forbidden')
+  } finally {
+    clearAdminRole()
     setToken(null)
   }
 })

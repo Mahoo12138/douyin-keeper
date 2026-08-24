@@ -3,14 +3,30 @@ import { requireAuth } from '@/auth/session'
 
 let cachedIdentity: { token: string; role: 'user' | 'admin' } | null = null
 
-export async function canActivateAdmin() {
+export type AdminAccess = 'allowed' | 'forbidden' | 'unauthenticated'
+type AdminGuardDeps = {
+  authenticate?: typeof requireAuth
+  getIdentity?: typeof me
+}
+
+export async function resolveAdminAccess(deps: AdminGuardDeps = {}): Promise<AdminAccess> {
   try {
-    const token = await requireAuth()
-    if (!cachedIdentity || cachedIdentity.token !== token) cachedIdentity = { token, role: (await me(token)).role }
-    return cachedIdentity.role === 'admin'
+    const token = await (deps.authenticate ?? requireAuth)()
+    if (!cachedIdentity || cachedIdentity.token !== token) cachedIdentity = { token, role: (await (deps.getIdentity ?? me)(token)).role }
+    return cachedIdentity.role === 'admin' ? 'allowed' : 'forbidden'
   } catch {
-    return false
+    return 'unauthenticated'
   }
+}
+
+export async function canActivateAdmin() {
+  return (await resolveAdminAccess()) === 'allowed'
+}
+
+export function adminRedirectTarget(access: AdminAccess): '/signin' | '/dashboard' | null {
+  if (access === 'unauthenticated') return '/signin'
+  if (access === 'forbidden') return '/dashboard'
+  return null
 }
 
 export function clearAdminRole() {
