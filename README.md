@@ -5,8 +5,7 @@ configure daily interaction tasks per friend, and observe everything from a PC w
 Operators manage users, accounts, workers, risk, and entitlement via a PC admin console.
 
 The architecture, domain model, contracts, and state machines are **frozen in `docs/`** (authoritative, Chinese-language).
-This repo currently implements **Milestone M0**: the monorepo scaffold, backend core with a working
-`register → login → me → redeem` round-trip, frontend/login scaffolds, and CI. See `docs/08-roadmap-repo.md` for the roadmap (M0–M7).
+The repository now includes the M0 foundation, the core M1–M3 account/friend/send backend flows, and a functional PC account-management surface with QR binding progress, capability snapshots, session checks, and friend-sync actions. Friends, tasks, history, Mini Program, and Admin surfaces continue to land incrementally. See `docs/08-roadmap-repo.md` for the roadmap (M0–M7).
 
 ## Layout
 

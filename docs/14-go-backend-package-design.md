@@ -67,6 +67,16 @@ backend/internal/webassets/dist/admin
 
 开发模式允许 Vite 独立运行；`go:embed` 是生产交付契约。
 
+### 1.2 Web Feature Boundary
+
+Web 路由文件只负责 TanStack Router 的 route 配置和页面装配；业务数据读取统一经过
+`packages/sdk-ts`，服务端状态统一由 TanStack Query 管理。具体页面按领域放在
+`apps/web/src/features/<domain>/`，领域目录内再拆分列表、状态展示、长任务面板等组件。
+例如账号页的 QR 绑定、账号列表和 capability 快照位于 `features/accounts`，而
+`routes/(root)/accounts.tsx` 只保留 route 声明。这一层次与 `reference/tinyship-main/apps/tanstack-app`
+的 route/component 分工一致，也保证后续 Web C、Admin 可以复用 contracts、SDK 和基础 UI，
+而不共享带业务状态的页面组件。
+
 ## 2. 依赖方向
 
 硬规则：

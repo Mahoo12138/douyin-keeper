@@ -470,7 +470,7 @@ Item：
 ```text
 event: qr_ready
 id: 3
-data: {"qr":{"format":"data_url","value":"...","expires_at":"..."}}
+data: {"format":"data_url","value":"...","expires_at":"..."}
 
 ```
 
@@ -488,7 +488,7 @@ error
 cancelled
 ```
 
-SSE 支持 `Last-Event-ID` 重放已持久化事件。
+SSE 支持 `Last-Event-ID`：服务端只重放序号更大的已持久化事件，随后继续轮询新事件。
 
 ### `POST /jobs/{job_id}/cancel`
 

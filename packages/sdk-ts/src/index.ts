@@ -59,6 +59,105 @@ export async function listAccounts(accessToken: string) {
   return data
 }
 
+export async function createAccountBinding(accessToken: string) {
+  const { data, error } = await api.POST('/accounts/bindings', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: { method: 'qr' },
+  })
+  if (error) throwApiError(error, 'binding failed')
+  return data
+}
+
+export async function checkAccountSession(accessToken: string, accountId: string) {
+  const { data, error } = await api.POST('/accounts/{accountId}/session-check', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { accountId } },
+  })
+  if (error) throwApiError(error, 'session check failed')
+  return data
+}
+
+export async function syncAccountFriends(accessToken: string, accountId: string) {
+  const { data, error } = await api.POST('/accounts/{accountId}/friends-sync', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { accountId } },
+  })
+  if (error) throwApiError(error, 'friend sync failed')
+  return data
+}
+
+export async function accountCapabilities(accessToken: string, accountId: string) {
+  const { data, error } = await api.GET('/accounts/{accountId}/capabilities', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { accountId } },
+  })
+  if (error) throwApiError(error, 'capabilities failed')
+  return data
+}
+
+export async function getJob(accessToken: string, jobId: string) {
+  const { data, error } = await api.GET('/jobs/{jobId}', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { jobId } },
+  })
+  if (error) throwApiError(error, 'job lookup failed')
+  return data
+}
+
+export async function cancelJob(accessToken: string, jobId: string) {
+  const { data, error } = await api.POST('/jobs/{jobId}/cancel', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { jobId } },
+  })
+  if (error) throwApiError(error, 'job cancellation failed')
+  return data
+}
+
+export type JobEventEnvelope = {
+  seq: number
+  event_type: string
+  payload: Record<string, unknown>
+}
+
+function throwApiError(error: unknown, fallback: string): never {
+  const body = error as { error?: { code?: string; message?: string } } | undefined
+  throw new ApiError(body?.error?.code ?? 'UNKNOWN', body?.error?.message ?? fallback)
+}
+
+/** Streams the replay-first SSE endpoint; callers own AbortController lifetime. */
+export async function streamJobEvents(
+  accessToken: string,
+  jobId: string,
+  onEvent: (event: JobEventEnvelope) => void,
+  signal?: AbortSignal,
+) {
+  const response = await fetch(`/api/v1/jobs/${encodeURIComponent(jobId)}/events`, {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'text/event-stream' },
+    signal,
+  })
+  if (!response.ok) throw new ApiError(`HTTP_${response.status}`, 'job event stream failed')
+  if (!response.body) throw new ApiError('STREAM_UNAVAILABLE', 'job event stream is unavailable')
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+      const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const frames = buffer.split('\n\n')
+    buffer = frames.pop() ?? ''
+    for (const frame of frames) {
+      const lines = frame.split('\n')
+      const eventType = lines.find((line) => line.startsWith('event:'))?.slice(6).trim() ?? 'message'
+      const seqValue = lines.find((line) => line.startsWith('id:'))?.slice(3).trim() ?? '0'
+      const data = lines.filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).join('\n')
+      if (!data) continue
+      onEvent({ seq: Number(seqValue) || 0, event_type: eventType, payload: JSON.parse(data) as Record<string, unknown> })
+    }
+  }
+}
+
 /** Error carrying the stable backend error code (docs/11 §13). */
 export class ApiError extends Error {
   constructor(

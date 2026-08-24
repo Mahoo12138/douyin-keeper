@@ -252,6 +252,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Job'
+  /jobs/{jobId}/events:
+    get:
+      operationId: streamJobEvents
+      description: Replay and stream append-only job events as Server-Sent Events.
+      parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Job event stream. Each SSE frame carries event, id, and a JSON payload in data.
+          content:
+            text/event-stream:
+              schema:
+                type: string
   /jobs/{jobId}/cancel:
     post:
       operationId: cancelJob
@@ -520,6 +538,11 @@ components:
           - 'null'
           format: date-time
         last_friend_sync_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        paused_at:
           type:
           - string
           - 'null'

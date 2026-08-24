@@ -2,7 +2,10 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -58,21 +61,22 @@ func (s *Server) handleJobEvents(w http.ResponseWriter, r *http.Request) {
 		Payload   json.RawMessage `json:"payload"`
 	}
 	send := func(e event) {
-		b, _ := json.Marshal(e)
-		_, _ = w.Write([]byte("data: " + string(b) + "\n\n"))
+		payload, _ := json.Marshal(e.Payload)
+		writeSSEEvent(w, e.EventType, e.Seq, payload)
 		flusher.Flush()
 	}
 
 	// Replay first.
 	events, err := s.jobs.Events(r.Context(), j.ID)
+	last := lastEventID(r)
 	if err == nil {
 		for _, e := range events {
+			if e.Seq <= last {
+				continue
+			}
 			send(event{Seq: e.Seq, EventType: e.EventType, Payload: e.Payload})
+			last = e.Seq
 		}
-	}
-	var last int64
-	if len(events) > 0 {
-		last = events[len(events)-1].Seq
 	}
 
 	// Poll loop ~2s; emit only rows newer than last.
@@ -99,6 +103,22 @@ func (s *Server) handleJobEvents(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+func lastEventID(r *http.Request) int64 {
+	value := r.Header.Get("Last-Event-ID")
+	if value == "" {
+		return 0
+	}
+	seq, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || seq < 0 {
+		return 0
+	}
+	return seq
+}
+
+func writeSSEEvent(w io.Writer, eventType string, seq int64, payload []byte) {
+	_, _ = fmt.Fprintf(w, "event: %s\nid: %d\ndata: %s\n\n", eventType, seq, payload)
 }
 
 func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request) {

@@ -180,6 +180,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/{jobId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Replay and stream append-only job events as Server-Sent Events. */
+        get: operations["streamJobEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/{jobId}/cancel": {
         parameters: {
             query?: never;
@@ -399,6 +416,8 @@ export interface components {
             last_session_check_at?: string | null;
             /** Format: date-time */
             last_friend_sync_at?: string | null;
+            /** Format: date-time */
+            paused_at?: string | null;
         };
         Capability: {
             capability: string;
@@ -883,6 +902,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Job"];
+                };
+            };
+        };
+    };
+    streamJobEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Job event stream. Each SSE frame carries event, id, and a JSON payload in data. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
                 };
             };
         };

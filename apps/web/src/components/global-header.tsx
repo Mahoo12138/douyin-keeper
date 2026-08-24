@@ -12,38 +12,42 @@ const nav = [
   { to: '/history', label: '发送记录' },
   { to: '/entitlement', label: '权益' },
 ] as const
+const navLinkClass = 'shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:px-3'
 
 export function GlobalHeader() {
   const navigate = useNavigate()
   return (
-    <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-4">
-        <Link to="/dashboard" className="flex items-center gap-2 font-semibold">
+    <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur-sm">
+      <div className="mx-auto flex h-16 max-w-5xl items-center gap-2 px-4 sm:gap-6 sm:px-6">
+        <Link to="/dashboard" className="flex shrink-0 items-center gap-2 font-semibold">
           <Sparkles className="size-5 text-primary" />
-          <span>抖音火花助手</span>
+          <span className="hidden sm:inline">抖音火花助手</span>
         </Link>
-        <nav className="flex flex-1 items-center gap-1 text-sm">
+        <nav className="min-w-0 flex-1 overflow-x-auto text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex w-max items-center gap-1">
           {nav.map((n) => (
             <Link
               key={n.to}
               to={n.to}
-              className="rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-              activeProps={{ className: 'bg-accent text-accent-foreground font-medium' }}
+              className={navLinkClass}
+              activeProps={{ className: `${navLinkClass} bg-accent text-accent-foreground font-medium` }}
             >
               {n.label}
             </Link>
           ))}
+          </div>
         </nav>
         <Button
           variant="ghost"
           size="sm"
+          className="shrink-0 px-2 sm:px-3"
           onClick={() => {
             setToken(null)
             navigate({ to: '/signin' })
           }}
         >
           <LogOut className="size-4" />
-          退出
+          <span className="hidden sm:inline">退出</span>
         </Button>
       </div>
     </header>
