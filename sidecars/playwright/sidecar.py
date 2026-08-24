@@ -10,6 +10,7 @@ friends.list. Message sending is a separate adapter increment.
 stdout carries protocol messages only; logs go to stderr.
 """
 
+import json
 import sys
 import threading
 import time
@@ -19,6 +20,27 @@ import friends_list
 import message_send
 import qr_login
 import sms_login
+
+ADAPTER_NAME = "browser.consumer"
+
+
+def _request_id_from_line(line):
+    try:
+        value = json.loads(line)
+    except (TypeError, json.JSONDecodeError):
+        return "invalid-request"
+    if isinstance(value, dict) and isinstance(value.get("request_id"), str) and value["request_id"]:
+        return value["request_id"]
+    return "invalid-request"
+
+
+def invalid_request_response(line, err):
+    return protocol.failure(
+        {"request_id": _request_id_from_line(line)},
+        err,
+        adapter=ADAPTER_NAME,
+        duration_ms=0,
+    )
 
 
 def cleanup_expired_handles():
@@ -64,14 +86,22 @@ def handle(req):
         # Placeholders for ops requiring additional browser adapters.
         return protocol.unsupported(req)
     except protocol.ProtocolError as exc:
-        return protocol.failure(req, exc, duration_ms=duration())
+        return protocol.failure(req, exc, adapter=ADAPTER_NAME, duration_ms=duration())
     except RuntimeError as exc:
         code = protocol.ERR_ADAPTER_UNAVAILABLE if str(exc) == "playwright_missing" else "SIDECAR_INTERNAL_ERROR"
-        return protocol.failure(req, protocol.ProtocolError(code, "browser adapter is unavailable"), duration_ms=duration())
+        return protocol.failure(
+            req,
+            protocol.ProtocolError(code, "browser adapter is unavailable"),
+            adapter=ADAPTER_NAME,
+            duration_ms=duration(),
+        )
     except Exception as exc:  # noqa: BLE001 — never crash the loop on one op
         protocol.log(f"internal error on {op}: {exc!r}")
         return protocol.failure(
-            req, protocol.ProtocolError("SIDECAR_INTERNAL_ERROR", "internal error"), duration_ms=duration()
+            req,
+            protocol.ProtocolError("SIDECAR_INTERNAL_ERROR", "internal error"),
+            adapter=ADAPTER_NAME,
+            duration_ms=duration(),
         )
 
 
@@ -83,9 +113,8 @@ def main():
         try:
             req = protocol.parse_request(line)
         except protocol.ProtocolError as exc:
-            # Cannot even build a proper envelope without a request_id; fall
-            # back to a minimal failure line.
-            print(f'{{"protocol_version":1,"request_id":"","ok":false,"error":{{"code":"{exc.code}","retryable":false,"message":"{exc}"}},"meta":{{"adapter":"nop","adapter_version":"0"}}}}')
+            sys.stdout.write(protocol.json_dumps(invalid_request_response(line, exc)) + "\n")
+            sys.stdout.flush()
             continue
         sys.stdout.write(protocol.json_dumps(handle(req)) + "\n")
         sys.stdout.flush()

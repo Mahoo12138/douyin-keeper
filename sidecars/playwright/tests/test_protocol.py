@@ -81,6 +81,34 @@ def test_first_message_operation_fails_closed_until_adapter_is_available():
     assert out["error"]["code"] == protocol.ERR_UNSUPPORTED_OPERATION
 
 
+def test_sidecar_failures_keep_browser_adapter_identity():
+    import sidecar
+
+    req = make_req("session.validate")
+    req["input"] = {"session": {"kind": "playwright_storage_state_file", "path": "/missing/session.json"}}
+    out = sidecar.handle(req)
+    assert out["ok"] is False
+    assert out["error"]["code"] == protocol.ERR_SESSION_EXPIRED
+    assert out["error"]["retryable"] is False
+    assert out["error"]["message"]
+    assert out["meta"]["adapter"] == "browser.consumer"
+    assert out["meta"]["adapter_version"] == "0.1.0"
+    assert isinstance(out["meta"]["duration_ms"], int)
+    assert out["meta"]["duration_ms"] >= 0
+
+
+def test_invalid_request_response_is_a_complete_failure_envelope():
+    import sidecar
+
+    line = json.dumps({"protocol_version": 1, "request_id": "bad-request", "op": "invalid"})
+    out = sidecar.invalid_request_response(line, protocol.ProtocolError(protocol.ERR_INVALID_REQUEST, "bad request"))
+    assert out["protocol_version"] == 1
+    assert out["request_id"] == "bad-request"
+    assert out["ok"] is False
+    assert set(out["error"]) >= {"code", "retryable", "message"}
+    assert out["meta"] == {"adapter": "browser.consumer", "adapter_version": "0.1.0", "duration_ms": 0}
+
+
 def test_failure_preserves_structured_detail():
     req = make_req("message.send_text")
     out = protocol.failure(req, protocol.ProtocolError(

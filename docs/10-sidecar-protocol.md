@@ -86,6 +86,8 @@ Request 必须符合 v1 schema：`protocol_version=1`、`input` 为对象，`dea
 Go ProcessClient 对响应 envelope 采用严格解码：拒绝未知顶层字段、缺失必填的 `meta`/`result`/
 `error` 字段、负数 `duration_ms` 和非对象 `error.detail`，并在协议校验失败后销毁当前
 Sidecar 进程，不复用可能已失步的 NDJSON 流。
+Python Sidecar 即使在请求校验失败时也返回完整 failure envelope；若能提取请求 ID 则原样
+回传，并保持真实 Adapter 身份，不使用缺少必填字段的 `nop` 响应。
 
 ## 3. Secret 传递
 
