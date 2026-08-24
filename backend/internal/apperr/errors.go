@@ -55,6 +55,7 @@ const (
 	CodeAdapterIncompatible       = "ADAPTER_INCOMPATIBLE"
 	CodeBrowserSelectorChanged    = "BROWSER_SELECTOR_CHANGED"
 	CodeNetworkTimeout            = "NETWORK_TIMEOUT"
+	CodeOutcomeUnknown            = "OUTCOME_UNKNOWN"
 
 	CodeEntitlementRequired    = "ENTITLEMENT_REQUIRED"
 	CodeEntitlementExpired     = "ENTITLEMENT_EXPIRED"

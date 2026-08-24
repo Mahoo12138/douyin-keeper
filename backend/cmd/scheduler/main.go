@@ -14,6 +14,7 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/config"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
@@ -78,6 +79,7 @@ func main() {
 	sendRepo := postgres.NewSendRepo(pool)
 	tick := scheduler.NewTickRunner(taskRepo, sendRepo, entitlementSvc, entitlementSvc,
 		outboxRepo, tx, cfg.ScheduleBatchSize)
+	sendReaper := scheduler.NewSendLeaseReaper(sendRepo, entitlementSvc, tx, cfg.ScheduleBatchSize)
 
 	publisher := scheduler.NewPublisher(outboxRepo, producer, cfg.OutboxBatchSize,
 		cfg.OutboxPollInterval, log)
@@ -127,6 +129,12 @@ func main() {
 				// Reconciler: return expired publish locks to pending (docs/15 §20).
 				if n, err := outboxRepo.ReconcileExpiredLocks(ctx); err == nil && n > 0 {
 					log.Info("outbox expired locks reconciled", "count", n)
+				}
+				if n, err := sendReaper.RunOnce(ctx); err != nil {
+					log.Error("send lease reaper failed", "err", err)
+				} else if n > 0 {
+					log.Warn("send attempts failed closed after expired lease", "count", n,
+						"error_code", apperr.CodeOutcomeUnknown)
 				}
 			}
 		}

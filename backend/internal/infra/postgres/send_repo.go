@@ -18,17 +18,25 @@ type SendRepo struct {
 
 func NewSendRepo(pool *pgxpool.Pool) *SendRepo { return &SendRepo{pool: pool} }
 
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
 // ---- intents ----
 
 const intentCols = `si.id, si.public_id, si.intent_type, si.request_id, si.task_id, si.account_id,
 	si.friend_id, si.local_date::text, si.scheduled_at, si.status, si.error_code, si.next_attempt_at,
 	si.last_job_id, si.created_at, si.updated_at`
 
-func scanIntent(row pgx.Row) (*send.SendIntent, error) {
-	var in send.SendIntent
-	err := row.Scan(&in.ID, &in.PublicID, &in.IntentType, &in.RequestID, &in.TaskID, &in.AccountID,
+func intentScanArgs(in *send.SendIntent) []any {
+	return []any{&in.ID, &in.PublicID, &in.IntentType, &in.RequestID, &in.TaskID, &in.AccountID,
 		&in.FriendID, &in.LocalDate, &in.ScheduledAt, &in.Status, &in.ErrorCode, &in.NextAttemptAt,
-		&in.LastJobID, &in.CreatedAt, &in.UpdatedAt)
+		&in.LastJobID, &in.CreatedAt, &in.UpdatedAt}
+}
+
+func scanIntent(row rowScanner) (*send.SendIntent, error) {
+	var in send.SendIntent
+	err := row.Scan(intentScanArgs(&in)...)
 	if err != nil {
 		return nil, err
 	}
@@ -131,11 +139,15 @@ const sendJobReturnCols = `id, public_id, intent_id, account_id, friend_id, atte
 	selected_adapter, status, error_code, retryable, platform_message_id, worker_id,
 	heartbeat_at, lease_expires_at, started_at, finished_at, created_at`
 
-func scanSendJob(row pgx.Row) (*send.SendJob, error) {
-	var j send.SendJob
-	err := row.Scan(&j.ID, &j.PublicID, &j.IntentID, &j.AccountID, &j.FriendID, &j.Attempt,
+func sendJobScanArgs(j *send.SendJob) []any {
+	return []any{&j.ID, &j.PublicID, &j.IntentID, &j.AccountID, &j.FriendID, &j.Attempt,
 		&j.SelectedAdapter, &j.Status, &j.ErrorCode, &j.Retryable, &j.PlatformMessageID, &j.WorkerID,
-		&j.HeartbeatAt, &j.LeaseExpiresAt, &j.StartedAt, &j.FinishedAt, &j.CreatedAt)
+		&j.HeartbeatAt, &j.LeaseExpiresAt, &j.StartedAt, &j.FinishedAt, &j.CreatedAt}
+}
+
+func scanSendJob(row rowScanner) (*send.SendJob, error) {
+	var j send.SendJob
+	err := row.Scan(sendJobScanArgs(&j)...)
 	if err != nil {
 		return nil, err
 	}
@@ -182,6 +194,43 @@ func (r *SendRepo) ClaimJob(ctx context.Context, publicID uuid.UUID, workerID st
 		return nil, nil
 	}
 	return j, err
+}
+
+// FindExpiredJobs locks a bounded set of expired running attempts for the
+// caller's transaction. The lock is held until that transaction finishes,
+// preventing two scheduler leaders from reaping the same attempt.
+func (r *SendRepo) FindExpiredJobs(ctx context.Context, at time.Time, limit int) ([]send.ExpiredSendJob, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT `+sendJobCols+`, `+intentCols+`, a.user_id
+		FROM send_jobs j
+		JOIN send_intents si ON si.id = j.intent_id
+		JOIN douyin_accounts a ON a.id = j.account_id
+		WHERE j.status = 'running'
+		  AND j.lease_expires_at IS NOT NULL
+		  AND j.lease_expires_at < $1
+		ORDER BY j.id
+		LIMIT $2
+		FOR UPDATE OF j SKIP LOCKED`, at, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []send.ExpiredSendJob
+	for rows.Next() {
+		var j send.SendJob
+		var in send.SendIntent
+		var userID int64
+		args := append(sendJobScanArgs(&j), intentScanArgs(&in)...)
+		args = append(args, &userID)
+		if err := rows.Scan(args...); err != nil {
+			return nil, err
+		}
+		out = append(out, send.ExpiredSendJob{Job: &j, Intent: &in, UserID: userID})
+	}
+	return out, rows.Err()
 }
 
 func (r *SendRepo) FinishJob(ctx context.Context, jobID int64, status send.JobStatus, errorCode *string, retryable bool, platformMessageID *string, at time.Time) error {

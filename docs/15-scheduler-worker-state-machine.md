@@ -359,7 +359,7 @@ AND lease_expires_at < now()
 处理：
 
 - 如果平台动作是否成功未知，不立即盲目重发；
-- 优先进入 `outcome_unknown` 内部错误分类；
+- 优先进入 `OUTCOME_UNKNOWN` 内部错误分类；
 - 若有平台 message id/归档查询能力，先 reconcile；
 - 无法确认时默认 fail-closed，避免重复发送。
 
