@@ -61,3 +61,16 @@ func TestGrantStatus(t *testing.T) {
 		t.Fatalf("revoked status = %q", got)
 	}
 }
+
+func TestGrantViewFromSummaryPreservesUserSafeHistoryFields(t *testing.T) {
+	now := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	revokedAt := now.Add(time.Hour)
+	view := grantViewFromSummary(entitlement.RedemptionSummary{
+		GrantPublicID: uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+		PlanCode:      "standard", SourceType: entitlement.SourceAdmin,
+		StartsAt: now, ExpiresAt: now.Add(24 * time.Hour), RevokedAt: &revokedAt,
+	})
+	if view.ID.String() != "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" || view.PlanCode != "standard" || view.SourceType != "admin" || view.RevokedAt == nil || !view.RevokedAt.Equal(revokedAt) {
+		t.Fatalf("grant view = %+v", view)
+	}
+}

@@ -274,11 +274,19 @@ type RedeemResultView struct {
 }
 
 type GrantView struct {
-	ID         uuid.UUID `json:"id"`
-	PlanCode   string    `json:"plan_code,omitempty"`
-	SourceType string    `json:"source_type"`
-	StartsAt   time.Time `json:"starts_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
+	ID         uuid.UUID  `json:"id"`
+	PlanCode   string     `json:"plan_code,omitempty"`
+	SourceType string     `json:"source_type"`
+	StartsAt   time.Time  `json:"starts_at"`
+	ExpiresAt  time.Time  `json:"expires_at"`
+	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
+}
+
+func grantViewFromSummary(summary entitlement.RedemptionSummary) GrantView {
+	return GrantView{
+		ID: summary.GrantPublicID, PlanCode: summary.PlanCode, SourceType: string(summary.SourceType),
+		StartsAt: summary.StartsAt, ExpiresAt: summary.ExpiresAt, RevokedAt: summary.RevokedAt,
+	}
 }
 
 type LinkCodeView struct {

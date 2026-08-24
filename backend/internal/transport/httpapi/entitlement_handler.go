@@ -3,11 +3,9 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
-	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 )
 
 type redeemReq struct {
@@ -47,7 +45,7 @@ func (s *Server) handleRedeem(w http.ResponseWriter, r *http.Request) {
 	writeOK(w, RedeemResultView{
 		Grant: GrantView{
 			ID: grant.PublicID, PlanCode: grantPlan, SourceType: string(grant.SourceType),
-			StartsAt: grant.StartsAt, ExpiresAt: grant.ExpiresAt,
+			StartsAt: grant.StartsAt, ExpiresAt: grant.ExpiresAt, RevokedAt: grant.RevokedAt,
 		},
 		Entitlement: effectiveEntitlementView(eff),
 	})
@@ -55,26 +53,14 @@ func (s *Server) handleRedeem(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListRedemptions(w http.ResponseWriter, r *http.Request) {
 	p := auth.MustPrincipal(r.Context())
-	eff, err := s.entitlements.GetEffective(r.Context(), p.UserID)
+	summaries, err := s.entitlements.ListUserGrantSummaries(r.Context(), p.UserID, 100)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	// M0: surface the effective grant; full grant-history list arrives with
-	// the admin console (M5).
-	items := []GrantView{}
-	if eff.Active && eff.GrantID != nil {
-		items = []GrantView{{
-			ID: *eff.GrantID, PlanCode: eff.PlanCode, SourceType: string(entitlement.SourceCard),
-			StartsAt: deref(eff.StartsAt), ExpiresAt: deref(eff.ExpiresAt),
-		}}
+	items := make([]GrantView, 0, len(summaries))
+	for _, summary := range summaries {
+		items = append(items, grantViewFromSummary(summary))
 	}
 	writeOK(w, map[string]any{"items": items})
-}
-
-func deref(t *time.Time) time.Time {
-	if t == nil {
-		return time.Time{}
-	}
-	return *t
 }
