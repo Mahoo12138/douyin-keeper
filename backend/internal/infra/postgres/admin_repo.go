@@ -230,6 +230,39 @@ func (r *AdminRepo) ListRiskSummaries(ctx context.Context, filter admin.RiskFilt
 	return items, nil
 }
 
+func (r *AdminRepo) ListAuditSummaries(ctx context.Context, filter admin.AuditFilter) ([]admin.AuditSummary, error) {
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT l.id, u.display_name, l.action, l.resource_type, l.resource_id,
+			(l.detail_json <> '{}'::jsonb), l.created_at
+		FROM audit_logs l
+		LEFT JOIN users u ON u.id = l.actor_user_id
+		WHERE ($1 = '' OR l.action = $1)
+		  AND ($2 = '' OR l.resource_type = $2)
+		  AND ($3 = '' OR COALESCE(u.display_name, '') ILIKE '%' || $3 || '%')
+		ORDER BY l.created_at DESC, l.id DESC
+		LIMIT $4`, filter.Action, filter.ResourceType, filter.Actor, filter.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]admin.AuditSummary, 0)
+	for rows.Next() {
+		var item admin.AuditSummary
+		if err := rows.Scan(
+			&item.ID, &item.ActorDisplayName, &item.Action, &item.ResourceType,
+			&item.ResourceID, &item.HasDetail, &item.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func (r *AdminRepo) ListAdapterHealth(ctx context.Context) ([]admin.AdapterHealthSummary, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT catalog.adapter, catalog.executable,

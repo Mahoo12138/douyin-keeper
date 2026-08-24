@@ -87,6 +87,15 @@ export async function listAdminRisks(accessToken: string, options?: { category?:
   return data
 }
 
+export async function listAdminAuditLogs(accessToken: string, options?: { action?: string; resource_type?: string; actor?: string; limit?: number }) {
+  const { data, error } = await api.GET('/admin/audit-logs', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { query: options },
+  })
+  if (error) throwApiError(error, 'admin audit logs lookup failed')
+  return data
+}
+
 export async function redeemCardCode(accessToken: string, code: string) {
   const { data, error } = await api.POST('/entitlements/redeem', {
     headers: { Authorization: `Bearer ${accessToken}` },

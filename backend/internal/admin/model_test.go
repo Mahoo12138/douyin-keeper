@@ -13,6 +13,7 @@ type repositoryStub struct {
 	adapterName string
 	enabled     bool
 	riskFilter  RiskFilter
+	auditFilter AuditFilter
 }
 
 func (r *repositoryStub) ListUserSummaries(_ context.Context, limit int) ([]UserSummary, error) {
@@ -41,6 +42,11 @@ func (r *repositoryStub) SetAdapterEnabled(_ context.Context, actorID int64, ada
 func (r *repositoryStub) ListRiskSummaries(_ context.Context, filter RiskFilter) ([]RiskSummary, error) {
 	r.riskFilter = filter
 	return []RiskSummary{{Code: "SESSION_EXPIRED"}}, nil
+}
+
+func (r *repositoryStub) ListAuditSummaries(_ context.Context, filter AuditFilter) ([]AuditSummary, error) {
+	r.auditFilter = filter
+	return []AuditSummary{{Action: "adapter.disable"}}, nil
 }
 
 func TestServiceClampsUserListLimit(t *testing.T) {
@@ -128,5 +134,16 @@ func TestServiceNormalizesRiskFilter(t *testing.T) {
 	}
 	if repo.riskFilter.Category != "AUTH" || repo.riskFilter.Severity != "critical" || repo.riskFilter.Code != "expired" || repo.riskFilter.Limit != 100 {
 		t.Fatalf("risk filter = %+v", repo.riskFilter)
+	}
+}
+
+func TestServiceNormalizesAuditFilter(t *testing.T) {
+	repo := &repositoryStub{}
+	items, err := NewService(repo).ListAuditLogs(context.Background(), AuditFilter{Action: "adapter.disable", ResourceType: "adapter", Actor: "admin", Limit: 500})
+	if err != nil || len(items) != 1 || items[0].Action != "adapter.disable" {
+		t.Fatalf("ListAuditLogs() = %+v, err = %v", items, err)
+	}
+	if repo.auditFilter.Action != "adapter.disable" || repo.auditFilter.ResourceType != "adapter" || repo.auditFilter.Actor != "admin" || repo.auditFilter.Limit != 100 {
+		t.Fatalf("audit filter = %+v", repo.auditFilter)
 	}
 }

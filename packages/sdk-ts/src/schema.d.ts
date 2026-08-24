@@ -116,6 +116,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAdminAuditLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts": {
         parameters: {
             query?: never;
@@ -681,6 +697,17 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        AdminAuditLog: {
+            /** Format: int64 */
+            id: number;
+            actor_display_name?: string | null;
+            action: string;
+            resource_type: string;
+            resource_id?: string | null;
+            has_detail: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
         Account: {
             /** Format: uuid */
             id: string;
@@ -1122,6 +1149,34 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["AdminRisk"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+        };
+    };
+    listAdminAuditLogs: {
+        parameters: {
+            query?: {
+                action?: string;
+                resource_type?: string;
+                actor?: string;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrator audit log summaries without raw detail JSON */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminAuditLog"][];
                         next_cursor: string | null;
                     };
                 };

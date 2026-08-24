@@ -167,6 +167,45 @@ paths:
                     type:
                     - string
                     - 'null'
+  /admin/audit-logs:
+    get:
+      operationId: listAdminAuditLogs
+      parameters:
+      - name: action
+        in: query
+        schema:
+          type: string
+          maxLength: 100
+      - name: resource_type
+        in: query
+        schema:
+          type: string
+          maxLength: 100
+      - name: actor
+        in: query
+        schema:
+          type: string
+          maxLength: 100
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Administrator audit log summaries without raw detail JSON
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - next_cursor
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminAuditLog'
+                  next_cursor:
+                    type:
+                    - string
+                    - 'null'
   /accounts:
     get:
       operationId: listAccounts
@@ -1196,6 +1235,35 @@ components:
           - string
           - 'null'
           format: date-time
+        created_at:
+          type: string
+          format: date-time
+    AdminAuditLog:
+      type: object
+      required:
+      - id
+      - action
+      - resource_type
+      - has_detail
+      - created_at
+      properties:
+        id:
+          type: integer
+          format: int64
+        actor_display_name:
+          type:
+          - string
+          - 'null'
+        action:
+          type: string
+        resource_type:
+          type: string
+        resource_id:
+          type:
+          - string
+          - 'null'
+        has_detail:
+          type: boolean
         created_at:
           type: string
           format: date-time

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,5 +117,28 @@ func TestAdminRiskFilterValidatesAndNormalizes(t *testing.T) {
 	invalid := httptest.NewRequest("GET", "/api/v1/admin/risks?category=INVALID", nil)
 	if _, err := adminRiskFilter(invalid); err == nil {
 		t.Fatal("invalid category should be rejected")
+	}
+}
+
+func TestAdminAuditViewRedactsRawDetail(t *testing.T) {
+	createdAt := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	actor := "admin"
+	resourceID := "fingerprint-123"
+	view := adminAuditViewFrom(admin.AuditSummary{
+		ID: 9, ActorDisplayName: &actor, Action: "entitlement.redeem",
+		ResourceType: "card_code", ResourceID: &resourceID, HasDetail: true, CreatedAt: createdAt,
+	})
+	if view.ID != 9 || view.ActorDisplayName == nil || *view.ActorDisplayName != "admin" || view.ResourceID == nil || !view.HasDetail {
+		t.Fatalf("audit view = %+v", view)
+	}
+	if view.CreatedAt != "2026-08-24T09:00:00Z" {
+		t.Fatalf("audit date = %q", view.CreatedAt)
+	}
+}
+
+func TestAdminAuditFilterRejectsOverlongValue(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/v1/admin/audit-logs?action="+strings.Repeat("x", 101), nil)
+	if _, err := adminAuditFilter(req); err == nil {
+		t.Fatal("overlong audit filter should be rejected")
 	}
 }

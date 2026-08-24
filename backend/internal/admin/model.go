@@ -147,6 +147,23 @@ type RiskSummary struct {
 	CreatedAt        time.Time
 }
 
+type AuditFilter struct {
+	Action       string
+	ResourceType string
+	Actor        string
+	Limit        int
+}
+
+type AuditSummary struct {
+	ID               int64
+	ActorDisplayName *string
+	Action           string
+	ResourceType     string
+	ResourceID       *string
+	HasDetail        bool
+	CreatedAt        time.Time
+}
+
 type Repository interface {
 	ListUserSummaries(ctx context.Context, limit int) ([]UserSummary, error)
 	ListAccountSummaries(ctx context.Context, limit int) ([]AccountSummary, error)
@@ -154,6 +171,7 @@ type Repository interface {
 	ListAdapterHealth(ctx context.Context) ([]AdapterHealthSummary, error)
 	SetAdapterEnabled(ctx context.Context, actorID int64, adapter string, enabled bool) (AdapterHealthSummary, error)
 	ListRiskSummaries(ctx context.Context, filter RiskFilter) ([]RiskSummary, error)
+	ListAuditSummaries(ctx context.Context, filter AuditFilter) ([]AuditSummary, error)
 }
 
 type Service struct {
@@ -190,6 +208,11 @@ func (s *Service) SetAdapterEnabled(ctx context.Context, actorID int64, adapter 
 func (s *Service) ListRisks(ctx context.Context, filter RiskFilter) ([]RiskSummary, error) {
 	filter.Limit = normalizeLimit(filter.Limit)
 	return s.repo.ListRiskSummaries(ctx, filter)
+}
+
+func (s *Service) ListAuditLogs(ctx context.Context, filter AuditFilter) ([]AuditSummary, error) {
+	filter.Limit = normalizeLimit(filter.Limit)
+	return s.repo.ListAuditSummaries(ctx, filter)
 }
 
 func normalizeLimit(limit int) int {
