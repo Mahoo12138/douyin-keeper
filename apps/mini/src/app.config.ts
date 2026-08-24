@@ -1,5 +1,5 @@
 export default defineAppConfig({
-  pages: ['pages/index/index', 'pages/spark/index', 'pages/login/index'],
+  pages: ['pages/index/index', 'pages/spark/index', 'pages/history/index', 'pages/login/index'],
   window: {
     backgroundTextStyle: 'light',
     navigationBarBackgroundColor: '#ffffff',
@@ -12,6 +12,7 @@ export default defineAppConfig({
     list: [
       { pagePath: 'pages/index/index', text: '首页' },
       { pagePath: 'pages/spark/index', text: '火花' },
+      { pagePath: 'pages/history/index', text: '记录' },
       { pagePath: 'pages/login/index', text: '我的' },
     ],
   },

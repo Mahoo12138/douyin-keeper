@@ -71,7 +71,7 @@ export function updateTask(token: string, taskId: string, enabled: boolean) {
   })
 }
 
-export type SendHistoryOptions = { from?: string; to?: string }
+export type SendHistoryOptions = { from?: string; to?: string; status?: components['schemas']['SendIntent']['status'] }
 
 export function listSendIntents(token: string, options: SendHistoryOptions = {}) {
   const query = Object.entries(options).filter(([, value]) => value).map(([key, value]) => `${key}=${encodeURIComponent(value!)}`).join('&')
