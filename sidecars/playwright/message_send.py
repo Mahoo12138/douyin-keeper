@@ -138,18 +138,24 @@ def _new_message_id(page, text, before_ids):
 def send_text(input_data):
     if not isinstance(input_data, dict):
         raise _error(protocol.ERR_INVALID_REQUEST, "input must be an object")
+    if set(input_data) - {"session", "target", "message"}:
+        raise _error(protocol.ERR_INVALID_REQUEST, "input contains unknown fields")
     session_path = _session_path(input_data)
     target = input_data.get("target")
     message = input_data.get("message")
     if not isinstance(target, dict) or not isinstance(message, dict):
         raise _error(protocol.ERR_INVALID_REQUEST, "target and message are required")
+    if set(target) - {"platform_conversation_id", "platform_user_id"}:
+        raise _error(protocol.ERR_INVALID_REQUEST, "target contains unknown fields")
+    if set(message) - {"text"}:
+        raise _error(protocol.ERR_INVALID_REQUEST, "message contains unknown fields")
     conversation_id = target.get("platform_conversation_id")
     platform_user_id = target.get("platform_user_id")
     text = message.get("text")
-    if not isinstance(conversation_id, str) or not conversation_id:
-        raise _error(protocol.ERR_INVALID_REQUEST, "platform_conversation_id is required")
-    if not isinstance(platform_user_id, str) or not platform_user_id:
-        raise _error(protocol.ERR_INVALID_REQUEST, "platform_user_id is required")
+    if not isinstance(conversation_id, str) or not conversation_id.strip() or len(conversation_id) > 512:
+        raise _error(protocol.ERR_INVALID_REQUEST, "platform_conversation_id must be 1..512 characters")
+    if not isinstance(platform_user_id, str) or not platform_user_id.strip() or len(platform_user_id) > 256:
+        raise _error(protocol.ERR_INVALID_REQUEST, "platform_user_id must be 1..256 characters")
     if not isinstance(text, str) or not text.strip() or len(text) > 2000:
         raise _error(protocol.ERR_INVALID_REQUEST, "message.text must be 1..2000 characters")
 

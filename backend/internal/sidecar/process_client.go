@@ -294,8 +294,17 @@ func validateOperationInput(op string, input any) error {
 	if err := rejectUnknownFields(object, "session", "target", "message"); err != nil {
 		return fmt.Errorf("sidecar: message.send_first %w", err)
 	}
-	if err := requireJSONObjectField(object, "session"); err != nil {
+	session, err := objectField(object, "session")
+	if err != nil {
 		return fmt.Errorf("sidecar: message.send_first %w", err)
+	}
+	if err := rejectUnknownFields(session, "kind", "path"); err != nil {
+		return fmt.Errorf("sidecar: message.send_first session %w", err)
+	}
+	kind, kindErr := stringField(session, "kind")
+	path, pathErr := stringField(session, "path")
+	if kindErr != nil || kind != "playwright_storage_state_file" || pathErr != nil || strings.TrimSpace(path) == "" {
+		return errors.New("sidecar: message.send_first session must reference a storage state file")
 	}
 	target, err := objectField(object, "target")
 	if err != nil {
@@ -331,13 +340,6 @@ func rejectUnknownFields(object map[string]json.RawMessage, allowed ...string) e
 		if _, ok := allowedSet[field]; !ok {
 			return fmt.Errorf("contains unknown field %q", field)
 		}
-	}
-	return nil
-}
-
-func requireJSONObjectField(object map[string]json.RawMessage, field string) error {
-	if _, err := objectField(object, field); err != nil {
-		return err
 	}
 	return nil
 }

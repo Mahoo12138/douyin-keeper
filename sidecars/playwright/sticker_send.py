@@ -15,13 +15,17 @@ def send_sticker(input_data):
     message = input_data.get("message")
     if not isinstance(target, dict) or not isinstance(message, dict):
         raise protocol.ProtocolError(protocol.ERR_INVALID_REQUEST, "target and message are required")
+    if set(target) - {"platform_conversation_id", "platform_user_id"}:
+        raise protocol.ProtocolError(protocol.ERR_INVALID_REQUEST, "target contains unknown fields")
+    if set(message) - {"sticker_id"}:
+        raise protocol.ProtocolError(protocol.ERR_INVALID_REQUEST, "message contains unknown fields")
     conversation_id = target.get("platform_conversation_id")
     platform_user_id = target.get("platform_user_id")
     sticker_id = message.get("sticker_id")
-    if not isinstance(conversation_id, str) or not conversation_id.strip():
-        raise protocol.ProtocolError(protocol.ERR_INVALID_REQUEST, "platform_conversation_id is required")
-    if not isinstance(platform_user_id, str) or not platform_user_id.strip():
-        raise protocol.ProtocolError(protocol.ERR_INVALID_REQUEST, "platform_user_id is required")
+    if not isinstance(conversation_id, str) or not conversation_id.strip() or len(conversation_id) > 512:
+        raise protocol.ProtocolError(protocol.ERR_INVALID_REQUEST, "platform_conversation_id must be 1..512 characters")
+    if not isinstance(platform_user_id, str) or not platform_user_id.strip() or len(platform_user_id) > 256:
+        raise protocol.ProtocolError(protocol.ERR_INVALID_REQUEST, "platform_user_id must be 1..256 characters")
     if not isinstance(sticker_id, str) or not sticker_id.strip() or len(sticker_id) > 256:
         raise protocol.ProtocolError(protocol.ERR_INVALID_REQUEST, "message.sticker_id must be 1..256 characters")
 

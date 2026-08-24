@@ -112,6 +112,23 @@ def test_platform_conversation_archive_rejects_missing_session_before_adapter_ca
         assert exc.code == protocol.ERR_INVALID_REQUEST
 
 
+def test_platform_conversation_archive_rejects_unknown_nested_fields():
+    import conversation_archive
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
+        json.dump({"cookies": []}, state)
+        state.flush()
+        try:
+            conversation_archive.archive({
+                "session": {"kind": "playwright_storage_state_file", "path": state.name},
+                "target": {"platform_conversation_id": "conversation-1", "nickname": "not-an-id"},
+                "archived": True,
+            })
+            assert False, "expected ProtocolError"
+        except protocol.ProtocolError as exc:
+            assert exc.code == protocol.ERR_INVALID_REQUEST
+
+
 def test_platform_conversation_list_validates_and_fails_closed_until_selector_exists():
     import sidecar
 
@@ -200,6 +217,26 @@ def test_sticker_send_rejects_unstable_or_incomplete_target_before_adapter_call(
         for input_data in invalid_inputs:
             try:
                 sticker_send.send_sticker(input_data)
+                assert False, "expected ProtocolError"
+            except protocol.ProtocolError as exc:
+                assert exc.code == protocol.ERR_INVALID_REQUEST
+
+
+def test_send_operations_reject_unknown_nested_fields():
+    import message_send
+    import sticker_send
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
+        json.dump({"cookies": []}, state)
+        state.flush()
+        session = {"kind": "playwright_storage_state_file", "path": state.name}
+        cases = (
+            (message_send.send_text, {"session": session, "target": {"platform_user_id": "u", "platform_conversation_id": "c", "nickname": "x"}, "message": {"text": "hello"}}),
+            (sticker_send.send_sticker, {"session": session, "target": {"platform_user_id": "u", "platform_conversation_id": "c"}, "message": {"sticker_id": "s", "text": "x"}}),
+        )
+        for sender, input_data in cases:
+            try:
+                sender(input_data)
                 assert False, "expected ProtocolError"
             except protocol.ProtocolError as exc:
                 assert exc.code == protocol.ERR_INVALID_REQUEST

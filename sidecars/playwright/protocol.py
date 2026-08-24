@@ -142,6 +142,8 @@ def _session_file(input_data):
     session = input_data.get("session")
     if not isinstance(session, dict) or session.get("kind") != "playwright_storage_state_file":
         raise ProtocolError(ERR_INVALID_REQUEST, "session must reference a storage state file")
+    if set(session) - {"kind", "path"}:
+        raise ProtocolError(ERR_INVALID_REQUEST, "session contains unknown fields")
     path = session.get("path")
     if not isinstance(path, str) or not path:
         raise ProtocolError(ERR_INVALID_REQUEST, "session.path is required")

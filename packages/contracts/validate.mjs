@@ -36,6 +36,52 @@ check('sidecar schema is valid JSON Schema draft-2020-12', () => {
   if (!ops.includes('health.check') || !ops.includes('message.send_text')) {
     throw new Error('missing frozen sidecar ops')
   }
+  const session = {kind: 'playwright_storage_state_file', path: '/run/session.json'}
+  const validInputs = [
+    {
+      op: 'conversations.list',
+      input: {session, cursor: null, limit: 100},
+    },
+    {
+      op: 'conversations.archive',
+      input: {session, target: {platform_conversation_id: 'conversation-1'}, archived: true},
+    },
+    {
+      op: 'message.send_text',
+      input: {
+        session,
+        target: {platform_user_id: 'user-1', platform_conversation_id: 'conversation-1'},
+        message: {text: 'hello'},
+      },
+    },
+    {
+      op: 'message.send_sticker',
+      input: {
+        session,
+        target: {platform_user_id: 'user-1', platform_conversation_id: 'conversation-1'},
+        message: {sticker_id: 'sticker-1'},
+      },
+    },
+    {
+      op: 'message.send_first',
+      input: {
+        session,
+        target: {platform_user_id: 'user-1'},
+        message: {text: 'hello'},
+      },
+    },
+  ]
+  for (const {op, input} of validInputs) {
+    const request = {
+      protocol_version: 1,
+      request_id: `contract-${op}`,
+      op,
+      deadline_ms: 30000,
+      input,
+    }
+    if (!validate(request)) throw new Error(`valid ${op} input rejected`)
+  }
+
   const validFirstMessage = {
     protocol_version: 1,
     request_id: 'contract-test',
@@ -47,10 +93,22 @@ check('sidecar schema is valid JSON Schema draft-2020-12', () => {
       message: {text: 'hello'},
     },
   }
-  if (!validate(validFirstMessage)) throw new Error('valid message.send_first input rejected')
   const invalidFirstMessage = structuredClone(validFirstMessage)
   invalidFirstMessage.input.target.platform_conversation_id = 'conversation-1'
   if (validate(invalidFirstMessage)) throw new Error('message.send_first accepted conversation target')
+
+  const invalidSticker = {
+    protocol_version: 1,
+    request_id: 'contract-sticker-invalid',
+    op: 'message.send_sticker',
+    deadline_ms: 30000,
+    input: {
+      session,
+      target: {platform_user_id: 'user-1', platform_conversation_id: 'conversation-1'},
+      message: {sticker_id: 'sticker-1', text: 'not allowed'},
+    },
+  }
+  if (validate(invalidSticker)) throw new Error('message.send_sticker accepted unknown message field')
 })
 
 check('every sidecar schema file parses', () => {
