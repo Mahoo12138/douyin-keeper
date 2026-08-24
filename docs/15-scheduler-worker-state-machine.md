@@ -386,6 +386,10 @@ NETWORK_TIMEOUT
 
 如果请求已经提交但响应丢失，结果可能未知，必须走 reconcile，而不是立即重发。
 
+Go Worker 只接受 Sidecar `retryable=true` 且错误码属于安全白名单的响应：
+`ADAPTER_UNAVAILABLE`（进程启动前失败）或 `NETWORK_TIMEOUT`（Adapter 明确确认请求未提交）。
+写入/读取失败、响应丢失和平台结果未知一律 fail-closed。
+
 ### 不重试
 
 ```text
@@ -412,6 +416,8 @@ attempt 4: +10m
 ```
 
 最大 Attempt 由 ErrorKind 决定。
+
+MVP 对上述安全重试错误统一最多执行 4 个 Attempt；达到上限后终止 Intent 并结算预留配额。
 
 重试流程：
 

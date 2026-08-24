@@ -80,6 +80,7 @@ func main() {
 	tick := scheduler.NewTickRunner(taskRepo, sendRepo, entitlementSvc, entitlementSvc,
 		outboxRepo, tx, cfg.ScheduleBatchSize)
 	sendReaper := scheduler.NewSendLeaseReaper(sendRepo, entitlementSvc, tx, cfg.ScheduleBatchSize)
+	retryRunner := scheduler.NewRetryRunner(sendRepo, entitlementSvc, outboxRepo, tx, cfg.ScheduleBatchSize)
 
 	publisher := scheduler.NewPublisher(outboxRepo, producer, cfg.OutboxBatchSize,
 		cfg.OutboxPollInterval, log)
@@ -135,6 +136,12 @@ func main() {
 				} else if n > 0 {
 					log.Warn("send attempts failed closed after expired lease", "count", n,
 						"error_code", apperr.CodeOutcomeUnknown)
+				}
+				if stats, err := retryRunner.RunOnce(ctx); err != nil {
+					log.Error("send retry scan failed", "err", err)
+				} else if stats.Requeued > 0 || stats.Exhausted > 0 {
+					log.Info("send retry scan completed", "scanned", stats.Scanned,
+						"requeued", stats.Requeued, "exhausted", stats.Exhausted)
 				}
 			}
 		}

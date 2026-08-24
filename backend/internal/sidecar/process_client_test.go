@@ -2,6 +2,7 @@ package sidecar
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -45,5 +46,13 @@ func TestProcessClientContextCancellationStopsProcess(t *testing.T) {
 	_, err := client.Call(ctx, Request{RequestID: "r1", Op: OpsHealthCheck})
 	if err == nil {
 		t.Fatal("expected context cancellation")
+	}
+}
+
+func TestProcessClientMarksStartFailureAsSafeRetryBoundary(t *testing.T) {
+	client := NewProcessClient("/definitely/missing/douyin-sidecar")
+	_, err := client.Call(context.Background(), Request{RequestID: "r1", Op: OpsHealthCheck})
+	if err == nil || !errors.Is(err, ErrProcessStart) {
+		t.Fatalf("expected ErrProcessStart, got %v", err)
 	}
 }

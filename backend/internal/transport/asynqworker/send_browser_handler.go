@@ -3,6 +3,7 @@ package asynqworker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -135,6 +136,10 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 			return err
 		})
 		if err != nil {
+			if errors.Is(err, sidecar.ErrProcessStart) {
+				nextAttemptAt := now().Add(sendRetryDelay(claimed.Attempt))
+				return finishSendRetry(ctx, deps, claimed, apperr.CodeAdapterUnavailable, nextAttemptAt, now)
+			}
 			if app, ok := apperr.As(err); ok && app.Code == apperr.CodeSessionExpired {
 				_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, now())
 				return failWithQuota(apperr.CodeSessionExpired)
@@ -143,6 +148,10 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		}
 		if code := sendSidecarErrorCode(response); code != "" {
 			mapped := mapSendSidecarError(code)
+			if shouldRetrySend(response) {
+				nextAttemptAt := now().Add(sendRetryDelay(claimed.Attempt))
+				return finishSendRetry(ctx, deps, claimed, mapped, nextAttemptAt, now)
+			}
 			if mapped == apperr.CodeSessionExpired {
 				_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, now())
 			} else if mapped == apperr.CodeChallengeRequired {
@@ -234,4 +243,42 @@ func mapSendSidecarError(code string) string {
 	default:
 		return apperr.CodeAdapterUnavailable
 	}
+}
+
+// shouldRetrySend trusts the Sidecar's retryable bit only for errors whose
+// adapter contract can prove that no platform write was accepted. A timeout
+// is conditional: adapters must set retryable=true only when they know the
+// request was not submitted; otherwise the result remains fail-closed.
+func shouldRetrySend(response *sidecar.Response) bool {
+	if response == nil || response.OK || response.Error == nil || !response.Error.Retryable {
+		return false
+	}
+	switch response.Error.Code {
+	case sidecar.ErrAdapterUnavailable, sidecar.ErrNetworkTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func sendRetryDelay(attempt int) time.Duration {
+	switch attempt {
+	case 1:
+		return 30 * time.Second
+	case 2:
+		return 2 * time.Minute
+	default:
+		return 10 * time.Minute
+	}
+}
+
+func finishSendRetry(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, code string,
+	nextAttemptAt time.Time, now func() time.Time) error {
+	return deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
+		errorCode := code
+		if err := deps.Sends.FinishJob(tctx, claimed.ID, send.JobFailed, &errorCode, true, nil, now()); err != nil {
+			return err
+		}
+		return deps.Sends.SetIntentStatus(tctx, claimed.IntentID, send.IntentRetryWait, &errorCode, &nextAttemptAt, now())
+	})
 }

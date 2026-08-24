@@ -23,11 +23,16 @@ func (r *OutboxRepo) Add(ctx context.Context, msg outbox.Message) error {
 	if msg.ID == "" {
 		msg.ID = uuid.New().String()
 	}
-	if msg.AvailableAt.IsZero() {
-		msg.AvailableAt = time.Now()
-	}
 	if msg.Payload == nil {
 		msg.Payload = []byte("{}")
+	}
+	if msg.AvailableAt.IsZero() {
+		_, err := From(ctx, r.pool).Exec(ctx, `
+			INSERT INTO queue_outbox (public_id, kind, aggregate_type, aggregate_id, payload_json, available_at, dedupe_key)
+			VALUES ($1,$2,$3,$4,$5,now(),$6)
+			ON CONFLICT (dedupe_key) DO NOTHING
+		`, msg.ID, msg.Kind, msg.AggregateType, msg.AggregateID, msg.Payload, msg.DedupeKey)
+		return err
 	}
 	_, err := From(ctx, r.pool).Exec(ctx, `
 		INSERT INTO queue_outbox (public_id, kind, aggregate_type, aggregate_id, payload_json, available_at, dedupe_key)

@@ -233,6 +233,39 @@ func (r *SendRepo) FindExpiredJobs(ctx context.Context, at time.Time, limit int)
 	return out, rows.Err()
 }
 
+// FindRetryDue locks retry_wait intents for one scheduler transaction. The
+// lock makes retry scans safe even if two scheduler leaders overlap briefly.
+func (r *SendRepo) FindRetryDue(ctx context.Context, at time.Time, limit int) ([]send.RetryDueIntent, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT `+intentCols+`, a.user_id
+		FROM send_intents si
+		JOIN douyin_accounts a ON a.id = si.account_id
+		WHERE si.status = 'retry_wait'
+		  AND si.next_attempt_at IS NOT NULL
+		  AND si.next_attempt_at <= $1
+		ORDER BY si.id
+		LIMIT $2
+		FOR UPDATE OF si SKIP LOCKED`, at, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []send.RetryDueIntent
+	for rows.Next() {
+		var in send.SendIntent
+		var userID int64
+		args := append(intentScanArgs(&in), &userID)
+		if err := rows.Scan(args...); err != nil {
+			return nil, err
+		}
+		out = append(out, send.RetryDueIntent{Intent: &in, UserID: userID})
+	}
+	return out, rows.Err()
+}
+
 func (r *SendRepo) FinishJob(ctx context.Context, jobID int64, status send.JobStatus, errorCode *string, retryable bool, platformMessageID *string, at time.Time) error {
 	_, err := From(ctx, r.pool).Exec(ctx, `
 		UPDATE send_jobs SET status=$2, error_code=$3, retryable=$4, platform_message_id=$5,

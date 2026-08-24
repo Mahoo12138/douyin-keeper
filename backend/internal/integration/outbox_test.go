@@ -11,6 +11,7 @@ import (
 
 func TestOutboxClaimPublishRoundTrip(t *testing.T) {
 	ctx := context.Background()
+	clearIntegrationOutbox(t, ctx)
 	repo := postgres.NewOutboxRepo(pool)
 
 	msg := outbox.Message{
@@ -24,7 +25,6 @@ func TestOutboxClaimPublishRoundTrip(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("add: %v", err)
 	}
-
 	pending, err := repo.ClaimPending(ctx, 10, "tester", 30*time.Second)
 	if err != nil {
 		t.Fatalf("claim: %v", err)
@@ -47,6 +47,7 @@ func TestOutboxClaimPublishRoundTrip(t *testing.T) {
 
 func TestOutboxDedupeKeyAbsorbed(t *testing.T) {
 	ctx := context.Background()
+	clearIntegrationOutbox(t, ctx)
 	repo := postgres.NewOutboxRepo(pool)
 	key := "dedupe:" + newUUID().String()
 
@@ -71,5 +72,12 @@ func TestOutboxDedupeKeyAbsorbed(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("expected dedupe to collapse to one row, got %d", n)
+	}
+}
+
+func clearIntegrationOutbox(t *testing.T, ctx context.Context) {
+	t.Helper()
+	if _, err := pool.Exec(ctx, `DELETE FROM queue_outbox`); err != nil {
+		t.Fatalf("clear integration outbox: %v", err)
 	}
 }

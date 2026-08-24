@@ -30,6 +30,11 @@ type ProcessClient struct {
 	reader *bufio.Reader
 }
 
+// ErrProcessStart identifies a failure that occurred before a request could
+// be written to the Sidecar. It is the only transport failure eligible for a
+// safe automatic retry; write/read failures leave platform outcome unknown.
+var ErrProcessStart = errors.New("sidecar process start failed")
+
 func NewProcessClient(command string, args ...string) *ProcessClient {
 	return &ProcessClient{command: command, args: append([]string(nil), args...)}
 }
@@ -105,7 +110,7 @@ func (c *ProcessClient) Call(ctx context.Context, req Request) (*Response, error
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if err := c.startLocked(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrProcessStart, err)
 	}
 	line, err := json.Marshal(req)
 	if err != nil {

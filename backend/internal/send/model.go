@@ -19,6 +19,8 @@ const (
 
 type IntentStatus string
 
+const MaxSendAttempts = 4
+
 const (
 	IntentPending   IntentStatus = "pending"
 	IntentQueued    IntentStatus = "queued"
@@ -97,6 +99,11 @@ type ExpiredSendJob struct {
 	UserID int64
 }
 
+type RetryDueIntent struct {
+	Intent *SendIntent
+	UserID int64
+}
+
 type Repository interface {
 	CreateIntent(ctx context.Context, in *SendIntent) error
 	CreateScheduledIntent(ctx context.Context, in *SendIntent) (bool, error)
@@ -109,6 +116,7 @@ type Repository interface {
 	GetJobOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*SendJob, error)
 	ClaimJob(ctx context.Context, publicID uuid.UUID, workerID string, lease time.Duration) (*SendJob, error)
 	FindExpiredJobs(ctx context.Context, at time.Time, limit int) ([]ExpiredSendJob, error)
+	FindRetryDue(ctx context.Context, at time.Time, limit int) ([]RetryDueIntent, error)
 	FinishJob(ctx context.Context, jobID int64, status JobStatus, errorCode *string, retryable bool, platformMessageID *string, at time.Time) error
 	SetIntentStatus(ctx context.Context, intentID int64, status IntentStatus, errorCode *string, nextAttemptAt *time.Time, at time.Time) error
 	SetIntentLastJob(ctx context.Context, intentID, jobID int64) error
