@@ -16,6 +16,7 @@ import (
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/friend"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
@@ -63,7 +64,10 @@ type SessionCheckDeps struct {
 	Tasks   interface {
 		GetByID(context.Context, int64) (*task.SparkTask, error)
 	}
-	Sends       send.Repository
+	Sends        send.Repository
+	Capabilities interface {
+		GetByAccountAndName(context.Context, int64, string) (*capability.Capability, error)
+	}
 	Entitlement send.Gate
 	Quota       interface {
 		ReleaseDaily(context.Context, int64, string) error
@@ -91,11 +95,23 @@ type SendDispatchDeps struct {
 	Now    func() time.Time
 }
 
-func NewLightMux(loader PayloadLoader, deps SendDispatchDeps, log *slog.Logger) *asynq.ServeMux {
+type CapabilityProbeDeps struct {
+	Snapshots capability.Repository
+	Sidecar   sidecar.Client
+	Tx        job.TxManager
+	Now       func() time.Time
+}
+
+type LightMuxDeps struct {
+	Dispatch SendDispatchDeps
+	Probe    CapabilityProbeDeps
+}
+
+func NewLightMux(loader PayloadLoader, deps LightMuxDeps, log *slog.Logger) *asynq.ServeMux {
 	return newMux(loader, nil, nil, &deps, log)
 }
 
-func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindDeps, dispatchDeps *SendDispatchDeps, log *slog.Logger) *asynq.ServeMux {
+func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindDeps, lightDeps *LightMuxDeps, log *slog.Logger) *asynq.ServeMux {
 	mux := asynq.NewServeMux()
 	for _, kind := range outboxKinds {
 		kind := kind
@@ -111,8 +127,12 @@ func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindD
 			mux.HandleFunc(kind, friendsSyncHandler(loader, *sessionDeps))
 			continue
 		}
-		if kind == asynqqueue.KindSendDispatch && dispatchDeps != nil {
-			mux.HandleFunc(kind, sendDispatchHandler(loader, *dispatchDeps))
+		if kind == asynqqueue.KindSendDispatch && lightDeps != nil {
+			mux.HandleFunc(kind, sendDispatchHandler(loader, lightDeps.Dispatch))
+			continue
+		}
+		if kind == asynqqueue.KindCapabilityProbe && lightDeps != nil && lightDeps.Probe.Snapshots != nil && lightDeps.Probe.Sidecar != nil && lightDeps.Probe.Tx != nil {
+			mux.HandleFunc(kind, capabilityProbeHandler(loader, lightDeps.Probe))
 			continue
 		}
 		if kind == asynqqueue.KindSendBrowser && sessionDeps != nil && sessionDeps.Sends != nil {

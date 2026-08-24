@@ -1,0 +1,124 @@
+package asynqworker
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+	"time"
+
+	"github.com/hibiken/asynq"
+
+	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
+)
+
+type probeLoader struct{ message *postgres.PendingMessage }
+
+func (l probeLoader) FetchByPublicID(context.Context, string) (*postgres.PendingMessage, error) {
+	return l.message, nil
+}
+
+type probeSnapshotRepo struct{ snapshots []capability.Capability }
+
+func (r *probeSnapshotRepo) ListByAccount(context.Context, int64) ([]capability.Capability, error) {
+	return r.snapshots, nil
+}
+
+func (r *probeSnapshotRepo) GetByAccountAndName(_ context.Context, accountID int64, name string) (*capability.Capability, error) {
+	for _, snapshot := range r.snapshots {
+		if snapshot.AccountID == accountID && snapshot.Name == name {
+			copy := snapshot
+			return &copy, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r *probeSnapshotRepo) Upsert(_ context.Context, snapshot capability.Capability) error {
+	for i := range r.snapshots {
+		if r.snapshots[i].AccountID == snapshot.AccountID && r.snapshots[i].Name == snapshot.Name {
+			r.snapshots[i] = snapshot
+			return nil
+		}
+	}
+	r.snapshots = append(r.snapshots, snapshot)
+	return nil
+}
+
+type probeTx struct{}
+
+func (probeTx) WithinTx(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) }
+
+type probeSidecar struct {
+	request  sidecar.Request
+	response *sidecar.Response
+}
+
+func (s *probeSidecar) Call(_ context.Context, request sidecar.Request) (*sidecar.Response, error) {
+	s.request = request
+	return s.response, nil
+}
+
+func TestCapabilityProbePersistsHealthSnapshot(t *testing.T) {
+	checkedAt := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	repo := &probeSnapshotRepo{}
+	client := &probeSidecar{response: &sidecar.Response{
+		ProtocolVersion: sidecar.ProtocolVersion,
+		OK:              true,
+		Result: map[string]any{
+			"status":       "healthy",
+			"adapter":      "browser.consumer",
+			"version":      "0.1.0",
+			"capabilities": []string{capability.NameMessageTextExisting},
+		},
+		Meta: sidecar.Meta{Adapter: "browser.consumer", AdapterVersion: "0.1.0"},
+	}}
+	loader := probeLoader{message: &postgres.PendingMessage{
+		PublicID: "probe-outbox",
+		Payload:  json.RawMessage(`{"account_id":42}`),
+	}}
+	handler := capabilityProbeHandler(loader, CapabilityProbeDeps{
+		Snapshots: repo, Sidecar: client, Tx: probeTx{}, Now: func() time.Time { return checkedAt },
+	})
+	if err := handler(context.Background(), asynq.NewTask("capability.probe", []byte(`{"outbox_id":"probe-outbox"}`))); err != nil {
+		t.Fatalf("probe failed: %v", err)
+	}
+	if client.request.Op != sidecar.OpsHealthCheck || client.request.DeadlineMS != 5000 {
+		t.Fatalf("unexpected health request: %+v", client.request)
+	}
+	if len(repo.snapshots) != len(capability.KnownNames) {
+		t.Fatalf("persisted %d snapshots, want %d", len(repo.snapshots), len(capability.KnownNames))
+	}
+	send, err := repo.GetByAccountAndName(context.Background(), 42, capability.NameMessageTextExisting)
+	if err != nil || send == nil || send.Status != capability.StatusAvailable {
+		t.Fatalf("send capability snapshot = %+v, err=%v", send, err)
+	}
+	friends, err := repo.GetByAccountAndName(context.Background(), 42, capability.NameFriendsSync)
+	if err != nil || friends == nil || friends.Status != capability.StatusUnavailable || friends.ErrorCode == nil || *friends.ErrorCode != sidecar.ErrAdapterUnavailable {
+		t.Fatalf("missing capability snapshot = %+v, err=%v", friends, err)
+	}
+}
+
+func TestCapabilityProbeFailsClosedWhenSidecarUnavailable(t *testing.T) {
+	repo := &probeSnapshotRepo{}
+	client := &probeSidecar{response: &sidecar.Response{
+		ProtocolVersion: sidecar.ProtocolVersion,
+		OK:              false,
+		Error:           &sidecar.Error{Code: sidecar.ErrAdapterUnavailable},
+	}}
+	handler := capabilityProbeHandler(probeLoader{message: &postgres.PendingMessage{
+		Payload: json.RawMessage(`{"account_id":42}`),
+	}}, CapabilityProbeDeps{Snapshots: repo, Sidecar: client, Tx: probeTx{}})
+	if err := handler(context.Background(), asynq.NewTask("capability.probe", []byte(`{"outbox_id":"probe-outbox"}`))); err != nil {
+		t.Fatalf("probe failed: %v", err)
+	}
+	if len(repo.snapshots) != len(capability.KnownNames) {
+		t.Fatalf("persisted %d snapshots, want %d", len(repo.snapshots), len(capability.KnownNames))
+	}
+	for _, snapshot := range repo.snapshots {
+		if snapshot.Status != capability.StatusUnavailable || snapshot.ErrorCode == nil || *snapshot.ErrorCode != sidecar.ErrAdapterUnavailable {
+			t.Fatalf("unexpected unavailable snapshot: %+v", snapshot)
+		}
+	}
+}

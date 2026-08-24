@@ -86,7 +86,8 @@ func main() {
 	mux := asynqworker.NewBrowserMux(postgres.NewOutboxRepo(pool), asynqworker.SessionCheckDeps{
 		Jobs: jobRepo, Accounts: accountRepo, Sessions: sessionSvc, Sidecar: sidecarClient,
 		Redis: rdb, Friends: friendRepo, Targets: friendRepo, Tasks: taskRepo, Sends: sendRepo,
-		Entitlement: entitlementSvc, Quota: entitlementSvc, Tx: workerTx,
+		Capabilities: postgres.NewCapabilityRepo(pool),
+		Entitlement:  entitlementSvc, Quota: entitlementSvc, Tx: workerTx,
 		WorkerID: workerID, LockTTL: 2 * time.Minute,
 	}, log)
 	srv := asynqqueue.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr}, asynqworker.ServerConfig("browser"))

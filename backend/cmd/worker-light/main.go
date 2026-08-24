@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/hibiken/asynq"
@@ -15,6 +16,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/transport/asynqworker"
 )
 
@@ -38,9 +40,26 @@ func main() {
 	}
 	defer pool.Close()
 
+	capabilityRepo := postgres.NewCapabilityRepo(pool)
+	workerTx := postgres.NewTxManager(pool)
+	sidecarScript := cfg.PlaywrightSidecarScript
+	if _, statErr := os.Stat(sidecarScript); os.IsNotExist(statErr) {
+		candidate := filepath.Join("..", sidecarScript)
+		if _, candidateErr := os.Stat(candidate); candidateErr == nil {
+			sidecarScript = candidate
+		}
+	}
+	sidecarClient := sidecar.NewProcessClient(cfg.PlaywrightSidecarCommand, sidecarScript)
+	defer sidecarClient.Close()
+
 	srv := asynqqueue.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr}, asynqworker.ServerConfig("light"))
-	mux := asynqworker.NewLightMux(postgres.NewOutboxRepo(pool), asynqworker.SendDispatchDeps{
-		Sends: postgres.NewSendRepo(pool), Outbox: postgres.NewOutboxRepo(pool), Tx: postgres.NewTxManager(pool),
+	mux := asynqworker.NewLightMux(postgres.NewOutboxRepo(pool), asynqworker.LightMuxDeps{
+		Dispatch: asynqworker.SendDispatchDeps{
+			Sends: postgres.NewSendRepo(pool), Outbox: postgres.NewOutboxRepo(pool), Tx: workerTx,
+		},
+		Probe: asynqworker.CapabilityProbeDeps{
+			Snapshots: capabilityRepo, Sidecar: sidecarClient, Tx: workerTx,
+		},
 	}, log)
 	log.Info("worker-light starting")
 	if err := asynqqueue.RunServer(srv, mux, ctx); err != nil {

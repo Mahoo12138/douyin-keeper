@@ -13,6 +13,7 @@ import (
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/redislock"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/send"
@@ -92,6 +93,15 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		}
 		if acct.SessionStatus == account.SessionChallengeRequired {
 			return failWithQuota(apperr.CodeChallengeRequired)
+		}
+		if deps.Capabilities != nil {
+			snapshot, capabilityErr := deps.Capabilities.GetByAccountAndName(ctx, acct.ID, capability.NameMessageTextExisting)
+			if capabilityErr != nil {
+				return failWithQuota(apperr.CodeInternal)
+			}
+			if snapshot == nil || snapshot.Status != capability.StatusAvailable {
+				return failWithQuota(capabilitySendError(snapshot))
+			}
 		}
 		decision, err := deps.Entitlement.Authorize(ctx, entitlement.AuthorizationRequest{
 			UserID: acct.UserID, Action: entitlement.ActionSendExecute,
@@ -173,6 +183,18 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		}
 		return nil
 	}
+}
+
+func capabilitySendError(snapshot *capability.Capability) string {
+	if snapshot != nil && snapshot.ErrorCode != nil {
+		switch *snapshot.ErrorCode {
+		case sidecar.ErrAdapterIncompatible:
+			return apperr.CodeAdapterIncompatible
+		case sidecar.ErrNetworkTimeout:
+			return apperr.CodeNetworkTimeout
+		}
+	}
+	return apperr.CodeAdapterUnavailable
 }
 
 func finishSend(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, jobStatus send.JobStatus, code string, retryable bool, messageID *string, intentStatus send.IntentStatus, now func() time.Time) error {

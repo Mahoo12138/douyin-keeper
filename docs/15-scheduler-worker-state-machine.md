@@ -268,6 +268,13 @@ commit
 
 Adapter 选择只产生“计划路由”。真正 Worker 开始前仍做 capability health check。
 
+当前 Browser Worker 的发送 preflight 会读取账号的
+`message.send.text.existing` snapshot：只有状态为 `available` 才允许进入
+Sidecar；snapshot 缺失、`degraded` 或 `unavailable` 时直接以
+`ADAPTER_UNAVAILABLE`（或快照中的兼容性错误）结束，并释放已预占的日配额。
+账号绑定成功后会通过 `capability.probe` 投递首次 `health.check`；周期性刷新和
+全局 adapter circuit breaker 留待后续模块。
+
 ## 7. Worker Claim
 
 收到 queue task 后：

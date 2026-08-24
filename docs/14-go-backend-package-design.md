@@ -249,6 +249,12 @@ internal/transport/httpapi/entitlement_handler.go
 - Adapter health；
 - Capability resolver policy。
 
+当前实现：账号 QR 绑定成功后在同一事务写入 `capability.probe` outbox，
+`worker-light` 调用 Sidecar `health.check` 并 upsert `capability_snapshots`。
+发送 Worker 在调用 Sidecar 前必须确认 `message.send.text.existing` 为
+`available`；缺失、未探测或不可用均 fail closed。全局
+`adapter_health` / circuit breaker 仍作为后续独立模块实现。
+
 ### `risk`
 
 拥有：

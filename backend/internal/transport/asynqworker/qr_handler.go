@@ -298,11 +298,21 @@ func enqueueInitialFriendsSync(ctx context.Context, deps QRBindDeps, acct *accou
 	if err := deps.Jobs.CreateJob(ctx, friendsJob); err != nil {
 		return err
 	}
-	return deps.Outbox.Add(ctx, outbox.Message{
+	if err := deps.Outbox.Add(ctx, outbox.Message{
 		Kind: outbox.KindFriendsSyncBrowser, AggregateType: "job",
 		AggregateID: friendsJob.PublicID.String(),
 		Payload:     mustJSON(map[string]string{"job_id": friendsJob.PublicID.String()}),
 		DedupeKey:   "job.platform:" + friendsJob.PublicID.String(),
+	}); err != nil {
+		return err
+	}
+	return deps.Outbox.Add(ctx, outbox.Message{
+		Kind: outbox.KindCapabilityProbe, AggregateType: "account",
+		AggregateID: acct.PublicID.String(),
+		Payload:     mustJSON(map[string]int64{"account_id": acct.ID}),
+		// Scope the dedupe key to this binding lifecycle so a later rebind
+		// gets a fresh health snapshot while duplicate enqueue paths remain safe.
+		DedupeKey: "capability.probe:" + acct.PublicID.String() + ":" + friendsJob.PublicID.String(),
 	})
 }
 
