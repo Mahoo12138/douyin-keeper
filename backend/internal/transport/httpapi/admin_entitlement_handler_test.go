@@ -13,10 +13,10 @@ func TestAdminEntitlementViewsExposeSummariesOnly(t *testing.T) {
 	now := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
 	plan := adminEntitlementPlanViewFrom(entitlement.Plan{
 		PublicID: uuid.MustParse("77777777-7777-7777-7777-777777777777"), Code: "standard", Name: "标准版",
-		Status: entitlement.StatusActive, AccountQuota: 3, TaskQuota: 10, DailySendQuota: 20,
+		Status: entitlement.StatusActive, AccountQuota: 3, TaskQuota: 10, DailySendQuota: 20, MigrationWeight: 2,
 		Features: map[string]bool{"browser_text_send": true}, CreatedAt: now, UpdatedAt: now,
 	})
-	if plan.ID == "" || plan.Features["browser_text_send"] != true || plan.CreatedAt != "2026-08-24T09:00:00Z" {
+	if plan.ID == "" || plan.MigrationWeight != 2 || plan.Features["browser_text_send"] != true || plan.CreatedAt != "2026-08-24T09:00:00Z" {
 		t.Fatalf("plan view = %+v", plan)
 	}
 

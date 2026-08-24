@@ -267,17 +267,23 @@ expires_at = anchor + duration_days
 
 虽然 Schema 支持多个 EntitlementPlan，但 MVP 建议只启用一个正式方案，例如 `standard`，通过不同 `duration_days` 区分卡密。
 
-若未来启用多个档位，MVP 阶段先禁止不同 Plan 混合排队：
+若启用多个档位，跨 Plan 兑换不再混合排队，而是执行显式的授权迁移：
+
+`409 ENTITLEMENT_PLAN_CONFLICT` 仅用于检测到无法安全解释的混合 Plan 授权链或无效迁移权重；
+正常跨 Plan 兑换不再因为档位不同而阻断。
+
+当前 Redeem 与管理员 Grant 已落实跨 Plan 迁移。每个 Plan 使用 `migration_weight` 表示
+内部授权能力单位/天（默认 1，范围 1–1000），它不是价格，也不能用于推导价格。迁移时锁定
+User，在同一事务内读取并撤销所有 `expires_at > now` 的旧 Grant，再按下式计算旧授权剩余时间：
 
 ```text
-409 ENTITLEMENT_PLAN_CONFLICT
+converted_remaining = floor(remaining_seconds * old_weight / new_weight)
+new_grant = converted_remaining + new_card_or_admin_duration
 ```
 
-后续再单独设计升级、降级、剩余时间折算，不把商业规则提前塞进核心授权系统。
-
-当前 Redeem 与管理员 Grant 已落实这条边界：已有未过期或已排程授权时，不同 Plan 不允许
-混合顺延，返回 `409 ENTITLEMENT_PLAN_CONFLICT`；过期后切换 Plan 允许，剩余时间折算
-仍留待后续升级/降级策略。
+新 Grant 从 `now` 立即生效；旧 Grant 的撤销原因和迁移前后方案只写入脱敏审计。相同权重保持
+原剩余时间，迁移不会制造两个同时生效的 Plan。旧版本未提供权重时按 1 处理，因此可平滑
+升级 Schema。
 
 ## 8. 原子兑换流程
 
@@ -620,7 +626,7 @@ MVP 不做：
 - 分销返佣；
 - 卡密转赠流程；
 - 自动续费；
-- 不同档位即时升级/降级折算；
+- 基于价格、订单或支付渠道的升级/降级折算；
 - 复杂余额或积分体系。
 
 这保证卡密只是一个简单、可审计、可替换的授权入口，不反向污染 Douyin Keeper 的核心业务模型。

@@ -54,6 +54,12 @@ func (r entitlementGrantStub) CreateGrant(context.Context, *Grant) error { retur
 func (r entitlementGrantStub) GetLastNonRevokedGrant(context.Context, int64) (*Grant, error) {
 	return r.grant, nil
 }
+func (r entitlementGrantStub) ListActiveOrScheduledGrants(context.Context, int64, time.Time) ([]*Grant, error) {
+	if r.grant == nil {
+		return nil, nil
+	}
+	return []*Grant{r.grant}, nil
+}
 func (r entitlementGrantStub) GetEffectiveGrant(context.Context, int64, time.Time) (*Grant, bool, error) {
 	return r.grant, true, nil
 }
@@ -85,32 +91,32 @@ func activeGrantForServiceTests() *Grant {
 	}
 }
 
-func TestValidatePlanRenewalRejectsDifferentActiveOrScheduledPlan(t *testing.T) {
-	now := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+func TestConvertRemainingDurationUsesPlanMigrationWeights(t *testing.T) {
 	tests := []struct {
-		name       string
-		last       *Grant
-		nextPlanID int64
-		wantCode   string
+		name      string
+		remaining time.Duration
+		oldWeight int
+		newWeight int
+		want      time.Duration
+		wantError bool
 	}{
-		{name: "no previous grant", last: nil, nextPlanID: 2},
-		{name: "same plan extends active grant", last: &Grant{EntitlementPlanID: 1, ExpiresAt: now.Add(time.Hour)}, nextPlanID: 1},
-		{name: "different plan conflicts with active grant", last: &Grant{EntitlementPlanID: 1, ExpiresAt: now.Add(time.Hour)}, nextPlanID: 2, wantCode: apperr.CodeEntitlementPlanConflict},
-		{name: "different plan conflicts with scheduled grant", last: &Grant{EntitlementPlanID: 1, StartsAt: now.Add(time.Hour), ExpiresAt: now.Add(48 * time.Hour)}, nextPlanID: 2, wantCode: apperr.CodeEntitlementPlanConflict},
-		{name: "different plan allowed after expiry", last: &Grant{EntitlementPlanID: 1, ExpiresAt: now}, nextPlanID: 2},
+		{name: "same weight preserves time", remaining: 24 * time.Hour, oldWeight: 1, newWeight: 1, want: 24 * time.Hour},
+		{name: "upgrade halves remaining time", remaining: 24 * time.Hour, oldWeight: 1, newWeight: 2, want: 12 * time.Hour},
+		{name: "downgrade doubles remaining time", remaining: 12 * time.Hour, oldWeight: 2, newWeight: 1, want: 24 * time.Hour},
+		{name: "sub-second remainder is discarded", remaining: time.Second - 1, oldWeight: 1, newWeight: 1, want: 0},
+		{name: "invalid weight fails closed", remaining: 24 * time.Hour, oldWeight: 0, newWeight: 1, wantError: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validatePlanRenewal(tt.last, tt.nextPlanID, now)
-			if tt.wantCode == "" {
-				if err != nil {
-					t.Fatalf("validatePlanRenewal() error = %v", err)
+			got, err := convertRemainingDuration(tt.remaining, tt.oldWeight, tt.newWeight)
+			if tt.wantError {
+				if err == nil {
+					t.Fatal("convertRemainingDuration() error = nil, want error")
 				}
 				return
 			}
-			app, ok := apperr.As(err)
-			if !ok || app.Code != tt.wantCode || app.Kind != apperr.KindConflict {
-				t.Fatalf("validatePlanRenewal() error = %v, want %s conflict", err, tt.wantCode)
+			if err != nil || got != tt.want {
+				t.Fatalf("convertRemainingDuration() = %s, err=%v, want %s", got, err, tt.want)
 			}
 		})
 	}

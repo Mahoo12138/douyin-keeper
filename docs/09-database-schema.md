@@ -673,28 +673,29 @@ Admin 使用独立 Repository / Policy，不通过隐藏的 `is_admin` 参数复
 
 ## 12. Migration 顺序
 
-建议第一批 migration：
+原始设计的逻辑迁移顺序（仅作模块分层参考，文件编号以仓库现状为准）：
 
 ```text
-000001_users_auth.sql
-000002_auth_sessions_refresh_link_codes.sql
-000003_entitlement_cards.sql
-000004_douyin_accounts_sessions.sql
-000005_friends_conversations.sql
-000006_spark_tasks.sql
-000007_send_intents_jobs.sql
-000008_jobs_events.sql
-000009_queue_outbox.sql
-000010_capabilities_risk.sql
-000011_admin_audit_settings.sql
-000012_indexes.sql
+users_auth
+auth_sessions_refresh_link_codes
+entitlement_cards
+douyin_accounts_sessions
+friends_conversations
+spark_tasks
+send_intents_jobs
+jobs_events
+queue_outbox
+capabilities_risk
+admin_audit_settings
+indexes
 ```
 
 原则：migration 只前进，不修改已发布 migration；修复通过新 migration 完成。
 
 当前仓库实际迁移已包含：`000001_init.sql`、`000002_notifications.sql`、
 `000003_message_templates.sql`、`000004_wechat_notifications.sql`、
-`000005_conversation_archive.sql`；后续结构变更继续追加新文件。
+`000005_conversation_archive.sql`、`000006_entitlement_migration_weight.sql`；
+后续结构变更继续追加新文件。
 
 ## 13. MVP 冻结项
 

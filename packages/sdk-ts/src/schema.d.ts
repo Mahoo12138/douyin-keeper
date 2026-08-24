@@ -1117,6 +1117,8 @@ export interface components {
             account_quota: number;
             task_quota: number;
             daily_send_quota: number;
+            /** @description Internal entitlement capacity unit per day; not a price. */
+            migration_weight: number;
             features: {
                 [key: string]: boolean;
             };
@@ -1131,6 +1133,11 @@ export interface components {
             account_quota: number;
             task_quota: number;
             daily_send_quota: number;
+            /**
+             * @description Internal entitlement capacity unit per day; defaults to 1 and is not a price.
+             * @default 1
+             */
+            migration_weight: number;
             features?: {
                 [key: string]: boolean;
             };

@@ -173,18 +173,24 @@ func (s *Service) Redeem(ctx context.Context, userID int64, rawCode string) (Gra
 			}
 			last = nil // first grant ever: anchor at now
 		}
-		if err := validatePlanRenewal(last, code.Batch.EntitlementPlanID, now); err != nil {
-			return err
-		}
 		anchor := now
-		if last != nil && last.ExpiresAt.After(anchor) {
+		period := time.Duration(code.Batch.DurationDays) * 24 * time.Hour
+		migrated := false
+		if last != nil && last.ExpiresAt.After(now) && last.EntitlementPlanID != code.Batch.EntitlementPlanID {
+			converted, err := s.migrateActiveGrants(tctx, userID, last, code.Plan, now, userID)
+			if err != nil {
+				return err
+			}
+			period += converted
+			migrated = true
+		} else if last != nil && last.ExpiresAt.After(anchor) {
 			anchor = last.ExpiresAt
 		}
 		g := &Grant{
 			PublicID: uuid.New(), UserID: userID,
 			EntitlementPlanID: code.Batch.EntitlementPlanID,
 			SourceType:        SourceCard, SourceCardID: &code.ID,
-			StartsAt: anchor, ExpiresAt: anchor.Add(time.Duration(code.Batch.DurationDays) * 24 * time.Hour),
+			StartsAt: anchor, ExpiresAt: anchor.Add(period),
 			Plan: code.Plan,
 		}
 		if err := s.grants.CreateGrant(tctx, g); err != nil {
@@ -198,6 +204,7 @@ func (s *Service) Redeem(ctx context.Context, userID int64, rawCode string) (Gra
 				"grant_id":      g.PublicID.String(),
 				"plan_code":     code.Plan.Code,
 				"duration_days": code.Batch.DurationDays,
+				"migrated":      migrated,
 			})
 		}
 		grant = *g
@@ -238,11 +245,14 @@ func (s *Service) GrantByAdmin(ctx context.Context, adminID, userID, planID int6
 			}
 			last = nil
 		}
-		if err := validatePlanRenewal(last, planID, now); err != nil {
-			return err
-		}
 		anchor := now
-		if last != nil && last.ExpiresAt.After(anchor) {
+		if last != nil && last.ExpiresAt.After(now) && last.EntitlementPlanID != planID {
+			converted, err := s.migrateActiveGrants(tctx, userID, last, plan, now, adminID)
+			if err != nil {
+				return err
+			}
+			period += converted
+		} else if last != nil && last.ExpiresAt.After(anchor) {
 			anchor = last.ExpiresAt
 		}
 		g := &Grant{
@@ -640,6 +650,15 @@ func (s *Service) RevokeUnusedCodeByAdmin(ctx context.Context, actorID int64, ba
 }
 
 func (s *Service) CreatePlan(ctx context.Context, p *Plan) (*Plan, error) {
+	if p == nil {
+		return nil, apperr.Validation(apperr.CodeConflict, "invalid entitlement plan")
+	}
+	if p.MigrationWeight == 0 {
+		p.MigrationWeight = 1
+	}
+	if p.MigrationWeight < 1 || p.MigrationWeight > 1000 {
+		return nil, apperr.Validation(apperr.CodeConflict, "migration weight out of range")
+	}
 	p.PublicID = uuid.New()
 	p.CreatedAt, p.UpdatedAt = s.now(), s.now()
 	if p.Status == "" {
@@ -776,15 +795,61 @@ func validateCodeForRedeem(c *CardCode, now time.Time) *apperr.AppError {
 	return nil
 }
 
-// validatePlanRenewal enforces the MVP rule from docs/03, docs/09 and docs/12:
-// while a user has an unrevoked grant that is still active or scheduled, a
-// different plan cannot be appended. Cross-plan upgrade/downgrade conversion
-// remains a separate product policy and must not be inferred here.
-func validatePlanRenewal(last *Grant, nextPlanID int64, now time.Time) *apperr.AppError {
-	if last == nil || !last.ExpiresAt.After(now) || last.EntitlementPlanID == nextPlanID {
-		return nil
+// migrateActiveGrants converts the remaining authorization window when a
+// user moves between plans. The caller must already hold the user lock and
+// run inside the surrounding entitlement transaction.
+func (s *Service) migrateActiveGrants(ctx context.Context, userID int64, last *Grant, nextPlan *Plan, now time.Time, actorID int64) (time.Duration, error) {
+	if last == nil || nextPlan == nil || !last.ExpiresAt.After(now) || last.EntitlementPlanID == nextPlan.ID {
+		return 0, nil
 	}
-	return apperr.Conflict(apperr.CodeEntitlementPlanConflict, "entitlement plan conflict")
+	if nextPlan.MigrationWeight < 1 || nextPlan.MigrationWeight > 1000 {
+		return 0, apperr.Validation(apperr.CodeConflict, "migration weight out of range")
+	}
+	oldPlan, err := s.plans.GetPlanByID(ctx, last.EntitlementPlanID)
+	if err != nil {
+		return 0, err
+	}
+	if oldPlan == nil || oldPlan.MigrationWeight < 1 || oldPlan.MigrationWeight > 1000 {
+		return 0, apperr.Conflict(apperr.CodeEntitlementPlanConflict, "source plan cannot be migrated")
+	}
+	active, err := s.grants.ListActiveOrScheduledGrants(ctx, userID, now)
+	if err != nil {
+		return 0, err
+	}
+	for _, item := range active {
+		if item == nil || item.EntitlementPlanID != last.EntitlementPlanID {
+			return 0, apperr.Conflict(apperr.CodeEntitlementPlanConflict, "entitlement plan conflict")
+		}
+	}
+	converted, err := convertRemainingDuration(last.ExpiresAt.Sub(now), oldPlan.MigrationWeight, nextPlan.MigrationWeight)
+	if err != nil {
+		return 0, err
+	}
+	reason := "plan migration to " + nextPlan.Code
+	for _, item := range active {
+		if err := s.grants.RevokeGrant(ctx, item.ID, actorID, reason); err != nil {
+			return 0, err
+		}
+	}
+	if s.audit != nil {
+		_ = s.audit.Record(ctx, &actorID, "entitlement.plan.migrate", "user", fmt.Sprintf("%d", userID), map[string]any{
+			"from_plan": oldPlan.Code, "to_plan": nextPlan.Code,
+			"remaining_seconds": int64(last.ExpiresAt.Sub(now) / time.Second),
+			"converted_seconds": int64(converted / time.Second),
+		})
+	}
+	return converted, nil
+}
+
+func convertRemainingDuration(remaining time.Duration, oldWeight, newWeight int) (time.Duration, error) {
+	if oldWeight < 1 || oldWeight > 1000 || newWeight < 1 || newWeight > 1000 {
+		return 0, apperr.Validation(apperr.CodeConflict, "migration weight out of range")
+	}
+	seconds := int64(remaining / time.Second)
+	if seconds <= 0 {
+		return 0, nil
+	}
+	return time.Duration(seconds*int64(oldWeight)/int64(newWeight)) * time.Second, nil
 }
 
 // TimeOf returns the current time from the service clock (helper).

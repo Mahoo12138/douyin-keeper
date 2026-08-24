@@ -236,9 +236,10 @@ Protocol 发送在明确收到 `outcome=not_sent`（或 `platform_write_accepted
 `MAX_GLOBAL_BROWSERS` 分离，Sidecar 调用持有可续租的 TTL lease；Protocol/interactive
 Worker 不占用该浏览器容量。真正的平台 selector 与 Sidecar SDK 仍需外部环境联调。
 
-权益层已补齐 MVP 的跨 Plan 顺延保护：Redeem 与管理员 Grant 在已有有效/排程授权时
-拒绝不同 Plan 混排并返回 `ENTITLEMENT_PLAN_CONFLICT`；真正的升级、降级和剩余时间
-折算策略仍属于后续 M7 工作。
+权益层已完成多档 Plan 的升级/降级迁移：Plan 暴露非价格性的 `migration_weight`（默认 1），
+Redeem 与管理员 Grant 在已有有效/排程授权时，会在 User 锁与同一数据库事务内撤销旧 Grant，
+按 `remaining_seconds * old_weight / new_weight` 向下取整折算剩余时间，再叠加本次时长创建新
+Grant；迁移前后方案和折算秒数写入脱敏审计，不引入订单或支付概念。
 
 ## 5. 编码前必须先冻结的契约
 

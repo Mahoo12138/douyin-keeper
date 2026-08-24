@@ -1843,6 +1843,7 @@ components:
       - account_quota
       - task_quota
       - daily_send_quota
+      - migration_weight
       - features
       - created_at
       - updated_at
@@ -1868,6 +1869,11 @@ components:
         daily_send_quota:
           type: integer
           minimum: 0
+        migration_weight:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: Internal entitlement capacity unit per day; not a price.
         features:
           type: object
           additionalProperties:
@@ -1902,6 +1908,12 @@ components:
         daily_send_quota:
           type: integer
           minimum: 0
+        migration_weight:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 1
+          description: Internal entitlement capacity unit per day; defaults to 1 and is not a price.
         features:
           type: object
           additionalProperties:

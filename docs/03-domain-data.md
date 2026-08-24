@@ -54,11 +54,13 @@ erDiagram
 
 `users` 不直接保存配额。运行时从当前 active Grant 对应的 Plan 计算 EffectiveEntitlement。
 
-MVP 续期采用顺延规则：新 Grant 从 `max(now, last_unrevoked_grant.expires_at)` 开始，避免提前续期损失时间。Schema 支持多个 Plan，但 MVP 建议只启用一个正式方案，暂不处理跨档位升级/降级折算。
+MVP 同 Plan 续期采用顺延规则：新 Grant 从 `max(now, last_unrevoked_grant.expires_at)` 开始，避免提前续期损失时间；跨 Plan 迁移按下文的 `migration_weight` 策略处理。
 
-当前 Redeem 与管理员 Grant 已执行 MVP 的跨 Plan 边界：用户存在仍有效或已排程的未撤销
-Grant 时，只有相同 Plan 才能顺延；不同 Plan 返回 `ENTITLEMENT_PLAN_CONFLICT`。过期
-授权之后切换 Plan 仍允许，升级/降级的剩余时间折算暂未实现。
+当前 Redeem 与管理员 Grant 已支持跨 Plan 迁移：Plan 的 `migration_weight` 表示内部授权
+能力单位/天，不是价格；跨 Plan 时在同一用户锁与数据库事务内撤销所有有效/排程旧 Grant，
+将 `max(0, last_expires_at - now)` 按 `old_weight / new_weight` 折算，再叠加本次卡密或人工授权
+时长生成新 Grant。默认权重为 1，因此旧方案保持剩余时间；权重更高的方案代表单位时间能力更高，
+剩余时间按比例缩短，权重更低则按比例延长。迁移动作写入脱敏审计，不引入价格、订单或支付概念。
 
 卡密重复提交已具备幂等边界：原兑换用户返回原 Grant，其他用户收到稳定的
 `CODE_ALREADY_REDEEMED`，不泄露授权归属。

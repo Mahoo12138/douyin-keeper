@@ -21,13 +21,13 @@ func NewEntitlementRepo(pool *pgxpool.Pool) *EntitlementRepo { return &Entitleme
 
 // ---- plans ----
 
-const planCols = `id, public_id, code, name, status, account_quota, task_quota, daily_send_quota, features_json, created_at, updated_at`
+const planCols = `id, public_id, code, name, status, account_quota, task_quota, daily_send_quota, migration_weight, features_json, created_at, updated_at`
 
 func scanPlan(row pgx.Row) (*entitlement.Plan, error) {
 	var p entitlement.Plan
 	var feats []byte
 	err := row.Scan(&p.ID, &p.PublicID, &p.Code, &p.Name, &p.Status,
-		&p.AccountQuota, &p.TaskQuota, &p.DailySendQuota, &feats, &p.CreatedAt, &p.UpdatedAt)
+		&p.AccountQuota, &p.TaskQuota, &p.DailySendQuota, &p.MigrationWeight, &feats, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -44,10 +44,10 @@ func (r *EntitlementRepo) CreatePlan(ctx context.Context, p *entitlement.Plan) e
 		return err
 	}
 	err = From(ctx, r.pool).QueryRow(ctx, `
-		INSERT INTO entitlement_plans (public_id, code, name, status, account_quota, task_quota, daily_send_quota, features_json, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		INSERT INTO entitlement_plans (public_id, code, name, status, account_quota, task_quota, daily_send_quota, migration_weight, features_json, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		RETURNING id
-	`, p.PublicID, p.Code, p.Name, p.Status, p.AccountQuota, p.TaskQuota, p.DailySendQuota, feats, p.CreatedAt, p.UpdatedAt).Scan(&p.ID)
+	`, p.PublicID, p.Code, p.Name, p.Status, p.AccountQuota, p.TaskQuota, p.DailySendQuota, p.MigrationWeight, feats, p.CreatedAt, p.UpdatedAt).Scan(&p.ID)
 	if isUniqueViolation(err) {
 		return apperr.Conflict(apperr.CodeConflict, "plan code already exists")
 	}
@@ -387,6 +387,27 @@ func (r *EntitlementRepo) CreateGrant(ctx context.Context, g *entitlement.Grant)
 		VALUES ($1,$2,$3,$4,$5,$6,$7)
 		RETURNING id
 	`, g.PublicID, g.UserID, g.EntitlementPlanID, g.SourceType, g.SourceCardID, g.StartsAt, g.ExpiresAt).Scan(&g.ID)
+}
+
+func (r *EntitlementRepo) ListActiveOrScheduledGrants(ctx context.Context, userID int64, now time.Time) ([]*entitlement.Grant, error) {
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT `+grantCols+` FROM entitlement_grants g
+		WHERE g.user_id = $1 AND g.revoked_at IS NULL AND g.expires_at > $2
+		ORDER BY g.expires_at DESC, g.id DESC
+	`, userID, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*entitlement.Grant
+	for rows.Next() {
+		grant, err := scanGrant(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, grant)
+	}
+	return out, rows.Err()
 }
 
 func (r *EntitlementRepo) GetLastNonRevokedGrant(ctx context.Context, userID int64) (*entitlement.Grant, error) {

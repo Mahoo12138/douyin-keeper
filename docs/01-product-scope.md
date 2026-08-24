@@ -104,6 +104,10 @@ Creator 首聊已完成本地权益闸门：任务创建、编辑和发送执行
 `creator_first_message`，Web 编辑器默认关闭并展示兑换提示；实际平台首聊动作仍等待
 Protocol/Browser Sidecar 的稳定操作契约与 selector 联调。
 
+多档权益迁移已完成本地授权闭环：Plan 增加非价格性的 `migration_weight`，跨 Plan 的卡密兑换
+和管理员授权会在同一事务中撤销有效/排程旧 Grant，按权重折算剩余时间后创建新 Grant，并写入
+脱敏审计；真实平台能力仍由 Capability、Session 和 Risk 独立约束。
+
 ## 6. 产品边界
 
 一个 Spark Task 表达的是：

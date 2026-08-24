@@ -35,9 +35,13 @@ type Plan struct {
 	AccountQuota   int
 	TaskQuota      int
 	DailySendQuota int
-	Features       map[string]bool
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	// MigrationWeight is an internal entitlement-capacity unit per day. It is
+	// deliberately not a price and is only used when converting remaining time
+	// during a cross-plan migration.
+	MigrationWeight int
+	Features        map[string]bool
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type PlanListFilter struct {

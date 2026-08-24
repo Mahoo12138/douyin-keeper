@@ -16,25 +16,27 @@ import (
 )
 
 type adminEntitlementPlanView struct {
-	ID             string          `json:"id"`
-	Code           string          `json:"code"`
-	Name           string          `json:"name"`
-	Status         string          `json:"status"`
-	AccountQuota   int             `json:"account_quota"`
-	TaskQuota      int             `json:"task_quota"`
-	DailySendQuota int             `json:"daily_send_quota"`
-	Features       map[string]bool `json:"features"`
-	CreatedAt      string          `json:"created_at"`
-	UpdatedAt      string          `json:"updated_at"`
+	ID              string          `json:"id"`
+	Code            string          `json:"code"`
+	Name            string          `json:"name"`
+	Status          string          `json:"status"`
+	AccountQuota    int             `json:"account_quota"`
+	TaskQuota       int             `json:"task_quota"`
+	DailySendQuota  int             `json:"daily_send_quota"`
+	MigrationWeight int             `json:"migration_weight"`
+	Features        map[string]bool `json:"features"`
+	CreatedAt       string          `json:"created_at"`
+	UpdatedAt       string          `json:"updated_at"`
 }
 
 type adminCreatePlanRequest struct {
-	Code           string          `json:"code"`
-	Name           string          `json:"name"`
-	AccountQuota   int             `json:"account_quota"`
-	TaskQuota      int             `json:"task_quota"`
-	DailySendQuota int             `json:"daily_send_quota"`
-	Features       map[string]bool `json:"features"`
+	Code            string          `json:"code"`
+	Name            string          `json:"name"`
+	AccountQuota    int             `json:"account_quota"`
+	TaskQuota       int             `json:"task_quota"`
+	DailySendQuota  int             `json:"daily_send_quota"`
+	MigrationWeight int             `json:"migration_weight"`
+	Features        map[string]bool `json:"features"`
 }
 
 type adminCardBatchView struct {
@@ -168,7 +170,10 @@ func (s *Server) handleAdminCreateEntitlementPlan(w http.ResponseWriter, r *http
 	}
 	code := strings.TrimSpace(req.Code)
 	name := strings.TrimSpace(req.Name)
-	if code == "" || len(code) > 50 || name == "" || len(name) > 100 || req.AccountQuota < 0 || req.TaskQuota < 0 || req.DailySendQuota < 0 {
+	if req.MigrationWeight == 0 {
+		req.MigrationWeight = 1
+	}
+	if code == "" || len(code) > 50 || name == "" || len(name) > 100 || req.AccountQuota < 0 || req.TaskQuota < 0 || req.DailySendQuota < 0 || req.MigrationWeight < 1 || req.MigrationWeight > 1000 {
 		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid entitlement plan"))
 		return
 	}
@@ -179,7 +184,7 @@ func (s *Server) handleAdminCreateEntitlementPlan(w http.ResponseWriter, r *http
 	p := auth.MustPrincipal(r.Context())
 	plan, err := s.entitlements.CreatePlanByAdmin(r.Context(), p.UserID, &entitlement.Plan{
 		Code: code, Name: name, Status: entitlement.StatusActive,
-		AccountQuota: req.AccountQuota, TaskQuota: req.TaskQuota, DailySendQuota: req.DailySendQuota,
+		AccountQuota: req.AccountQuota, TaskQuota: req.TaskQuota, DailySendQuota: req.DailySendQuota, MigrationWeight: req.MigrationWeight,
 		Features: req.Features,
 	})
 	if err != nil {
@@ -590,7 +595,7 @@ func adminEntitlementPlanViewFrom(item entitlement.Plan) adminEntitlementPlanVie
 	}
 	return adminEntitlementPlanView{
 		ID: item.PublicID.String(), Code: item.Code, Name: item.Name, Status: string(item.Status),
-		AccountQuota: item.AccountQuota, TaskQuota: item.TaskQuota, DailySendQuota: item.DailySendQuota,
+		AccountQuota: item.AccountQuota, TaskQuota: item.TaskQuota, DailySendQuota: item.DailySendQuota, MigrationWeight: item.MigrationWeight,
 		Features: features, CreatedAt: item.CreatedAt.Format(timeRFC3339), UpdatedAt: item.UpdatedAt.Format(timeRFC3339),
 	}
 }
