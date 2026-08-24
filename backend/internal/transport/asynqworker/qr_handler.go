@@ -111,10 +111,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			return err
 		}
 		fail := func(code string) error {
-			_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{
-				EventType: "error", Payload: mustJSON(map[string]string{"code": code}), CreatedAt: deps.Now(),
-			})
-			return deps.Jobs.Finish(ctx, claimed.ID, job.StatusFailed, &code, deps.Now())
+			return finishBindFailure(ctx, deps, claimed, code)
 		}
 		if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "started", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()}); err != nil {
 			return err
@@ -164,20 +161,17 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		}
 		err = callErr
 		if err != nil {
-			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, capability.AdapterBrowserConsumer, claimed.PublicID.String())
-			return fail(apperr.CodeAdapterUnavailable)
+			return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterUnavailable)
 		}
 		if code := sidecarErrorCode(startResponse); code != "" {
 			mapped := mapSidecarError(code)
-			observeWorkerRisk(ctx, deps.Risk, acct.ID, mapped, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, mapped, deps.Now)
-			return fail(mapped)
+			return finishBindRiskFailure(ctx, deps, claimed, acct.ID, mapped)
 		}
 		var started qrStartResult
 		if err := decodeResult(startResponse, &started); err != nil || started.LoginHandle == "" || started.QR.Value == "" {
-			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
-			return fail(apperr.CodeAdapterIncompatible)
+			return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
 		}
 		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
 			return err
@@ -219,29 +213,22 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 				return callErr
 			}
 			if callErr != nil {
-				observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, capability.AdapterBrowserConsumer, claimed.PublicID.String())
-				return fail(apperr.CodeAdapterUnavailable)
+				return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterUnavailable)
 			}
 			if code := sidecarErrorCode(response); code != "" {
 				mapped := mapSidecarError(code)
-				observeWorkerRisk(ctx, deps.Risk, acct.ID, mapped, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 				observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, mapped, deps.Now)
-				return fail(mapped)
+				return finishBindRiskFailure(ctx, deps, claimed, acct.ID, mapped)
 			}
 			var polled qrPollResult
 			if err := decodeResult(response, &polled); err != nil {
-				observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 				observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
-				return fail(apperr.CodeAdapterIncompatible)
+				return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
 			}
 			if polled.State == "challenge_required" {
-				if deps.Risk != nil {
-					observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeChallengeRequired, capability.AdapterBrowserConsumer, claimed.PublicID.String())
-				} else {
-					_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionChallengeRequired, deps.Now())
-				}
-				_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "challenge_required", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()})
-				return fail(apperr.CodeChallengeRequired)
+				return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeChallengeRequired, job.JobEvent{
+					EventType: "challenge_required", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now(),
+				})
 			}
 			if polled.State == "scanned" && lastState != "scanned" {
 				if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "scanned", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()}); err != nil {
@@ -256,9 +243,8 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 				return completeQRBind(ctx, deps, claimed, acct, exportPath, polled)
 			}
 			if polled.State != "waiting" && polled.State != "scanned" {
-				observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 				observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
-				return fail(apperr.CodeAdapterIncompatible)
+				return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
 			}
 			if err := sleepContext(ctx, deps.PollEvery); err != nil {
 				return err
@@ -335,13 +321,8 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 		if app, ok := apperr.As(err); ok {
 			code = app.Code
 		}
-		if deps.Risk != nil {
-			observeWorkerRisk(ctx, deps.Risk, acct.ID, code, capability.AdapterBrowserConsumer, claimed.PublicID.String())
-		} else if code == apperr.CodeSessionExpired {
-			_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, deps.Now())
-		}
 		observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, code, deps.Now)
-		return finishBindFailure(ctx, deps, claimed, code)
+		return finishBindRiskFailure(ctx, deps, claimed, acct.ID, code)
 	}
 	if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
 		return err
@@ -416,8 +397,30 @@ func enqueueInitialFriendsSync(ctx context.Context, deps QRBindDeps, acct *accou
 }
 
 func finishBindFailure(ctx context.Context, deps QRBindDeps, claimed *job.Job, code string) error {
-	_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "error", Payload: mustJSON(map[string]string{"code": code}), CreatedAt: deps.Now()})
-	return deps.Jobs.Finish(ctx, claimed.ID, job.StatusFailed, &code, deps.Now())
+	if deps.Tx == nil {
+		_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "error", Payload: mustJSON(map[string]string{"code": code}), CreatedAt: deps.Now()})
+		return deps.Jobs.Finish(ctx, claimed.ID, job.StatusFailed, &code, deps.Now())
+	}
+	return commitWorkerFailure(ctx, deps.Tx, deps.Jobs, nil, claimed, 0, code, "", "", nil, deps.Now)
+}
+
+func finishBindRiskFailure(ctx context.Context, deps QRBindDeps, claimed *job.Job, acctID int64, code string, events ...job.JobEvent) error {
+	if deps.Tx == nil {
+		return finishBindFailure(ctx, deps, claimed, code)
+	}
+	var fallback func(context.Context) error
+	switch code {
+	case apperr.CodeSessionExpired:
+		fallback = func(tctx context.Context) error {
+			return deps.Accounts.SetSessionStatus(tctx, acctID, account.SessionExpired, deps.Now())
+		}
+	case apperr.CodeChallengeRequired:
+		fallback = func(tctx context.Context) error {
+			return deps.Accounts.SetSessionStatus(tctx, acctID, account.SessionChallengeRequired, deps.Now())
+		}
+	}
+	return commitWorkerFailureWithEvents(ctx, deps.Tx, deps.Jobs, deps.Risk, claimed, acctID, code,
+		capability.AdapterBrowserConsumer, claimed.PublicID.String(), fallback, events, deps.Now)
 }
 
 func decodeResult(response *sidecar.Response, target any) error {

@@ -403,6 +403,8 @@ Outbox 的完成路径，Worker 必须在同一数据库事务内先条件终结
 Session、账号身份和 Outbox；任一步失败都回滚，不能让旧 Worker 在 Job 已被 Reaper 终结后
 留下 `bound` 账号或孤儿消息。Friends Sync 的好友快照与 `last_friend_sync_at`、Session Check
 的 `session_status=valid` 也必须在 Job 成功终态事务中提交，并由成功事件记录同一结果。
+QR/SMS 绑定失败时，风险事件、Session 状态和 `challenge_required` 事件同样纳入 Job 失败
+事务，Job 条件终结仍是事务中的第一步。
 
 Scheduler/Reaper 查找：
 

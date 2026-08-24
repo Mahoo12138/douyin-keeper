@@ -55,6 +55,22 @@ func commitWorkerFailure(
 	fallback func(context.Context) error,
 	now func() time.Time,
 ) error {
+	return commitWorkerFailureWithEvents(ctx, tx, j, applier, claimed, accountID, code, adapter, jobID, fallback, nil, now)
+}
+
+func commitWorkerFailureWithEvents(
+	ctx context.Context,
+	tx job.TxManager,
+	j job.Repository,
+	applier riskApplier,
+	claimed *job.Job,
+	accountID int64,
+	code, adapter string,
+	jobID string,
+	fallback func(context.Context) error,
+	events []job.JobEvent,
+	now func() time.Time,
+) error {
 	return tx.WithinTx(ctx, func(tctx context.Context) error {
 		if err := j.Finish(tctx, claimed.ID, job.StatusFailed, &code, now()); err != nil {
 			return err
@@ -65,6 +81,11 @@ func commitWorkerFailure(
 			}
 		} else if fallback != nil {
 			if err := fallback(tctx); err != nil {
+				return err
+			}
+		}
+		for _, event := range events {
+			if err := j.AppendEvent(tctx, claimed.ID, event); err != nil {
 				return err
 			}
 		}

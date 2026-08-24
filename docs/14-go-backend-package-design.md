@@ -286,6 +286,8 @@ QR/SMS、Friends Sync 和 Session Check 等 Generic Job 也复用同一 heartbea
 账号写入与后续 Friends/Capability Outbox 还必须和 Job 成功终态处于同一事务，并先执行 Job 条件终结，
 防止 Reaper 与迟到 Worker 交错产生孤儿状态。Friends Sync 的好友快照与
 `last_friend_sync_at`、Session Check 的 `session_status=valid` 也遵循同一顺序，成功事件一并提交。
+QR/SMS 绑定的失败风险、账号 Session 状态和 `challenge_required` 事件也必须通过调用方事务入口
+与 Job 失败终态一起提交；不能先独立记录风险再结束交互 Job。
 
 `account` 同时提供 Scheduler 使用的 `SessionCheckRepository` 投影：每 30 分钟扫描
 绑定且 Session 为 `unknown/valid`、`last_session_check_at` 已过期的账号，并排除已有

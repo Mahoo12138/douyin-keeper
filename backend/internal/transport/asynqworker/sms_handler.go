@@ -13,7 +13,6 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/redislock"
@@ -84,10 +83,7 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 			return err
 		}
 		fail := func(code string) error {
-			_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{
-				EventType: "error", Payload: mustJSON(map[string]string{"code": code}), CreatedAt: deps.Now(),
-			})
-			return deps.Jobs.Finish(ctx, claimed.ID, job.StatusFailed, &code, deps.Now())
+			return finishBindFailure(ctx, deps, claimed, code)
 		}
 		if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "started", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()}); err != nil {
 			return err
@@ -138,20 +134,17 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 		}
 		err = callErr
 		if err != nil {
-			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, capability.AdapterBrowserConsumer, claimed.PublicID.String())
-			return fail(apperr.CodeAdapterUnavailable)
+			return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterUnavailable)
 		}
 		if code := sidecarErrorCode(startResponse); code != "" {
 			mapped := mapSidecarError(code)
-			observeWorkerRisk(ctx, deps.Risk, acct.ID, mapped, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, mapped, deps.Now)
-			return fail(mapped)
+			return finishBindRiskFailure(ctx, deps, claimed, acct.ID, mapped)
 		}
 		var started smsStartResult
 		if err := decodeResult(startResponse, &started); err != nil || started.LoginHandle == "" {
-			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
-			return fail(apperr.CodeAdapterIncompatible)
+			return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
 		}
 		if err := deps.Jobs.MarkWaiting(ctx, claimed.ID, deps.LockTTL); err != nil {
 			return err
@@ -197,8 +190,7 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 				return callErr
 			}
 			if callErr != nil {
-				observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, capability.AdapterBrowserConsumer, claimed.PublicID.String())
-				return fail(apperr.CodeAdapterUnavailable)
+				return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterUnavailable)
 			}
 			if code := sidecarErrorCode(response); code != "" {
 				if code == sidecar.ErrSMSCodeInvalid {
@@ -209,28 +201,21 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 				}
 				mapped := mapSidecarError(code)
 				if code == sidecar.ErrChallengeRequired {
-					if deps.Risk != nil {
-						observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeChallengeRequired, capability.AdapterBrowserConsumer, claimed.PublicID.String())
-					} else {
-						_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionChallengeRequired, deps.Now())
-					}
-					_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "challenge_required", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()})
+					return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeChallengeRequired, job.JobEvent{
+						EventType: "challenge_required", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now(),
+					})
 				}
 				observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, mapped, deps.Now)
-				return fail(mapped)
+				return finishBindRiskFailure(ctx, deps, claimed, acct.ID, mapped)
 			}
 			var verified smsVerifyResult
 			if err := decodeResult(response, &verified); err != nil {
-				return fail(apperr.CodeAdapterIncompatible)
+				return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
 			}
 			if verified.State == "challenge_required" {
-				if deps.Risk != nil {
-					observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeChallengeRequired, capability.AdapterBrowserConsumer, claimed.PublicID.String())
-				} else {
-					_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionChallengeRequired, deps.Now())
-				}
-				_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "challenge_required", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()})
-				return fail(apperr.CodeChallengeRequired)
+				return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeChallengeRequired, job.JobEvent{
+					EventType: "challenge_required", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now(),
+				})
 			}
 			if verified.State == "authenticated" && verified.SessionExported {
 				return completeBind(ctx, deps, claimed, acct, exportPath, verified.Identity)

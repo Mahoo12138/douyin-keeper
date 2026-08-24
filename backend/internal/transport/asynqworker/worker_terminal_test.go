@@ -94,4 +94,26 @@ func TestCommitWorkerFailureFinalizesJobBeforeRiskProjection(t *testing.T) {
 	}
 }
 
+func TestFinishBindRiskFailureKeepsChallengeEventAndRiskInJobTx(t *testing.T) {
+	j := &bindJobRepoStub{}
+	risk := &transactionalRiskStub{}
+	now := func() time.Time { return time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC) }
+	claimed := &job.Job{ID: 13, PublicID: uuid.New(), Status: job.StatusWaiting}
+	deps := QRBindDeps{Jobs: j, Accounts: &bindAccountRepoStub{}, Tx: bindTxStub{}, Risk: risk, Now: now}
+
+	if err := finishBindRiskFailure(context.Background(), deps, claimed, 20, "CHALLENGE_REQUIRED", job.JobEvent{
+		EventType: "challenge_required", Payload: []byte(`{}`), CreatedAt: now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(j.operations) == 0 || j.operations[0] != "tx:finish" {
+		t.Fatalf("job operations = %#v, want transaction finish first", j.operations)
+	}
+	for _, operation := range append(j.operations, risk.operations...) {
+		if len(operation) < len("tx:") || operation[:len("tx:")] != "tx:" {
+			t.Fatalf("binding failure side effect escaped completion transaction: %q", operation)
+		}
+	}
+}
+
 var _ account.Repository = (*bindAccountRepoStub)(nil)
