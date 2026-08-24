@@ -210,6 +210,7 @@ Browser Worker 成功后更新 `last_session_check_at` 和 `session_status=valid
 - `ACCOUNT_QUOTA_EXCEEDED`
 - `TASK_QUOTA_EXCEEDED`
 - `FEATURE_NOT_ENTITLED`
+- `ENTITLEMENT_PLAN_CONFLICT`
 
 底层错误文本写入受限的内部 log/detail。
 

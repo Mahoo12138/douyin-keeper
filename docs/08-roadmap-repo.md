@@ -204,6 +204,10 @@ outcome 未知时保持 fail-closed；真实 Protocol SDK 和平台 selector 仍
 发送 worker 最终执行都会校验 `creator_first_message`，并为 `message.send_first` 预留
 协议路由；真实平台首聊动作仍等待 Sidecar 契约与 selector 联调。
 
+权益层已补齐 MVP 的跨 Plan 顺延保护：Redeem 与管理员 Grant 在已有有效/排程授权时
+拒绝不同 Plan 混排并返回 `ENTITLEMENT_PLAN_CONFLICT`；真正的升级、降级和剩余时间
+折算策略仍属于后续 M7 工作。
+
 ## 5. 编码前必须先冻结的契约
 
 开始正式实现前，先确定并尽量不频繁改动：

@@ -139,6 +139,9 @@ func (s *Service) Redeem(ctx context.Context, userID int64, rawCode string) (Gra
 			}
 			last = nil // first grant ever: anchor at now
 		}
+		if err := validatePlanRenewal(last, code.Batch.EntitlementPlanID, now); err != nil {
+			return err
+		}
 		anchor := now
 		if last != nil && last.ExpiresAt.After(anchor) {
 			anchor = last.ExpiresAt
@@ -201,11 +204,11 @@ func (s *Service) GrantByAdmin(ctx context.Context, adminID, userID, planID int6
 			}
 			last = nil
 		}
+		if err := validatePlanRenewal(last, planID, now); err != nil {
+			return err
+		}
 		anchor := now
 		if last != nil && last.ExpiresAt.After(anchor) {
-			if last.EntitlementPlanID != planID {
-				return apperr.Conflict(apperr.CodeConflict, "entitlement plan conflict")
-			}
 			anchor = last.ExpiresAt
 		}
 		g := &Grant{
@@ -533,6 +536,17 @@ func validateCodeForRedeem(c *CardCode, now time.Time) *apperr.AppError {
 		return apperr.Conflict(apperr.CodeConflict, "card code not yet redeemable")
 	}
 	return nil
+}
+
+// validatePlanRenewal enforces the MVP rule from docs/03, docs/09 and docs/12:
+// while a user has an unrevoked grant that is still active or scheduled, a
+// different plan cannot be appended. Cross-plan upgrade/downgrade conversion
+// remains a separate product policy and must not be inferred here.
+func validatePlanRenewal(last *Grant, nextPlanID int64, now time.Time) *apperr.AppError {
+	if last == nil || !last.ExpiresAt.After(now) || last.EntitlementPlanID == nextPlanID {
+		return nil
+	}
+	return apperr.Conflict(apperr.CodeEntitlementPlanConflict, "entitlement plan conflict")
 }
 
 // TimeOf returns the current time from the service clock (helper).

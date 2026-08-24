@@ -58,12 +58,13 @@ const (
 	CodeNetworkTimeout            = "NETWORK_TIMEOUT"
 	CodeOutcomeUnknown            = "OUTCOME_UNKNOWN"
 
-	CodeEntitlementRequired    = "ENTITLEMENT_REQUIRED"
-	CodeEntitlementExpired     = "ENTITLEMENT_EXPIRED"
-	CodeFeatureNotEntitled     = "FEATURE_NOT_ENTITLED"
-	CodeAccountQuotaExceeded   = "ACCOUNT_QUOTA_EXCEEDED"
-	CodeTaskQuotaExceeded      = "TASK_QUOTA_EXCEEDED"
-	CodeDailySendQuotaExceeded = "DAILY_SEND_QUOTA_EXCEEDED"
+	CodeEntitlementRequired     = "ENTITLEMENT_REQUIRED"
+	CodeEntitlementExpired      = "ENTITLEMENT_EXPIRED"
+	CodeEntitlementPlanConflict = "ENTITLEMENT_PLAN_CONFLICT"
+	CodeFeatureNotEntitled      = "FEATURE_NOT_ENTITLED"
+	CodeAccountQuotaExceeded    = "ACCOUNT_QUOTA_EXCEEDED"
+	CodeTaskQuotaExceeded       = "TASK_QUOTA_EXCEEDED"
+	CodeDailySendQuotaExceeded  = "DAILY_SEND_QUOTA_EXCEEDED"
 
 	CodeInternal = "INTERNAL_ERROR"
 )

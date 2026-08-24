@@ -275,6 +275,10 @@ expires_at = anchor + duration_days
 
 后续再单独设计升级、降级、剩余时间折算，不把商业规则提前塞进核心授权系统。
 
+当前 Redeem 与管理员 Grant 已落实这条边界：已有未过期或已排程授权时，不同 Plan 不允许
+混合顺延，返回 `409 ENTITLEMENT_PLAN_CONFLICT`；过期后切换 Plan 允许，剩余时间折算
+仍留待后续升级/降级策略。
+
 ## 8. 原子兑换流程
 
 兑换必须是一个数据库事务，并对 User + Card 加锁。

@@ -56,6 +56,10 @@ erDiagram
 
 MVP 续期采用顺延规则：新 Grant 从 `max(now, last_unrevoked_grant.expires_at)` 开始，避免提前续期损失时间。Schema 支持多个 Plan，但 MVP 建议只启用一个正式方案，暂不处理跨档位升级/降级折算。
 
+当前 Redeem 与管理员 Grant 已执行 MVP 的跨 Plan 边界：用户存在仍有效或已排程的未撤销
+Grant 时，只有相同 Plan 才能顺延；不同 Plan 返回 `ENTITLEMENT_PLAN_CONFLICT`。过期
+授权之后切换 Plan 仍允许，升级/降级的剩余时间折算暂未实现。
+
 详见 `12-card-code-entitlement.md`。
 
 ## 3. DouyinAccount
