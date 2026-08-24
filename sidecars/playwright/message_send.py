@@ -108,23 +108,31 @@ def _editor_text(editor):
             return ""
 
 
-def _last_message_id(page, text):
+def _message_ids(page, text):
     try:
-        return page.evaluate(
+        values = page.evaluate(
             """(wanted) => {
               const nodes = Array.from(document.querySelectorAll('[data-msg-id], [data-message-id], [class*="MessageItem"]'));
-              for (let i = nodes.length - 1; i >= 0; i -= 1) {
-                const node = nodes[i];
-                if ((node.innerText || '').includes(wanted)) {
-                  return node.getAttribute('data-msg-id') || node.getAttribute('data-message-id') || '';
-                }
-              }
-              return '';
+              return nodes
+                .filter((node) => (node.innerText || '').includes(wanted))
+                .map((node) => node.getAttribute('data-msg-id') || node.getAttribute('data-message-id') || '')
+                .filter((value) => value);
             }""",
             text,
-        ) or ""
+        ) or []
+        if not isinstance(values, list):
+            return []
+        return [value for value in values if isinstance(value, str) and value]
     except Exception:
-        return ""
+        return []
+
+
+def _new_message_id(page, text, before_ids):
+    before = set(before_ids or ())
+    for message_id in reversed(_message_ids(page, text)):
+        if message_id not in before:
+            return message_id
+    return ""
 
 
 def send_text(input_data):
@@ -163,6 +171,7 @@ def send_text(input_data):
         editor = _editor(page)
         if editor is None:
             raise _error(protocol.ERR_BROWSER_SELECTOR_CHANGED, "message editor is unavailable")
+        before_message_ids = set(_message_ids(page, text))
         editor.click()
         try:
             editor.fill(text)
@@ -176,7 +185,7 @@ def send_text(input_data):
         page.wait_for_timeout(1_000)
         if text in _editor_text(editor):
             raise _error(protocol.ERR_ADAPTER_INCOMPATIBLE, "message send was not confirmed", detail={"outcome": "unknown"})
-        message_id = _last_message_id(page, text)
+        message_id = _new_message_id(page, text, before_message_ids)
         if not message_id:
             raise _error(protocol.ERR_ADAPTER_INCOMPATIBLE, "platform message id was not observed", detail={"outcome": "unknown"})
         return {"confirmed": True, "platform_message_id": message_id}

@@ -443,7 +443,9 @@ Success：
 }
 ```
 
-只有平台明确确认后 `confirmed=true`。不能用固定 sleep 后假定成功。
+只有平台明确确认后 `confirmed=true`。不能用固定 sleep 后假定成功。Browser Adapter
+应记录发送前已有消息 ID，只接受发送后出现的新增 `platform_message_id`；“最后一条
+相同文本”可能是历史消息，不能单独作为成功证据。
 
 ## 10.1 Send Sticker（V1.1）
 

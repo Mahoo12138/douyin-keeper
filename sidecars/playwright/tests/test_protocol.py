@@ -90,6 +90,24 @@ def test_failure_preserves_structured_detail():
     assert out["error"]["detail"] == {"outcome": "unknown"}
 
 
+def test_message_confirmation_requires_a_new_platform_message_id():
+    import message_send
+
+    class FakePage:
+        def __init__(self, values):
+            self.values = list(values)
+
+        def evaluate(self, _script, _text):
+            return self.values.pop(0)
+
+    page = FakePage([["message-old"], ["message-old", "message-new"]])
+    before = set(message_send._message_ids(page, "same text"))
+    assert message_send._new_message_id(page, "same text", before) == "message-new"
+
+    page = FakePage([["message-old"]])
+    assert message_send._new_message_id(page, "same text", {"message-old"}) == ""
+
+
 def test_validate_session_accepts_sessionid_cookie():
     with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
         json.dump({"cookies": [{"name": "sessionid", "value": "opaque"}]}, state)
