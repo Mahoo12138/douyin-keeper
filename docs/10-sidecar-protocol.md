@@ -135,13 +135,26 @@ login.sms.verify       # V1.1
 session.validate
 friends.list
 conversations.list
+conversations.archive   # platform-side archive; fail-closed until selector adapter lands
 message.send_text
 message.send_sticker   # V1.1
 message.send_first     # V1.2
 ```
 
-当前会话归档不属于 Sidecar v1 操作，只更新产品侧 `conversations.archived_at` 索引字段。
-平台侧归档若后续加入，必须新增版本化操作契约，不得复用本地归档 API 假装完成。
+用户侧归档仍只更新产品侧 `conversations.archived_at` 索引字段；平台侧归档现在冻结为
+独立的 `conversations.archive` 操作，不得复用本地归档 API 假装平台操作成功。该操作要求：
+
+```json
+{
+  "session": {"kind": "playwright_storage_state_file", "path": "/run/.../session.json"},
+  "target": {"platform_conversation_id": "0:1:..."},
+  "archived": true
+}
+```
+
+真实 selector、菜单确认和平台回执尚未部署时，Sidecar 必须返回
+`PLATFORM_ARCHIVE_UNAVAILABLE`，不得返回成功 envelope；后续接入仍需由 Job/Outbox
+和账号锁控制执行与幂等。
 
 Go 不向 Sidecar 传 DOM selector / XPath / webpack module id。
 
@@ -531,6 +544,7 @@ PLATFORM_RATE_LIMITED
 FRIEND_NOT_FOUND
 FRIEND_AMBIGUOUS
 CONVERSATION_NOT_FOUND
+PLATFORM_ARCHIVE_UNAVAILABLE
 TARGET_IDENTITY_MISMATCH
 
 BROWSER_NAVIGATION_FAILED
@@ -559,6 +573,7 @@ Sidecar operation 与领域 capability 分离：
 | `session.validate` | `session.validate` |
 | `friends.list` | `friends.sync` |
 | `conversations.list` | `conversations.sync` |
+| `conversations.archive` | `conversations.archive` |
 | `message.send_text` | `message.send.text.existing` |
 | `message.send_sticker` | `message.send.sticker.existing` |
 | `message.send_first` | `message.send.text.first` |

@@ -18,6 +18,7 @@ import time
 import protocol
 import friends_list
 import message_send
+import conversation_archive
 import qr_login
 import sms_login
 
@@ -83,6 +84,8 @@ def handle(req):
             return protocol.success(req, friends_list.list_friends(req.get("input")), "browser.consumer", duration_ms=duration())
         if op == "message.send_text":
             return protocol.success(req, message_send.send_text(req.get("input")), "browser.consumer", duration_ms=duration())
+        if op == "conversations.archive":
+            return protocol.success(req, conversation_archive.archive(req.get("input")), "browser.consumer", duration_ms=duration())
         # Placeholders for ops requiring additional browser adapters.
         return protocol.unsupported(req)
     except protocol.ProtocolError as exc:

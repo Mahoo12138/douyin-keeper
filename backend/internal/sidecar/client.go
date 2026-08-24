@@ -18,17 +18,18 @@ const (
 
 // Ops are the v1 operations (docs/10 §4).
 const (
-	OpsHealthCheck        = "health.check"
-	OpsLoginQRStart       = "login.qr.start"
-	OpsLoginQRPoll        = "login.qr.poll"
-	OpsLoginSMSStart      = "login.sms.start"
-	OpsLoginSMSVerify     = "login.sms.verify"
-	OpsSessionValidate    = "session.validate"
-	OpsFriendsList        = "friends.list"
-	OpsConversationsList  = "conversations.list"
-	OpsMessageSendText    = "message.send_text"
-	OpsMessageSendSticker = "message.send_sticker"
-	OpsMessageSendFirst   = "message.send_first"
+	OpsHealthCheck          = "health.check"
+	OpsLoginQRStart         = "login.qr.start"
+	OpsLoginQRPoll          = "login.qr.poll"
+	OpsLoginSMSStart        = "login.sms.start"
+	OpsLoginSMSVerify       = "login.sms.verify"
+	OpsSessionValidate      = "session.validate"
+	OpsFriendsList          = "friends.list"
+	OpsConversationsList    = "conversations.list"
+	OpsConversationsArchive = "conversations.archive"
+	OpsMessageSendText      = "message.send_text"
+	OpsMessageSendSticker   = "message.send_sticker"
+	OpsMessageSendFirst     = "message.send_first"
 )
 
 // Request is the proto request envelope.
@@ -67,36 +68,37 @@ type Response struct {
 
 // Stable error codes (docs/10 §11).
 const (
-	ErrInvalidRequest          = "INVALID_REQUEST"
-	ErrUnsupportedProtocol     = "UNSUPPORTED_PROTOCOL_VERSION"
-	ErrUnsupportedOperation    = "UNSUPPORTED_OPERATION"
-	ErrDeadlineExceeded        = "DEADLINE_EXCEEDED"
-	ErrSessionExpired          = "SESSION_EXPIRED"
-	ErrQRExpired               = "QR_EXPIRED"
-	ErrSMSCodeInvalid          = "SMS_CODE_INVALID"
-	ErrSMSCodeExpired          = "SMS_CODE_EXPIRED"
-	ErrLoginHandleNotFound     = "LOGIN_HANDLE_NOT_FOUND"
-	ErrChallengeRequired       = "CHALLENGE_REQUIRED"
-	ErrPlatformRateLimited     = "PLATFORM_RATE_LIMITED"
-	ErrBrowserSelectorChanged  = "BROWSER_SELECTOR_CHANGED"
-	ErrFriendNotFound          = "FRIEND_NOT_FOUND"
-	ErrFriendAmbiguous         = "FRIEND_AMBIGUOUS"
-	ErrConversationNotFound    = "CONVERSATION_NOT_FOUND"
-	ErrTargetIdentityMismatch  = "TARGET_IDENTITY_MISMATCH"
-	ErrBrowserNavigationFailed = "BROWSER_NAVIGATION_FAILED"
-	ErrBrowserContextFailed    = "BROWSER_CONTEXT_FAILED"
-	ErrAdapterUnavailable      = "ADAPTER_UNAVAILABLE"
-	ErrAdapterIncompatible     = "ADAPTER_INCOMPATIBLE"
-	ErrNetworkTimeout          = "NETWORK_TIMEOUT"
-	ErrNetworkError            = "NETWORK_ERROR"
-	ErrInternal                = "SIDECAR_INTERNAL_ERROR"
+	ErrInvalidRequest             = "INVALID_REQUEST"
+	ErrUnsupportedProtocol        = "UNSUPPORTED_PROTOCOL_VERSION"
+	ErrUnsupportedOperation       = "UNSUPPORTED_OPERATION"
+	ErrDeadlineExceeded           = "DEADLINE_EXCEEDED"
+	ErrSessionExpired             = "SESSION_EXPIRED"
+	ErrQRExpired                  = "QR_EXPIRED"
+	ErrSMSCodeInvalid             = "SMS_CODE_INVALID"
+	ErrSMSCodeExpired             = "SMS_CODE_EXPIRED"
+	ErrLoginHandleNotFound        = "LOGIN_HANDLE_NOT_FOUND"
+	ErrChallengeRequired          = "CHALLENGE_REQUIRED"
+	ErrPlatformRateLimited        = "PLATFORM_RATE_LIMITED"
+	ErrBrowserSelectorChanged     = "BROWSER_SELECTOR_CHANGED"
+	ErrFriendNotFound             = "FRIEND_NOT_FOUND"
+	ErrFriendAmbiguous            = "FRIEND_AMBIGUOUS"
+	ErrConversationNotFound       = "CONVERSATION_NOT_FOUND"
+	ErrPlatformArchiveUnavailable = "PLATFORM_ARCHIVE_UNAVAILABLE"
+	ErrTargetIdentityMismatch     = "TARGET_IDENTITY_MISMATCH"
+	ErrBrowserNavigationFailed    = "BROWSER_NAVIGATION_FAILED"
+	ErrBrowserContextFailed       = "BROWSER_CONTEXT_FAILED"
+	ErrAdapterUnavailable         = "ADAPTER_UNAVAILABLE"
+	ErrAdapterIncompatible        = "ADAPTER_INCOMPATIBLE"
+	ErrNetworkTimeout             = "NETWORK_TIMEOUT"
+	ErrNetworkError               = "NETWORK_ERROR"
+	ErrInternal                   = "SIDECAR_INTERNAL_ERROR"
 )
 
 func IsKnownOperation(op string) bool {
 	switch op {
 	case OpsHealthCheck, OpsLoginQRStart, OpsLoginQRPoll, OpsLoginSMSStart,
 		OpsLoginSMSVerify, OpsSessionValidate, OpsFriendsList, OpsConversationsList,
-		OpsMessageSendText, OpsMessageSendSticker, OpsMessageSendFirst:
+		OpsConversationsArchive, OpsMessageSendText, OpsMessageSendSticker, OpsMessageSendFirst:
 		return true
 	default:
 		return false

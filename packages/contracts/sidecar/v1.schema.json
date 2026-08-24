@@ -21,6 +21,7 @@
             "session.validate",
             "friends.list",
             "conversations.list",
+            "conversations.archive",
             "message.send_text",
             "message.send_sticker",
             "message.send_first"

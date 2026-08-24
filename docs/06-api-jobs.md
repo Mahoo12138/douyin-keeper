@@ -44,8 +44,10 @@
 - `GET /api/accounts/:id/conversations`（默认只返回未归档会话；`include_archived=true` 用于管理查看）
 - `PATCH /api/accounts/:id/conversations/:conversationId`（设置用户侧归档标记）
 
-会话归档当前只更新产品侧索引，不调用抖音平台操作。若未来支持平台侧归档，必须新增
-版本化 Sidecar 操作、Job/Outbox 事件和账号锁定规则，不能复用此 API 假装平台操作成功。
+会话归档当前只更新产品侧索引，不调用抖音平台操作。平台侧归档的
+`conversations.archive` Sidecar 输入契约已冻结，但真实 selector 尚未部署；在平台适配器可用
+前必须返回 `PLATFORM_ARCHIVE_UNAVAILABLE`。正式接入仍需新增 Job/Outbox 事件和账号锁定规则，
+不能复用此 API 假装平台操作成功。
 
 ### Tasks
 

@@ -81,6 +81,37 @@ def test_first_message_operation_fails_closed_until_adapter_is_available():
     assert out["error"]["code"] == protocol.ERR_UNSUPPORTED_OPERATION
 
 
+def test_platform_conversation_archive_validates_and_fails_closed_until_selector_exists():
+    import sidecar
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
+        json.dump({"cookies": []}, state)
+        state.flush()
+        req = make_req("conversations.archive")
+        req["input"] = {
+            "session": {"kind": "playwright_storage_state_file", "path": state.name},
+            "target": {"platform_conversation_id": "conversation-1"},
+            "archived": True,
+        }
+        out = sidecar.handle(req)
+    assert out["ok"] is False
+    assert out["error"]["code"] == protocol.ERR_PLATFORM_ARCHIVE_UNAVAILABLE
+    assert out["error"]["detail"] == {
+        "operation": "conversations.archive",
+        "reason": "selector_not_configured",
+    }
+
+
+def test_platform_conversation_archive_rejects_missing_session_before_adapter_call():
+    import conversation_archive
+
+    try:
+        conversation_archive.archive({"target": {"platform_conversation_id": "conversation-1"}, "archived": True})
+        assert False, "expected ProtocolError"
+    except protocol.ProtocolError as exc:
+        assert exc.code == protocol.ERR_INVALID_REQUEST
+
+
 def test_sidecar_failures_keep_browser_adapter_identity():
     import sidecar
 

@@ -87,6 +87,9 @@ func TestProcessClientNormalizesAndValidatesRequestEnvelope(t *testing.T) {
 	if _, err := client.Call(context.Background(), Request{RequestID: "r2", Op: "not-an-op"}); err == nil {
 		t.Fatal("unknown operation should be rejected")
 	}
+	if !IsKnownOperation(OpsConversationsArchive) {
+		t.Fatal("platform archive operation should be part of the v1 contract")
+	}
 	if _, err := client.Call(context.Background(), Request{RequestID: "r3", Op: OpsHealthCheck, DeadlineMS: MinDeadlineMS - 1}); err == nil {
 		t.Fatal("deadline below contract minimum should be rejected")
 	}

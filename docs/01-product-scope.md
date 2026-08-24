@@ -98,7 +98,8 @@
 
 当前已完成会话归档的用户侧闭环：会话支持归档/恢复，默认列表隐藏已归档项，并保留
 账号归属校验；该状态是产品侧索引状态，不代表已经调用抖音平台的归档接口。平台侧
-归档仍需待 Sidecar 增加稳定的操作契约和真实 selector 后接入。
+`conversations.archive` 输入契约已加入 Sidecar v1 并保持 fail-closed，真实 selector、平台
+回执和 Job/Outbox 接入仍待完成。
 
 Creator 首聊已完成本地权益闸门：任务创建、编辑和发送执行均要求有效权益包含
 `creator_first_message`，Web 编辑器默认关闭并展示兑换提示；实际平台首聊动作仍等待
