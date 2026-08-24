@@ -613,6 +613,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationList'
+  /notifications/preferences:
+    get:
+      operationId: getNotificationPreferences
+      responses:
+        '200':
+          description: Current user's notification preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferences'
+    patch:
+      operationId: updateNotificationPreferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - wechat_enabled
+              properties:
+                wechat_enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated notification preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferences'
   /notifications/read-all:
     post:
       operationId: markAllNotificationsRead
@@ -2398,6 +2428,19 @@ components:
           type:
           - string
           - 'null'
+    NotificationPreferences:
+      type: object
+      required:
+      - wechat_enabled
+      - updated_at
+      properties:
+        wechat_enabled:
+          type: boolean
+        updated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
     Friend:
       type: object
       required:

@@ -48,6 +48,19 @@
 - `GET /api/send-intents`
 - `GET /api/send-jobs/:id`
 
+### Notifications
+
+- `GET /api/notifications`
+- `GET /api/notifications/preferences`
+- `PATCH /api/notifications/preferences`（`{"wechat_enabled":true|false}`）
+- `POST /api/notifications/:id/read`
+- `POST /api/notifications/read-all`
+
+风险通知在产生站内通知的同一 PostgreSQL 事务内创建 `notification_deliveries` 和
+`queue_outbox(notification.wechat.send)`。Outbox Publisher 投递后由 `worker-light`
+按 delivery 状态发送微信订阅消息；未授权、未配置模板的消息记录为 skipped，微信
+临时错误记录为 failed 并交给 Asynq 重试。
+
 ### Jobs
 
 - `GET /api/jobs/:id`

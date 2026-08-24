@@ -612,8 +612,14 @@ send.browser
 ```text
 send.protocol
 capability.probe
+notification.wechat.send
 small reconciliation jobs
 ```
+
+`notification` domain 只定义偏好、站内通知和 delivery repository contract；微信 HTTP
+客户端位于 `infra/wechat`，`transport/asynqworker` 负责从 outbox payload 加载通知并
+执行发送。发送失败标记为 `failed` 后返回错误，让 Asynq 按队列策略重试；未订阅或未
+配置模板则标记为 `skipped`。
 
 Outbox Publisher 可以独立 goroutine 运行在 scheduler，或单独编译一个轻量进程；不要运行在每个 worker 中重复抢同一批消息，除非实现 `FOR UPDATE SKIP LOCKED`。
 

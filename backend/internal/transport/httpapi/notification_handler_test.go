@@ -39,3 +39,15 @@ func TestNotificationFilterParsesUnreadAndLimit(t *testing.T) {
 		t.Fatal("invalid unread_only should be rejected")
 	}
 }
+
+func TestNotificationPreferencesViewFormatsUnsetTimestamp(t *testing.T) {
+	view := notificationPreferencesViewFrom(&notification.Preferences{UserID: 7})
+	if view.WechatEnabled || view.UpdatedAt != nil {
+		t.Fatalf("preferences view = %+v", view)
+	}
+	updatedAt := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	view = notificationPreferencesViewFrom(&notification.Preferences{UserID: 7, WechatEnabled: true, UpdatedAt: updatedAt})
+	if !view.WechatEnabled || view.UpdatedAt == nil || *view.UpdatedAt != "2026-08-24T09:00:00Z" {
+		t.Fatalf("preferences view = %+v", view)
+	}
+}

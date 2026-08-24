@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -11,6 +12,15 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/notification"
 )
+
+type notificationPreferencesView struct {
+	WechatEnabled bool    `json:"wechat_enabled"`
+	UpdatedAt     *string `json:"updated_at"`
+}
+
+type patchNotificationPreferencesReq struct {
+	WechatEnabled *bool `json:"wechat_enabled"`
+}
 
 type notificationView struct {
 	ID           uuid.UUID `json:"id"`
@@ -42,6 +52,31 @@ func (s *Server) handleListNotifications(w http.ResponseWriter, r *http.Request)
 		views = append(views, notificationViewFrom(item))
 	}
 	writeOK(w, map[string]any{"items": views, "unread_count": unreadCount, "next_cursor": nil})
+}
+
+func (s *Server) handleGetNotificationPreferences(w http.ResponseWriter, r *http.Request) {
+	principal := auth.MustPrincipal(r.Context())
+	item, err := s.notifications.GetPreferences(r.Context(), principal.UserID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeOK(w, notificationPreferencesViewFrom(item))
+}
+
+func (s *Server) handlePatchNotificationPreferences(w http.ResponseWriter, r *http.Request) {
+	principal := auth.MustPrincipal(r.Context())
+	var req patchNotificationPreferencesReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.WechatEnabled == nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "wechat_enabled is required"))
+		return
+	}
+	item, err := s.notifications.SetWechatEnabled(r.Context(), principal.UserID, *req.WechatEnabled)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeOK(w, notificationPreferencesViewFrom(item))
 }
 
 func (s *Server) handleMarkNotificationRead(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +129,15 @@ func notificationViewFrom(item *notification.Notification) notificationView {
 		ReadAt: formatOptionalNotificationTime(item.ReadAt), CreatedAt: item.CreatedAt.Format(timeRFC3339),
 		ExpiresAt: formatOptionalNotificationTime(item.ExpiresAt),
 	}
+}
+
+func notificationPreferencesViewFrom(item *notification.Preferences) notificationPreferencesView {
+	var updatedAt *string
+	if !item.UpdatedAt.IsZero() {
+		formatted := item.UpdatedAt.Format(timeRFC3339)
+		updatedAt = &formatted
+	}
+	return notificationPreferencesView{WechatEnabled: item.WechatEnabled, UpdatedAt: updatedAt}
 }
 
 func formatOptionalNotificationTime(value *time.Time) *string {

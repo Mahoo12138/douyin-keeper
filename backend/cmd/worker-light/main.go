@@ -17,6 +17,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
+	wechatinfra "github.com/mahoo12138/douyin-keeper/backend/internal/infra/wechat"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/transport/asynqworker"
 )
@@ -42,6 +43,7 @@ func main() {
 	defer pool.Close()
 
 	capabilityRepo := postgres.NewCapabilityRepo(pool)
+	notificationRepo := postgres.NewNotificationRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
 	healthService := capability.NewHealthService(capabilityRepo, capability.DefaultHealthPolicy())
 	resolver := capability.NewResolver(capabilityRepo, healthService, capability.AdapterBrowserConsumer)
@@ -54,6 +56,10 @@ func main() {
 	}
 	sidecarClient := sidecar.NewProcessClient(cfg.PlaywrightSidecarCommand, sidecarScript)
 	defer sidecarClient.Close()
+	var wechatSender *wechatinfra.Client
+	if cfg.WechatAppID != "" && cfg.WechatAppSecret != "" {
+		wechatSender = wechatinfra.NewClient(cfg.WechatAppID, cfg.WechatAppSecret, nil)
+	}
 
 	srv := asynqqueue.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr}, asynqworker.ServerConfig("light"))
 	mux := asynqworker.NewLightMux(postgres.NewOutboxRepo(pool), asynqworker.LightMuxDeps{
@@ -65,6 +71,11 @@ func main() {
 		Probe: asynqworker.CapabilityProbeDeps{
 			Snapshots: capabilityRepo, Sidecar: sidecarClient, Tx: workerTx,
 			Health: healthService, Adapter: capability.AdapterBrowserConsumer,
+		},
+		Wechat: asynqworker.WechatNotificationDeps{
+			Deliveries: notificationRepo, Sender: wechatSender,
+			TemplateID: cfg.WechatNotificationTemplateID, Page: cfg.WechatNotificationPage,
+			TitleField: cfg.WechatNotificationTitleField, BodyField: cfg.WechatNotificationBodyField,
 		},
 	}, log)
 	log.Info("worker-light starting")

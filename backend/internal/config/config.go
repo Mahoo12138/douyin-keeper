@@ -34,8 +34,12 @@ type Config struct {
 	CardCodePepperDK1 string
 
 	// WeChat mini program (optional; real exchange is enabled when both are set)
-	WechatAppID     string
-	WechatAppSecret string
+	WechatAppID                  string
+	WechatAppSecret              string
+	WechatNotificationTemplateID string
+	WechatNotificationPage       string
+	WechatNotificationTitleField string
+	WechatNotificationBodyField  string
 
 	// Scheduler / outbox (docs/15)
 	OutboxBatchSize    int
@@ -70,8 +74,12 @@ func Load() *Config {
 
 		CardCodePepperDK1: os.Getenv("CARD_CODE_PEPPER_DK1"),
 
-		WechatAppID:     os.Getenv("WECHAT_APP_ID"),
-		WechatAppSecret: os.Getenv("WECHAT_APP_SECRET"),
+		WechatAppID:                  os.Getenv("WECHAT_APP_ID"),
+		WechatAppSecret:              os.Getenv("WECHAT_APP_SECRET"),
+		WechatNotificationTemplateID: os.Getenv("WECHAT_NOTIFICATION_TEMPLATE_ID"),
+		WechatNotificationPage:       env("WECHAT_NOTIFICATION_PAGE", "pages/index/index"),
+		WechatNotificationTitleField: env("WECHAT_NOTIFICATION_TITLE_FIELD", "thing1"),
+		WechatNotificationBodyField:  env("WECHAT_NOTIFICATION_BODY_FIELD", "thing2"),
 
 		OutboxBatchSize:    intEnv("OUTBOX_BATCH_SIZE", 100),
 		OutboxPollInterval: dur("OUTBOX_POLL_INTERVAL", 5*time.Second),

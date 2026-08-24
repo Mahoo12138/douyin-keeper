@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -54,6 +55,20 @@ func (s *Service) Create(ctx context.Context, item *Notification) error {
 		return fmt.Errorf("notification: invalid notification")
 	}
 	return s.repo.Create(ctx, item)
+}
+
+func (s *Service) GetPreferences(ctx context.Context, userID int64) (*Preferences, error) {
+	if userID <= 0 {
+		return nil, ErrInvalidUser
+	}
+	return s.repo.GetPreferences(ctx, userID)
+}
+
+func (s *Service) SetWechatEnabled(ctx context.Context, userID int64, enabled bool) (*Preferences, error) {
+	if userID <= 0 {
+		return nil, ErrInvalidUser
+	}
+	return s.repo.SetWechatEnabled(ctx, userID, enabled, time.Now())
 }
 
 func normalizeLimit(limit int) int {

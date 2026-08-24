@@ -129,6 +129,7 @@ Prometheus/OpenTelemetry 指标：
 - `queue_latency_seconds`
 - `session_expired_total`
 - `risk_event_total{category,code}`
+- `wechat_notification_delivery_total{status}`
 
 核心 SLO：
 
@@ -152,6 +153,10 @@ Prometheus/OpenTelemetry 指标：
 - 开关 Protocol Adapter；
 - 管理员主动暂停/恢复账号；
 - 登录身份绑定（微信 ↔ 产品账号）。
+
+微信通知只读取 `wechat_mini.provider_subject` 作为发送目标；不记录微信
+`session_key`、AppSecret、access token 或完整通知请求。投递记录只保存状态、尝试次数
+和有限错误码，正文继续留在用户可见的站内通知表中。
 
 管理员不能通过普通后台读取 Session。
 

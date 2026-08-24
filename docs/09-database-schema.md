@@ -556,6 +556,33 @@ CREATE TABLE queue_outbox (
 
 数据库是真实业务状态源，Asynq 只负责传输。详见 `15-scheduler-worker-state-machine.md`。
 
+## 8.2 Notification Delivery
+
+```sql
+CREATE TABLE notification_preferences (
+  user_id        BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  wechat_enabled BOOLEAN NOT NULL DEFAULT false,
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE notification_deliveries (
+  id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  notification_id BIGINT NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+  channel         TEXT NOT NULL CHECK (channel IN ('wechat')),
+  status          TEXT NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending','sent','skipped','failed')),
+  attempts        INTEGER NOT NULL DEFAULT 0,
+  last_error_code TEXT,
+  last_error_at   TIMESTAMPTZ,
+  sent_at         TIMESTAMPTZ,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(notification_id, channel)
+);
+```
+
+风险通知事务同时写入站内通知、微信 delivery 和 `queue_outbox`；delivery 不保存
+微信凭据，worker 运行时从 `auth_identities.provider_subject` 读取发送目标。
+
 ## 9. Capability 与 Adapter Health
 
 ```sql
@@ -665,7 +692,7 @@ Admin 使用独立 Repository / Policy，不通过隐藏的 `is_admin` 参数复
 原则：migration 只前进，不修改已发布 migration；修复通过新 migration 完成。
 
 当前仓库实际迁移已包含：`000001_init.sql`、`000002_notifications.sql`、
-`000003_message_templates.sql`；后续结构变更继续追加新文件。
+`000003_message_templates.sql`、`000004_wechat_notifications.sql`；后续结构变更继续追加新文件。
 
 ## 13. MVP 冻结项
 

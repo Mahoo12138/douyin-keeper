@@ -2,21 +2,30 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/notification"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/outbox"
 )
 
 type NotificationRepo struct {
-	pool *pgxpool.Pool
+	pool  *pgxpool.Pool
+	relay outbox.Outbox
 }
 
-func NewNotificationRepo(pool *pgxpool.Pool) *NotificationRepo {
-	return &NotificationRepo{pool: pool}
+func NewNotificationRepo(pool *pgxpool.Pool, relays ...outbox.Outbox) *NotificationRepo {
+	var relay outbox.Outbox
+	if len(relays) > 0 {
+		relay = relays[0]
+	}
+	return &NotificationRepo{pool: pool, relay: relay}
 }
 
 func (r *NotificationRepo) List(ctx context.Context, userID int64, filter notification.ListFilter) ([]*notification.Notification, int, error) {
@@ -85,13 +94,15 @@ func (r *NotificationRepo) Create(ctx context.Context, item *notification.Notifi
 	if createdAt.IsZero() {
 		createdAt = time.Now()
 	}
-	_, err := From(ctx, r.pool).Exec(ctx, `
+	err := From(ctx, r.pool).QueryRow(ctx, `
 		INSERT INTO notifications
 			(public_id, user_id, type, priority, title, body, resource_type, resource_id, dedupe_key, created_at, expires_at)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULLIF($9,''),$10,$11)
-		ON CONFLICT (user_id, dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING`,
+		ON CONFLICT (user_id, dedupe_key) WHERE dedupe_key IS NOT NULL
+		DO UPDATE SET public_id=notifications.public_id
+		RETURNING public_id`,
 		item.PublicID, item.UserID, item.Type, item.Priority, item.Title, item.Body,
-		item.ResourceType, item.ResourceID, item.DedupeKey, createdAt, item.ExpiresAt)
+		item.ResourceType, item.ResourceID, item.DedupeKey, createdAt, item.ExpiresAt).Scan(&item.PublicID)
 	return err
 }
 
@@ -119,13 +130,112 @@ func (r *NotificationRepo) NotifyRisk(ctx context.Context, accountID int64, code
 		return err
 	}
 	item := &notification.Notification{
-		UserID: userID, Type: notification.TypeRiskEvent, Priority: priority,
+		PublicID: uuid.New(), UserID: userID, Type: notification.TypeRiskEvent, Priority: priority,
 		Title: title, Body: body, ResourceType: stringPtr("account"),
 		ResourceID: stringPtr(publicID.String()),
 		DedupeKey:  fmt.Sprintf("risk:%d:%s:%s", accountID, code, createdAt.In(loc).Format("2006-01-02")),
 		CreatedAt:  createdAt,
 	}
-	return r.Create(ctx, item)
+	if err := r.Create(ctx, item); err != nil {
+		return err
+	}
+	if err := r.EnsureWechatDelivery(ctx, item.PublicID); err != nil {
+		return err
+	}
+	if r.relay == nil {
+		return nil
+	}
+	payload, err := json.Marshal(map[string]string{"notification_id": item.PublicID.String()})
+	if err != nil {
+		return err
+	}
+	return r.relay.Add(ctx, outbox.Message{
+		Kind: outbox.KindNotificationWechat, AggregateType: "notification",
+		AggregateID: item.PublicID.String(), Payload: payload,
+		DedupeKey: "notification.wechat:" + item.PublicID.String(),
+	})
+}
+
+func (r *NotificationRepo) GetPreferences(ctx context.Context, userID int64) (*notification.Preferences, error) {
+	var item notification.Preferences
+	err := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT user_id, wechat_enabled, updated_at
+		FROM notification_preferences WHERE user_id=$1`, userID).
+		Scan(&item.UserID, &item.WechatEnabled, &item.UpdatedAt)
+	if err == pgx.ErrNoRows {
+		return &notification.Preferences{UserID: userID}, nil
+	}
+	return &item, err
+}
+
+func (r *NotificationRepo) SetWechatEnabled(ctx context.Context, userID int64, enabled bool, at time.Time) (*notification.Preferences, error) {
+	var item notification.Preferences
+	err := From(ctx, r.pool).QueryRow(ctx, `
+		INSERT INTO notification_preferences (user_id, wechat_enabled, updated_at)
+		VALUES ($1,$2,$3)
+		ON CONFLICT (user_id) DO UPDATE SET wechat_enabled=EXCLUDED.wechat_enabled, updated_at=EXCLUDED.updated_at
+		RETURNING user_id, wechat_enabled, updated_at`, userID, enabled, at).
+		Scan(&item.UserID, &item.WechatEnabled, &item.UpdatedAt)
+	return &item, err
+}
+
+func (r *NotificationRepo) EnsureWechatDelivery(ctx context.Context, publicID uuid.UUID) error {
+	_, err := From(ctx, r.pool).Exec(ctx, `
+		INSERT INTO notification_deliveries (notification_id, channel)
+		SELECT id, 'wechat' FROM notifications WHERE public_id=$1
+		ON CONFLICT (notification_id, channel) DO NOTHING`, publicID)
+	return err
+}
+
+func (r *NotificationRepo) GetWechatDelivery(ctx context.Context, publicID uuid.UUID) (*notification.WechatDelivery, error) {
+	var item notification.WechatDelivery
+	var openID *string
+	err := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT n.id, n.id, n.public_id, n.user_id, n.title, n.body, n.created_at,
+		       d.status, d.attempts, d.last_error_code,
+		       COALESCE(p.wechat_enabled, false),
+		       (SELECT ai.provider_subject FROM auth_identities ai
+			  WHERE ai.user_id=n.user_id AND ai.provider='wechat_mini'
+			  ORDER BY ai.id DESC LIMIT 1)
+		FROM notifications n
+		JOIN notification_deliveries d ON d.notification_id=n.id AND d.channel='wechat'
+		LEFT JOIN notification_preferences p ON p.user_id=n.user_id
+		WHERE n.public_id=$1`, publicID).Scan(
+		&item.ID, &item.NotificationID, &item.NotificationPublicID, &item.UserID,
+		&item.Title, &item.Body, &item.CreatedAt, &item.Status, &item.Attempts,
+		&item.LastErrorCode, &item.WechatEnabled, &openID)
+	if err == pgx.ErrNoRows {
+		return nil, apperr.NotFound(apperr.CodeNotFound, "notification delivery not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if openID != nil {
+		item.OpenID = *openID
+	}
+	return &item, nil
+}
+
+func (r *NotificationRepo) MarkWechatDeliverySent(ctx context.Context, publicID uuid.UUID, at time.Time) error {
+	_, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE notification_deliveries d SET status='sent', sent_at=$2, updated_at=$2
+		FROM notifications n WHERE d.notification_id=n.id AND d.channel='wechat' AND n.public_id=$1`, publicID, at)
+	return err
+}
+
+func (r *NotificationRepo) MarkWechatDeliverySkipped(ctx context.Context, publicID uuid.UUID, reason string, at time.Time) error {
+	_, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE notification_deliveries d SET status='skipped', last_error_code=$2, updated_at=$3
+		FROM notifications n WHERE d.notification_id=n.id AND d.channel='wechat' AND n.public_id=$1`, publicID, reason, at)
+	return err
+}
+
+func (r *NotificationRepo) MarkWechatDeliveryFailed(ctx context.Context, publicID uuid.UUID, code string, at time.Time) error {
+	_, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE notification_deliveries d SET status='failed', attempts=attempts+1,
+			last_error_code=$2, last_error_at=$3, updated_at=$3
+		FROM notifications n WHERE d.notification_id=n.id AND d.channel='wechat' AND n.public_id=$1`, publicID, code, at)
+	return err
 }
 
 func riskCopy(code, nickname string) (string, string) {
@@ -152,3 +262,4 @@ func riskCopy(code, nickname string) (string, string) {
 func stringPtr(value string) *string { return &value }
 
 var _ notification.Repository = (*NotificationRepo)(nil)
+var _ notification.DeliveryRepository = (*NotificationRepo)(nil)

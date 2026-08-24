@@ -14,7 +14,7 @@ type Message struct {
 	// ID is a client-generated public id (uuid) or empty for auto.
 	ID string
 	// Kind selects the asynq task type / worker queue.
-	Kind string
+	Kind          string
 	AggregateType string
 	AggregateID   string
 	Payload       json.RawMessage
@@ -40,4 +40,5 @@ const (
 	KindSendBrowser         = "send.browser"
 	KindSendProtocol        = "send.protocol"
 	KindCapabilityProbe     = "capability.probe"
+	KindNotificationWechat  = "notification.wechat.send"
 )

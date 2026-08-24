@@ -21,7 +21,9 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/redislock"
+	wechatinfra "github.com/mahoo12138/douyin-keeper/backend/internal/infra/wechat"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/notification"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/outbox"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/send"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
@@ -41,6 +43,7 @@ var outboxKinds = []string{
 	asynqqueue.KindSendBrowser,
 	asynqqueue.KindSendProtocol,
 	asynqqueue.KindCapabilityProbe,
+	asynqqueue.KindNotificationWechat,
 }
 
 // NewMux registers a stub handler for every outbox kind. The handler pulls
@@ -117,9 +120,24 @@ type CapabilityProbeDeps struct {
 	Now       func() time.Time
 }
 
+type WechatSubscriptionSender interface {
+	SendSubscription(context.Context, wechatinfra.SubscriptionMessage) error
+}
+
+type WechatNotificationDeps struct {
+	Deliveries notification.DeliveryRepository
+	Sender     WechatSubscriptionSender
+	TemplateID string
+	Page       string
+	TitleField string
+	BodyField  string
+	Now        func() time.Time
+}
+
 type LightMuxDeps struct {
 	Dispatch SendDispatchDeps
 	Probe    CapabilityProbeDeps
+	Wechat   WechatNotificationDeps
 }
 
 func NewLightMux(loader PayloadLoader, deps LightMuxDeps, log *slog.Logger) *asynq.ServeMux {
@@ -152,6 +170,10 @@ func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindD
 		}
 		if kind == asynqqueue.KindCapabilityProbe && lightDeps != nil && lightDeps.Probe.Snapshots != nil && lightDeps.Probe.Sidecar != nil && lightDeps.Probe.Tx != nil {
 			mux.HandleFunc(kind, capabilityProbeHandler(loader, lightDeps.Probe))
+			continue
+		}
+		if kind == asynqqueue.KindNotificationWechat && lightDeps != nil && lightDeps.Wechat.Deliveries != nil {
+			mux.HandleFunc(kind, wechatNotificationHandler(loader, lightDeps.Wechat))
 			continue
 		}
 		if kind == asynqqueue.KindSendBrowser && sessionDeps != nil && sessionDeps.Sends != nil {

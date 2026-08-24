@@ -116,6 +116,8 @@ func (s *Server) Router() http.Handler {
 
 			private.Get("/me/entitlement", s.handleMyEntitlement)
 			private.Get("/notifications", s.handleListNotifications)
+			private.Get("/notifications/preferences", s.handleGetNotificationPreferences)
+			private.Patch("/notifications/preferences", s.handlePatchNotificationPreferences)
 			private.Post("/notifications/read-all", s.handleMarkAllNotificationsRead)
 			private.Post("/notifications/{notificationId}/read", s.handleMarkNotificationRead)
 			private.Post("/entitlements/redeem", s.handleRedeem)

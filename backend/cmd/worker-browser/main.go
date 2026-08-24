@@ -68,7 +68,8 @@ func main() {
 	sendRepo := postgres.NewSendRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
 	healthService := capability.NewHealthService(postgres.NewCapabilityRepo(pool), capability.DefaultHealthPolicy())
-	notificationRepo := postgres.NewNotificationRepo(pool)
+	outboxRepo := postgres.NewOutboxRepo(pool)
+	notificationRepo := postgres.NewNotificationRepo(pool, outboxRepo)
 	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown).WithNotifier(notificationRepo)
 	entitlementRepo := postgres.NewEntitlementRepo(pool)
 	entitlementSvc := entitlement.NewService(entitlementRepo, entitlementRepo, entitlementRepo, entitlementRepo,
@@ -88,7 +89,7 @@ func main() {
 		workerID = "worker-browser"
 	}
 	workerID += ":" + time.Now().Format("20060102150405")
-	mux := asynqworker.NewBrowserMux(postgres.NewOutboxRepo(pool), asynqworker.SessionCheckDeps{
+	mux := asynqworker.NewBrowserMux(outboxRepo, asynqworker.SessionCheckDeps{
 		Jobs: jobRepo, Accounts: accountRepo, Sessions: sessionSvc, Sidecar: sidecarClient,
 		Redis: rdb, Friends: friendRepo, Targets: friendRepo, Tasks: taskRepo, Sends: sendRepo,
 		Capabilities: postgres.NewCapabilityRepo(pool),

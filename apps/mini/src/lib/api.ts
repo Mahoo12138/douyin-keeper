@@ -39,6 +39,16 @@ export function linkWechatMini(wechatCode: string, linkCode: string) {
   return request<components['schemas']['AuthResponse']>('/auth/wechat-mini/link', { method: 'POST', data: { wechat_code: wechatCode, link_code: linkCode } })
 }
 
+export function getNotificationPreferences(token: string) {
+  return request<components['schemas']['NotificationPreferences']>('/notifications/preferences', { token })
+}
+
+export function updateNotificationPreferences(token: string, wechatEnabled: boolean) {
+  return request<components['schemas']['NotificationPreferences']>('/notifications/preferences', {
+    method: 'PATCH', token, data: { wechat_enabled: wechatEnabled },
+  })
+}
+
 export function getMe(token: string) {
   return request<components['schemas']['User']>('/me', { token })
 }

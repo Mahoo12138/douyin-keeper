@@ -60,7 +60,8 @@ func main() {
 	accountRepo := postgres.NewAccountRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
 	healthService := capability.NewHealthService(postgres.NewCapabilityRepo(pool), capability.DefaultHealthPolicy())
-	notificationRepo := postgres.NewNotificationRepo(pool)
+	outboxRepo := postgres.NewOutboxRepo(pool)
+	notificationRepo := postgres.NewNotificationRepo(pool, outboxRepo)
 	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown).WithNotifier(notificationRepo)
 	sessionSvc := session.NewService(postgres.NewSessionRepo(pool), workerTx, cipher, cfg.SessionTempDir)
 	sidecarScript := cfg.PlaywrightSidecarScript
@@ -79,9 +80,9 @@ func main() {
 	workerID += ":" + time.Now().Format("20060102150405")
 
 	srv := asynqqueue.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr}, asynqworker.ServerConfig("interactive"))
-	mux := asynqworker.NewInteractiveMux(postgres.NewOutboxRepo(pool), asynqworker.QRBindDeps{
+	mux := asynqworker.NewInteractiveMux(outboxRepo, asynqworker.QRBindDeps{
 		Jobs: jobRepo, Accounts: accountRepo, Sessions: sessionSvc, Sidecar: sidecarClient,
-		Redis: rdb, Tx: workerTx, Outbox: postgres.NewOutboxRepo(pool), Health: healthService, Risk: riskService,
+		Redis: rdb, Tx: workerTx, Outbox: outboxRepo, Health: healthService, Risk: riskService,
 		WorkerID: workerID, ProfileRoot: cfg.LoginProfileDir, LockTTL: 6 * time.Minute,
 	}, log)
 	log.Info("worker-interactive starting")

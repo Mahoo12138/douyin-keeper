@@ -323,6 +323,23 @@ export async function markAllNotificationsRead(accessToken: string) {
   return data
 }
 
+export async function getNotificationPreferences(accessToken: string) {
+  const { data, error } = await api.GET('/notifications/preferences', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (error) throwApiError(error, 'notification preferences lookup failed')
+  return data
+}
+
+export async function updateNotificationPreferences(accessToken: string, wechat_enabled: boolean) {
+  const { data, error } = await api.PATCH('/notifications/preferences', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: { wechat_enabled },
+  })
+  if (error) throwApiError(error, 'notification preferences update failed')
+  return data
+}
+
 export async function listFriends(accessToken: string, accountId: string, options?: { limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/accounts/{accountId}/friends', {
     headers: { Authorization: `Bearer ${accessToken}` },

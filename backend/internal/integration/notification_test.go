@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/notification"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/risk"
@@ -26,7 +27,18 @@ func TestNotificationRepoDedupeReadStateAndRiskIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	notifications := postgres.NewNotificationRepo(pool)
+	identityAt := time.Now()
+	if err := postgres.NewAuthUserRepo(pool).CreateIdentity(ctx, &auth.AuthIdentity{
+		UserID: ownerID, Provider: "wechat_mini", ProviderSubject: "openid-" + uuid.NewString(), CreatedAt: identityAt,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	outboxRepo := postgres.NewOutboxRepo(pool)
+	notifications := postgres.NewNotificationRepo(pool, outboxRepo)
+	prefs, err := notifications.SetWechatEnabled(ctx, ownerID, true, identityAt)
+	if err != nil || !prefs.WechatEnabled {
+		t.Fatalf("set notification preferences = %+v, err=%v", prefs, err)
+	}
 	now := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
 	risks := risk.NewService(postgres.NewRiskRepo(pool), accounts, postgres.NewTxManager(pool), time.Minute).WithNotifier(notifications)
 	risks.SetNow(func() time.Time { return now })
@@ -45,6 +57,19 @@ func TestNotificationRepoDedupeReadStateAndRiskIntegration(t *testing.T) {
 	}
 	if items[0].Priority != notification.PriorityCritical || items[0].ResourceID == nil || *items[0].ResourceID != acct.PublicID.String() {
 		t.Fatalf("risk notification = %+v", items[0])
+	}
+	delivery, err := notifications.GetWechatDelivery(ctx, items[0].PublicID)
+	if err != nil || delivery.Status != notification.DeliveryPending || !delivery.WechatEnabled || delivery.OpenID == "" {
+		t.Fatalf("wechat delivery = %+v, err=%v", delivery, err)
+	}
+	var outboxCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT COUNT(*)::int FROM queue_outbox
+		WHERE kind=$1 AND aggregate_id=$2`, "notification.wechat.send", items[0].PublicID.String()).Scan(&outboxCount); err != nil {
+		t.Fatal(err)
+	}
+	if outboxCount != 1 {
+		t.Fatalf("wechat outbox count = %d, want 1", outboxCount)
 	}
 	updated, err := notifications.MarkRead(ctx, ownerID, items[0].PublicID)
 	if err != nil || !updated {

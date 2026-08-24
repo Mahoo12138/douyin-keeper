@@ -22,6 +22,7 @@ const (
 	KindSendBrowser         = "send.browser"
 	KindSendProtocol        = "send.protocol"
 	KindCapabilityProbe     = "capability.probe"
+	KindNotificationWechat  = "notification.wechat.send"
 
 	QueueInteractive = "interactive"
 	QueueBrowser     = "browser"
@@ -35,7 +36,7 @@ func QueueFor(kind string) string {
 		return QueueInteractive
 	case KindSessionCheckBrowser, KindFriendsSyncBrowser, KindSendBrowser:
 		return QueueBrowser
-	case KindSendDispatch, KindSendProtocol, KindCapabilityProbe:
+	case KindSendDispatch, KindSendProtocol, KindCapabilityProbe, KindNotificationWechat:
 		return QueueLight
 	default:
 		return QueueLight
@@ -55,8 +56,8 @@ func (c *Client) Close() error { return c.inner.Close() }
 
 type Message struct {
 	// Id, Kind, AggregateID and Payload mirror queue_outbox columns.
-	ID        string          // public_id (UUID string)
-	Kind      string          // outbox kind
+	ID            string      // public_id (UUID string)
+	Kind          string      // outbox kind
 	WorkerPayload interface{} // small struct serialized into the asynq task
 }
 

@@ -151,6 +151,7 @@ API 路由优先于 SPA fallback。微信小程序独立发布，不进入 Backe
 - Send Dispatch
 - Protocol Send
 - Capability Probe
+- WeChat subscription notification
 - 轻量状态更新
 
 Scheduler Tick、Retry Scan、Lease Reaper 独立为 `scheduler` 进程，不占 Worker queue concurrency。

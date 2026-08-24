@@ -14,6 +14,7 @@ flowchart LR
     Q --> WI[worker-interactive]
     Q --> WB[worker-browser]
     Q --> WL[worker-light]
+    WL --> WX[WeChat subscribe API]
     WI --> PG
     WB --> PG
     WL --> PG
@@ -26,6 +27,11 @@ flowchart LR
 - Worker：决定“如何执行”；
 - PostgreSQL：持久化业务状态；
 - Redis/Asynq：只负责 transport / delay / queue。
+
+风险通知同事务写入 `notification_deliveries` 和
+`queue_outbox(kind=notification.wechat.send)`。`worker-light` 只从 outbox stable id
+加载通知，已发送/已跳过的 delivery 直接幂等 ACK；微信临时失败写入 `failed` 后返回
+错误，交给 Asynq 重试。
 
 ## 1.1 Container Mapping
 

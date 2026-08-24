@@ -175,6 +175,17 @@ WECHAT_IDENTITY_NOT_LINKED
 
 将当前用户的全部未读通知标记为已读，并返回 `marked_count`。
 
+### `GET /notifications/preferences`
+
+返回当前用户的通知偏好。首次读取且没有设置记录时返回 `wechat_enabled=false`。
+
+### `PATCH /notifications/preferences`
+
+请求体：`{"wechat_enabled":true|false}`。小程序只有在微信端订阅授权成功后才提交
+`true`；关闭通知只关闭后续投递偏好，不删除已有站内通知。风险通知产生时，服务端
+在同一事务内创建站内通知、微信 delivery 和 `notification.wechat.send` outbox；
+`worker-light` 负责调用微信订阅消息接口并记录 `sent/skipped/failed` 状态。
+
 ## 4.1 Entitlement / 卡密兑换
 
 系统内部没有订单/支付 API。C 端只有授权查询与卡密兑换。
@@ -728,5 +739,6 @@ GET  /jobs/{id}/events
 POST /jobs/{id}/cancel
 ```
 
-小程序微信登录与 Admin API 已按上述命名空间接入；真实微信身份交换依赖运行时配置
-`WECHAT_APP_ID` 与 `WECHAT_APP_SECRET`。
+小程序微信登录、通知偏好与 Admin API 已按上述命名空间接入；真实微信身份交换依赖
+运行时配置 `WECHAT_APP_ID` 与 `WECHAT_APP_SECRET`，微信通知还需要
+`WECHAT_NOTIFICATION_TEMPLATE_ID` 及模板字段配置。

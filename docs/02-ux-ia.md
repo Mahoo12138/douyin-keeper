@@ -188,7 +188,7 @@ Tab：
 4. 今日任务执行完成；
 5. 系统维护。
 
-当前 V1.1 站内通知已接入 `GET /api/v1/notifications`、`POST /api/v1/notifications/{id}/read` 和 `POST /api/v1/notifications/read-all`。风险事件中的登录失效、安全验证、平台限流和 Adapter/浏览器能力异常会为账号所有者生成通知；同一账号同一风险码在同一 `Asia/Shanghai` 自然日内去重，通知不展示 Session、Cookie 或风险详情 JSON。通知页保留加载、失败、空数据、未读数量、单条已读和全部已读状态。
+当前 V1.1 站内通知已接入 `GET /api/v1/notifications`、`POST /api/v1/notifications/{id}/read` 和 `POST /api/v1/notifications/read-all`；通知偏好通过 `GET/PATCH /api/v1/notifications/preferences` 管理。风险事件中的登录失效、安全验证、平台限流和 Adapter/浏览器能力异常会为账号所有者生成通知；同一账号同一风险码在同一 `Asia/Shanghai` 自然日内去重，通知不展示 Session、Cookie 或风险详情 JSON。通知页保留加载、失败、空数据、未读数量、单条已读和全部已读状态；微信通知通过事务性 outbox 与 `worker-light` 异步投递，失败状态可重试且不影响站内通知。
 
 ### 1.10 权益与兑换 `/entitlement`
 
@@ -270,7 +270,7 @@ Tab：
 
 MVP 中抖音账号首次绑定仍推荐在 PC 完成。小程序对未绑定账号显示“请在 PC 完成首次绑定”。
 
-当前实现已接入 `wx.login()`、服务端 `jscode2session` 身份交换、微信登录、PC 一次性绑定码和本地退出登录交互；后端未配置完整的微信 AppID/Secret 时，接口明确返回 `WECHAT_IDENTITY_NOT_LINKED`，小程序提示用户先在 PC 端完成绑定，不伪造登录成功。服务端只保存 `wechat_mini` 的 provider subject，不持久化微信 `session_key`。
+当前实现已接入 `wx.login()`、服务端 `jscode2session` 身份交换、微信登录、PC 一次性绑定码、本地退出登录和“微信服务通知”订阅授权交互；后端未配置完整的微信 AppID/Secret 时，接口明确返回 `WECHAT_IDENTITY_NOT_LINKED`，小程序提示用户先在 PC 端完成绑定，不伪造登录成功。服务端只保存 `wechat_mini` 的 provider subject，不持久化微信 `session_key`。
 
 ---
 

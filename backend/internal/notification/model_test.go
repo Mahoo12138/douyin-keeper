@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -29,6 +30,14 @@ func (r *repositoryStub) MarkAllRead(_ context.Context, userID int64) (int, erro
 }
 
 func (r *repositoryStub) Create(context.Context, *Notification) error { return nil }
+
+func (r *repositoryStub) GetPreferences(_ context.Context, userID int64) (*Preferences, error) {
+	return &Preferences{UserID: userID}, nil
+}
+
+func (r *repositoryStub) SetWechatEnabled(_ context.Context, userID int64, enabled bool, at time.Time) (*Preferences, error) {
+	return &Preferences{UserID: userID, WechatEnabled: enabled, UpdatedAt: at}, nil
+}
 
 func TestServiceNormalizesListAndMarksRead(t *testing.T) {
 	repo := &repositoryStub{}
@@ -57,5 +66,18 @@ func TestServiceRejectsInvalidUser(t *testing.T) {
 	}
 	if err := svc.MarkRead(context.Background(), 0, uuid.New()); err != ErrInvalidUser {
 		t.Fatalf("MarkRead invalid user error = %v", err)
+	}
+}
+
+func TestServiceManagesWechatPreferences(t *testing.T) {
+	repo := &repositoryStub{}
+	svc := NewService(repo)
+	preferences, err := svc.SetWechatEnabled(context.Background(), 7, true)
+	if err != nil || preferences == nil || !preferences.WechatEnabled || preferences.UserID != 7 || preferences.UpdatedAt.IsZero() {
+		t.Fatalf("SetWechatEnabled() = %+v, err=%v", preferences, err)
+	}
+	preferences, err = svc.GetPreferences(context.Background(), 7)
+	if err != nil || preferences == nil || preferences.UserID != 7 {
+		t.Fatalf("GetPreferences() = %+v, err=%v", preferences, err)
 	}
 }
