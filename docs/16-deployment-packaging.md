@@ -444,8 +444,8 @@ Vite Dev Server -> Go API
 生产/Release 构建必须验证：
 
 ```text
-web dist exists
-admin dist exists
+apps/web/dist exists
+backend/internal/transport/webassets/dist/web exists
       ↓
 go:embed build
 ```

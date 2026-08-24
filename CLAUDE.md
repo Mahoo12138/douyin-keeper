@@ -10,6 +10,8 @@ The repository is in **Milestone M0**: the full architecture, domain model, cont
 
 ## Authoritative starting points
 
+Repository update: PC Web and Admin are now a single `apps/web` TanStack SPA; Admin lives under `/admin/*`, and `pnpm build:spa` produces the one Go-embedded artifact. The historical scaffold notes below should be read with this merged layout.
+
 - `docs/00-index.md` — index, overall architecture diagram, and core principles. Read this first.
 - `docs/08-roadmap-repo.md` — tech stack, planned monorepo layout, milestones (M0–M7), and the 16 contracts that must be frozen before implementation.
 - `docs/14-go-backend-package-design.md`, `docs/15-scheduler-worker-state-machine.md`, `docs/13-auth-entitlement-engineering.md` — the three engineering constraint docs that govern all backend code.

@@ -83,10 +83,10 @@ jobs:
       - run: pnpm --filter @douyin-keeper/sdk-ts generate
       - run: pnpm --filter @douyin-keeper/ui-web typecheck
       - run: pnpm --filter @douyin-keeper/sdk-ts typecheck
+      - run: pnpm --filter @douyin-keeper/sdk-ts test
       - run: pnpm --filter @douyin-keeper/web gen && pnpm --filter @douyin-keeper/web typecheck
-      - run: pnpm --filter @douyin-keeper/admin gen && pnpm --filter @douyin-keeper/admin typecheck
-      - run: pnpm --filter @douyin-keeper/web build
-      - run: pnpm --filter @douyin-keeper/admin build
+      - run: pnpm --filter @douyin-keeper/web test
+      - run: pnpm build:spa
 
   sidecar:
     name: Sidecar (protocol)
