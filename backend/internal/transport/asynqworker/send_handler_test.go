@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
@@ -102,6 +103,30 @@ func TestRequiredTaskFeatureOnlyGatesCreatorFirstMessage(t *testing.T) {
 	}
 	if got := requiredTaskFeature(true); got != entitlement.FeatureCreatorFirstMessage {
 		t.Fatalf("requiredTaskFeature(true) = %q, want %q", got, entitlement.FeatureCreatorFirstMessage)
+	}
+}
+
+func TestSendAccountStateErrorRejectsStalePlatformState(t *testing.T) {
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	cooldownUntil := now.Add(time.Minute)
+	tests := []struct {
+		name string
+		acct *account.Account
+		want string
+	}{
+		{name: "missing", want: apperr.CodeNotFound},
+		{name: "released", acct: &account.Account{BindingStatus: account.BindingReleased}, want: apperr.CodeConflict},
+		{name: "paused", acct: &account.Account{BindingStatus: account.BindingBound, PausedAt: &now}, want: apperr.CodeAccountPaused},
+		{name: "cooling down", acct: &account.Account{BindingStatus: account.BindingBound, RiskStatus: account.RiskCoolingDown, CooldownUntil: &cooldownUntil}, want: apperr.CodeAccountCooldownActive},
+		{name: "expired", acct: &account.Account{BindingStatus: account.BindingBound, SessionStatus: account.SessionExpired}, want: apperr.CodeSessionExpired},
+		{name: "ready", acct: &account.Account{BindingStatus: account.BindingBound, SessionStatus: account.SessionValid}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sendAccountStateError(tt.acct, now); got != tt.want {
+				t.Fatalf("sendAccountStateError() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

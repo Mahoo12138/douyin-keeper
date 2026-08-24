@@ -314,6 +314,9 @@ Adapter。
 
 `CAS queued -> running` 使 Redis 重复投递不会执行两次。
 
+账号锁取得后必须重新读取账号状态并执行一次最终 preflight；不能继续使用 claim 前的旧快照，
+以阻断解绑、暂停、风险冷却或 Session 失效与平台调用之间的竞态。
+
 建议 SQL：
 
 ```sql

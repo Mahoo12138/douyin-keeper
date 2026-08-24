@@ -146,23 +146,8 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 			return finishSendWithQuota(ctx, deps, claimed, send.JobFailed, code, false, nil, send.IntentFailed,
 				acct.UserID, intent.LocalDate, now, adapterConfig.adapter)
 		}
-		if acct.BindingStatus != account.BindingBound {
-			return failWithQuota(apperr.CodeConflict)
-		}
-		if acct.PausedAt != nil {
-			return failWithQuota(apperr.CodeAccountPaused)
-		}
-		if acct.RiskStatus == account.RiskPaused {
-			return failWithQuota(apperr.CodeAccountPaused)
-		}
-		if acct.RiskStatus == account.RiskCoolingDown && (acct.CooldownUntil == nil || now().Before(*acct.CooldownUntil)) {
-			return failWithQuota(apperr.CodeAccountCooldownActive)
-		}
-		if acct.SessionStatus == account.SessionExpired {
-			return failWithQuota(apperr.CodeSessionExpired)
-		}
-		if acct.SessionStatus == account.SessionChallengeRequired {
-			return failWithQuota(apperr.CodeChallengeRequired)
+		if code := sendAccountStateError(acct, now()); code != "" {
+			return failWithQuota(code)
 		}
 		if intent.TaskID == nil {
 			return failWithQuota(apperr.CodeAdapterIncompatible)
@@ -207,6 +192,14 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 			return failWithQuota(apperr.CodeAccountBusy)
 		}
 		defer func() { _ = lock.Release(context.Background()) }()
+		latest, err := deps.Accounts.GetByID(ctx, claimed.AccountID)
+		if err != nil || latest == nil || latest.UserID != acct.UserID {
+			return failWithQuota(apperr.CodeNotFound)
+		}
+		acct = latest
+		if code := sendAccountStateError(acct, now()); code != "" {
+			return failWithQuota(code)
+		}
 		target, err := deps.Targets.GetSendTarget(ctx, claimed.AccountID, claimed.FriendID)
 		if err != nil {
 			code := apperr.CodeAdapterIncompatible
@@ -312,6 +305,28 @@ func validateSendPreflightDependencies(deps SessionCheckDeps) error {
 		return fmt.Errorf("adapter health service is not configured")
 	}
 	return nil
+}
+
+func sendAccountStateError(acct *account.Account, now time.Time) string {
+	if acct == nil {
+		return apperr.CodeNotFound
+	}
+	if acct.BindingStatus != account.BindingBound {
+		return apperr.CodeConflict
+	}
+	if acct.PausedAt != nil || acct.RiskStatus == account.RiskPaused {
+		return apperr.CodeAccountPaused
+	}
+	if acct.RiskStatus == account.RiskCoolingDown && (acct.CooldownUntil == nil || now.Before(*acct.CooldownUntil)) {
+		return apperr.CodeAccountCooldownActive
+	}
+	if acct.SessionStatus == account.SessionExpired {
+		return apperr.CodeSessionExpired
+	}
+	if acct.SessionStatus == account.SessionChallengeRequired {
+		return apperr.CodeChallengeRequired
+	}
+	return ""
 }
 
 func requiredTaskFeature(allowFirstMessage bool) string {
