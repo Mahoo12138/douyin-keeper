@@ -121,3 +121,13 @@ def test_qr_poll_rejects_unknown_handle():
         assert False, "expected ProtocolError"
     except protocol.ProtocolError as exc:
         assert exc.code == protocol.ERR_LOGIN_HANDLE_NOT_FOUND
+
+
+def test_friends_list_rejects_missing_session_file():
+    import friends_list
+
+    try:
+        friends_list.list_friends({"session": {"kind": "playwright_storage_state_file", "path": "/missing/session.json"}})
+        assert False, "expected ProtocolError"
+    except protocol.ProtocolError as exc:
+        assert exc.code == protocol.ERR_SESSION_EXPIRED

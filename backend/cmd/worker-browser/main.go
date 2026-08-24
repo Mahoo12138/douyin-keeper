@@ -1,8 +1,8 @@
 // Command worker-browser processes the browser queue (friends sync, session
 // check, browser send) with a global browser semaphore (docs/04 §3, docs/15 §17).
-// Session checks are wired to the encrypted-session boundary and browser
-// Sidecar; other browser operations remain explicit stubs until their
-// platform adapters land.
+// Session checks and friends sync are wired to the encrypted-session boundary
+// and browser Sidecar; other browser operations remain explicit stubs until
+// their platform adapters land.
 package main
 
 import (
@@ -60,6 +60,7 @@ func main() {
 	}
 	jobRepo := postgres.NewJobRepo(pool)
 	accountRepo := postgres.NewAccountRepo(pool)
+	friendRepo := postgres.NewFriendRepo(pool)
 	sessionSvc := session.NewService(postgres.NewSessionRepo(pool), postgres.NewTxManager(pool), cipher, cfg.SessionTempDir)
 	sidecarScript := cfg.PlaywrightSidecarScript
 	if _, statErr := os.Stat(sidecarScript); os.IsNotExist(statErr) {
@@ -77,7 +78,8 @@ func main() {
 	workerID += ":" + time.Now().Format("20060102150405")
 	mux := asynqworker.NewBrowserMux(postgres.NewOutboxRepo(pool), asynqworker.SessionCheckDeps{
 		Jobs: jobRepo, Accounts: accountRepo, Sessions: sessionSvc, Sidecar: sidecarClient,
-		Redis: rdb, WorkerID: workerID, LockTTL: 2 * time.Minute,
+		Redis: rdb, Friends: friendRepo, Tx: postgres.NewTxManager(pool),
+		WorkerID: workerID, LockTTL: 2 * time.Minute,
 	}, log)
 	srv := asynqqueue.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr}, asynqworker.ServerConfig("browser"))
 	log.Info("worker-browser starting")

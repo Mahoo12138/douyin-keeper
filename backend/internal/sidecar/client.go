@@ -12,17 +12,17 @@ const ProtocolVersion = 1
 
 // Ops are the v1 operations (docs/10 §4).
 const (
-	OpsHealthCheck      = "health.check"
-	OpsLoginQRStart     = "login.qr.start"
-	OpsLoginQRPoll      = "login.qr.poll"
-	OpsLoginSMSStart    = "login.sms.start"
-	OpsLoginSMSVerify   = "login.sms.verify"
-	OpsSessionValidate  = "session.validate"
-	OpsFriendsList      = "friends.list"
-	OpsConversationsList = "conversations.list"
-	OpsMessageSendText  = "message.send_text"
+	OpsHealthCheck        = "health.check"
+	OpsLoginQRStart       = "login.qr.start"
+	OpsLoginQRPoll        = "login.qr.poll"
+	OpsLoginSMSStart      = "login.sms.start"
+	OpsLoginSMSVerify     = "login.sms.verify"
+	OpsSessionValidate    = "session.validate"
+	OpsFriendsList        = "friends.list"
+	OpsConversationsList  = "conversations.list"
+	OpsMessageSendText    = "message.send_text"
 	OpsMessageSendSticker = "message.send_sticker"
-	OpsMessageSendFirst = "message.send_first"
+	OpsMessageSendFirst   = "message.send_first"
 )
 
 // Request is the proto request envelope.
@@ -43,20 +43,20 @@ type Meta struct {
 
 // Error mirrors the protocol error object.
 type Error struct {
-	Code     string `json:"code"`
+	Code      string `json:"code"`
 	Retryable bool   `json:"retryable"`
-	Message  string `json:"message"`
-	Detail   any    `json:"detail,omitempty"`
+	Message   string `json:"message"`
+	Detail    any    `json:"detail,omitempty"`
 }
 
 // Response is either a success or a failure envelope.
 type Response struct {
-	ProtocolVersion int  `json:"protocol_version"`
+	ProtocolVersion int    `json:"protocol_version"`
 	RequestID       string `json:"request_id"`
-	OK              bool  `json:"ok"`
-	Result          any   `json:"result,omitempty"`
+	OK              bool   `json:"ok"`
+	Result          any    `json:"result,omitempty"`
 	Error           *Error `json:"error,omitempty"`
-	Meta            Meta  `json:"meta"`
+	Meta            Meta   `json:"meta"`
 }
 
 // Stable error codes (docs/10 §11).
@@ -70,6 +70,7 @@ const (
 	ErrLoginHandleNotFound    = "LOGIN_HANDLE_NOT_FOUND"
 	ErrChallengeRequired      = "CHALLENGE_REQUIRED"
 	ErrPlatformRateLimited    = "PLATFORM_RATE_LIMITED"
+	ErrBrowserSelectorChanged = "BROWSER_SELECTOR_CHANGED"
 	ErrFriendNotFound         = "FRIEND_NOT_FOUND"
 	ErrFriendAmbiguous        = "FRIEND_AMBIGUOUS"
 	ErrConversationNotFound   = "CONVERSATION_NOT_FOUND"

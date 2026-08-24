@@ -1,6 +1,6 @@
 // Package asynqworker wires Asynq handlers to the outbox kinds. Session check
-// is the first real browser operation; remaining platform adapters are kept
-// explicit until their contracts are implemented.
+// and friends sync are the first real browser operations; remaining platform
+// adapters are kept explicit until their contracts are implemented.
 package asynqworker
 
 import (
@@ -16,6 +16,7 @@ import (
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/friend"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/redislock"
@@ -44,8 +45,8 @@ func NewMux(loader PayloadLoader, log *slog.Logger) *asynq.ServeMux {
 	return newMux(loader, nil, nil, log)
 }
 
-// SessionCheckDeps wires the first real browser job. Other browser jobs stay
-// on the stub handler until their adapter contracts are implemented.
+// SessionCheckDeps wires the session-check and friends-sync browser jobs.
+// Other browser jobs stay on the stub handler until their adapters land.
 type SessionCheckDeps struct {
 	Jobs     job.Repository
 	Accounts account.Repository
@@ -54,6 +55,8 @@ type SessionCheckDeps struct {
 	}
 	Sidecar  sidecar.Client
 	Redis    *redis.Client
+	Friends  friend.SyncRepository
+	Tx       job.TxManager
 	WorkerID string
 	LockTTL  time.Duration
 	Now      func() time.Time
@@ -77,6 +80,10 @@ func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindD
 		}
 		if kind == asynqqueue.KindSessionCheckBrowser && sessionDeps != nil {
 			mux.HandleFunc(kind, sessionCheckHandler(loader, *sessionDeps, log))
+			continue
+		}
+		if kind == asynqqueue.KindFriendsSyncBrowser && sessionDeps != nil && sessionDeps.Friends != nil {
+			mux.HandleFunc(kind, friendsSyncHandler(loader, *sessionDeps))
 			continue
 		}
 		mux.HandleFunc(kind, func(ctx context.Context, t *asynq.Task) error {

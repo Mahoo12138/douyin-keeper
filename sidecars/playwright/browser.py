@@ -40,29 +40,44 @@ def _prepare_page(context, page):
 
 
 @contextmanager
-def launch(user_data_dir, locale="zh-CN"):
+def launch(user_data_dir=None, state_in=None, locale="zh-CN"):
     factory = _playwright_factory()
     if factory is None:
         raise RuntimeError("playwright_missing")
     pw = factory().start()
     context = None
     try:
-        os.makedirs(user_data_dir, mode=0o700, exist_ok=True)
-        context = pw.chromium.launch_persistent_context(
-            user_data_dir,
-            headless=not _headed(),
-            args=list(_BROWSER_ARGS),
-            locale=locale,
-            timezone_id="Asia/Shanghai",
-            viewport={"width": 1280, "height": 720},
-        )
+        context_options = {
+            "headless": not _headed(),
+            "args": list(_BROWSER_ARGS),
+            "locale": locale,
+            "timezone_id": "Asia/Shanghai",
+            "viewport": {"width": 1280, "height": 720},
+        }
+        if user_data_dir:
+            os.makedirs(user_data_dir, mode=0o700, exist_ok=True)
+            context = pw.chromium.launch_persistent_context(user_data_dir, **context_options)
+        else:
+            browser = pw.chromium.launch(
+                headless=context_options["headless"], args=context_options["args"]
+            )
+            context_options.pop("headless")
+            context_options.pop("args")
+            if state_in:
+                context_options["storage_state"] = state_in
+            context = browser.new_context(**context_options)
         page = context.pages[0] if context.pages else context.new_page()
         _prepare_page(context, page)
-        yield pw, None, context, page
+        yield pw, browser if not user_data_dir else None, context, page
     finally:
         if context is not None:
             try:
                 context.close()
+            except Exception:
+                pass
+        if not user_data_dir and "browser" in locals() and browser is not None:
+            try:
+                browser.close()
             except Exception:
                 pass
         try:

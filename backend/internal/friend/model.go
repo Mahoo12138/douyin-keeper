@@ -23,23 +23,43 @@ const (
 )
 
 type Friend struct {
-	ID               int64
-	PublicID         uuid.UUID
-	AccountID        int64
-	PlatformUserID   *string
-	IdentityStatus   IdentityStatus
-	DisplayName      string
-	Nickname         string
-	ShortID          *string
-	AvatarURL        *string
-	StreakDays       int
-	HasConversation  bool
-	SparkEnabled     bool
-	LastSeenAt       *time.Time
-	LastSentAt       *time.Time
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	DeletedAt        *time.Time
+	ID              int64
+	PublicID        uuid.UUID
+	AccountID       int64
+	PlatformUserID  *string
+	IdentityStatus  IdentityStatus
+	DisplayName     string
+	Nickname        string
+	ShortID         *string
+	AvatarURL       *string
+	StreakDays      int
+	HasConversation bool
+	SparkEnabled    bool
+	LastSeenAt      *time.Time
+	LastSentAt      *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	DeletedAt       *time.Time
+}
+
+// SyncItem is the adapter-neutral friend snapshot returned by friends.list.
+// PlatformUserID is the only stable send-routing key; all display fields are
+// refreshed during a sync and are never used as an upsert key.
+type SyncItem struct {
+	PlatformUserID  *string
+	IdentityStatus  IdentityStatus
+	DisplayName     string
+	Nickname        string
+	ShortID         *string
+	AvatarURL       *string
+	StreakDays      int
+	HasConversation bool
+	Conversation    *ConversationSnapshot
+}
+
+type ConversationSnapshot struct {
+	PlatformConversationID string
+	Channel                string
 }
 
 // Resolved reports whether automated sending is allowed (docs/09 §5).
@@ -50,6 +70,13 @@ type Repository interface {
 	ListByAccountOwned(ctx context.Context, userID int64, accountPublicID uuid.UUID) ([]*Friend, error)
 	GetOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*Friend, error)
 	UpdateSparkEnabled(ctx context.Context, friendID int64, enabled bool) error
+}
+
+// SyncRepository is the worker-only write slice. It is intentionally
+// separate from the user-facing Repository so API handlers cannot mutate a
+// whole account's friend set accidentally.
+type SyncRepository interface {
+	SyncBatch(ctx context.Context, accountID int64, items []SyncItem, seenPlatformIDs, seenConversationIDs []string, at time.Time) error
 }
 
 // Gate is the entitlement slice used by the friend service.
