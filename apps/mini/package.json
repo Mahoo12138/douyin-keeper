@@ -2,10 +2,11 @@
   "name": "@douyin-keeper/mini",
   "version": "0.1.0",
   "private": true,
-  "description": "Douyin Keeper WeChat mini program (Taro + React) — skeleton, real flows land in M4",
+  "description": "Douyin Keeper WeChat mini program (Taro + React) — mobile console for spark maintenance",
   "scripts": {
     "dev:weapp": "taro build --type weapp --watch",
     "build:weapp": "taro build --type weapp",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -30,6 +31,7 @@
     "@types/react": "^19.0.0",
     "babel-preset-taro": "^4.0.9",
     "typescript": "^5.8.3",
+    "vitest": "^3.2.7",
     "webpack": "^5.97.0"
   }
 }

@@ -13,7 +13,7 @@ export class MiniApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options: { token?: string | null; method?: 'GET' | 'POST'; data?: unknown } = {}) {
+async function request<T>(path: string, options: { token?: string | null; method?: 'GET' | 'POST' | 'PATCH'; data?: unknown } = {}) {
   const response = await Taro.request<T | ApiErrorBody>({
     url: `${API_BASE_URL}${path}`,
     method: options.method ?? 'GET',
@@ -47,8 +47,28 @@ export function listAccounts(token: string) {
   return request<Collection<components['schemas']['Account']>>('/accounts', { token })
 }
 
+export function listFriends(token: string, accountId: string) {
+  return request<Collection<components['schemas']['Friend']>>(`/accounts/${accountId}/friends`, { token })
+}
+
+export function updateFriend(token: string, friendId: string, sparkEnabled: boolean) {
+  return request<components['schemas']['Friend']>(`/friends/${friendId}`, {
+    method: 'PATCH',
+    token,
+    data: { spark_enabled: sparkEnabled },
+  })
+}
+
 export function listTasks(token: string) {
   return request<Collection<components['schemas']['SparkTask']>>('/tasks', { token })
+}
+
+export function updateTask(token: string, taskId: string, enabled: boolean) {
+  return request<components['schemas']['SparkTask']>(`/tasks/${taskId}`, {
+    method: 'PATCH',
+    token,
+    data: { enabled },
+  })
 }
 
 export type SendHistoryOptions = { from?: string; to?: string }
