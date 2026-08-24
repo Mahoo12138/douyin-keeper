@@ -92,6 +92,7 @@ func (s *Server) Router() http.Handler {
 		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Post("/admin/entitlement-grants/{grantId}/revoke", s.handleAdminRevokeGrant)
 		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Get("/admin/card-batches/{batchId}/codes", s.handleAdminListCardCodes)
 		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Post("/admin/card-batches/{batchId}/codes/{codeId}/revoke", s.handleAdminRevokeCardCode)
+		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Get("/admin/overview", s.handleAdminOverview)
 		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Get("/admin/workers", s.handleAdminRuntime)
 		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Get("/admin/adapters", s.handleAdminListAdapters)
 		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Patch("/admin/adapters/{adapter}", s.handleAdminUpdateAdapter)

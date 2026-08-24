@@ -352,6 +352,16 @@ paths:
       responses:
         '204':
           description: Unused card code revoked
+  /admin/overview:
+    get:
+      operationId: getAdminOverview
+      responses:
+        '200':
+          description: Administrator operations overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminOverview'
   /admin/workers:
     get:
       operationId: getAdminRuntime
@@ -1716,6 +1726,110 @@ components:
           minimum: 0
         paused:
           type: boolean
+    AdminOverview:
+      type: object
+      required:
+      - observed_at
+      - active_users
+      - dau
+      - active_accounts
+      - today_send_succeeded
+      - today_send_failed
+      - today_send_success_rate
+      - risk_accounts
+      - queue_pending
+      - queue_active
+      - queue_retry
+      - queue_latency_seconds
+      - workers_online
+      - workers_total
+      - failure_codes
+      - adapter_success_rates
+      properties:
+        observed_at:
+          type: string
+          format: date-time
+        active_users:
+          type: integer
+          minimum: 0
+        dau:
+          type: integer
+          minimum: 0
+        active_accounts:
+          type: integer
+          minimum: 0
+        today_send_succeeded:
+          type: integer
+          minimum: 0
+        today_send_failed:
+          type: integer
+          minimum: 0
+        today_send_success_rate:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+        risk_accounts:
+          type: integer
+          minimum: 0
+        queue_pending:
+          type: integer
+          minimum: 0
+        queue_active:
+          type: integer
+          minimum: 0
+        queue_retry:
+          type: integer
+          minimum: 0
+        queue_latency_seconds:
+          type: integer
+          minimum: 0
+        workers_online:
+          type: integer
+          minimum: 0
+        workers_total:
+          type: integer
+          minimum: 0
+        failure_codes:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminFailureCode'
+        adapter_success_rates:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminAdapterSuccessRate'
+    AdminFailureCode:
+      type: object
+      required:
+      - code
+      - count
+      properties:
+        code:
+          type: string
+        count:
+          type: integer
+          minimum: 0
+    AdminAdapterSuccessRate:
+      type: object
+      required:
+      - name
+      - succeeded
+      - failed
+      - success_rate
+      properties:
+        name:
+          type: string
+        succeeded:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        success_rate:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
     AdminRuntime:
       type: object
       required:

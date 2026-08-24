@@ -115,6 +115,35 @@ type RuntimeSummary struct {
 	SchedulerLeaderExpires *time.Time
 }
 
+type FailureCodeSummary struct {
+	Code  string
+	Count int
+}
+
+type AdapterSuccessSummary struct {
+	Name      string
+	Succeeded int
+	Failed    int
+}
+
+type OverviewSummary struct {
+	ObservedAt          time.Time
+	ActiveUsers         int
+	DAU                 int
+	ActiveAccounts      int
+	TodaySendSucceeded  int
+	TodaySendFailed     int
+	RiskAccounts        int
+	QueuePending        int
+	QueueActive         int
+	QueueRetry          int
+	QueueLatencySeconds int
+	WorkersOnline       int
+	WorkersTotal        int
+	FailureCodes        []FailureCodeSummary
+	AdapterSuccesses    []AdapterSuccessSummary
+}
+
 type AdapterHealthSummary struct {
 	Name             string
 	Status           string
@@ -169,6 +198,7 @@ type Repository interface {
 	ListUserSummaries(ctx context.Context, limit int) ([]UserSummary, error)
 	ListAccountSummaries(ctx context.Context, limit int) ([]AccountSummary, error)
 	GetRuntimeSummary(ctx context.Context) (RuntimeSummary, error)
+	GetOverviewSummary(ctx context.Context) (OverviewSummary, error)
 	ListAdapterHealth(ctx context.Context) ([]AdapterHealthSummary, error)
 	SetAdapterEnabled(ctx context.Context, actorID int64, adapter string, enabled bool) (AdapterHealthSummary, error)
 	SetAccountPaused(ctx context.Context, actorID int64, accountID uuid.UUID, paused bool) (AccountSummary, error)
@@ -194,6 +224,10 @@ func (s *Service) ListAccounts(ctx context.Context, limit int) ([]AccountSummary
 
 func (s *Service) Runtime(ctx context.Context) (RuntimeSummary, error) {
 	return s.repo.GetRuntimeSummary(ctx)
+}
+
+func (s *Service) Overview(ctx context.Context) (OverviewSummary, error) {
+	return s.repo.GetOverviewSummary(ctx)
 }
 
 func (s *Service) ListAdapters(ctx context.Context) ([]AdapterHealthSummary, error) {

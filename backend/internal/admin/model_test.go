@@ -35,6 +35,10 @@ func (r *repositoryStub) GetRuntimeSummary(context.Context) (RuntimeSummary, err
 	return RuntimeSummary{RunningJobs: 3}, nil
 }
 
+func (r *repositoryStub) GetOverviewSummary(context.Context) (OverviewSummary, error) {
+	return OverviewSummary{DAU: 4}, nil
+}
+
 func (r *repositoryStub) ListAdapterHealth(context.Context) ([]AdapterHealthSummary, error) {
 	return []AdapterHealthSummary{r.adapter}, nil
 }
@@ -111,6 +115,16 @@ func TestServiceReturnsRuntimeSummary(t *testing.T) {
 	}
 	if summary.RunningJobs != 3 {
 		t.Fatalf("running jobs = %d, want 3", summary.RunningJobs)
+	}
+}
+
+func TestServiceReturnsOverviewSummary(t *testing.T) {
+	summary, err := NewService(&repositoryStub{}).Overview(context.Background())
+	if err != nil {
+		t.Fatalf("Overview() error = %v", err)
+	}
+	if summary.DAU != 4 {
+		t.Fatalf("DAU = %d, want 4", summary.DAU)
 	}
 }
 

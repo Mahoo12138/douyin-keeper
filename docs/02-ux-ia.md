@@ -290,6 +290,8 @@ MVP 中抖音账号首次绑定仍推荐在 PC 完成。小程序对未绑定账
 - Worker 在线数；
 - Browser/Protocol 成功率。
 
+当前实现由管理员只读接口 `GET /api/v1/admin/overview` 一次返回上述核心指标：DAU 使用 `auth_sessions.last_seen_at` 按 `Asia/Shanghai` 自然日去重，今日发送与失败码/通道成功率使用同一自然日边界；有效账号定义为绑定状态 `bound` 且 Session 状态 `valid`，风险账号定义为 `risk_status != normal`。队列积压、活动任务、重试数和最大观测延迟来自 Asynq runtime，Worker 在线数来自各 Worker pool 心跳。页面复用统一 Admin 壳、Card/Table、主题和响应式断点，并覆盖加载、失败、空数据和手动重载状态。
+
 ### 3.2 用户管理
 
 - 用户基础信息；

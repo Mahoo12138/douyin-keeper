@@ -545,6 +545,115 @@ func (r *AdminRepo) GetRuntimeSummary(ctx context.Context) (admin.RuntimeSummary
 	return summary, nil
 }
 
+func (r *AdminRepo) GetOverviewSummary(ctx context.Context) (admin.OverviewSummary, error) {
+	runtime, err := r.GetRuntimeSummary(ctx)
+	if err != nil {
+		return admin.OverviewSummary{}, err
+	}
+
+	summary := admin.OverviewSummary{
+		ObservedAt:       runtime.ObservedAt,
+		FailureCodes:     make([]admin.FailureCodeSummary, 0),
+		AdapterSuccesses: make([]admin.AdapterSuccessSummary, 0),
+	}
+	for _, queue := range runtime.Queues {
+		summary.QueuePending += queue.Pending
+		summary.QueueActive += queue.Active
+		summary.QueueRetry += queue.Retry
+		if queue.LatencySeconds > summary.QueueLatencySeconds {
+			summary.QueueLatencySeconds = queue.LatencySeconds
+		}
+	}
+	for _, pool := range runtime.Pools {
+		summary.WorkersTotal++
+		if pool.Online {
+			summary.WorkersOnline++
+		}
+	}
+
+	const today = `(date_trunc('day', now() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai')`
+	if err := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*)::int FROM users WHERE deleted_at IS NULL AND status = 'active'),
+			(SELECT COUNT(DISTINCT s.user_id)::int
+			 FROM auth_sessions s
+			 JOIN users u ON u.id = s.user_id
+			 WHERE u.deleted_at IS NULL
+			   AND s.last_seen_at >= `+today+`),
+			(SELECT COUNT(*)::int
+			 FROM douyin_accounts
+			 WHERE deleted_at IS NULL AND binding_status = 'bound' AND session_status = 'valid'),
+			(SELECT COUNT(*) FILTER (WHERE status = 'succeeded')::int
+			 FROM send_jobs WHERE created_at >= `+today+`),
+			(SELECT COUNT(*) FILTER (WHERE status = 'failed')::int
+			 FROM send_jobs WHERE created_at >= `+today+`),
+			(SELECT COUNT(*)::int
+			 FROM douyin_accounts
+			 WHERE deleted_at IS NULL AND risk_status <> 'normal')
+	`).Scan(
+		&summary.ActiveUsers,
+		&summary.DAU,
+		&summary.ActiveAccounts,
+		&summary.TodaySendSucceeded,
+		&summary.TodaySendFailed,
+		&summary.RiskAccounts,
+	); err != nil {
+		return admin.OverviewSummary{}, err
+	}
+
+	failureRows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT COALESCE(NULLIF(error_code, ''), 'UNKNOWN') AS code, COUNT(*)::int AS count
+		FROM send_jobs
+		WHERE status = 'failed' AND created_at >= `+today+`
+		GROUP BY 1
+		ORDER BY count DESC, code ASC
+		LIMIT 5`)
+	if err != nil {
+		return admin.OverviewSummary{}, err
+	}
+	defer failureRows.Close()
+	for failureRows.Next() {
+		var item admin.FailureCodeSummary
+		if err := failureRows.Scan(&item.Code, &item.Count); err != nil {
+			return admin.OverviewSummary{}, err
+		}
+		summary.FailureCodes = append(summary.FailureCodes, item)
+	}
+	if err := failureRows.Err(); err != nil {
+		return admin.OverviewSummary{}, err
+	}
+
+	adapterRows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT
+			CASE
+				WHEN selected_adapter LIKE 'browser.%' OR selected_adapter LIKE 'douyin.browser.%' THEN 'browser'
+				WHEN selected_adapter LIKE 'protocol.%' OR selected_adapter LIKE 'douyin.protocol.%' THEN 'protocol'
+				ELSE selected_adapter
+			END AS adapter,
+			COUNT(*) FILTER (WHERE status = 'succeeded')::int AS succeeded,
+			COUNT(*) FILTER (WHERE status = 'failed')::int AS failed
+		FROM send_jobs
+		WHERE created_at >= `+today+` AND status IN ('succeeded', 'failed') AND NULLIF(selected_adapter, '') IS NOT NULL
+		GROUP BY 1
+		ORDER BY (COUNT(*) FILTER (WHERE status = 'succeeded') + COUNT(*) FILTER (WHERE status = 'failed')) DESC, adapter ASC`)
+	if err != nil {
+		return admin.OverviewSummary{}, err
+	}
+	defer adapterRows.Close()
+	for adapterRows.Next() {
+		var item admin.AdapterSuccessSummary
+		if err := adapterRows.Scan(&item.Name, &item.Succeeded, &item.Failed); err != nil {
+			return admin.OverviewSummary{}, err
+		}
+		summary.AdapterSuccesses = append(summary.AdapterSuccesses, item)
+	}
+	if err := adapterRows.Err(); err != nil {
+		return admin.OverviewSummary{}, err
+	}
+
+	return summary, nil
+}
+
 func runtimePoolIndex(queues map[string]int) int {
 	for index, pool := range runtimePools {
 		if _, ok := queues[pool.queue]; ok {

@@ -535,37 +535,33 @@ POST /admin/card-batches/{id}/codes/{code_id}/revoke
 
 ## 12. Admin Overview
 
-推荐首页一次返回：
+当前首页由 `GET /admin/overview` 一次返回运营概览，统计日边界统一使用 `Asia/Shanghai`：
 
 ```json
 {
-  "users": {
-    "total": 120,
-    "active_24h": 48
-  },
-  "accounts": {
-    "total": 180,
-    "valid": 165,
-    "expired": 9,
-    "challenge_required": 6
-  },
-  "jobs": {
-    "queued": 3,
-    "running": 2,
-    "failed_24h": 7
-  },
-  "adapters": [
-    {
-      "name": "browser.consumer",
-      "status": "healthy"
-    },
-    {
-      "name": "protocol.im",
-      "status": "open"
-    }
+  "observed_at": "2026-08-24T09:00:00Z",
+  "active_users": 120,
+  "dau": 48,
+  "active_accounts": 165,
+  "today_send_succeeded": 93,
+  "today_send_failed": 7,
+  "today_send_success_rate": 0.93,
+  "risk_accounts": 6,
+  "queue_pending": 3,
+  "queue_active": 2,
+  "queue_retry": 1,
+  "queue_latency_seconds": 12,
+  "workers_online": 2,
+  "workers_total": 3,
+  "failure_codes": [{"code": "RATE_LIMITED", "count": 4}],
+  "adapter_success_rates": [
+    {"name": "browser", "succeeded": 80, "failed": 5, "success_rate": 0.9412},
+    {"name": "protocol", "succeeded": 13, "failed": 2, "success_rate": 0.8667}
   ]
 }
 ```
+
+`active_accounts` 表示 `binding_status=bound` 且 `session_status=valid` 的未删除账号；`risk_accounts` 表示 `risk_status != normal` 的未删除账号；失败码返回当日失败任务的 Top 5，通道成功率按 `selected_adapter` 归一为 Browser/Protocol 后统计。
 
 ## 13. 稳定 Error Code
 

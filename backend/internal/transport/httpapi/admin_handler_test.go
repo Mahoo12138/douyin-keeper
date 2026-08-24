@@ -73,6 +73,34 @@ func TestAdminRuntimeViewIncludesPoolsQueuesAndHealth(t *testing.T) {
 	}
 }
 
+func TestAdminOverviewViewCalculatesRatesAndCopiesBreakdowns(t *testing.T) {
+	observedAt := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	view := adminOverviewViewFrom(admin.OverviewSummary{
+		ObservedAt: observedAt, ActiveUsers: 12, DAU: 7, ActiveAccounts: 5,
+		TodaySendSucceeded: 7, TodaySendFailed: 3, RiskAccounts: 2,
+		QueuePending: 4, QueueActive: 2, QueueRetry: 1, QueueLatencySeconds: 8,
+		WorkersOnline: 2, WorkersTotal: 3,
+		FailureCodes:     []admin.FailureCodeSummary{{Code: "RATE_LIMITED", Count: 3}},
+		AdapterSuccesses: []admin.AdapterSuccessSummary{{Name: "browser", Succeeded: 4, Failed: 1}},
+	})
+
+	if view.ObservedAt != "2026-08-24T09:00:00Z" || view.DAU != 7 || view.QueueLatencySeconds != 8 || view.WorkersOnline != 2 {
+		t.Fatalf("overview view = %+v", view)
+	}
+	if view.TodaySendSuccessRate != 0.7 || len(view.FailureCodes) != 1 || view.FailureCodes[0].Code != "RATE_LIMITED" {
+		t.Fatalf("overview rates/breakdown = %+v / %+v", view.TodaySendSuccessRate, view.FailureCodes)
+	}
+	if len(view.AdapterSuccessRates) != 1 || view.AdapterSuccessRates[0].SuccessRate != 0.8 {
+		t.Fatalf("adapter success rates = %+v", view.AdapterSuccessRates)
+	}
+}
+
+func TestSuccessRateReturnsZeroWithoutAttempts(t *testing.T) {
+	if got := successRate(0, 0); got != 0 {
+		t.Fatalf("successRate(0, 0) = %v, want 0", got)
+	}
+}
+
 func TestAdminAdapterViewIncludesHealthAndControlState(t *testing.T) {
 	checkedAt := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
 	errorCode := "ADAPTER_INCOMPATIBLE"

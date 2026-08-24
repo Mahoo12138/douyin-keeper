@@ -193,6 +193,14 @@ export async function getAdminRuntime(accessToken: string) {
   return data
 }
 
+export async function getAdminOverview(accessToken: string) {
+  const { data, error } = await api.GET('/admin/overview', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (error) throwApiError(error, 'admin overview lookup failed')
+  return data
+}
+
 export async function listAdminAdapters(accessToken: string) {
   const { data, error } = await api.GET('/admin/adapters', {
     headers: { Authorization: `Bearer ${accessToken}` },

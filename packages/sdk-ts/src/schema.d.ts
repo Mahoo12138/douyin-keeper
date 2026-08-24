@@ -260,6 +260,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAdminOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/workers": {
         parameters: {
             query?: never;
@@ -983,6 +999,37 @@ export interface components {
             processed: number;
             latency_seconds: number;
             paused: boolean;
+        };
+        AdminOverview: {
+            /** Format: date-time */
+            observed_at: string;
+            active_users: number;
+            dau: number;
+            active_accounts: number;
+            today_send_succeeded: number;
+            today_send_failed: number;
+            /** Format: double */
+            today_send_success_rate: number;
+            risk_accounts: number;
+            queue_pending: number;
+            queue_active: number;
+            queue_retry: number;
+            queue_latency_seconds: number;
+            workers_online: number;
+            workers_total: number;
+            failure_codes: components["schemas"]["AdminFailureCode"][];
+            adapter_success_rates: components["schemas"]["AdminAdapterSuccessRate"][];
+        };
+        AdminFailureCode: {
+            code: string;
+            count: number;
+        };
+        AdminAdapterSuccessRate: {
+            name: string;
+            succeeded: number;
+            failed: number;
+            /** Format: double */
+            success_rate: number;
         };
         AdminRuntime: {
             /** Format: date-time */
@@ -1743,6 +1790,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    getAdminOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrator operations overview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOverview"];
+                };
             };
         };
     };
