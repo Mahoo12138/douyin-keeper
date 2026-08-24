@@ -119,6 +119,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminAdapter'
+  /admin/risks:
+    get:
+      operationId: listAdminRisks
+      parameters:
+      - name: category
+        in: query
+        schema:
+          type: string
+          enum:
+          - AUTH
+          - PLATFORM
+          - PROTOCOL
+          - BROWSER
+          - NETWORK
+          - DATA
+      - name: severity
+        in: query
+        schema:
+          type: string
+          enum:
+          - info
+          - warning
+          - critical
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 100
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Administrator risk event summaries
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - next_cursor
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminRisk'
+                  next_cursor:
+                    type:
+                    - string
+                    - 'null'
   /accounts:
     get:
       operationId: listAccounts
@@ -1095,6 +1143,61 @@ components:
           type:
           - string
           - 'null'
+          format: date-time
+    AdminRisk:
+      type: object
+      required:
+      - id
+      - account_id
+      - owner_display_name
+      - nickname
+      - category
+      - code
+      - severity
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+        owner_display_name:
+          type: string
+        nickname:
+          type: string
+        category:
+          type: string
+          enum:
+          - AUTH
+          - PLATFORM
+          - PROTOCOL
+          - BROWSER
+          - NETWORK
+          - DATA
+        code:
+          type: string
+        severity:
+          type: string
+          enum:
+          - info
+          - warning
+          - critical
+        source_adapter:
+          type:
+          - string
+          - 'null'
+        action:
+          type:
+          - string
+          - 'null'
+        cooldown_until:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
           format: date-time
     Account:
       type: object

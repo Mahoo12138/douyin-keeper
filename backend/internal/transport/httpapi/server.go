@@ -80,6 +80,7 @@ func (s *Server) Router() http.Handler {
 		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Get("/admin/workers", s.handleAdminRuntime)
 		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Get("/admin/adapters", s.handleAdminListAdapters)
 		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Patch("/admin/adapters/{adapter}", s.handleAdminUpdateAdapter)
+		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Get("/admin/risks", s.handleAdminListRisks)
 
 		// Everything else requires authentication.
 		api.Group(func(private chi.Router) {

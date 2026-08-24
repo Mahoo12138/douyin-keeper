@@ -78,6 +78,15 @@ export async function updateAdminAdapter(accessToken: string, adapter: string, e
   return data
 }
 
+export async function listAdminRisks(accessToken: string, options?: { category?: components['schemas']['AdminRisk']['category']; severity?: components['schemas']['AdminRisk']['severity']; code?: string; limit?: number }) {
+  const { data, error } = await api.GET('/admin/risks', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { query: options },
+  })
+  if (error) throwApiError(error, 'admin risks lookup failed')
+  return data
+}
+
 export async function redeemCardCode(accessToken: string, code: string) {
   const { data, error } = await api.POST('/entitlements/redeem', {
     headers: { Authorization: `Bearer ${accessToken}` },

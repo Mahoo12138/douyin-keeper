@@ -194,6 +194,42 @@ func (r *AdminRepo) ListAccountSummaries(ctx context.Context, limit int) ([]admi
 	return items, nil
 }
 
+func (r *AdminRepo) ListRiskSummaries(ctx context.Context, filter admin.RiskFilter) ([]admin.RiskSummary, error) {
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT e.public_id, a.public_id, u.display_name, a.nickname,
+			e.category, e.code, e.severity, e.source_adapter, e.action,
+			e.cooldown_until, e.created_at
+		FROM risk_events e
+		JOIN douyin_accounts a ON a.id = e.account_id
+		JOIN users u ON u.id = a.user_id
+		WHERE ($1 = '' OR e.category = $1)
+		  AND ($2 = '' OR e.severity = $2)
+		  AND ($3 = '' OR e.code ILIKE '%' || $3 || '%')
+		ORDER BY e.created_at DESC, e.id DESC
+		LIMIT $4`, filter.Category, filter.Severity, filter.Code, filter.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]admin.RiskSummary, 0)
+	for rows.Next() {
+		var item admin.RiskSummary
+		if err := rows.Scan(
+			&item.PublicID, &item.AccountPublicID, &item.OwnerDisplayName, &item.Nickname,
+			&item.Category, &item.Code, &item.Severity, &item.SourceAdapter, &item.Action,
+			&item.CooldownUntil, &item.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func (r *AdminRepo) ListAdapterHealth(ctx context.Context) ([]admin.AdapterHealthSummary, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT catalog.adapter, catalog.executable,

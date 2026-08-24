@@ -126,12 +126,34 @@ type AdapterHealthSummary struct {
 	CheckedAt        *time.Time
 }
 
+type RiskFilter struct {
+	Category string
+	Severity string
+	Code     string
+	Limit    int
+}
+
+type RiskSummary struct {
+	PublicID         uuid.UUID
+	AccountPublicID  uuid.UUID
+	OwnerDisplayName string
+	Nickname         string
+	Category         string
+	Code             string
+	Severity         string
+	SourceAdapter    *string
+	Action           *string
+	CooldownUntil    *time.Time
+	CreatedAt        time.Time
+}
+
 type Repository interface {
 	ListUserSummaries(ctx context.Context, limit int) ([]UserSummary, error)
 	ListAccountSummaries(ctx context.Context, limit int) ([]AccountSummary, error)
 	GetRuntimeSummary(ctx context.Context) (RuntimeSummary, error)
 	ListAdapterHealth(ctx context.Context) ([]AdapterHealthSummary, error)
 	SetAdapterEnabled(ctx context.Context, actorID int64, adapter string, enabled bool) (AdapterHealthSummary, error)
+	ListRiskSummaries(ctx context.Context, filter RiskFilter) ([]RiskSummary, error)
 }
 
 type Service struct {
@@ -163,6 +185,11 @@ func (s *Service) SetAdapterEnabled(ctx context.Context, actorID int64, adapter 
 		return AdapterHealthSummary{}, ErrUnknownAdapter
 	}
 	return s.repo.SetAdapterEnabled(ctx, actorID, adapter, enabled)
+}
+
+func (s *Service) ListRisks(ctx context.Context, filter RiskFilter) ([]RiskSummary, error) {
+	filter.Limit = normalizeLimit(filter.Limit)
+	return s.repo.ListRiskSummaries(ctx, filter)
 }
 
 func normalizeLimit(limit int) int {

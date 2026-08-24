@@ -100,6 +100,22 @@ export interface paths {
         patch: operations["updateAdminAdapter"];
         trace?: never;
     };
+    "/admin/risks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAdminRisks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts": {
         parameters: {
             query?: never;
@@ -646,6 +662,25 @@ export interface components {
             /** Format: date-time */
             checked_at?: string | null;
         };
+        AdminRisk: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            account_id: string;
+            owner_display_name: string;
+            nickname: string;
+            /** @enum {string} */
+            category: "AUTH" | "PLATFORM" | "PROTOCOL" | "BROWSER" | "NETWORK" | "DATA";
+            code: string;
+            /** @enum {string} */
+            severity: "info" | "warning" | "critical";
+            source_adapter?: string | null;
+            action?: string | null;
+            /** Format: date-time */
+            cooldown_until?: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
         Account: {
             /** Format: uuid */
             id: string;
@@ -1061,6 +1096,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminAdapter"];
+                };
+            };
+        };
+    };
+    listAdminRisks: {
+        parameters: {
+            query?: {
+                category?: "AUTH" | "PLATFORM" | "PROTOCOL" | "BROWSER" | "NETWORK" | "DATA";
+                severity?: "info" | "warning" | "critical";
+                code?: string;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrator risk event summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminRisk"][];
+                        next_cursor: string | null;
+                    };
                 };
             };
         };

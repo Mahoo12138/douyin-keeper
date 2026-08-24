@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -83,5 +84,37 @@ func TestAdminAdapterViewIncludesHealthAndControlState(t *testing.T) {
 	}
 	if view.ErrorCode == nil || *view.ErrorCode != errorCode || view.CheckedAt == nil || *view.CheckedAt != "2026-08-24T09:00:00Z" {
 		t.Fatalf("adapter health details = %+v", view)
+	}
+}
+
+func TestAdminRiskViewOmitsSensitiveDetailAndFormatsDates(t *testing.T) {
+	createdAt := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	cooldownUntil := createdAt.Add(10 * time.Minute)
+	adapter := "browser.consumer"
+	action := "cooldown"
+	view := adminRiskViewFrom(admin.RiskSummary{
+		PublicID:         uuid.MustParse("44444444-4444-4444-4444-444444444444"),
+		AccountPublicID:  uuid.MustParse("55555555-5555-5555-5555-555555555555"),
+		OwnerDisplayName: "demo", Nickname: "火花账号", Category: "PLATFORM",
+		Code: "PLATFORM_RATE_LIMITED", Severity: "warning", SourceAdapter: &adapter,
+		Action: &action, CooldownUntil: &cooldownUntil, CreatedAt: createdAt,
+	})
+	if view.ID != "44444444-4444-4444-4444-444444444444" || view.AccountID != "55555555-5555-5555-5555-555555555555" || view.Code != "PLATFORM_RATE_LIMITED" {
+		t.Fatalf("risk view = %+v", view)
+	}
+	if view.CreatedAt != "2026-08-24T09:00:00Z" || view.CooldownUntil == nil || *view.CooldownUntil != "2026-08-24T09:10:00Z" {
+		t.Fatalf("risk dates = %+v", view)
+	}
+}
+
+func TestAdminRiskFilterValidatesAndNormalizes(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/v1/admin/risks?category=auth&severity=CRITICAL&code=expired&limit=20", nil)
+	filter, err := adminRiskFilter(req)
+	if err != nil || filter.Category != "AUTH" || filter.Severity != "critical" || filter.Code != "expired" || filter.Limit != 20 {
+		t.Fatalf("filter = %+v, err = %v", filter, err)
+	}
+	invalid := httptest.NewRequest("GET", "/api/v1/admin/risks?category=INVALID", nil)
+	if _, err := adminRiskFilter(invalid); err == nil {
+		t.Fatal("invalid category should be rejected")
 	}
 }

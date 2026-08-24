@@ -347,7 +347,13 @@ browser.consumer、browser.creator、protocol.im 的健康、版本、失败次�
 `PATCH /admin/adapters/{adapter}` 只允许管理员启停已登记 Adapter，启停动作写入 `audit_logs`。
 未产生过探针记录时显示“未上报”，不把缺少健康记录误判为故障。
 
-### 3.6 权益与卡密
+### 3.6 风险中心
+
+展示风险事件的账号、所属用户、分类、错误码、严重度、来源 Adapter、动作、冷却时间和发生时间；支持按分类、严重度和错误码筛选。风险列表不展示 `detail_json`，避免将 Session、Cookie 或消息正文带入管理员页面。
+
+当前 M5 已接入管理员只读风险列表：`GET /admin/risks` 支持上述筛选，返回账号与风险摘要，并对分类和严重度做白名单校验。
+
+### 3.7 权益与卡密
 
 子页面：
 

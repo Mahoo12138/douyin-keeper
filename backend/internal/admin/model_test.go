@@ -12,6 +12,7 @@ type repositoryStub struct {
 	actorID     int64
 	adapterName string
 	enabled     bool
+	riskFilter  RiskFilter
 }
 
 func (r *repositoryStub) ListUserSummaries(_ context.Context, limit int) ([]UserSummary, error) {
@@ -35,6 +36,11 @@ func (r *repositoryStub) ListAdapterHealth(context.Context) ([]AdapterHealthSumm
 func (r *repositoryStub) SetAdapterEnabled(_ context.Context, actorID int64, adapter string, enabled bool) (AdapterHealthSummary, error) {
 	r.actorID, r.adapterName, r.enabled = actorID, adapter, enabled
 	return r.adapter, nil
+}
+
+func (r *repositoryStub) ListRiskSummaries(_ context.Context, filter RiskFilter) ([]RiskSummary, error) {
+	r.riskFilter = filter
+	return []RiskSummary{{Code: "SESSION_EXPIRED"}}, nil
 }
 
 func TestServiceClampsUserListLimit(t *testing.T) {
@@ -111,5 +117,16 @@ func TestServiceRejectsUnknownAdapter(t *testing.T) {
 	_, err := NewService(&repositoryStub{}).SetAdapterEnabled(context.Background(), 42, "unknown", true)
 	if !errors.Is(err, ErrUnknownAdapter) {
 		t.Fatalf("error = %v, want ErrUnknownAdapter", err)
+	}
+}
+
+func TestServiceNormalizesRiskFilter(t *testing.T) {
+	repo := &repositoryStub{}
+	items, err := NewService(repo).ListRisks(context.Background(), RiskFilter{Category: "AUTH", Severity: "critical", Code: "expired", Limit: 500})
+	if err != nil || len(items) != 1 || items[0].Code != "SESSION_EXPIRED" {
+		t.Fatalf("ListRisks() = %+v, err = %v", items, err)
+	}
+	if repo.riskFilter.Category != "AUTH" || repo.riskFilter.Severity != "critical" || repo.riskFilter.Code != "expired" || repo.riskFilter.Limit != 100 {
+		t.Fatalf("risk filter = %+v", repo.riskFilter)
 	}
 }
