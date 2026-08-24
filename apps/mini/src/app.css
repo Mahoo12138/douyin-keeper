@@ -85,6 +85,16 @@ page {
 .toggle-title { display: block; font-size: 28rpx; font-weight: 600; }
 .task-panel { margin-top: 20rpx; padding: 18rpx; border-radius: 12rpx; background: #f7f9fc; }
 .task-panel .toggle-row { margin-top: 0; }
+.task-edit-button { display: block; width: 100%; margin-top: 18rpx; padding: 0; border: 0; color: #1f5bd8; background: transparent; font-size: 24rpx; line-height: 1.5; text-align: left; }
+.task-editor { margin-top: 18rpx; padding-top: 18rpx; border-top: 1rpx solid #e2e6ee; }
+.task-time-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12rpx; }
+.task-input, .task-textarea { box-sizing: border-box; display: block; width: 100%; margin-top: 8rpx; padding: 0 16rpx; border: 1rpx solid #d9d9d9; border-radius: 10rpx; background: #fff; font-size: 26rpx; }
+.task-input { height: 68rpx; }
+.task-textarea { min-height: 140rpx; padding-top: 14rpx; padding-bottom: 14rpx; }
+.task-message-input { margin-bottom: 16rpx; }
+.task-editor-actions { display: flex; justify-content: flex-end; gap: 12rpx; margin-top: 18rpx; }
+.task-cancel-button, .task-save-button { width: auto; min-width: 160rpx; margin: 0; }
+.task-cancel-button { color: #5f5f5f; background: #f0f0f0; }
 .date-tabs { display: flex; gap: 12rpx; overflow-x: auto; padding: 4rpx 24rpx 8rpx; white-space: nowrap; }
 .date-tab { flex: 0 0 auto; width: 128rpx; margin: 0; padding: 0; border: 1rpx solid #e3e3e3; border-radius: 12rpx; color: #5f5f5f; background: #fff; font-size: 24rpx; line-height: 68rpx; }
 .date-tab-active { border-color: #1f5bd8; color: #1f5bd8; background: #edf3ff; }

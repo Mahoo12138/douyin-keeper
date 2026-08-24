@@ -129,11 +129,20 @@ export function listTasks(token: string) {
   return request<Collection<components['schemas']['SparkTask']>>('/tasks', { token })
 }
 
-export function updateTask(token: string, taskId: string, enabled: boolean) {
+export type UpdateTaskPatch = {
+  enabled?: boolean
+  timezone?: string
+  window_start?: string
+  window_end?: string
+  message?: { kind: 'text' | 'sticker'; body: string }
+  allow_first_message?: boolean
+}
+
+export function updateTask(token: string, taskId: string, patch: UpdateTaskPatch) {
   return request<components['schemas']['SparkTask']>(`/tasks/${taskId}`, {
     method: 'PATCH',
     token,
-    data: { enabled },
+    data: patch,
   })
 }
 

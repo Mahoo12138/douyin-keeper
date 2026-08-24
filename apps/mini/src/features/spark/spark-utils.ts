@@ -18,3 +18,18 @@ export function replaceTask(tasks: SparkTask[], updated: SparkTask) {
 export function enabledTaskCount(tasks: SparkTask[]) {
   return tasks.filter((task) => task.enabled).length
 }
+
+export function taskTimeInput(value: string) {
+  return value.slice(0, 5)
+}
+
+export function taskTimePayload(value: string) {
+  return value.length === 5 ? `${value}:00` : value
+}
+
+export function taskDraftError(windowStart: string, windowEnd: string, message: string) {
+  if (!windowStart || !windowEnd) return '请选择完整的发送时间窗口。'
+  if (windowStart >= windowEnd) return '结束时间必须晚于开始时间。'
+  if (!message.trim()) return '请填写消息内容。'
+  return null
+}

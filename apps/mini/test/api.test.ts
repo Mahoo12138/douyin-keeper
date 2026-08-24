@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { getMe, listMyEntitlementGrants, listNotifications, markAllNotificationsRead, markNotificationRead, myEntitlement, redeemCardCode } from '../src/lib/api'
+import { getMe, listMyEntitlementGrants, listNotifications, markAllNotificationsRead, markNotificationRead, myEntitlement, redeemCardCode, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -88,5 +88,24 @@ describe('mini API auth recovery', () => {
     expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/notifications/notification-1/read')
     expect(requestMock.mock.calls[2]?.[0]?.url).toBe('/api/v1/notifications/read-all')
     expect(result.marked_count).toBe(2)
+  })
+
+  it('patches task settings without changing the shared auth client contract', async () => {
+    requestMock.mockResolvedValueOnce({ statusCode: 200, data: { id: 'task-1', enabled: true } })
+
+    const task = await updateTask('access-1', 'task-1', {
+      window_start: '19:30:00',
+      window_end: '22:30:00',
+      message: { kind: 'text', body: '晚间问候' },
+    })
+
+    expect(task.id).toBe('task-1')
+    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/tasks/task-1')
+    expect(requestMock.mock.calls[0]?.[0]?.method).toBe('PATCH')
+    expect(requestMock.mock.calls[0]?.[0]?.data).toEqual({
+      window_start: '19:30:00',
+      window_end: '22:30:00',
+      message: { kind: 'text', body: '晚间问候' },
+    })
   })
 })
