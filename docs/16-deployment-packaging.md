@@ -66,6 +66,10 @@ go build
 keeper-backend
 ```
 
+本地开发使用 Vite 提供 SPA，`apps/web/vite.config.ts` 将 dev/preview 服务固定绑定到
+IPv4 loopback（`127.0.0.1`），与 README 中的访问地址一致；生产运行不依赖该服务，仍只
+从 Backend 的 `go:embed` 静态文件系统提供页面。
+
 最终运行容器不需要 Node.js，也不需要 Nginx 才能提供 PC 页面。
 
 ### 2.3 Go 嵌入包

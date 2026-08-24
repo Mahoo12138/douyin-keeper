@@ -73,7 +73,7 @@ go test ./...
 
 ```bash
 pnpm install
-pnpm --filter ./apps/web dev    # http://localhost:5173 (proxies /api -> localhost:8080)
+pnpm --filter ./apps/web dev    # http://127.0.0.1:5173 (proxies /api -> localhost:8080)
 pnpm build:spa                  # dists consumed by go:embed (docs/16)
 ```
 

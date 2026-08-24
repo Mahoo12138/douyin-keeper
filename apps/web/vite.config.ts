@@ -16,10 +16,17 @@ export default defineConfig({
     tsconfigPaths({ projects: ['tsconfig.json'], ignoreConfigErrors: true }),
   ],
   server: {
+    // Keep local development reachable at the documented IPv4 loopback URL
+    // (127.0.0.1:5173); Vite otherwise binds only ::1 on some macOS setups.
+    host: '127.0.0.1',
     port: 5173,
     proxy: {
       '/api': { target: 'http://127.0.0.1:8080', changeOrigin: true },
     },
+  },
+  preview: {
+    host: '127.0.0.1',
+    port: 4173,
   },
   build: {
     outDir: 'dist',
