@@ -32,6 +32,7 @@ import { Route as AdminEntitlementRouteImport } from './routes/admin/entitlement
 import { Route as AdminRisksRouteImport } from './routes/admin/risks'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminWorkersRouteImport } from './routes/admin/workers'
+import { Route as rootAccountsAccountIdRouteImport } from './routes/(root)/accounts/$accountId'
 import { Route as AdminUsersUserIdRouteImport } from './routes/admin/users/$userId'
 import { Route as AdminEntitlementBatchesBatchIdRouteImport } from './routes/admin/entitlement/batches/$batchId'
 
@@ -148,6 +149,11 @@ const AdminWorkersRoute = AdminWorkersRouteImport.update({
   path: '/workers',
   getParentRoute: () => AdminRoute,
 } as any)
+const rootAccountsAccountIdRoute = rootAccountsAccountIdRouteImport.update({
+  id: '/$accountId',
+  path: '/$accountId',
+  getParentRoute: () => rootAccountsRoute,
+} as any)
 const AdminUsersUserIdRoute = AdminUsersUserIdRouteImport.update({
   id: '/$userId',
   path: '/$userId',
@@ -165,7 +171,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/signin': typeof authSigninRoute
   '/signup': typeof authSignupRoute
-  '/accounts': typeof rootAccountsRoute
+  '/accounts': typeof rootAccountsRouteWithChildren
   '/conversations': typeof rootConversationsRoute
   '/dashboard': typeof rootDashboardRoute
   '/entitlement': typeof rootEntitlementRoute
@@ -182,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRouteWithChildren
   '/admin/workers': typeof AdminWorkersRoute
   '/admin/': typeof AdminIndexRoute
+  '/accounts/$accountId': typeof rootAccountsAccountIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/admin/entitlement/batches/$batchId': typeof AdminEntitlementBatchesBatchIdRoute
 }
@@ -189,7 +196,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/signin': typeof authSigninRoute
   '/signup': typeof authSignupRoute
-  '/accounts': typeof rootAccountsRoute
+  '/accounts': typeof rootAccountsRouteWithChildren
   '/conversations': typeof rootConversationsRoute
   '/dashboard': typeof rootDashboardRoute
   '/entitlement': typeof rootEntitlementRoute
@@ -206,6 +213,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRouteWithChildren
   '/admin/workers': typeof AdminWorkersRoute
   '/admin': typeof AdminIndexRoute
+  '/accounts/$accountId': typeof rootAccountsAccountIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/admin/entitlement/batches/$batchId': typeof AdminEntitlementBatchesBatchIdRoute
 }
@@ -217,7 +225,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/(auth)/signin': typeof authSigninRoute
   '/(auth)/signup': typeof authSignupRoute
-  '/(root)/accounts': typeof rootAccountsRoute
+  '/(root)/accounts': typeof rootAccountsRouteWithChildren
   '/(root)/conversations': typeof rootConversationsRoute
   '/(root)/dashboard': typeof rootDashboardRoute
   '/(root)/entitlement': typeof rootEntitlementRoute
@@ -234,6 +242,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRouteWithChildren
   '/admin/workers': typeof AdminWorkersRoute
   '/admin/': typeof AdminIndexRoute
+  '/(root)/accounts/$accountId': typeof rootAccountsAccountIdRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/admin/entitlement/batches/$batchId': typeof AdminEntitlementBatchesBatchIdRoute
 }
@@ -261,6 +270,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/workers'
     | '/admin/'
+    | '/accounts/$accountId'
     | '/admin/users/$userId'
     | '/admin/entitlement/batches/$batchId'
   fileRoutesByTo: FileRoutesByTo
@@ -285,6 +295,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/workers'
     | '/admin'
+    | '/accounts/$accountId'
     | '/admin/users/$userId'
     | '/admin/entitlement/batches/$batchId'
   id:
@@ -312,6 +323,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/workers'
     | '/admin/'
+    | '/(root)/accounts/$accountId'
     | '/admin/users/$userId'
     | '/admin/entitlement/batches/$batchId'
   fileRoutesById: FileRoutesById
@@ -486,6 +498,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminWorkersRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/(root)/accounts/$accountId': {
+      id: '/(root)/accounts/$accountId'
+      path: '/$accountId'
+      fullPath: '/accounts/$accountId'
+      preLoaderRoute: typeof rootAccountsAccountIdRouteImport
+      parentRoute: typeof rootAccountsRoute
+    }
     '/admin/users/$userId': {
       id: '/admin/users/$userId'
       path: '/$userId'
@@ -517,8 +536,20 @@ const authRouteRouteWithChildren = authRouteRoute._addFileChildren(
   authRouteRouteChildren,
 )
 
+interface rootAccountsRouteChildren {
+  rootAccountsAccountIdRoute: typeof rootAccountsAccountIdRoute
+}
+
+const rootAccountsRouteChildren: rootAccountsRouteChildren = {
+  rootAccountsAccountIdRoute: rootAccountsAccountIdRoute,
+}
+
+const rootAccountsRouteWithChildren = rootAccountsRoute._addFileChildren(
+  rootAccountsRouteChildren,
+)
+
 interface rootRouteRouteChildren {
-  rootAccountsRoute: typeof rootAccountsRoute
+  rootAccountsRoute: typeof rootAccountsRouteWithChildren
   rootConversationsRoute: typeof rootConversationsRoute
   rootDashboardRoute: typeof rootDashboardRoute
   rootEntitlementRoute: typeof rootEntitlementRoute
@@ -530,7 +561,7 @@ interface rootRouteRouteChildren {
 }
 
 const rootRouteRouteChildren: rootRouteRouteChildren = {
-  rootAccountsRoute: rootAccountsRoute,
+  rootAccountsRoute: rootAccountsRouteWithChildren,
   rootConversationsRoute: rootConversationsRoute,
   rootDashboardRoute: rootDashboardRoute,
   rootEntitlementRoute: rootEntitlementRoute,

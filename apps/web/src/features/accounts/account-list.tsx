@@ -1,5 +1,6 @@
+import { Link } from '@tanstack/react-router'
 import { Avatar, AvatarFallback, AvatarImage, Button } from '@douyin-keeper/ui-web'
-import { RefreshCw, Smartphone, UsersRound } from 'lucide-react'
+import { ArrowRight, RefreshCw, Smartphone, UsersRound } from 'lucide-react'
 
 import type { Account } from './account-types'
 import { bindingLabel, formatDate, riskLabel, sessionLabel, StatusBadge } from './account-status'
@@ -55,6 +56,7 @@ function AccountRow({ account, selected, busyAction, onSelect, onSession, onFrie
           </span>
         </button>
         <div className="flex flex-wrap gap-2 lg:justify-end">
+          <Button asChild variant="ghost" size="sm"><Link to="/accounts/$accountId" params={{ accountId: account.id }}>详情<ArrowRight /></Link></Button>
           <Button variant="outline" size="sm" onClick={onSession} disabled={busyAction !== null}>
             <RefreshCw />
             会话检查
