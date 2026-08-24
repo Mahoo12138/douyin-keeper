@@ -39,11 +39,11 @@ func (r *OutboxRepo) Add(ctx context.Context, msg outbox.Message) error {
 
 // PendingMessage is a claimed outbox row handed to the publisher.
 type PendingMessage struct {
-	ID        int64
-	PublicID  string
-	Kind      string
-	Payload   []byte
-	Attempts  int
+	ID       int64
+	PublicID string
+	Kind     string
+	Payload  []byte
+	Attempts int
 }
 
 // ClaimPending atomically claims up to n due messages (SKIP LOCKED).
@@ -52,7 +52,7 @@ func (r *OutboxRepo) ClaimPending(ctx context.Context, n int, lockedBy string, l
 		UPDATE queue_outbox SET
 			status = 'publishing',
 			locked_by = $1,
-			locked_until = now() + $2::interval,
+			locked_until = now() + make_interval(secs => $2),
 			attempts = attempts
 		WHERE id IN (
 			SELECT id FROM queue_outbox
@@ -64,7 +64,7 @@ func (r *OutboxRepo) ClaimPending(ctx context.Context, n int, lockedBy string, l
 			FOR UPDATE SKIP LOCKED
 		)
 		RETURNING id, public_id, kind, payload_json, attempts
-	`, lockedBy, lockTTL.String(), n)
+	`, lockedBy, lockTTL.Seconds(), n)
 	if err != nil {
 		return nil, err
 	}

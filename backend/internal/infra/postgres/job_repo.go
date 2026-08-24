@@ -61,9 +61,9 @@ func (r *JobRepo) Claim(ctx context.Context, publicID uuid.UUID, workerID string
 	j, err := scanJob(From(ctx, r.pool).QueryRow(ctx, `
 		UPDATE jobs SET status='running', worker_id=$2,
 			started_at=COALESCE(started_at, now()), heartbeat_at=now(),
-			lease_expires_at=now()+$3::interval
+			lease_expires_at=now()+make_interval(secs => $3)
 		WHERE public_id=$1 AND status='queued'
-		RETURNING `+jobCols, publicID, workerID, lease.String()))
+		RETURNING `+jobCols, publicID, workerID, lease.Seconds()))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
