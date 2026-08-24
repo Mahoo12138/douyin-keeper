@@ -668,6 +668,31 @@ paths:
                     type:
                     - string
                     - 'null'
+  /accounts/{accountId}/conversations:
+    get:
+      operationId: listConversations
+      parameters:
+      - $ref: '#/components/parameters/AccountId'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - next_cursor
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Conversation'
+                  next_cursor:
+                    type:
+                    - string
+                    - 'null'
   /friends/{friendId}:
     patch:
       operationId: updateFriend
@@ -2295,6 +2320,53 @@ components:
         spark_enabled:
           type: boolean
         last_sent_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    Conversation:
+      type: object
+      required:
+      - id
+      - friend_id
+      - friend_display_name
+      - friend_nickname
+      - platform_identity_status
+      - channel
+      properties:
+        id:
+          type: string
+          format: uuid
+        friend_id:
+          type: string
+          format: uuid
+        friend_display_name:
+          type: string
+        friend_nickname:
+          type: string
+        friend_avatar_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+        platform_identity_status:
+          type: string
+          enum:
+          - pending
+          - resolved
+          - ambiguous
+          - missing
+        channel:
+          type: string
+          enum:
+          - consumer
+          - creator
+        last_message_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        last_synced_at:
           type:
           - string
           - 'null'

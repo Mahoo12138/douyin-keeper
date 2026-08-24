@@ -332,6 +332,15 @@ export async function listFriends(accessToken: string, accountId: string, option
   return data
 }
 
+export async function listConversations(accessToken: string, accountId: string, options?: { limit?: number }) {
+  const { data, error } = await api.GET('/accounts/{accountId}/conversations', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { accountId }, query: options },
+  })
+  if (error) throwApiError(error, 'conversations failed')
+  return data
+}
+
 export async function updateFriend(accessToken: string, friendId: string, sparkEnabled: boolean) {
   const { data, error } = await api.PATCH('/friends/{friendId}', {
     headers: { Authorization: `Bearer ${accessToken}` },

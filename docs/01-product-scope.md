@@ -79,8 +79,9 @@
 - 登录态主动健康检查与到期提醒。
 
 当前已完成站内通知切片、SMS Binding 的异步状态机与安全验证码通道，以及 Sticker
-任务的契约、任务配置和 browser worker 路由。真实抖音页面 selector 和贴纸发送仍
-依赖 Sidecar 环境联调；会话列表和微信服务通知仍待后续接入真实平台能力。
+任务的契约、任务配置和 browser worker 路由；用户端也已增加按账号浏览的独立会话
+列表。真实抖音页面 selector、贴纸发送和 `conversations.list` 的独立 Sidecar 同步
+仍依赖真实平台环境联调；微信服务通知仍待后续接入。
 
 ## 5. V1.2
 

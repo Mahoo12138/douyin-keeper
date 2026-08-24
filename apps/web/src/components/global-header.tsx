@@ -8,6 +8,7 @@ const nav = [
   { to: '/dashboard', label: '概览' },
   { to: '/accounts', label: '抖音账号' },
   { to: '/friends', label: '好友与火花' },
+  { to: '/conversations', label: '会话' },
   { to: '/tasks', label: '任务' },
   { to: '/history', label: '发送记录' },
   { to: '/notifications', label: '通知' },

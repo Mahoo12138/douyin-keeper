@@ -16,6 +16,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as authSigninRouteImport } from './routes/(auth)/signin'
 import { Route as authSignupRouteImport } from './routes/(auth)/signup'
 import { Route as rootAccountsRouteImport } from './routes/(root)/accounts'
+import { Route as rootConversationsRouteImport } from './routes/(root)/conversations'
 import { Route as rootDashboardRouteImport } from './routes/(root)/dashboard'
 import { Route as rootEntitlementRouteImport } from './routes/(root)/entitlement'
 import { Route as rootFriendsRouteImport } from './routes/(root)/friends'
@@ -64,6 +65,11 @@ const authSignupRoute = authSignupRouteImport.update({
 const rootAccountsRoute = rootAccountsRouteImport.update({
   id: '/accounts',
   path: '/accounts',
+  getParentRoute: () => rootRouteRoute,
+} as any)
+const rootConversationsRoute = rootConversationsRouteImport.update({
+  id: '/conversations',
+  path: '/conversations',
   getParentRoute: () => rootRouteRoute,
 } as any)
 const rootDashboardRoute = rootDashboardRouteImport.update({
@@ -154,6 +160,7 @@ export interface FileRoutesByFullPath {
   '/signin': typeof authSigninRoute
   '/signup': typeof authSignupRoute
   '/accounts': typeof rootAccountsRoute
+  '/conversations': typeof rootConversationsRoute
   '/dashboard': typeof rootDashboardRoute
   '/entitlement': typeof rootEntitlementRoute
   '/friends': typeof rootFriendsRoute
@@ -176,6 +183,7 @@ export interface FileRoutesByTo {
   '/signin': typeof authSigninRoute
   '/signup': typeof authSignupRoute
   '/accounts': typeof rootAccountsRoute
+  '/conversations': typeof rootConversationsRoute
   '/dashboard': typeof rootDashboardRoute
   '/entitlement': typeof rootEntitlementRoute
   '/friends': typeof rootFriendsRoute
@@ -202,6 +210,7 @@ export interface FileRoutesById {
   '/(auth)/signin': typeof authSigninRoute
   '/(auth)/signup': typeof authSignupRoute
   '/(root)/accounts': typeof rootAccountsRoute
+  '/(root)/conversations': typeof rootConversationsRoute
   '/(root)/dashboard': typeof rootDashboardRoute
   '/(root)/entitlement': typeof rootEntitlementRoute
   '/(root)/friends': typeof rootFriendsRoute
@@ -227,6 +236,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/signup'
     | '/accounts'
+    | '/conversations'
     | '/dashboard'
     | '/entitlement'
     | '/friends'
@@ -249,6 +259,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/signup'
     | '/accounts'
+    | '/conversations'
     | '/dashboard'
     | '/entitlement'
     | '/friends'
@@ -274,6 +285,7 @@ export interface FileRouteTypes {
     | '/(auth)/signin'
     | '/(auth)/signup'
     | '/(root)/accounts'
+    | '/(root)/conversations'
     | '/(root)/dashboard'
     | '/(root)/entitlement'
     | '/(root)/friends'
@@ -348,6 +360,13 @@ declare module '@tanstack/react-router' {
       path: '/accounts'
       fullPath: '/accounts'
       preLoaderRoute: typeof rootAccountsRouteImport
+      parentRoute: typeof rootRouteRoute
+    }
+    '/(root)/conversations': {
+      id: '/(root)/conversations'
+      path: '/conversations'
+      fullPath: '/conversations'
+      preLoaderRoute: typeof rootConversationsRouteImport
       parentRoute: typeof rootRouteRoute
     }
     '/(root)/dashboard': {
@@ -481,6 +500,7 @@ const authRouteRouteWithChildren = authRouteRoute._addFileChildren(
 
 interface rootRouteRouteChildren {
   rootAccountsRoute: typeof rootAccountsRoute
+  rootConversationsRoute: typeof rootConversationsRoute
   rootDashboardRoute: typeof rootDashboardRoute
   rootEntitlementRoute: typeof rootEntitlementRoute
   rootFriendsRoute: typeof rootFriendsRoute
@@ -491,6 +511,7 @@ interface rootRouteRouteChildren {
 
 const rootRouteRouteChildren: rootRouteRouteChildren = {
   rootAccountsRoute: rootAccountsRoute,
+  rootConversationsRoute: rootConversationsRoute,
   rootDashboardRoute: rootDashboardRoute,
   rootEntitlementRoute: rootEntitlementRoute,
   rootFriendsRoute: rootFriendsRoute,

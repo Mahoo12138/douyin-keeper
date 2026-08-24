@@ -500,6 +500,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/{accountId}/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listConversations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/friends/{friendId}": {
         parameters: {
             query?: never;
@@ -1222,6 +1238,24 @@ export interface components {
             spark_enabled: boolean;
             /** Format: date-time */
             last_sent_at?: string | null;
+        };
+        Conversation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            friend_id: string;
+            friend_display_name: string;
+            friend_nickname: string;
+            /** Format: uri */
+            friend_avatar_url?: string | null;
+            /** @enum {string} */
+            platform_identity_status: "pending" | "resolved" | "ambiguous" | "missing";
+            /** @enum {string} */
+            channel: "consumer" | "creator";
+            /** Format: date-time */
+            last_message_at?: string | null;
+            /** Format: date-time */
+            last_synced_at?: string | null;
         };
         SparkTask: {
             /** Format: uuid */
@@ -2232,6 +2266,33 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["Friend"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+        };
+    };
+    listConversations: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Conversations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Conversation"][];
                         next_cursor: string | null;
                     };
                 };

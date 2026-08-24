@@ -16,6 +16,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/admin"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/conversation"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/friend"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
@@ -32,6 +33,7 @@ type Server struct {
 	entitlements  *entitlement.Service
 	accounts      *account.Service
 	friends       *friend.Service
+	conversations *conversation.Service
 	tasks         *task.Service
 	sends         *send.Service
 	jobs          *job.Service
@@ -47,11 +49,11 @@ type Server struct {
 }
 
 func NewServer(authSvc *auth.Service, ent *entitlement.Service, accounts *account.Service,
-	friends *friend.Service, tasks *task.Service, sends *send.Service, jobs *job.Service,
+	friends *friend.Service, conversations *conversation.Service, tasks *task.Service, sends *send.Service, jobs *job.Service,
 	capabilities capability.Repository, adminSvc *admin.Service, notificationsSvc *notification.Service, signingKey []byte, refreshTTL time.Duration,
 	pg *pgxpool.Pool, redis *redis.Client) *Server {
 	return &Server{
-		auth: authSvc, entitlements: ent, accounts: accounts, friends: friends,
+		auth: authSvc, entitlements: ent, accounts: accounts, friends: friends, conversations: conversations,
 		tasks: tasks, sends: sends, jobs: jobs, admin: adminSvc, notifications: notificationsSvc, capabilities: capabilities,
 		signingKey: signingKey, refreshTTL: refreshTTL, pg: pg, redis: redis,
 	}
@@ -127,6 +129,7 @@ func (s *Server) Router() http.Handler {
 			private.Get("/accounts/{accountId}/capabilities", s.handleAccountCapabilities)
 
 			private.Get("/accounts/{accountId}/friends", s.handleListFriends)
+			private.Get("/accounts/{accountId}/conversations", s.handleListConversations)
 			private.Get("/friends/{friendId}", s.handleGetFriend)
 			private.Patch("/friends/{friendId}", s.handlePatchFriend)
 

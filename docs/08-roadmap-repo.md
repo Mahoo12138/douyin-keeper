@@ -137,6 +137,11 @@ Sidecar Contract 另外维护 JSON Schema，版本化：
 - 好友列表；
 - 火花开关。
 
+M2 当前实现还提供独立的会话列表 API 和 `/conversations` 页面：会话通过账号归属
+隔离查询，前端展示对端身份状态、通道、最近消息和最近同步时间，并复用统一 SPA
+组件库与主题。独立 `conversations.list` Sidecar 的真实分页抓取仍待平台 selector
+联调，不在本切片中猜测内部 DOM。
+
 ### M3 — 任务
 
 - SparkTask；
