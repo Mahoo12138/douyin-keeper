@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { getMe, listMyEntitlementGrants, listNotifications, markAllNotificationsRead, markNotificationRead, myEntitlement, redeemCardCode, updateTask } from '../src/lib/api'
+import { getMe, listMyEntitlementGrants, listNotifications, markAllNotificationsRead, markNotificationRead, myEntitlement, redeemCardCode, runTaskNow, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -107,5 +107,16 @@ describe('mini API auth recovery', () => {
       window_end: '22:30:00',
       message: { kind: 'text', body: '晚间问候' },
     })
+  })
+
+  it('sends the idempotency key for immediate task execution', async () => {
+    requestMock.mockResolvedValueOnce({ statusCode: 202, data: { intent_id: 'intent-1', job_id: 'job-1', status: 'queued' } })
+
+    const result = await runTaskNow('access-1', 'task-1', '00000000-0000-4000-8000-000000000001')
+
+    expect(result.status).toBe('queued')
+    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/tasks/task-1/run-now')
+    expect(requestMock.mock.calls[0]?.[0]?.method).toBe('POST')
+    expect(requestMock.mock.calls[0]?.[0]?.header['Idempotency-Key']).toBe('00000000-0000-4000-8000-000000000001')
   })
 })

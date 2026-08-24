@@ -7,7 +7,7 @@ const API_BASE_URL = (process.env.TARO_APP_API_BASE_URL || '/api/v1').replace(/\
 
 type Collection<T> = { items: T[]; next_cursor?: string | null }
 type ApiErrorBody = { error?: { code?: string; message?: string } }
-type RequestOptions = { token?: string | null; method?: 'GET' | 'POST' | 'PATCH'; data?: unknown; skipRefresh?: boolean }
+type RequestOptions = { token?: string | null; method?: 'GET' | 'POST' | 'PATCH'; data?: unknown; headers?: Record<string, string>; skipRefresh?: boolean }
 
 export class MiniApiError extends Error {
   constructor(public readonly code: string, message: string, public readonly statusCode: number) {
@@ -24,6 +24,7 @@ async function request<T>(path: string, options: RequestOptions = {}) {
     header: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
+      ...options.headers,
       ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
     },
   })
@@ -143,6 +144,12 @@ export function updateTask(token: string, taskId: string, patch: UpdateTaskPatch
     method: 'PATCH',
     token,
     data: patch,
+  })
+}
+
+export function runTaskNow(token: string, taskId: string, idempotencyKey: string) {
+  return request<{ intent_id: string; job_id: string; status: 'queued' }>(`/tasks/${taskId}/run-now`, {
+    method: 'POST', token, headers: { 'Idempotency-Key': idempotencyKey },
   })
 }
 
