@@ -25,7 +25,10 @@ func (r paginationBatchStub) GetSummaryByPublicID(context.Context, uuid.UUID) (C
 }
 func (r paginationBatchStub) DisableBatch(context.Context, int64, uuid.UUID) error { return nil }
 func (r paginationBatchStub) ListCodeSummaries(context.Context, uuid.UUID, int) ([]CardCodeSummary, error) {
-	return nil, nil
+	return []CardCodeSummary{{ID: 3}, {ID: 2}, {ID: 1}}, nil
+}
+func (r paginationBatchStub) ListCodeSummariesPage(context.Context, uuid.UUID, CardCodeListFilter) ([]CardCodeSummary, error) {
+	return []CardCodeSummary{{ID: 3}, {ID: 2}, {ID: 1}}, nil
 }
 func (r paginationBatchStub) RevokeUnusedCode(context.Context, int64, uuid.UUID, int64, string) error {
 	return nil
@@ -65,6 +68,33 @@ func TestListRedemptionSummariesPageTrimsAndBuildsCursor(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(page.Items) != 2 || page.Items[0].GrantID != 3 || page.Items[1].GrantID != 2 || page.NextAfterID != 2 || page.NextCreatedAt == nil {
+		t.Fatalf("page = %+v", page)
+	}
+}
+
+func TestListCardCodeSummariesPageBuildsCursor(t *testing.T) {
+	service := &Service{batches: paginationBatchStub{}}
+	page, err := service.ListCardCodeSummariesPage(context.Background(), uuid.New(), CardCodeListFilter{Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].ID != 3 || page.Items[1].ID != 2 || page.NextAfterID != 2 {
+		t.Fatalf("page = %+v", page)
+	}
+}
+
+func TestListUserGrantSummariesPageBuildsCursor(t *testing.T) {
+	base := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	service := &Service{grants: entitlementGrantStub{redemptions: []RedemptionSummary{
+		{GrantID: 3, CreatedAt: base.Add(2 * time.Minute)},
+		{GrantID: 2, CreatedAt: base.Add(time.Minute)},
+		{GrantID: 1, CreatedAt: base},
+	}}}
+	page, err := service.ListUserGrantSummariesPage(context.Background(), 7, RedemptionListFilter{Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.NextAfterID != 2 || page.NextCreatedAt == nil {
 		t.Fatalf("page = %+v", page)
 	}
 }

@@ -69,3 +69,31 @@ func TestAdminRedemptionListCursorPageIsStable(t *testing.T) {
 		t.Fatalf("cursor order is not stable: first=%+v second=%+v", first, second)
 	}
 }
+
+func TestAdminCardCodeListCursorPageIsStable(t *testing.T) {
+	ctx := context.Background()
+	service := newEntSvc()
+	adminID := newUser(t)
+	_, plan := seedCard(t, service, adminID)
+	batch := &entitlement.CardBatch{
+		EntitlementPlanID: plan.ID, Name: "分页卡密明细", DurationDays: 30, Quantity: 3,
+		Status: entitlement.StatusActive, CodeVersion: entitlement.CardCodeVersion1, CreatedBy: adminID,
+	}
+	if _, err := service.CreateBatchWithCodes(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+	first, err := service.ListCardCodeSummariesPage(ctx, batch.PublicID, entitlement.CardCodeListFilter{Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Items) != 2 || first.NextAfterID == 0 {
+		t.Fatalf("first page = %+v", first)
+	}
+	second, err := service.ListCardCodeSummariesPage(ctx, batch.PublicID, entitlement.CardCodeListFilter{Limit: 2, AfterID: first.NextAfterID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Items) != 1 || second.Items[0].ID <= first.Items[1].ID {
+		t.Fatalf("second page = %+v", second)
+	}
+}

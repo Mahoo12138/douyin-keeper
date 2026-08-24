@@ -142,7 +142,7 @@ export async function listAdminRedemptions(accessToken: string, options?: { limi
   return data
 }
 
-export async function getAdminUserEntitlements(accessToken: string, userId: string, options?: { limit?: number }) {
+export async function getAdminUserEntitlements(accessToken: string, userId: string, options?: { limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/admin/users/{userId}/entitlements', {
     headers: { Authorization: `Bearer ${accessToken}` },
     params: { path: { userId }, query: options },
@@ -170,7 +170,7 @@ export async function revokeAdminEntitlementGrant(accessToken: string, grantId: 
   if (error) throwApiError(error, 'admin entitlement grant revoke failed')
 }
 
-export async function listAdminCardCodes(accessToken: string, batchId: string, options?: { limit?: number }) {
+export async function listAdminCardCodes(accessToken: string, batchId: string, options?: { limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/admin/card-batches/{batchId}/codes', {
     headers: { Authorization: `Bearer ${accessToken}` },
     params: { path: { batchId }, query: options },

@@ -119,6 +119,16 @@ type CardCodeSummary struct {
 	CreatedAt       time.Time
 }
 
+type CardCodeListFilter struct {
+	Limit   int
+	AfterID int64
+}
+
+type CardCodeListPage struct {
+	Items       []CardCodeSummary
+	NextAfterID int64
+}
+
 type CardCode struct {
 	ID              int64
 	BatchID         int64

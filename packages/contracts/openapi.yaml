@@ -252,6 +252,7 @@ paths:
           type: string
           format: uuid
       - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: User entitlement history
@@ -312,6 +313,7 @@ paths:
           type: string
           format: uuid
       - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Card code summaries without plaintext codes

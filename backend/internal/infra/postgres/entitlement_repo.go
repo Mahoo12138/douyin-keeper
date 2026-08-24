@@ -219,6 +219,15 @@ func (r *EntitlementRepo) DisableBatch(ctx context.Context, actorID int64, publi
 }
 
 func (r *EntitlementRepo) ListCodeSummaries(ctx context.Context, batchPublicID uuid.UUID, limit int) ([]entitlement.CardCodeSummary, error) {
+	return r.listCodeSummaries(ctx, batchPublicID, entitlement.CardCodeListFilter{Limit: limit})
+}
+
+func (r *EntitlementRepo) ListCodeSummariesPage(ctx context.Context, batchPublicID uuid.UUID, filter entitlement.CardCodeListFilter) ([]entitlement.CardCodeSummary, error) {
+	filter.Limit++
+	return r.listCodeSummaries(ctx, batchPublicID, filter)
+}
+
+func (r *EntitlementRepo) listCodeSummaries(ctx context.Context, batchPublicID uuid.UUID, filter entitlement.CardCodeListFilter) ([]entitlement.CardCodeSummary, error) {
 	var exists bool
 	if err := From(ctx, r.pool).QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM card_batches WHERE public_id=$1)`, batchPublicID).Scan(&exists); err != nil {
 		return nil, err
@@ -230,9 +239,9 @@ func (r *EntitlementRepo) ListCodeSummaries(ctx context.Context, batchPublicID u
 		SELECT cc.id, cc.code_fingerprint, cc.status, cc.redeemed_at, cc.revoked_at, cc.created_at
 		FROM card_codes cc
 		JOIN card_batches b ON b.id=cc.batch_id
-		WHERE b.public_id=$1
+		WHERE b.public_id=$1 AND ($3::bigint = 0 OR cc.id > $3)
 		ORDER BY cc.id
-		LIMIT $2`, batchPublicID, limit)
+		LIMIT $2`, batchPublicID, filter.Limit, filter.AfterID)
 	if err != nil {
 		return nil, err
 	}

@@ -370,7 +370,7 @@ func (s *Server) handleAdminListUserEntitlements(w http.ResponseWriter, r *http.
 		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid user id"))
 		return
 	}
-	limit, err := adminListLimit(r)
+	filter, err := adminRedemptionFilter(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -380,18 +380,22 @@ func (s *Server) handleAdminListUserEntitlements(w http.ResponseWriter, r *http.
 		writeError(w, r, err)
 		return
 	}
-	items, err := s.entitlements.ListUserGrantSummaries(r.Context(), user.ID, limit)
+	page, err := s.entitlements.ListUserGrantSummariesPage(r.Context(), user.ID, filter)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	views := make([]adminRedemptionView, 0, len(items))
-	for _, item := range items {
+	views := make([]adminRedemptionView, 0, len(page.Items))
+	for _, item := range page.Items {
 		views = append(views, adminRedemptionViewFrom(item))
+	}
+	var nextCursor any
+	if page.NextCreatedAt != nil && page.NextAfterID > 0 {
+		nextCursor = encodeAdminRedemptionCursor(*page.NextCreatedAt, page.NextAfterID)
 	}
 	writeOK(w, map[string]any{
 		"user":  adminEntitlementUserView{ID: user.PublicID.String(), DisplayName: user.DisplayName, Status: string(user.Status)},
-		"items": views, "next_cursor": nil,
+		"items": views, "next_cursor": nextCursor,
 	})
 }
 
@@ -468,25 +472,53 @@ func (s *Server) handleAdminListCardCodes(w http.ResponseWriter, r *http.Request
 		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid card batch id"))
 		return
 	}
-	limit, err := adminListLimit(r)
+	filter, err := adminCardCodeFilter(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	items, err := s.entitlements.ListCardCodeSummaries(r.Context(), batchID, limit)
+	page, err := s.entitlements.ListCardCodeSummariesPage(r.Context(), batchID, filter)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	views := make([]adminCardCodeView, 0, len(items))
-	for _, item := range items {
+	views := make([]adminCardCodeView, 0, len(page.Items))
+	for _, item := range page.Items {
 		views = append(views, adminCardCodeView{
 			ID: item.ID, CodeFingerprint: item.CodeFingerprint, Status: item.Status,
 			RedeemedAt: formatOptionalAdminTime(item.RedeemedAt), RevokedAt: formatOptionalAdminTime(item.RevokedAt),
 			CreatedAt: item.CreatedAt.Format(timeRFC3339),
 		})
 	}
-	writeOK(w, map[string]any{"items": views, "next_cursor": nil})
+	var nextCursor any
+	if page.NextAfterID > 0 {
+		nextCursor = encodeAdminCardCodeCursor(page.NextAfterID)
+	}
+	writeOK(w, map[string]any{"items": views, "next_cursor": nextCursor})
+}
+
+func adminCardCodeFilter(r *http.Request) (entitlement.CardCodeListFilter, error) {
+	limit, err := adminListLimit(r)
+	if err != nil {
+		return entitlement.CardCodeListFilter{}, err
+	}
+	filter := entitlement.CardCodeListFilter{Limit: limit}
+	if value := r.URL.Query().Get("cursor"); value != "" {
+		decoded, err := base64.RawURLEncoding.DecodeString(value)
+		if err != nil {
+			return filter, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+		}
+		id, err := strconv.ParseInt(string(decoded), 10, 64)
+		if err != nil || id < 1 {
+			return filter, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+		}
+		filter.AfterID = id
+	}
+	return filter, nil
+}
+
+func encodeAdminCardCodeCursor(id int64) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(id, 10)))
 }
 
 func (s *Server) handleAdminRevokeCardCode(w http.ResponseWriter, r *http.Request) {

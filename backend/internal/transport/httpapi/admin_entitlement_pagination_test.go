@@ -24,3 +24,13 @@ func TestAdminRedemptionFilterRejectsInvalidCursor(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminCardCodeFilterDecodesCursor(t *testing.T) {
+	filter, err := adminCardCodeFilter(httptest.NewRequest("GET", "/?limit=20&cursor="+encodeAdminCardCodeCursor(42), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filter.Limit != 20 || filter.AfterID != 42 {
+		t.Fatalf("filter = %+v", filter)
+	}
+}

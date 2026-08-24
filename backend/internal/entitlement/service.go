@@ -512,6 +512,14 @@ func (s *Service) ListUserGrantSummaries(ctx context.Context, userID int64, limi
 	return s.grants.ListUserGrantSummaries(ctx, userID, limit)
 }
 
+func (s *Service) ListUserGrantSummariesPage(ctx context.Context, userID int64, filter RedemptionListFilter) (RedemptionListPage, error) {
+	if userID <= 0 {
+		return RedemptionListPage{}, apperr.Validation(apperr.CodeConflict, "invalid user")
+	}
+	filter.UserID = &userID
+	return s.ListRedemptionSummariesPage(ctx, filter)
+}
+
 func (s *Service) ListCardCodeSummaries(ctx context.Context, batchPublicID uuid.UUID, limit int) ([]CardCodeSummary, error) {
 	if batchPublicID == uuid.Nil {
 		return nil, apperr.Validation(apperr.CodeConflict, "invalid card batch")
@@ -523,6 +531,48 @@ func (s *Service) ListCardCodeSummaries(ctx context.Context, batchPublicID uuid.
 		limit = 1000
 	}
 	return s.batches.ListCodeSummaries(ctx, batchPublicID, limit)
+}
+
+func (s *Service) ListCardCodeSummariesPage(ctx context.Context, batchPublicID uuid.UUID, filter CardCodeListFilter) (CardCodeListPage, error) {
+	if batchPublicID == uuid.Nil {
+		return CardCodeListPage{}, apperr.Validation(apperr.CodeConflict, "invalid card batch")
+	}
+	filter.Limit = normalizeEntitlementLimit(filter.Limit, 50, 100)
+	if filter.AfterID < 0 {
+		filter.AfterID = 0
+	}
+	var (
+		items []CardCodeSummary
+		err   error
+	)
+	if repo, ok := s.batches.(BatchPageRepository); ok {
+		items, err = repo.ListCodeSummariesPage(ctx, batchPublicID, filter)
+	} else {
+		items, err = s.batches.ListCodeSummaries(ctx, batchPublicID, filter.Limit)
+		if filter.AfterID > 0 {
+			start := len(items)
+			for index, item := range items {
+				if item.ID > filter.AfterID {
+					start = index
+					break
+				}
+			}
+			if start < len(items) {
+				items = items[start:]
+			} else {
+				items = nil
+			}
+		}
+	}
+	if err != nil {
+		return CardCodeListPage{}, err
+	}
+	page := CardCodeListPage{Items: items}
+	if len(items) > filter.Limit {
+		page.Items = items[:filter.Limit]
+		page.NextAfterID = page.Items[len(page.Items)-1].ID
+	}
+	return page, nil
 }
 
 func normalizeEntitlementLimit(limit, fallback, maximum int) int {

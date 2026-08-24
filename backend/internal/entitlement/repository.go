@@ -45,6 +45,7 @@ type GrantRepository interface {
 
 type BatchPageRepository interface {
 	ListSummariesPage(ctx context.Context, filter BatchListFilter) ([]CardBatchSummary, error)
+	ListCodeSummariesPage(ctx context.Context, batchPublicID uuid.UUID, filter CardCodeListFilter) ([]CardCodeSummary, error)
 }
 
 type GrantPageRepository interface {
