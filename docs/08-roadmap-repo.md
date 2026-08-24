@@ -217,7 +217,8 @@ Sidecar 已冻结稳定目标/资源 ID 校验与未配置时的 fail-closed 响
 - 多档权益方案与授权迁移策略。
 
 会话归档已先完成用户侧索引闭环：新增 `archived_at`、归档/恢复 API、默认隐藏归档
-查询、统一 Web 会话筛选与响应式操作按钮；平台侧 `conversations.archive` Sidecar 输入契约
+查询、统一 Web 会话筛选与响应式操作按钮；会话页同时提供明确的“请求平台归档/恢复”操作，提交
+后台 Job 后只反馈“已提交”，不提前假设平台状态；平台侧 `conversations.archive` Sidecar 输入契约
 已冻结并保持 fail-closed，平台归档请求的 Job/Outbox、Browser Worker、账号锁与确认回执校验
 已接线；真实 selector 和平台回执仍待适配器联调。
 

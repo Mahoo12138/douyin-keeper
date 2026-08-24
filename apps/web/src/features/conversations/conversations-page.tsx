@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { listConversations, setConversationArchived, type components } from '@douyin-keeper/sdk-ts'
+import { listConversations, requestPlatformConversationArchive, setConversationArchived, type components } from '@douyin-keeper/sdk-ts'
 import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@douyin-keeper/ui-web'
-import { Archive, ArchiveRestore, Filter, MessageCircle, Search, Smartphone } from 'lucide-react'
+import { Archive, ArchiveRestore, CloudCog, Filter, MessageCircle, Search, Smartphone } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { getToken } from '@/auth/session'
 import { useAccountsQuery } from '../accounts/use-accounts-query'
+import { getPlatformArchiveAction } from './conversation-utils'
 
 type Conversation = components['schemas']['Conversation']
 type Channel = Conversation['channel'] | 'all'
@@ -40,6 +41,12 @@ export function ConversationsPage() {
       toast.success(updated.archived ? '会话已归档' : '会话已恢复')
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : '更新会话归档状态失败'),
+  })
+  const platformArchiveMutation = useMutation({
+    mutationFn: ({ conversationId, archived }: { conversationId: string; archived: boolean }) =>
+      requestPlatformConversationArchive(token as string, accountId as string, conversationId, archived),
+    onSuccess: () => toast.success('平台归档任务已提交，等待后台与适配器确认'),
+    onError: (error) => toast.error(error instanceof Error ? error.message : '提交平台归档任务失败；平台状态未改变'),
   })
 
   const conversations = conversationsQ.data?.pages.flatMap((page) => page.items) ?? []
@@ -100,30 +107,35 @@ export function ConversationsPage() {
             <ConversationSelect label="归档" value={archiveFilter} onChange={(value) => setArchiveFilter(value as ArchiveFilter)} options={[{ value: 'active', label: '未归档' }, { value: 'archived', label: '已归档' }, { value: 'all', label: '全部会话' }]} />
           </div>
 
-          {conversationsQ.isLoading ? <Skeleton className="h-64 w-full" /> : conversationsQ.isError ? <ErrorState onRetry={() => void conversationsQ.refetch()} /> : visibleConversations.length ? <ConversationContent items={visibleConversations} onArchive={(conversationId, archived) => archiveMutation.mutate({ conversationId, archived })} pendingConversationId={archiveMutation.isPending ? archiveMutation.variables?.conversationId : undefined} /> : <EmptyState hasFilters={!!search || channel !== 'all' || archiveFilter !== 'active'} onReset={() => { setSearch(''); setChannel('all'); setArchiveFilter('active') }} />}
+          {conversationsQ.isLoading ? <Skeleton className="h-64 w-full" /> : conversationsQ.isError ? <ErrorState onRetry={() => void conversationsQ.refetch()} /> : visibleConversations.length ? <ConversationContent items={visibleConversations} onArchive={(conversationId, archived) => archiveMutation.mutate({ conversationId, archived })} onPlatformArchive={(conversationId, archived) => { const action = getPlatformArchiveAction(!archived); if (!window.confirm(action.confirmLabel)) return; platformArchiveMutation.mutate({ conversationId, archived }) }} pendingConversationId={archiveMutation.isPending ? archiveMutation.variables?.conversationId : undefined} pendingPlatformConversationId={platformArchiveMutation.isPending ? platformArchiveMutation.variables?.conversationId : undefined} /> : <EmptyState hasFilters={!!search || channel !== 'all' || archiveFilter !== 'active'} onReset={() => { setSearch(''); setChannel('all'); setArchiveFilter('active') }} />}
           {conversationsQ.hasNextPage ? <div className="flex justify-center"><Button variant="outline" onClick={() => void conversationsQ.fetchNextPage()} disabled={conversationsQ.isFetchingNextPage}>{conversationsQ.isFetchingNextPage ? '加载中…' : '加载更多会话'}</Button></div> : null}
-          <p className="text-xs text-muted-foreground">会话昵称仅用于展示和诊断，不作为自动发送的唯一目标条件；本页归档不会修改抖音平台状态。</p>
+          <p className="text-xs text-muted-foreground">会话昵称仅用于展示和诊断，不作为自动发送的唯一目标条件；“归档/恢复”只修改产品侧索引，“请求平台…”会创建后台任务，未联调时保持失败关闭。</p>
         </CardContent>
       </Card>
     </div>
   )
 }
 
-function ConversationContent({ items, onArchive, pendingConversationId }: { items: Conversation[]; onArchive: (conversationId: string, archived: boolean) => void; pendingConversationId?: string }) {
-  return <><div className="hidden md:block"><ConversationTable items={items} onArchive={onArchive} pendingConversationId={pendingConversationId} /></div><div className="space-y-3 md:hidden">{items.map((item) => <ConversationCard key={item.id} item={item} onArchive={onArchive} pending={pendingConversationId === item.id} />)}</div></>
+function ConversationContent({ items, onArchive, onPlatformArchive, pendingConversationId, pendingPlatformConversationId }: { items: Conversation[]; onArchive: (conversationId: string, archived: boolean) => void; onPlatformArchive: (conversationId: string, archived: boolean) => void; pendingConversationId?: string; pendingPlatformConversationId?: string }) {
+  return <><div className="hidden md:block"><ConversationTable items={items} onArchive={onArchive} onPlatformArchive={onPlatformArchive} pendingConversationId={pendingConversationId} pendingPlatformConversationId={pendingPlatformConversationId} /></div><div className="space-y-3 md:hidden">{items.map((item) => <ConversationCard key={item.id} item={item} onArchive={onArchive} onPlatformArchive={onPlatformArchive} pending={pendingConversationId === item.id} platformPending={pendingPlatformConversationId === item.id} />)}</div></>
 }
 
-function ConversationTable({ items, onArchive, pendingConversationId }: { items: Conversation[]; onArchive: (conversationId: string, archived: boolean) => void; pendingConversationId?: string }) {
-  return <Table className="min-w-[900px]"><TableHeader><TableRow><TableHead className="pl-5">对端</TableHead><TableHead>通道</TableHead><TableHead>身份</TableHead><TableHead>最近消息</TableHead><TableHead>最近同步</TableHead><TableHead className="pr-5 text-right">操作</TableHead></TableRow></TableHeader><TableBody>{items.map((item) => <TableRow key={item.id}><TableCell className="pl-5"><ConversationPeer item={item} /></TableCell><TableCell><ChannelBadge channel={item.channel} /></TableCell><TableCell><IdentityBadge status={item.platform_identity_status} /></TableCell><TableCell className="whitespace-nowrap text-sm text-muted-foreground">{formatDate(item.last_message_at)}</TableCell><TableCell className="whitespace-nowrap text-sm text-muted-foreground">{formatDate(item.last_synced_at)}</TableCell><TableCell className="pr-5 text-right"><ArchiveButton item={item} onArchive={onArchive} pending={pendingConversationId === item.id} /></TableCell></TableRow>)}</TableBody></Table>
+function ConversationTable({ items, onArchive, onPlatformArchive, pendingConversationId, pendingPlatformConversationId }: { items: Conversation[]; onArchive: (conversationId: string, archived: boolean) => void; onPlatformArchive: (conversationId: string, archived: boolean) => void; pendingConversationId?: string; pendingPlatformConversationId?: string }) {
+  return <Table className="min-w-[1040px]"><TableHeader><TableRow><TableHead className="pl-5">对端</TableHead><TableHead>通道</TableHead><TableHead>身份</TableHead><TableHead>最近消息</TableHead><TableHead>最近同步</TableHead><TableHead className="pr-5 text-right">操作</TableHead></TableRow></TableHeader><TableBody>{items.map((item) => <TableRow key={item.id}><TableCell className="pl-5"><ConversationPeer item={item} /></TableCell><TableCell><ChannelBadge channel={item.channel} /></TableCell><TableCell><IdentityBadge status={item.platform_identity_status} /></TableCell><TableCell className="whitespace-nowrap text-sm text-muted-foreground">{formatDate(item.last_message_at)}</TableCell><TableCell className="whitespace-nowrap text-sm text-muted-foreground">{formatDate(item.last_synced_at)}</TableCell><TableCell className="pr-5 text-right"><div className="flex justify-end gap-1"><ArchiveButton item={item} onArchive={onArchive} pending={pendingConversationId === item.id} /><PlatformArchiveButton item={item} onPlatformArchive={onPlatformArchive} pending={pendingPlatformConversationId === item.id} /></div></TableCell></TableRow>)}</TableBody></Table>
 }
 
-function ConversationCard({ item, onArchive, pending }: { item: Conversation; onArchive: (conversationId: string, archived: boolean) => void; pending: boolean }) {
-  return <div className="rounded-xl border bg-card p-4"><div className="flex items-start justify-between gap-3"><ConversationPeer item={item} /><ChannelBadge channel={item.channel} /></div><div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><div className="text-xs text-muted-foreground">身份</div><div className="mt-1"><IdentityBadge status={item.platform_identity_status} /></div></div><div><div className="text-xs text-muted-foreground">最近消息</div><div className="mt-1 text-muted-foreground">{formatDate(item.last_message_at)}</div></div></div><div className="mt-3 text-xs text-muted-foreground">最近同步 {formatDate(item.last_synced_at)}</div><div className="mt-4 flex justify-end"><ArchiveButton item={item} onArchive={onArchive} pending={pending} /></div></div>
+function ConversationCard({ item, onArchive, onPlatformArchive, pending, platformPending }: { item: Conversation; onArchive: (conversationId: string, archived: boolean) => void; onPlatformArchive: (conversationId: string, archived: boolean) => void; pending: boolean; platformPending: boolean }) {
+  return <div className="rounded-xl border bg-card p-4"><div className="flex items-start justify-between gap-3"><ConversationPeer item={item} /><ChannelBadge channel={item.channel} /></div><div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><div className="text-xs text-muted-foreground">身份</div><div className="mt-1"><IdentityBadge status={item.platform_identity_status} /></div></div><div><div className="text-xs text-muted-foreground">最近消息</div><div className="mt-1 text-muted-foreground">{formatDate(item.last_message_at)}</div></div></div><div className="mt-3 text-xs text-muted-foreground">最近同步 {formatDate(item.last_synced_at)}</div><div className="mt-4 flex flex-wrap justify-end gap-1"><ArchiveButton item={item} onArchive={onArchive} pending={pending} /><PlatformArchiveButton item={item} onPlatformArchive={onPlatformArchive} pending={platformPending} /></div></div>
 }
 
 function ArchiveButton({ item, onArchive, pending }: { item: Conversation; onArchive: (conversationId: string, archived: boolean) => void; pending: boolean }) {
   const nextArchived = !item.archived
   return <Button variant="ghost" size="sm" disabled={pending} onClick={() => onArchive(item.id, nextArchived)} aria-label={nextArchived ? '归档会话' : '恢复会话'}>{nextArchived ? <Archive className="mr-1.5 size-4" /> : <ArchiveRestore className="mr-1.5 size-4" />}{pending ? '处理中…' : nextArchived ? '归档' : '恢复'}</Button>
+}
+
+function PlatformArchiveButton({ item, onPlatformArchive, pending }: { item: Conversation; onPlatformArchive: (conversationId: string, archived: boolean) => void; pending: boolean }) {
+  const action = getPlatformArchiveAction(item.archived)
+  return <Button variant="outline" size="sm" disabled={pending} onClick={() => onPlatformArchive(item.id, action.archived)} aria-label={action.label}><CloudCog className="mr-1.5 size-4" />{pending ? '提交中…' : action.label}</Button>
 }
 
 function ConversationPeer({ item }: { item: Conversation }) {
