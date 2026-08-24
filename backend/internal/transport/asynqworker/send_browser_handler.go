@@ -118,6 +118,13 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		if err != nil || claimed == nil {
 			return err
 		}
+		heartbeatCtx, stopHeartbeat := context.WithCancel(ctx)
+		heartbeatDone := make(chan struct{})
+		go runSendHeartbeat(heartbeatCtx, deps.Sends, claimed.ID, deps.WorkerID, deps.LockTTL, heartbeatDone)
+		defer func() {
+			stopHeartbeat()
+			<-heartbeatDone
+		}()
 		intent, err := deps.Sends.GetIntentByID(ctx, claimed.IntentID)
 		if err != nil {
 			return finishSend(ctx, deps, claimed, send.JobFailed, apperr.CodeInternal, false, nil, send.IntentFailed, now, adapterConfig.adapter)
@@ -297,6 +304,29 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 			return err
 		}
 		return nil
+	}
+}
+
+const sendHeartbeatInterval = 20 * time.Second
+
+func runSendHeartbeat(ctx context.Context, sends send.Repository, jobID int64, workerID string, lease time.Duration, done chan<- struct{}) {
+	defer close(done)
+	interval := sendHeartbeatInterval
+	if lease > 0 && lease/3 < interval {
+		interval = lease / 3
+	}
+	if interval <= 0 {
+		interval = time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			_ = sends.HeartbeatJob(ctx, jobID, workerID, lease)
+		}
 	}
 }
 

@@ -277,6 +277,10 @@ internal/transport/httpapi/entitlement_handler.go
 过期 snapshot，通过 outbox 投递新的 `capability.probe`。`disabled` 状态只允许管理
 策略显式恢复。
 
+Send Worker 在 Claim 后每 20 秒续租 `send_jobs`；heartbeat 只允许当前
+`running + worker_id` 更新。最终结果写入同样要求 Job 仍为 `running`，因此 lease
+过期后由 Reaper 写入 `OUTCOME_UNKNOWN` 的任务不会被旧 Worker 覆盖成成功。
+
 `account` 同时提供 Scheduler 使用的 `SessionCheckRepository` 投影：每 30 分钟扫描
 绑定且 Session 为 `unknown/valid`、`last_session_check_at` 已过期的账号，并排除已有
 活动或周期内新建 session-check Job 的账号。Scheduler 在同一事务内写入通用 Job 与

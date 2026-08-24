@@ -77,6 +77,17 @@ func TestSendJobClaimAndFinishPreserveTargetState(t *testing.T) {
 	if duplicate, err := sends.ClaimJob(ctx, j.PublicID, "duplicate-worker", time.Minute); err != nil || duplicate != nil {
 		t.Fatalf("duplicate claim should be absorbed: err=%v job=%+v", err, duplicate)
 	}
+	if err := sends.HeartbeatJob(ctx, j.ID, "duplicate-worker", time.Minute); err == nil {
+		t.Fatal("heartbeat from a different worker must be rejected")
+	}
+	claimedLease := claimed.LeaseExpiresAt
+	if err := sends.HeartbeatJob(ctx, j.ID, "send-integration-worker", time.Minute); err != nil {
+		t.Fatalf("heartbeat failed: %v", err)
+	}
+	heartbeated, err := sends.GetJobByPublicID(ctx, j.PublicID)
+	if err != nil || heartbeated.HeartbeatAt == nil || heartbeated.LeaseExpiresAt == nil || claimedLease == nil || !heartbeated.LeaseExpiresAt.After(*claimedLease) {
+		t.Fatalf("heartbeat did not extend lease: before=%v after=%+v err=%v", claimedLease, heartbeated, err)
+	}
 	messageID := "platform-message-1"
 	if err := postgres.NewTxManager(pool).WithinTx(ctx, func(tctx context.Context) error {
 		if err := sends.FinishJob(tctx, j.ID, send.JobSucceeded, nil, false, &messageID, when.Add(time.Second)); err != nil {
@@ -94,6 +105,9 @@ func TestSendJobClaimAndFinishPreserveTargetState(t *testing.T) {
 	intent, err := sends.GetIntentByPublicID(ctx, in.PublicID)
 	if err != nil || intent.Status != send.IntentSucceeded {
 		t.Fatalf("finished intent mismatch: err=%v intent=%+v", err, intent)
+	}
+	if err := sends.FinishJob(ctx, j.ID, send.JobFailed, nil, false, nil, when.Add(2*time.Second)); err == nil {
+		t.Fatal("terminal send job must not be overwritten after the first finish")
 	}
 	target, err := friends.GetSendTarget(ctx, acct.ID, list[0].ID)
 	if err != nil || target.PlatformUserID != platformID || target.PlatformConversationID != conversationID {

@@ -254,6 +254,22 @@ func (r *SendRepo) ClaimJob(ctx context.Context, publicID uuid.UUID, workerID st
 	return j, err
 }
 
+func (r *SendRepo) HeartbeatJob(ctx context.Context, jobID int64, workerID string, lease time.Duration) error {
+	if lease <= 0 {
+		lease = 2 * time.Minute
+	}
+	tag, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE send_jobs SET heartbeat_at=now(), lease_expires_at=now()+make_interval(secs => $3)
+		WHERE id=$1 AND status='running' AND worker_id=$2`, jobID, workerID, lease.Seconds())
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
 // FindExpiredJobs locks a bounded set of expired running attempts for the
 // caller's transaction. The lock is held until that transaction finishes,
 // preventing two scheduler leaders from reaping the same attempt.
@@ -325,10 +341,14 @@ func (r *SendRepo) FindRetryDue(ctx context.Context, at time.Time, limit int) ([
 }
 
 func (r *SendRepo) FinishJob(ctx context.Context, jobID int64, status send.JobStatus, errorCode *string, retryable bool, platformMessageID *string, at time.Time) error {
-	_, err := From(ctx, r.pool).Exec(ctx, `
+	tag, err := From(ctx, r.pool).Exec(ctx, `
 		UPDATE send_jobs SET status=$2, error_code=$3, retryable=$4, platform_message_id=$5,
-			finished_at=$6, heartbeat_at=NULL, lease_expires_at=NULL WHERE id=$1`,
+			finished_at=$6, heartbeat_at=NULL, lease_expires_at=NULL
+		WHERE id=$1 AND status='running'`,
 		jobID, status, errorCode, retryable, platformMessageID, at)
+	if err == nil && tag.RowsAffected() != 1 {
+		return pgx.ErrNoRows
+	}
 	return err
 }
 

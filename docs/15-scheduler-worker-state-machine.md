@@ -375,6 +375,10 @@ heartbeat_at
 lease_expires_at
 ```
 
+当前 Send Worker 在 Claim 后每 20 秒更新一次 `send_jobs` lease；Repository 同时校验
+`status='running'` 和 `worker_id`。最终 `FinishJob` 也只接受仍处于 `running` 的 Job，
+避免 lease Reaper 先以 `OUTCOME_UNKNOWN` 关闭任务后，迟到的旧 Worker 再覆盖终态。
+
 Scheduler/Reaper 查找：
 
 ```text

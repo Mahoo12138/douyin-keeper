@@ -136,6 +136,7 @@ type Repository interface {
 	GetJobByPublicID(ctx context.Context, publicID uuid.UUID) (*SendJob, error)
 	GetJobOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*SendJob, error)
 	ClaimJob(ctx context.Context, publicID uuid.UUID, workerID string, lease time.Duration) (*SendJob, error)
+	HeartbeatJob(ctx context.Context, jobID int64, workerID string, lease time.Duration) error
 	FindExpiredJobs(ctx context.Context, at time.Time, limit int) ([]ExpiredSendJob, error)
 	FindRetryDue(ctx context.Context, at time.Time, limit int) ([]RetryDueIntent, error)
 	FinishJob(ctx context.Context, jobID int64, status JobStatus, errorCode *string, retryable bool, platformMessageID *string, at time.Time) error
