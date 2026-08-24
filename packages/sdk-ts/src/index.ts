@@ -95,6 +95,33 @@ export async function accountCapabilities(accessToken: string, accountId: string
   return data
 }
 
+export async function listFriends(accessToken: string, accountId: string, options?: { limit?: number; cursor?: string }) {
+  const { data, error } = await api.GET('/accounts/{accountId}/friends', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { accountId }, query: options },
+  })
+  if (error) throwApiError(error, 'friends failed')
+  return data
+}
+
+export async function updateFriend(accessToken: string, friendId: string, sparkEnabled: boolean) {
+  const { data, error } = await api.PATCH('/friends/{friendId}', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { friendId } },
+    body: { spark_enabled: sparkEnabled },
+  })
+  if (error) throwApiError(error, 'friend update failed')
+  return data
+}
+
+export async function listTasks(accessToken: string) {
+  const { data, error } = await api.GET('/tasks', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (error) throwApiError(error, 'tasks failed')
+  return data
+}
+
 export async function getJob(accessToken: string, jobId: string) {
   const { data, error } = await api.GET('/jobs/{jobId}', {
     headers: { Authorization: `Bearer ${accessToken}` },
