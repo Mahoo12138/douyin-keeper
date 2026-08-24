@@ -17,6 +17,7 @@ const nav = [
   { to: '/history', label: '发送记录' },
   { to: '/notifications', label: '通知' },
   { to: '/entitlement', label: '权益' },
+  { to: '/settings', label: '设置' },
 ] as const
 const navLinkClass = 'shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:px-3'
 
@@ -95,6 +96,9 @@ export function GlobalHeader() {
                 </Link>
               </>}
               <div className="my-1 h-px bg-border" />
+              <Link to="/settings" className="flex min-h-10 items-center gap-2 rounded-md px-3 text-sm hover:bg-accent">
+                设置
+              </Link>
               <button type="button" className="flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm text-destructive hover:bg-destructive/10" onClick={() => void signOut()}>
                 <LogOut className="size-4" />
                 退出登录

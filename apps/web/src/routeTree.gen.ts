@@ -22,6 +22,7 @@ import { Route as rootEntitlementRouteImport } from './routes/(root)/entitlement
 import { Route as rootFriendsRouteImport } from './routes/(root)/friends'
 import { Route as rootHistoryRouteImport } from './routes/(root)/history'
 import { Route as rootNotificationsRouteImport } from './routes/(root)/notifications'
+import { Route as rootSettingsRouteImport } from './routes/(root)/settings'
 import { Route as rootTasksRouteImport } from './routes/(root)/tasks'
 import { Route as rootTemplatesRouteImport } from './routes/(root)/templates'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
@@ -98,6 +99,11 @@ const rootHistoryRoute = rootHistoryRouteImport.update({
 const rootNotificationsRoute = rootNotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
+  getParentRoute: () => rootRouteRoute,
+} as any)
+const rootSettingsRoute = rootSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteRoute,
 } as any)
 const rootTasksRoute = rootTasksRouteImport.update({
@@ -184,6 +190,7 @@ export interface FileRoutesByFullPath {
   '/friends': typeof rootFriendsRoute
   '/history': typeof rootHistoryRoute
   '/notifications': typeof rootNotificationsRoute
+  '/settings': typeof rootSettingsRoute
   '/tasks': typeof rootTasksRoute
   '/templates': typeof rootTemplatesRoute
   '/admin/accounts': typeof AdminAccountsRoute
@@ -210,6 +217,7 @@ export interface FileRoutesByTo {
   '/friends': typeof rootFriendsRoute
   '/history': typeof rootHistoryRoute
   '/notifications': typeof rootNotificationsRoute
+  '/settings': typeof rootSettingsRoute
   '/tasks': typeof rootTasksRoute
   '/templates': typeof rootTemplatesRoute
   '/admin/accounts': typeof AdminAccountsRoute
@@ -240,6 +248,7 @@ export interface FileRoutesById {
   '/(root)/friends': typeof rootFriendsRoute
   '/(root)/history': typeof rootHistoryRoute
   '/(root)/notifications': typeof rootNotificationsRoute
+  '/(root)/settings': typeof rootSettingsRoute
   '/(root)/tasks': typeof rootTasksRoute
   '/(root)/templates': typeof rootTemplatesRoute
   '/admin/accounts': typeof AdminAccountsRoute
@@ -269,6 +278,7 @@ export interface FileRouteTypes {
     | '/friends'
     | '/history'
     | '/notifications'
+    | '/settings'
     | '/tasks'
     | '/templates'
     | '/admin/accounts'
@@ -295,6 +305,7 @@ export interface FileRouteTypes {
     | '/friends'
     | '/history'
     | '/notifications'
+    | '/settings'
     | '/tasks'
     | '/templates'
     | '/admin/accounts'
@@ -324,6 +335,7 @@ export interface FileRouteTypes {
     | '/(root)/friends'
     | '/(root)/history'
     | '/(root)/notifications'
+    | '/(root)/settings'
     | '/(root)/tasks'
     | '/(root)/templates'
     | '/admin/accounts'
@@ -438,6 +450,13 @@ declare module '@tanstack/react-router' {
       path: '/notifications'
       fullPath: '/notifications'
       preLoaderRoute: typeof rootNotificationsRouteImport
+      parentRoute: typeof rootRouteRoute
+    }
+    '/(root)/settings': {
+      id: '/(root)/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof rootSettingsRouteImport
       parentRoute: typeof rootRouteRoute
     }
     '/(root)/tasks': {
@@ -575,6 +594,7 @@ interface rootRouteRouteChildren {
   rootFriendsRoute: typeof rootFriendsRoute
   rootHistoryRoute: typeof rootHistoryRoute
   rootNotificationsRoute: typeof rootNotificationsRoute
+  rootSettingsRoute: typeof rootSettingsRoute
   rootTasksRoute: typeof rootTasksRoute
   rootTemplatesRoute: typeof rootTemplatesRoute
 }
@@ -587,6 +607,7 @@ const rootRouteRouteChildren: rootRouteRouteChildren = {
   rootFriendsRoute: rootFriendsRoute,
   rootHistoryRoute: rootHistoryRoute,
   rootNotificationsRoute: rootNotificationsRoute,
+  rootSettingsRoute: rootSettingsRoute,
   rootTasksRoute: rootTasksRoute,
   rootTemplatesRoute: rootTemplatesRoute,
 }

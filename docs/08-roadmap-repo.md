@@ -182,7 +182,7 @@ M2 当前实现还提供独立的会话列表 API 和 `/conversations` 页面：
 - 通知；
 - Capability UI。
 
-当前已完成 M6 的通知切片：新增 `notifications`、`notification_preferences`、`notification_deliveries` 持久化表、风险事件通知生成与去重、权益 7/3/1 天到期提醒、用户通知查询/单条已读/全部已读和微信通知偏好 API，以及统一 Web `/notifications` 页面；通知按账号所有者隔离，不返回 Session、Cookie 或风险详情。风险事件在同一事务写入微信 delivery 与 `notification.wechat.send` outbox，由 `worker-light` 负责微信订阅消息发送、状态记录和失败重试；权益到期提醒只写入站内通知，按 Grant 和阈值幂等，不进入微信投递链路。小程序“我的”页已提供订阅授权入口，真实模板配置和微信平台联调仍待完成。Sticker 已完成任务配置、契约和 browser worker 路由，真实平台发送仍等待 Sidecar 实现；SMS Binding 已完成端到端状态机和安全输入通道，真实抖音页面 selector 仍需 Sidecar 环境联调，Capability UI 已在账号页提供能力快照展示。Scheduler 现已增加登录态主动健康检查：按 30 分钟周期为绑定账号投递去重的 browser session-check Job，失效与安全验证沿用 Risk/站内通知闭环。
+当前已完成 M6 的通知切片：新增 `notifications`、`notification_preferences`、`notification_deliveries` 持久化表、风险事件通知生成与去重、权益 7/3/1 天到期提醒、用户通知查询/单条已读/全部已读和微信通知偏好 API，以及统一 Web `/notifications` 页面；普通用户 `/settings` 展示账号信息与通知偏好，Web 端不伪造微信订阅授权，仅支持关闭已开启的微信通知。通知按账号所有者隔离，不返回 Session、Cookie 或风险详情。风险事件在同一事务写入微信 delivery 与 `notification.wechat.send` outbox，由 `worker-light` 负责微信订阅消息发送、状态记录和失败重试；权益到期提醒只写入站内通知，按 Grant 和阈值幂等，不进入微信投递链路。小程序“我的”页已提供订阅授权入口，真实模板配置和微信平台联调仍待完成。Sticker 已完成任务配置、契约和 browser worker 路由，真实平台发送仍等待 Sidecar 实现；SMS Binding 已完成端到端状态机和安全输入通道，真实抖音页面 selector 仍需 Sidecar 环境联调，Capability UI 已在账号页提供能力快照展示。Scheduler 现已增加登录态主动健康检查：按 30 分钟周期为绑定账号投递去重的 browser session-check Job，失效与安全验证沿用 Risk/站内通知闭环。
 消息模板池已完成用户隔离存储、OpenAPI/SDK、CRUD 页面和任务编辑器套用；模板套用保存为任务快照，不产生隐式联动。
 
 账号 QR/SMS 绑定使用的统一 SSE 客户端现已支持断线续传：连接关闭或网络错误时自动重连，
