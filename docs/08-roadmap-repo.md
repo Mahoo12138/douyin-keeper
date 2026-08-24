@@ -208,6 +208,8 @@ outcome 未知时保持 fail-closed；真实 Protocol SDK 和平台 selector 仍
 也不会把协议任务误交给 Browser Sidecar。Creator 首聊已完成本地权益闸门：任务创建/编辑和
 发送 worker 最终执行都会校验 `creator_first_message`，并为 `message.send_first` 预留
 协议路由；真实平台首聊动作仍等待 Sidecar 契约与 selector 联调。
+Resolver 的 fallback 也会检查全局 Adapter health；Browser 被禁用或熔断时返回无 Adapter
+的不可用计划，首聊则继续保留 `protocol.im` 路由身份并 fail-closed。
 
 多 Worker 扩展已补齐 Browser Semaphore 首个闭环：`worker-browser` 使用 Redis
 `semaphore:browser` 共享全局容量，配置 `WORKER_BROWSER_CONCURRENCY` 与

@@ -141,6 +141,10 @@ Protocol 作为可选、实验性 Adapter。
 - 出现 SDK 不兼容时全局关闭该 Adapter，而不是让每个账号反复失败；
 - 支持 fallback 的错误才回落浏览器。
 
+路由器在选择候选能力和最终 fallback 时都会重新检查 Adapter health；Adapter 被禁用或
+熔断时不会把它作为可执行路由持久化。首聊没有安全的 Browser fallback，即使 Protocol
+暂时不可用也保留 `protocol.im` 路由身份并 fail-closed。
+
 如果继续复用远端前端 Bundle：
 
 - Bundle URL 不直接硬编码为“永远有效”；

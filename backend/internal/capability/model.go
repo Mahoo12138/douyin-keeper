@@ -102,35 +102,45 @@ func (r *Resolver) Resolve(ctx context.Context, accountID int64, req ResolveRequ
 	if err != nil {
 		return Route{}, err
 	}
-	if r == nil || r.snapshots == nil {
+	if r == nil {
 		return fallback, nil
 	}
-	snapshots, err := r.snapshots.ListByAccount(ctx, accountID)
-	if err != nil {
-		return Route{}, fmt.Errorf("capability resolver: list snapshots: %w", err)
-	}
-	byCapability := make(map[string]Capability, len(snapshots))
-	for _, snapshot := range snapshots {
-		byCapability[snapshot.Name] = snapshot
-	}
-	for _, candidate := range candidates {
-		if !r.isExecutable(candidate.adapter) {
-			continue
+	if r.snapshots != nil {
+		snapshots, err := r.snapshots.ListByAccount(ctx, accountID)
+		if err != nil {
+			return Route{}, fmt.Errorf("capability resolver: list snapshots: %w", err)
 		}
-		snapshot, ok := byCapability[candidate.capability]
-		if !ok || snapshot.Status != StatusAvailable || snapshot.Adapter == nil || *snapshot.Adapter != candidate.adapter {
-			continue
+		byCapability := make(map[string]Capability, len(snapshots))
+		for _, snapshot := range snapshots {
+			byCapability[snapshot.Name] = snapshot
 		}
-		if r.health != nil {
-			allowed, err := r.health.Allow(ctx, candidate.adapter)
-			if err != nil {
-				return Route{}, fmt.Errorf("capability resolver: adapter health %s: %w", candidate.adapter, err)
-			}
-			if !allowed {
+		for _, candidate := range candidates {
+			if !r.isExecutable(candidate.adapter) {
 				continue
 			}
+			snapshot, ok := byCapability[candidate.capability]
+			if !ok || snapshot.Status != StatusAvailable || snapshot.Adapter == nil || *snapshot.Adapter != candidate.adapter {
+				continue
+			}
+			if r.health != nil {
+				allowed, err := r.health.Allow(ctx, candidate.adapter)
+				if err != nil {
+					return Route{}, fmt.Errorf("capability resolver: adapter health %s: %w", candidate.adapter, err)
+				}
+				if !allowed {
+					continue
+				}
+			}
+			return Route{Adapter: candidate.adapter, Capability: candidate.capability, Available: true}, nil
 		}
-		return Route{Adapter: candidate.adapter, Capability: candidate.capability, Available: true}, nil
+	}
+
+	return r.resolveFallback(ctx, fallback, req)
+}
+
+func (r *Resolver) resolveFallback(ctx context.Context, fallback Route, req ResolveRequest) (Route, error) {
+	if fallback.Adapter == "" {
+		return fallback, nil
 	}
 	if !r.isExecutable(fallback.Adapter) {
 		// A first-message route has no safe browser fallback. Preserve the
@@ -142,6 +152,24 @@ func (r *Resolver) Resolve(ctx context.Context, accountID int64, req ResolveRequ
 		}
 		fallback.Adapter = ""
 		fallback.Reason = "no_executable_adapter"
+		return fallback, nil
+	}
+	if r.health != nil {
+		allowed, err := r.health.Allow(ctx, fallback.Adapter)
+		if err != nil {
+			return Route{}, fmt.Errorf("capability resolver: fallback adapter health %s: %w", fallback.Adapter, err)
+		}
+		if !allowed {
+			// Keep first-message work on the protocol lane even when the
+			// protocol is currently open/disabled; dispatch must fail closed
+			// instead of silently changing the operation to browser semantics.
+			if req.AllowFirstMessage && fallback.Adapter == AdapterProtocolIM {
+				fallback.Reason = "no_available_adapter"
+				return fallback, nil
+			}
+			fallback.Adapter = ""
+			fallback.Reason = "no_available_adapter"
+		}
 	}
 	return fallback, nil
 }

@@ -95,3 +95,47 @@ func TestCapabilityRepoUpsertAndLookup(t *testing.T) {
 		t.Fatalf("adapter circuit did not recover: health=%+v err=%v", health, err)
 	}
 }
+
+func TestDisabledAdapterCannotBecomeFallbackRoute(t *testing.T) {
+	ctx := context.Background()
+	actorID := newUser(t)
+	acct := &account.Account{
+		PublicID: uuid.New(), UserID: newUser(t), BindingStatus: account.BindingBound,
+		SessionStatus: account.SessionValid, RiskStatus: account.RiskNormal,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	if err := postgres.NewAccountRepo(pool).Create(ctx, acct); err != nil {
+		t.Fatal(err)
+	}
+
+	adapter := capability.AdapterBrowserConsumer
+	if err := postgres.NewCapabilityRepo(pool).Upsert(ctx, capability.Capability{
+		AccountID: acct.ID, Name: capability.NameMessageTextExisting,
+		Status: capability.StatusAvailable, Adapter: &adapter, CheckedAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	adminRepo := postgres.NewAdminRepo(pool, nil)
+	if _, err := adminRepo.SetAdapterEnabled(ctx, actorID, adapter, false); err != nil {
+		t.Fatalf("disable adapter: %v", err)
+	}
+	defer func() {
+		if _, err := adminRepo.SetAdapterEnabled(ctx, actorID, adapter, true); err != nil {
+			t.Errorf("restore adapter: %v", err)
+		}
+	}()
+
+	capabilityRepo := postgres.NewCapabilityRepo(pool)
+	health := capability.NewHealthService(capabilityRepo, capability.DefaultHealthPolicy())
+	resolver := capability.NewResolver(capabilityRepo, health, capability.AdapterBrowserConsumer)
+	route, err := resolver.Resolve(ctx, acct.ID, capability.ResolveRequest{
+		MessageKind: "text", HasConversation: true,
+	})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if route.Adapter != "" || route.Available || route.Reason != "no_available_adapter" {
+		t.Fatalf("disabled adapter fallback route = %+v", route)
+	}
+}

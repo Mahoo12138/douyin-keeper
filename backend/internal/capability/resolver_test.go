@@ -48,7 +48,7 @@ func TestResolverDoesNotRouteProtocolWhenWorkerIsNotRegistered(t *testing.T) {
 	protocol := AdapterProtocolIM
 	resolver := NewResolver(resolverSnapshotRepo{items: []Capability{{
 		Name: NameMessageTextExisting, Status: StatusAvailable, Adapter: &protocol,
-	}}}, resolverHealth{allowed: map[string]bool{protocol: true}}, AdapterBrowserConsumer)
+	}}}, resolverHealth{allowed: map[string]bool{protocol: true, AdapterBrowserConsumer: true}}, AdapterBrowserConsumer)
 	route, err := resolver.Resolve(context.Background(), 1, ResolveRequest{MessageKind: "text", HasConversation: true})
 	if err != nil || route.Adapter != AdapterBrowserConsumer || route.Available {
 		t.Fatalf("unregistered protocol route=%+v err=%v", route, err)
@@ -65,5 +65,35 @@ func TestResolverKeepsFirstMessageOnProtocolLaneWhenRuntimeIsUnavailable(t *test
 	}
 	if route.Adapter != AdapterProtocolIM || route.Available || route.Reason != "no_executable_adapter" {
 		t.Fatalf("first-message route = %+v, want protocol unavailable plan", route)
+	}
+}
+
+func TestResolverDoesNotReturnDisabledFallback(t *testing.T) {
+	resolver := NewResolver(nil, resolverHealth{allowed: map[string]bool{
+		AdapterBrowserConsumer: false,
+	}}, AdapterBrowserConsumer)
+	route, err := resolver.Resolve(context.Background(), 1, ResolveRequest{
+		MessageKind: "text", HasConversation: true,
+	})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if route.Adapter != "" || route.Available || route.Capability != NameMessageTextExisting || route.Reason != "no_available_adapter" {
+		t.Fatalf("disabled fallback route = %+v, want no executable adapter", route)
+	}
+}
+
+func TestResolverKeepsFirstMessageOnProtocolLaneWhenHealthIsBlocked(t *testing.T) {
+	resolver := NewResolver(nil, resolverHealth{allowed: map[string]bool{
+		AdapterProtocolIM: false,
+	}}, AdapterProtocolIM, AdapterBrowserConsumer)
+	route, err := resolver.Resolve(context.Background(), 1, ResolveRequest{
+		MessageKind: "text", AllowFirstMessage: true,
+	})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if route.Adapter != AdapterProtocolIM || route.Available || route.Reason != "no_available_adapter" {
+		t.Fatalf("blocked first-message route = %+v, want protocol fail-closed plan", route)
 	}
 }
