@@ -57,6 +57,14 @@ func (r *AccountRepo) ListOwned(ctx context.Context, userID int64) ([]*account.A
 }
 
 func (r *AccountRepo) ListOwnedSummary(ctx context.Context, userID int64) ([]*account.Summary, error) {
+	return r.listOwnedSummary(ctx, userID, 100, 0)
+}
+
+func (r *AccountRepo) ListOwnedSummaryPage(ctx context.Context, userID int64, filter account.SummaryListFilter) ([]*account.Summary, error) {
+	return r.listOwnedSummary(ctx, userID, filter.Limit+1, filter.AfterID)
+}
+
+func (r *AccountRepo) listOwnedSummary(ctx context.Context, userID int64, limit int, afterID int64) ([]*account.Summary, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		WITH site_day AS (
 			SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai')::date AS local_date
@@ -79,12 +87,14 @@ func (r *AccountRepo) ListOwnedSummary(ctx context.Context, userID int64) ([]*ac
 		FROM douyin_accounts a
 		JOIN users u ON u.id = a.user_id
 		WHERE a.user_id=$1 AND a.deleted_at IS NULL
-		ORDER BY a.id DESC`, userID)
+		  AND ($2::bigint = 0 OR a.id < $2)
+		ORDER BY a.id DESC
+		LIMIT $3`, userID, afterID, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := make([]*account.Summary, 0)
+	out := make([]*account.Summary, 0, limit)
 	for rows.Next() {
 		var item account.Summary
 		if err := rows.Scan(
@@ -305,3 +315,6 @@ func (r *AccountRepo) CountQuotaOccupied(ctx context.Context, userID int64) (int
 func (r *AccountRepo) CountAccountsOccupied(ctx context.Context, userID int64) (int, error) {
 	return r.CountQuotaOccupied(ctx, userID)
 }
+
+var _ account.SummaryRepository = (*AccountRepo)(nil)
+var _ account.SummaryPageRepository = (*AccountRepo)(nil)

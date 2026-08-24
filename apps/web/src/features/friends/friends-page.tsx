@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Link } from '@tanstack/react-router'
-import { listAccounts, listFriends, listTasks, syncAccountFriends, updateFriend, updateTask } from '@douyin-keeper/sdk-ts'
+import { listFriends, listTasks, syncAccountFriends, updateFriend, updateTask } from '@douyin-keeper/sdk-ts'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton } from '@douyin-keeper/ui-web'
 import { Filter, RefreshCw, Search, Settings2, Sparkles, X } from 'lucide-react'
 
@@ -12,6 +12,7 @@ import { filterFriends } from './friend-filters'
 import type { Friend, SparkFilter, TaskFilter } from './friend-types'
 import { FriendTable } from './friend-table'
 import { isValidBulkWindow, normalizeTimeInput, selectAllResolvedFriends, tasksForSelectedFriends, toggleSelectedFriend } from './friend-bulk-utils'
+import { useAccountsQuery } from '../accounts/use-accounts-query'
 
 export function FriendsPage() {
   const token = getToken()
@@ -26,13 +27,9 @@ export function FriendsPage() {
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkWindowOpen, setBulkWindowOpen] = useState(false)
 
-  const accountsQ = useQuery({
-    queryKey: ['accounts'],
-    queryFn: () => listAccounts(token as string),
-    enabled: !!token,
-  })
-  const accountId = selectedAccountId ?? accountsQ.data?.items[0]?.id
-  const selectedAccount = accountsQ.data?.items.find((account) => account.id === accountId)
+  const accountsQ = useAccountsQuery(token, { loadAll: true })
+  const accountId = selectedAccountId ?? accountsQ.accounts[0]?.id
+  const selectedAccount = accountsQ.accounts.find((account) => account.id === accountId)
   const friendsQ = useInfiniteQuery({
     queryKey: ['friends', accountId],
     queryFn: ({ pageParam }) => listFriends(token as string, accountId as string, { limit: 50, cursor: pageParam }),
@@ -151,7 +148,7 @@ export function FriendsPage() {
     return <div className="space-y-6"><Skeleton className="h-20 w-full" /><Skeleton className="h-72 w-full" /></div>
   }
 
-  if (!accountsQ.data?.items.length) {
+  if (!accountsQ.accounts.length) {
     return (
       <Card>
         <CardHeader>
@@ -201,7 +198,7 @@ export function FriendsPage() {
               <Label htmlFor="friend-search">搜索好友</Label>
               <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="friend-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="昵称、备注或抖音号" className="pl-9" /></div>
             </div>
-            <FilterSelect label="账号" value={accountId ?? ''} onChange={selectAccount} options={accountsQ.data.items.map((account) => ({ value: account.id, label: account.nickname || '未命名账号' }))} />
+            <FilterSelect label="账号" value={accountId ?? ''} onChange={selectAccount} options={accountsQ.accounts.map((account) => ({ value: account.id, label: account.nickname || '未命名账号' }))} />
             <FilterSelect label="火花状态" value={sparkFilter} onChange={(value) => setSparkFilter(value as SparkFilter)} options={[{ value: 'all', label: '全部' }, { value: 'enabled', label: '已开启' }, { value: 'disabled', label: '未开启' }]} />
             <FilterSelect label="任务状态" value={taskFilter} onChange={(value) => setTaskFilter(value as TaskFilter)} options={[{ value: 'all', label: '全部' }, { value: 'enabled', label: '任务已启用' }, { value: 'disabled', label: '任务已停用' }, { value: 'none', label: '未配置任务' }]} />
           </div>

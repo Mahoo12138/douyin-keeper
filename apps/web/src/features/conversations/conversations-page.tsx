@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { listAccounts, listConversations, setConversationArchived, type components } from '@douyin-keeper/sdk-ts'
+import { listConversations, setConversationArchived, type components } from '@douyin-keeper/sdk-ts'
 import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@douyin-keeper/ui-web'
 import { Archive, ArchiveRestore, Filter, MessageCircle, Search, Smartphone } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { getToken } from '@/auth/session'
+import { useAccountsQuery } from '../accounts/use-accounts-query'
 
 type Conversation = components['schemas']['Conversation']
 type Channel = Conversation['channel'] | 'all'
@@ -20,13 +21,9 @@ export function ConversationsPage() {
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('active')
   const queryClient = useQueryClient()
 
-  const accountsQ = useQuery({
-    queryKey: ['accounts'],
-    queryFn: () => listAccounts(token as string),
-    enabled: !!token,
-  })
-  const accountId = selectedAccountId ?? accountsQ.data?.items[0]?.id
-  const selectedAccount = accountsQ.data?.items.find((account) => account.id === accountId)
+  const accountsQ = useAccountsQuery(token, { loadAll: true })
+  const accountId = selectedAccountId ?? accountsQ.accounts[0]?.id
+  const selectedAccount = accountsQ.accounts.find((account) => account.id === accountId)
   const conversationsQ = useInfiniteQuery({
     queryKey: ['conversations', accountId],
     queryFn: ({ pageParam }) => listConversations(token as string, accountId as string, { limit: 50, cursor: pageParam, include_archived: true }),
@@ -61,7 +58,7 @@ export function ConversationsPage() {
 
   if (accountsQ.isLoading) return <ConversationsLoading />
 
-  if (!accountsQ.data?.items.length) {
+  if (!accountsQ.accounts.length) {
     return (
       <Card>
         <CardHeader>
@@ -98,7 +95,7 @@ export function ConversationsPage() {
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_minmax(160px,220px)_minmax(180px,1fr)_minmax(160px,200px)]">
             <div className="space-y-1.5"><Label htmlFor="conversation-search">搜索对端</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="conversation-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="昵称或显示名" className="pl-9" /></div></div>
-            <ConversationSelect label="账号" value={accountId ?? ''} onChange={setSelectedAccountId} options={accountsQ.data.items.map((account) => ({ value: account.id, label: account.nickname || '未命名账号' }))} />
+            <ConversationSelect label="账号" value={accountId ?? ''} onChange={setSelectedAccountId} options={accountsQ.accounts.map((account) => ({ value: account.id, label: account.nickname || '未命名账号' }))} />
             <ConversationSelect label="通道" value={channel} onChange={(value) => setChannel(value as Channel)} options={[{ value: 'all', label: '全部通道' }, { value: 'consumer', label: '消费端' }, { value: 'creator', label: '创作者' }]} />
             <ConversationSelect label="归档" value={archiveFilter} onChange={(value) => setArchiveFilter(value as ArchiveFilter)} options={[{ value: 'active', label: '未归档' }, { value: 'archived', label: '已归档' }, { value: 'all', label: '全部会话' }]} />
           </div>

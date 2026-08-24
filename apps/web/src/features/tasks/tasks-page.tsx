@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { createTask, deleteTask, listAccounts, listFriends, listMessageTemplates, listTasks, myEntitlement, runTaskNow, updateTask } from '@douyin-keeper/sdk-ts'
+import { createTask, deleteTask, listFriends, listMessageTemplates, listTasks, myEntitlement, runTaskNow, updateTask } from '@douyin-keeper/sdk-ts'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton } from '@douyin-keeper/ui-web'
 import { Filter, Plus, Search } from 'lucide-react'
 
@@ -10,6 +10,7 @@ import { getToken } from '@/auth/session'
 import { TaskEditorDrawer } from './task-editor-drawer'
 import { TaskTable } from './task-table'
 import type { Account, Friend, MessageTemplate, Task, TaskDraft } from './task-types'
+import { useAccountsQuery } from '../accounts/use-accounts-query'
 
 export function TasksPage() {
   const token = getToken()
@@ -20,8 +21,8 @@ export function TasksPage() {
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null)
   const [editor, setEditor] = useState<{ draft: TaskDraft; mode: 'create' | 'edit' } | null>(null)
 
-  const accountsQ = useQuery({ queryKey: ['accounts'], queryFn: () => listAccounts(token as string), enabled: !!token })
-  const accounts = accountsQ.data?.items ?? []
+  const accountsQ = useAccountsQuery(token, { loadAll: true })
+  const accounts = accountsQ.accounts
   const tasksQ = useInfiniteQuery({
     queryKey: ['tasks'],
     queryFn: ({ pageParam }) => listTasks(token as string, { limit: 50, cursor: pageParam }),

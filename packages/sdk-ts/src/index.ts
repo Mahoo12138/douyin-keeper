@@ -283,9 +283,10 @@ export async function listMyEntitlementGrants(accessToken: string) {
   return data
 }
 
-export async function listAccounts(accessToken: string) {
+export async function listAccounts(accessToken: string, options?: { limit?: number; cursor?: string }) {
   const { data } = await api.GET('/accounts', {
     headers: { Authorization: `Bearer ${accessToken}` },
+    params: { query: options },
   })
   if (!data) throw new ApiError('NOT_FOUND', 'accounts failed')
   return data

@@ -6,11 +6,12 @@ import {
 	Avatar, AvatarFallback, AvatarImage, Badge, Button, Card, CardContent, CardDescription,
 	CardHeader, CardTitle, Skeleton,
 } from '@douyin-keeper/ui-web'
-import { listAccounts, listNotifications, listSendIntents, listTasks, me, myEntitlement } from '@douyin-keeper/sdk-ts'
+import { listNotifications, listSendIntents, listTasks, me, myEntitlement } from '@douyin-keeper/sdk-ts'
 
 import { getToken } from '@/auth/session'
 import { bindingLabel, formatDate, riskLabel, sessionLabel, StatusBadge } from '@/features/accounts/account-status'
 import { countIntentsByAccount, countTasksByAccount, summarizeAccounts, summarizeIntents, todayRange, type Account } from '@/features/dashboard/dashboard-utils'
+import { useAccountsQuery } from '@/features/accounts/use-accounts-query'
 
 export const Route = createFileRoute('/(root)/dashboard')({ component: DashboardPage })
 
@@ -19,7 +20,7 @@ function DashboardPage() {
 	const range = todayRange()
 	const meQ = useQuery({ queryKey: ['me', token], queryFn: () => me(token as string), enabled: !!token, staleTime: 60_000 })
 	const entQ = useQuery({ queryKey: ['entitlement'], queryFn: () => myEntitlement(token as string), enabled: !!token })
-	const accountsQ = useQuery({ queryKey: ['accounts'], queryFn: () => listAccounts(token as string), enabled: !!token })
+	const accountsQ = useAccountsQuery(token, { loadAll: true })
 	const tasksQ = useQuery({ queryKey: ['tasks'], queryFn: () => listTasks(token as string), enabled: !!token })
 	const intentsQ = useQuery({
 		queryKey: ['send-intents', 'dashboard', range.day],
@@ -28,7 +29,7 @@ function DashboardPage() {
 	})
 	const notificationsQ = useQuery({ queryKey: ['notifications'], queryFn: () => listNotifications(token as string, { limit: 5 }), enabled: !!token })
 
-	const accounts = accountsQ.data?.items ?? []
+	const accounts = accountsQ.accounts
 	const tasks = tasksQ.data?.items ?? []
 	const intents = intentsQ.data?.items ?? []
 	const notifications = notificationsQ.data?.items ?? []

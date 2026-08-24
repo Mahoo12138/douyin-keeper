@@ -1,13 +1,16 @@
 package httpapi
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
 
+	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
 )
@@ -21,16 +24,52 @@ var smsPhonePattern = regexp.MustCompile(`^\+?[0-9][0-9 ()-]{3,30}$`)
 
 func (s *Server) handleListAccounts(w http.ResponseWriter, r *http.Request) {
 	p := auth.MustPrincipal(r.Context())
-	accounts, err := s.accounts.ListOwnedSummary(r.Context(), p.UserID)
+	filter, err := accountSummaryFilter(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	items := make([]AccountView, 0, len(accounts))
-	for _, a := range accounts {
+	page, err := s.accounts.ListOwnedSummaryPage(r.Context(), p.UserID, filter)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	items := make([]AccountView, 0, len(page.Items))
+	for _, a := range page.Items {
 		items = append(items, accountSummaryView(a))
 	}
-	writeOK(w, map[string]any{"items": items, "next_cursor": nil})
+	var nextCursor any
+	if page.NextAfterID > 0 {
+		nextCursor = encodeAccountCursor(page.NextAfterID)
+	}
+	writeOK(w, map[string]any{"items": items, "next_cursor": nextCursor})
+}
+
+func accountSummaryFilter(r *http.Request) (account.SummaryListFilter, error) {
+	filter := account.SummaryListFilter{}
+	if value := r.URL.Query().Get("limit"); value != "" {
+		limit, err := strconv.Atoi(value)
+		if err != nil || limit < 1 || limit > 100 {
+			return filter, apperr.Validation(apperr.CodeConflict, "invalid limit")
+		}
+		filter.Limit = limit
+	}
+	if value := r.URL.Query().Get("cursor"); value != "" {
+		decoded, err := base64.RawURLEncoding.DecodeString(value)
+		if err != nil {
+			return filter, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+		}
+		id, err := strconv.ParseInt(string(decoded), 10, 64)
+		if err != nil || id < 1 {
+			return filter, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+		}
+		filter.AfterID = id
+	}
+	return filter, nil
+}
+
+func encodeAccountCursor(id int64) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(id, 10)))
 }
 
 func (s *Server) handleCreateBinding(w http.ResponseWriter, r *http.Request) {

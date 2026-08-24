@@ -546,6 +546,18 @@ paths:
   /accounts:
     get:
       operationId: listAccounts
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      - name: cursor
+        in: query
+        schema:
+          type: string
       responses:
         '200':
           description: Accounts

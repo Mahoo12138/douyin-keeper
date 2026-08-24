@@ -3,7 +3,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { ArrowLeft, CheckCircle2, Clock3, History, ListChecks, RefreshCw, Send, ShieldCheck, Smartphone, UsersRound } from 'lucide-react'
-import { accountCapabilities, checkAccountSession, listAccounts, listFriends, listSendIntents, listTasks, syncAccountFriends, updateFriend, type components } from '@douyin-keeper/sdk-ts'
+import { accountCapabilities, checkAccountSession, listFriends, listSendIntents, listTasks, syncAccountFriends, updateFriend, type components } from '@douyin-keeper/sdk-ts'
 import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton } from '@douyin-keeper/ui-web'
 
 import { getToken } from '@/auth/session'
@@ -11,6 +11,7 @@ import { waitForJobEvents } from '@/lib/job-progress'
 import { CapabilityPanel } from '@/features/accounts/capability-panel'
 import { bindingLabel, formatDate, riskLabel, sessionLabel, StatusBadge } from '@/features/accounts/account-status'
 import { type Account, type Capability } from '@/features/accounts/account-types'
+import { useAccountsQuery } from '@/features/accounts/use-accounts-query'
 import { friendsById, summarizeAccountIntents, tasksForAccount } from '@/features/accounts/account-detail-utils'
 import { FriendTable } from '@/features/friends/friend-table'
 import type { Friend, SparkTask } from '@/features/friends/friend-types'
@@ -29,13 +30,13 @@ function AccountDetailPage() {
 	const [busyAction, setBusyAction] = useState<'session' | 'friends' | null>(null)
 	const [pendingFriendId, setPendingFriendId] = useState<string | null>(null)
 	const [selectedIntent, setSelectedIntent] = useState<Intent | null>(null)
-	const accountsQ = useQuery({ queryKey: ['accounts'], queryFn: () => listAccounts(token as string), enabled: !!token })
+	const accountsQ = useAccountsQuery(token, { loadAll: true })
 	const friendsQ = useInfiniteQuery({ queryKey: ['account-friends', accountId], queryFn: ({ pageParam }) => listFriends(token as string, accountId, { limit: 50, cursor: pageParam }), initialPageParam: undefined as string | undefined, getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined, enabled: !!token })
 	const tasksQ = useQuery({ queryKey: ['tasks'], queryFn: () => listTasks(token as string), enabled: !!token })
 	const intentsQ = useQuery({ queryKey: ['send-intents', 'account', accountId], queryFn: () => listSendIntents(token as string, { account_id: accountId }), enabled: !!token })
 	const capabilitiesQ = useQuery({ queryKey: ['account-capabilities', accountId], queryFn: () => accountCapabilities(token as string, accountId), enabled: !!token })
 
-	const account = accountsQ.data?.items.find((item) => item.id === accountId)
+	const account = accountsQ.accounts.find((item) => item.id === accountId)
 	const friends = friendsQ.data?.pages.flatMap((page) => page.items) ?? []
 	const tasks = tasksForAccount(tasksQ.data?.items ?? [], accountId)
 	const intents = intentsQ.data?.items ?? []

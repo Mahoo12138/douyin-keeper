@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { CalendarDays, ChevronRight, Filter, Search, X } from 'lucide-react'
-import { listAccounts, listSendIntents, type components } from '@douyin-keeper/sdk-ts'
+import { listSendIntents, type components } from '@douyin-keeper/sdk-ts'
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@douyin-keeper/ui-web'
 
 import { getToken } from '@/auth/session'
 import { HistoryDetailDrawer } from './history-detail-drawer'
+import { useAccountsQuery } from '../accounts/use-accounts-query'
 
 type HistoryItem = components['schemas']['SendIntent']
 type HistoryStatus = HistoryItem['status']
@@ -43,11 +44,7 @@ export function HistoryPage() {
   const [selected, setSelected] = useState<HistoryItem | null>(null)
   const invalidDateRange = !!fromDate && !!toDate && fromDate > toDate
 
-  const accountsQ = useQuery({
-    queryKey: ['accounts'],
-    queryFn: () => listAccounts(token as string),
-    enabled: !!token,
-  })
+  const accountsQ = useAccountsQuery(token, { loadAll: true })
   const filters = useMemo(() => ({
     account_id: accountFilter === 'all' ? undefined : accountFilter,
     friend_id: friendFilter === 'all' ? undefined : friendFilter,
@@ -121,7 +118,7 @@ export function HistoryPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <HistoryFilters search={search} onSearch={setSearch} account={accountFilter} onAccount={setAccountFilter} friend={friendFilter} onFriend={setFriendFilter} status={statusFilter} onStatus={setStatusFilter} fromDate={fromDate} onFromDate={setFromDate} toDate={toDate} onToDate={setToDate} accounts={accountsQ.data?.items ?? []} friends={friendOptions} />
+          <HistoryFilters search={search} onSearch={setSearch} account={accountFilter} onAccount={setAccountFilter} friend={friendFilter} onFriend={setFriendFilter} status={statusFilter} onStatus={setStatusFilter} fromDate={fromDate} onFromDate={setFromDate} toDate={toDate} onToDate={setToDate} accounts={accountsQ.accounts} friends={friendOptions} />
           {invalidDateRange ? (
             <div className="rounded-lg border border-amber-300 bg-amber-50/60 px-4 py-10 text-center dark:border-amber-900 dark:bg-amber-950/20"><p className="font-medium">日期范围无效</p><p className="mt-1 text-sm text-muted-foreground">结束日期需要晚于或等于开始日期。</p></div>
           ) : historyQ.isError ? (

@@ -259,6 +259,9 @@ ENTITLEMENT_PLAN_CONFLICT
 
 ### `GET /accounts`
 
+默认返回 50 条、最多 100 条，按账号内部 ID 降序排列；通过 `cursor` 继续读取后续账号。
+账号归属和运营摘要与原列表保持一致。
+
 Account summary：
 
 ```json

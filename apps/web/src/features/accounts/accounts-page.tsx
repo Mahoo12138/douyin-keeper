@@ -5,7 +5,6 @@ import {
   accountCapabilities,
   checkAccountSession,
   deleteAccount,
-  listAccounts,
   pauseAccount,
   resumeAccount,
   syncAccountFriends,
@@ -18,6 +17,7 @@ import { AccountBindingFlow } from './account-binding-flow'
 import { AccountList, EmptyAccounts } from './account-list'
 import type { Account } from './account-types'
 import { CapabilityPanel } from './capability-panel'
+import { useAccountsQuery } from './use-accounts-query'
 
 export function AccountsPage() {
   const token = getToken()
@@ -25,12 +25,8 @@ export function AccountsPage() {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null)
 
-  const accountsQ = useQuery({
-    queryKey: ['accounts'],
-    queryFn: () => listAccounts(token as string),
-    enabled: !!token,
-  })
-  const selectedAccount = accountsQ.data?.items.find((account) => account.id === selectedAccountId)
+  const accountsQ = useAccountsQuery(token)
+  const selectedAccount = accountsQ.accounts.find((account) => account.id === selectedAccountId)
   const capabilitiesQ = useQuery({
     queryKey: ['account-capabilities', selectedAccountId],
     queryFn: () => accountCapabilities(token as string, selectedAccountId as string),
@@ -80,7 +76,7 @@ export function AccountsPage() {
     }
   }
 
-  const accounts = accountsQ.data?.items ?? []
+  const accounts = accountsQ.accounts
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -103,16 +99,19 @@ export function AccountsPage() {
           ) : accounts.length === 0 ? (
             <EmptyAccounts />
           ) : (
-            <AccountList
-              accounts={accounts}
-              selectedAccountId={selectedAccountId}
-              busyAction={busyAction}
-              onSelect={(accountId) => setSelectedAccountId((current) => current === accountId ? null : accountId)}
-              onSession={(account) => void runAccountAction(account, 'session')}
-              onFriends={(account) => void runAccountAction(account, 'friends')}
-              onPause={(account) => void runAccountAction(account, account.paused_at ? 'resume' : 'pause')}
-              onRelease={(account) => void releaseAccount(account)}
-            />
+            <>
+              <AccountList
+                accounts={accounts}
+                selectedAccountId={selectedAccountId}
+                busyAction={busyAction}
+                onSelect={(accountId) => setSelectedAccountId((current) => current === accountId ? null : accountId)}
+                onSession={(account) => void runAccountAction(account, 'session')}
+                onFriends={(account) => void runAccountAction(account, 'friends')}
+                onPause={(account) => void runAccountAction(account, account.paused_at ? 'resume' : 'pause')}
+                onRelease={(account) => void releaseAccount(account)}
+              />
+              {accountsQ.hasNextPage && <div className="mt-4 flex justify-center"><Button variant="outline" onClick={() => void accountsQ.fetchNextPage()} disabled={accountsQ.isFetchingNextPage}>{accountsQ.isFetchingNextPage ? '加载中…' : '加载更多账号'}</Button></div>}
+            </>
           )}
         </CardContent>
       </Card>

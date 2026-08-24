@@ -14,6 +14,17 @@ type releaseRepo struct {
 	status      BindingStatus
 }
 
+type summaryPageRepo struct {
+	*releaseRepo
+	items  []*Summary
+	filter SummaryListFilter
+}
+
+func (r *summaryPageRepo) ListOwnedSummaryPage(_ context.Context, _ int64, filter SummaryListFilter) ([]*Summary, error) {
+	r.filter = filter
+	return r.items, nil
+}
+
 func (r *releaseRepo) ListOwned(_ context.Context, _ int64) ([]*Account, error) {
 	if r.account == nil {
 		return nil, nil
@@ -78,5 +89,23 @@ func TestListOwnedSummaryFallsBackForLeanRepositories(t *testing.T) {
 	}
 	if summaries[0].FriendCount != 0 || summaries[0].EnabledTaskCount != 0 || summaries[0].TodaySendSucceeded != 0 || summaries[0].TodaySendFailed != 0 {
 		t.Fatalf("fallback counters = %+v", summaries[0])
+	}
+}
+
+func TestListOwnedSummaryPageNormalizesAndTrimsCursor(t *testing.T) {
+	repo := &summaryPageRepo{
+		releaseRepo: &releaseRepo{},
+		items:       []*Summary{{Account: Account{ID: 3}}, {Account: Account{ID: 2}}, {Account: Account{ID: 1}}},
+	}
+	service := NewService(repo, inlineReleaseTx{}, nil, nil, nil, nil)
+	page, err := service.ListOwnedSummaryPage(context.Background(), 7, SummaryListFilter{Limit: 2, AfterID: 9})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].Account.ID != 3 || page.Items[1].Account.ID != 2 || page.NextAfterID != 2 {
+		t.Fatalf("page = %+v", page)
+	}
+	if repo.filter.Limit != 2 || repo.filter.AfterID != 9 {
+		t.Fatalf("filter = %+v", repo.filter)
 	}
 }

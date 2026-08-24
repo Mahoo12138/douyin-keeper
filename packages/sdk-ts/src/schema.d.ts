@@ -2287,7 +2287,10 @@ export interface operations {
     };
     listAccounts: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;

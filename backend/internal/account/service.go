@@ -71,6 +71,61 @@ func (s *Service) ListOwnedSummary(ctx context.Context, userID int64) ([]*Summar
 	return summaries, nil
 }
 
+func (s *Service) ListOwnedSummaryPage(ctx context.Context, userID int64, filter SummaryListFilter) (SummaryListPage, error) {
+	filter = normalizeSummaryListFilter(filter)
+	if repo, ok := s.repo.(SummaryPageRepository); ok {
+		items, err := repo.ListOwnedSummaryPage(ctx, userID, filter)
+		if err != nil {
+			return SummaryListPage{}, err
+		}
+		return trimSummaryListPage(items, filter.Limit), nil
+	}
+	items, err := s.ListOwnedSummary(ctx, userID)
+	if err != nil {
+		return SummaryListPage{}, err
+	}
+	if filter.AfterID > 0 {
+		start := len(items)
+		for index, item := range items {
+			if item != nil && item.Account.ID < filter.AfterID {
+				start = index
+				break
+			}
+		}
+		if start < len(items) {
+			items = items[start:]
+		} else {
+			items = nil
+		}
+	}
+	return trimSummaryListPage(items, filter.Limit), nil
+}
+
+func normalizeSummaryListFilter(filter SummaryListFilter) SummaryListFilter {
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.AfterID < 0 {
+		filter.AfterID = 0
+	}
+	return filter
+}
+
+func trimSummaryListPage(items []*Summary, limit int) SummaryListPage {
+	page := SummaryListPage{Items: items}
+	if len(items) <= limit {
+		return page
+	}
+	page.Items = items[:limit]
+	if last := page.Items[len(page.Items)-1]; last != nil && last.Account.ID > 0 {
+		page.NextAfterID = last.Account.ID
+	}
+	return page
+}
+
 func (s *Service) GetOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*Account, error) {
 	return s.repo.GetOwned(ctx, userID, publicID)
 }

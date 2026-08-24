@@ -32,6 +32,22 @@ type SummaryRepository interface {
 	ListOwnedSummary(ctx context.Context, userID int64) ([]*Summary, error)
 }
 
+type SummaryListFilter struct {
+	Limit   int
+	AfterID int64
+}
+
+type SummaryListPage struct {
+	Items       []*Summary
+	NextAfterID int64
+}
+
+// SummaryPageRepository is the API-facing cursor projection. The legacy
+// summary method remains available for internal callers needing a snapshot.
+type SummaryPageRepository interface {
+	ListOwnedSummaryPage(ctx context.Context, userID int64, filter SummaryListFilter) ([]*Summary, error)
+}
+
 // SessionCheckTarget is a bound account that needs a periodic login-state
 // validation. Scheduler reads this projection so it does not depend on the
 // user-facing account list query.
