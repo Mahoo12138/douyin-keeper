@@ -506,9 +506,9 @@ Go worker 会 fail-closed。
 尚未部署时返回 `ADAPTER_UNAVAILABLE`，并在 `error.detail` 标明
 `{"operation":"message.send_sticker","reason":"selector_not_configured"}`，不得返回
 成功 envelope。`packages/contracts/sidecar/v1.schema.json` 同时为
-`conversations.list`、`conversations.archive`、`message.send_text`、`message.send_sticker`
-和 `message.send_first` 提供 operation-specific input 定义，`contracts:check` 会覆盖合法
-请求及未知嵌套字段。
+`conversations.list`、`conversations.archive`、`message.send_text`、`message.send_sticker`、
+`message.send_first`、QR/SMS 登录、`session.validate` 和 `friends.list` 提供 operation-specific
+input 定义，`contracts:check` 会覆盖合法请求及未知嵌套字段。
 
 ## 10.2 Send First Message（V1.2）
 

@@ -32,6 +32,30 @@
       },
       "allOf": [
         {
+          "if": {"properties": {"op": {"const": "login.qr.start"}}},
+          "then": {"properties": {"input": {"$ref": "#/$defs/loginQRStartInput"}}}
+        },
+        {
+          "if": {"properties": {"op": {"const": "login.qr.poll"}}},
+          "then": {"properties": {"input": {"$ref": "#/$defs/loginQRPollInput"}}}
+        },
+        {
+          "if": {"properties": {"op": {"const": "login.sms.start"}}},
+          "then": {"properties": {"input": {"$ref": "#/$defs/loginSMSStartInput"}}}
+        },
+        {
+          "if": {"properties": {"op": {"const": "login.sms.verify"}}},
+          "then": {"properties": {"input": {"$ref": "#/$defs/loginSMSVerifyInput"}}}
+        },
+        {
+          "if": {"properties": {"op": {"const": "session.validate"}}},
+          "then": {"properties": {"input": {"$ref": "#/$defs/sessionValidateInput"}}}
+        },
+        {
+          "if": {"properties": {"op": {"const": "friends.list"}}},
+          "then": {"properties": {"input": {"$ref": "#/$defs/friendsListInput"}}}
+        },
+        {
           "if": {"properties": {"op": {"const": "conversations.list"}}},
           "then": {"properties": {"input": {"$ref": "#/$defs/conversationsListInput"}}}
         },
@@ -60,6 +84,68 @@
       "properties": {
         "kind": {"const": "playwright_storage_state_file"},
         "path": {"type": "string", "minLength": 1}
+      }
+    },
+    "absolutePath": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 4096,
+      "pattern": "^/",
+      "not": {"enum": ["/", "/tmp", "/run"]}
+    },
+    "loginQRStartInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_dir"],
+      "properties": {
+        "profile_dir": {"$ref": "#/$defs/absolutePath"},
+        "locale": {"type": "string", "minLength": 1, "maxLength": 32, "default": "zh-CN"}
+      }
+    },
+    "loginQRPollInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["login_handle"],
+      "properties": {
+        "login_handle": {"type": "string", "minLength": 1, "maxLength": 128},
+        "export_session_file": {"$ref": "#/$defs/absolutePath"}
+      }
+    },
+    "loginSMSStartInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_dir", "phone"],
+      "properties": {
+        "profile_dir": {"$ref": "#/$defs/absolutePath"},
+        "phone": {"type": "string", "minLength": 5, "maxLength": 32},
+        "locale": {"type": "string", "minLength": 1, "maxLength": 32, "default": "zh-CN"}
+      }
+    },
+    "loginSMSVerifyInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["login_handle", "code"],
+      "properties": {
+        "login_handle": {"type": "string", "minLength": 1, "maxLength": 128},
+        "code": {"type": "string", "pattern": "^[0-9]{4,8}$"},
+        "export_session_file": {"$ref": "#/$defs/absolutePath"}
+      }
+    },
+    "sessionValidateInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session"],
+      "properties": {
+        "session": {"$ref": "#/$defs/sessionRef"},
+        "validation_level": {"const": "basic", "default": "basic"}
+      }
+    },
+    "friendsListInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session"],
+      "properties": {
+        "session": {"$ref": "#/$defs/sessionRef"}
       }
     },
     "existingConversationTarget": {

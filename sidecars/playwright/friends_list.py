@@ -104,6 +104,8 @@ def _extract(page):
 def list_friends(input_data):
     if not isinstance(input_data, dict):
         raise _error(protocol.ERR_INVALID_REQUEST, "input must be an object")
+    if set(input_data) - {"session"}:
+        raise _error(protocol.ERR_INVALID_REQUEST, "input contains unknown fields")
     state_path = protocol._session_file(input_data)
     with browser.launch(state_in=state_path) as (_pw, _browser, context, page):
         page.goto(CHAT_URL, wait_until="domcontentloaded", timeout=60_000)

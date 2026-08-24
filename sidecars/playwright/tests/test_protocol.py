@@ -378,6 +378,34 @@ def test_qr_start_rejects_relative_profile_dir():
         assert exc.code == protocol.ERR_INVALID_REQUEST
 
 
+def test_interactive_and_probe_operations_reject_unknown_fields():
+    import friends_list
+    import qr_login
+    import sms_login
+
+    cases = (
+        (qr_login.start, {"profile_dir": "/tmp/keeper-login", "unexpected": True}),
+        (qr_login.poll, {"login_handle": "qr_missing", "unexpected": True}),
+        (sms_login.start, {"profile_dir": "/tmp/keeper-login", "phone": "13800138000", "unexpected": True}),
+        (sms_login.verify, {"login_handle": "sms_missing", "code": "123456", "unexpected": True}),
+        (friends_list.list_friends, {"session": {"kind": "playwright_storage_state_file", "path": "/missing/session.json"}, "unexpected": True}),
+    )
+    for operation, input_data in cases:
+        try:
+            operation(input_data)
+            assert False, "expected ProtocolError"
+        except protocol.ProtocolError as exc:
+            assert exc.code == protocol.ERR_INVALID_REQUEST
+
+
+def test_session_validate_rejects_unknown_validation_level():
+    try:
+        protocol.validate_session({"session": {"kind": "playwright_storage_state_file", "path": "/missing/session.json"}, "validation_level": "deep"})
+        assert False, "expected ProtocolError"
+    except protocol.ProtocolError as exc:
+        assert exc.code == protocol.ERR_INVALID_REQUEST
+
+
 def test_qr_poll_rejects_unknown_handle():
     import qr_login
 

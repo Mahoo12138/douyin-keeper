@@ -39,6 +39,30 @@ check('sidecar schema is valid JSON Schema draft-2020-12', () => {
   const session = {kind: 'playwright_storage_state_file', path: '/run/session.json'}
   const validInputs = [
     {
+      op: 'login.qr.start',
+      input: {profile_dir: '/run/keeper/login', locale: 'zh-CN'},
+    },
+    {
+      op: 'login.qr.poll',
+      input: {login_handle: 'qr_handle', export_session_file: '/run/keeper/session.json'},
+    },
+    {
+      op: 'login.sms.start',
+      input: {profile_dir: '/run/keeper/login', phone: '+8613800138000', locale: 'zh-CN'},
+    },
+    {
+      op: 'login.sms.verify',
+      input: {login_handle: 'sms_handle', code: '123456', export_session_file: '/run/keeper/session.json'},
+    },
+    {
+      op: 'session.validate',
+      input: {session},
+    },
+    {
+      op: 'friends.list',
+      input: {session},
+    },
+    {
       op: 'conversations.list',
       input: {session, cursor: null, limit: 100},
     },
@@ -109,6 +133,15 @@ check('sidecar schema is valid JSON Schema draft-2020-12', () => {
     },
   }
   if (validate(invalidSticker)) throw new Error('message.send_sticker accepted unknown message field')
+
+  const invalidLogin = {
+    protocol_version: 1,
+    request_id: 'contract-login-invalid',
+    op: 'login.sms.verify',
+    deadline_ms: 30000,
+    input: {login_handle: 'sms_handle', code: '123456', unexpected: true},
+  }
+  if (validate(invalidLogin)) throw new Error('login.sms.verify accepted unknown input field')
 })
 
 check('every sidecar schema file parses', () => {

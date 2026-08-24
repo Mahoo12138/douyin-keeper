@@ -159,6 +159,13 @@ def validate_session(input_data):
     lived storage-state file and never returns its contents. A later adapter
     can add a live page check without changing this result contract.
     """
+    if not isinstance(input_data, dict):
+        raise ProtocolError(ERR_INVALID_REQUEST, "input must be an object")
+    if set(input_data) - {"session", "validation_level"}:
+        raise ProtocolError(ERR_INVALID_REQUEST, "input contains unknown fields")
+    validation_level = input_data.get("validation_level", "basic")
+    if validation_level != "basic":
+        raise ProtocolError(ERR_INVALID_REQUEST, "validation_level must be basic")
     path = _session_file(input_data)
     try:
         with open(path, "r", encoding="utf-8") as handle:

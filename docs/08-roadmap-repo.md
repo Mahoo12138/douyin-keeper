@@ -232,7 +232,8 @@ outcome 未知时保持 fail-closed；真实 Protocol SDK 和平台 selector 仍
 fail-closed，且不会把协议任务误交给 Browser Sidecar；
 真实平台首聊动作仍等待 Sidecar SDK 与 selector 联调。
 已实现的会话列表、平台归档、文本发送、贴纸发送和首聊操作也已同步到 operation-specific
-Sidecar JSON Schema，并由契约检查覆盖未知嵌套字段。
+Sidecar JSON Schema，并由契约检查覆盖未知嵌套字段；QR/SMS 登录、Session Validate 和
+好友同步的输入边界也已同步，轮询在认证完成前仍允许省略导出路径。
 Resolver 的 fallback 也会检查全局 Adapter health；Browser 被禁用或熔断时返回无 Adapter
 的不可用计划，首聊则继续保留 `protocol.im` 路由身份并 fail-closed。
 Protocol 发送在明确收到 `outcome=not_sent`（或 `platform_write_accepted=false`）且 Browser

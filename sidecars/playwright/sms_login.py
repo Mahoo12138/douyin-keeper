@@ -70,7 +70,7 @@ def _input_object(input_data):
 
 def _profile_dir(input_data):
     value = input_data.get("profile_dir")
-    if not isinstance(value, str) or not value or not os.path.isabs(value):
+    if not isinstance(value, str) or not value or len(value) > 4096 or not os.path.isabs(value):
         raise _error(protocol.ERR_INVALID_REQUEST, "profile_dir must be an absolute path")
     if value in ("/", "/tmp", "/run"):
         raise _error(protocol.ERR_INVALID_REQUEST, "profile_dir is too broad")
@@ -81,7 +81,7 @@ def _profile_dir(input_data):
 
 def _export_file(input_data):
     value = input_data.get("export_session_file")
-    if not isinstance(value, str) or not value or not os.path.isabs(value):
+    if not isinstance(value, str) or not value or len(value) > 4096 or not os.path.isabs(value):
         raise _error(protocol.ERR_INVALID_REQUEST, "export_session_file must be an absolute path")
     parent = os.path.dirname(value)
     os.makedirs(parent, mode=0o700, exist_ok=True)
@@ -141,12 +141,14 @@ def _first_visible(page, selectors):
 
 def start(input_data):
     input_data = _input_object(input_data)
+    if set(input_data) - {"profile_dir", "phone", "locale"}:
+        raise _error(protocol.ERR_INVALID_REQUEST, "input contains unknown fields")
     profile_dir = _profile_dir(input_data)
     phone = str(input_data.get("phone") or "").strip()
     if len(phone) < 5 or len(phone) > 32:
         raise _error(protocol.ERR_INVALID_REQUEST, "phone must be 5..32 characters")
     locale = input_data.get("locale", "zh-CN")
-    if not isinstance(locale, str) or not locale:
+    if not isinstance(locale, str) or not locale or len(locale) > 32:
         raise _error(protocol.ERR_INVALID_REQUEST, "locale must be a non-empty string")
 
     manager = browser.launch(user_data_dir=profile_dir, locale=locale)
@@ -192,9 +194,12 @@ def cleanup_expired(now=None):
 
 def verify(input_data):
     input_data = _input_object(input_data)
+    if set(input_data) - {"login_handle", "code", "export_session_file"}:
+        raise _error(protocol.ERR_INVALID_REQUEST, "input contains unknown fields")
     handle = input_data.get("login_handle")
-    code = str(input_data.get("code") or "").strip()
-    if not isinstance(handle, str) or not handle:
+    raw_code = input_data.get("code")
+    code = raw_code.strip() if isinstance(raw_code, str) else ""
+    if not isinstance(handle, str) or not handle or len(handle) > 128:
         raise _error(protocol.ERR_INVALID_REQUEST, "login_handle is required")
     if not code.isdigit() or not 4 <= len(code) <= 8:
         raise _error(protocol.ERR_INVALID_REQUEST, "code must be 4..8 digits")
