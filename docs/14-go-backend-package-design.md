@@ -584,7 +584,8 @@ shutdown gracefully
 - leader election；
 - Tick due tasks；
 - retry due intents；
-- lease recovery；
+- SendJob 与 Generic Job lease recovery；
+- binding Job 超时后的账号状态清理；
 - risk cooldown cleanup；
 - 不运行浏览器；
 - 不直接消费发送队列。

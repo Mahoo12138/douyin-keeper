@@ -128,4 +128,49 @@ func (r *JobRepo) RequestCancel(ctx context.Context, jobID int64, at time.Time) 
 	return err
 }
 
+// FindExpiredLeases returns generic jobs whose worker lease expired while the
+// job was running or waiting for user input. The row lock keeps a scheduler
+// reaper batch stable until its surrounding transaction finishes.
+func (r *JobRepo) FindExpiredLeases(ctx context.Context, at time.Time, limit int) ([]*job.Job, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT `+jobCols+` FROM jobs
+		WHERE status IN ('running','waiting_user')
+		  AND lease_expires_at IS NOT NULL AND lease_expires_at < $1
+		ORDER BY lease_expires_at, id
+		LIMIT $2
+		FOR UPDATE SKIP LOCKED`, at, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*job.Job, 0)
+	for rows.Next() {
+		var item job.Job
+		if err := rows.Scan(&item.ID, &item.PublicID, &item.UserID, &item.AccountID, &item.Type,
+			&item.Status, &item.ErrorCode, &item.Cancelable, &item.CancelRequestedAt,
+			&item.WorkerID, &item.HeartbeatAt, &item.LeaseExpiresAt, &item.CreatedAt,
+			&item.StartedAt, &item.FinishedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, &item)
+	}
+	return items, rows.Err()
+}
+
+// FinishExpired closes a still-expired job conditionally. It prevents a late
+// reaper from overwriting a worker that renewed or completed the job after the
+// scan, even when the caller is not holding the original row lock.
+func (r *JobRepo) FinishExpired(ctx context.Context, jobID int64, status job.Status, errorCode *string, at time.Time) (bool, error) {
+	tag, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE jobs SET status=$2, error_code=$3, finished_at=$4,
+			heartbeat_at=NULL, lease_expires_at=NULL
+		WHERE id=$1 AND status IN ('running','waiting_user')
+		  AND lease_expires_at IS NOT NULL AND lease_expires_at < $4`,
+		jobID, status, errorCode, at)
+	return tag.RowsAffected() == 1, err
+}
+
 var _ job.Repository = (*JobRepo)(nil)

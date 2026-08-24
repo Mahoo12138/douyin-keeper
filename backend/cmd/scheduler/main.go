@@ -83,6 +83,7 @@ func main() {
 	tick := scheduler.NewTickRunner(taskRepo, sendRepo, entitlementSvc, entitlementSvc,
 		outboxRepo, tx, cfg.ScheduleBatchSize)
 	sendReaper := scheduler.NewSendLeaseReaper(sendRepo, entitlementSvc, tx, cfg.ScheduleBatchSize)
+	jobReaper := scheduler.NewJobLeaseReaper(jobRepo, accountRepo, tx, cfg.ScheduleBatchSize)
 	retryRunner := scheduler.NewRetryRunner(sendRepo, entitlementSvc, outboxRepo, tx, cfg.ScheduleBatchSize)
 	capabilityProbe := scheduler.NewCapabilityProbeRunner(capabilityRepo, outboxRepo, tx,
 		scheduler.DefaultCapabilityProbeInterval, cfg.ScheduleBatchSize)
@@ -143,6 +144,12 @@ func main() {
 					log.Error("send lease reaper failed", "err", err)
 				} else if n > 0 {
 					log.Warn("send attempts failed closed after expired lease", "count", n,
+						"error_code", apperr.CodeOutcomeUnknown)
+				}
+				if n, err := jobReaper.RunOnce(ctx); err != nil {
+					log.Error("generic job lease reaper failed", "err", err)
+				} else if n > 0 {
+					log.Warn("generic jobs failed closed after expired lease", "count", n,
 						"error_code", apperr.CodeOutcomeUnknown)
 				}
 				if stats, err := retryRunner.RunOnce(ctx); err != nil {

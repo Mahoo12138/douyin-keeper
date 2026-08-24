@@ -203,7 +203,8 @@ Browser Worker 成功后更新 `last_session_check_at` 和 `session_status=valid
 - `ADAPTER_INCOMPATIBLE`
 - `BROWSER_SELECTOR_CHANGED`
 - `NETWORK_TIMEOUT`
-- `OUTCOME_UNKNOWN`（Worker lease 过期，平台结果无法确认；不自动重发）
+- `OUTCOME_UNKNOWN`（Worker lease 过期，平台结果无法确认；不自动重发；Generic Job
+  也使用该错误码表示 Worker 崩溃或租约失效）
 - `ACCOUNT_BUSY`
 - `ENTITLEMENT_REQUIRED`
 - `ENTITLEMENT_EXPIRED`

@@ -372,7 +372,7 @@ lease_expires_at
 Scheduler/Reaper 查找：
 
 ```text
-status = running
+status IN (running, waiting_user)
 AND lease_expires_at < now()
 ```
 
@@ -688,6 +688,10 @@ Scheduler 周期任务：
 ### Worker Lease Reaper
 
 - running lease expired -> outcome reconcile / fail closed。
+- Generic Job 的 `running/waiting_user` lease 过期后写入 `OUTCOME_UNKNOWN` 并追加 `error`
+  事件；若 API 已请求取消，则最终写 `cancelled` 和 `cancelled` 事件。
+- `account.bind.qr` / `account.bind.sms` 超时回收时，若账号仍为 `binding`，恢复为
+  `unbound`，避免账号配额永久被占用。
 
 ### Binding Cleanup
 
