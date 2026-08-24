@@ -280,6 +280,8 @@ internal/transport/httpapi/entitlement_handler.go
 Send Worker 在 Claim 后每 20 秒续租 `send_jobs`；heartbeat 只允许当前
 `running + worker_id` 更新。最终结果写入同样要求 Job 仍为 `running`，因此 lease
 过期后由 Reaper 写入 `OUTCOME_UNKNOWN` 的任务不会被旧 Worker 覆盖成成功。
+QR/SMS、Friends Sync 和 Session Check 等 Generic Job 也复用同一 heartbeat/终态 CAS
+边界，长 Sidecar 操作不会因 lease 到期而被误判或覆盖终态。
 
 `account` 同时提供 Scheduler 使用的 `SessionCheckRepository` 投影：每 30 分钟扫描
 绑定且 Session 为 `unknown/valid`、`last_session_check_at` 已过期的账号，并排除已有

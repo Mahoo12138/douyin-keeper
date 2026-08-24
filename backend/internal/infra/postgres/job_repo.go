@@ -70,10 +70,30 @@ func (r *JobRepo) Claim(ctx context.Context, publicID uuid.UUID, workerID string
 	return j, err
 }
 
+func (r *JobRepo) Heartbeat(ctx context.Context, jobID int64, workerID string, lease time.Duration) error {
+	if lease <= 0 {
+		lease = 2 * time.Minute
+	}
+	tag, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE jobs SET heartbeat_at=now(), lease_expires_at=now()+make_interval(secs => $3)
+		WHERE id=$1 AND status IN ('running','waiting_user') AND worker_id=$2`, jobID, workerID, lease.Seconds())
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
 func (r *JobRepo) Finish(ctx context.Context, jobID int64, status job.Status, errorCode *string, at time.Time) error {
-	_, err := From(ctx, r.pool).Exec(ctx, `
+	tag, err := From(ctx, r.pool).Exec(ctx, `
 		UPDATE jobs SET status=$2, error_code=$3, finished_at=$4,
-			heartbeat_at=NULL, lease_expires_at=NULL WHERE id=$1`, jobID, status, errorCode, at)
+			heartbeat_at=NULL, lease_expires_at=NULL
+		WHERE id=$1 AND status IN ('running','waiting_user')`, jobID, status, errorCode, at)
+	if err == nil && tag.RowsAffected() != 1 {
+		return pgx.ErrNoRows
+	}
 	return err
 }
 

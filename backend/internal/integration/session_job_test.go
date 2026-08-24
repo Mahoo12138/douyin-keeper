@@ -76,6 +76,17 @@ func TestAccountSessionRoundTripAndJobClaim(t *testing.T) {
 	if err != nil || second != nil {
 		t.Fatalf("duplicate claim should be absorbed: err=%v job=%+v", err, second)
 	}
+	if err := jobs.Heartbeat(ctx, j.ID, "duplicate-worker", 90*time.Second); err == nil {
+		t.Fatal("heartbeat from a different worker must be rejected")
+	}
+	claimedLease := claimed.LeaseExpiresAt
+	if err := jobs.Heartbeat(ctx, j.ID, "integration-worker", 90*time.Second); err != nil {
+		t.Fatalf("heartbeat failed: %v", err)
+	}
+	heartbeated, err := jobs.GetOwned(ctx, &userID, j.PublicID)
+	if err != nil || heartbeated.HeartbeatAt == nil || heartbeated.LeaseExpiresAt == nil || claimedLease == nil || !heartbeated.LeaseExpiresAt.After(*claimedLease) {
+		t.Fatalf("heartbeat did not extend lease: before=%v after=%+v err=%v", claimedLease, heartbeated, err)
+	}
 	if err := jobs.MarkWaiting(ctx, j.ID, 90*time.Second); err != nil {
 		t.Fatalf("mark waiting failed: %v", err)
 	}
@@ -100,6 +111,9 @@ func TestAccountSessionRoundTripAndJobClaim(t *testing.T) {
 	finished, err := jobs.GetOwned(ctx, &userID, j.PublicID)
 	if err != nil || finished.Status != job.StatusSucceeded {
 		t.Fatalf("finish failed: err=%v job=%+v", err, finished)
+	}
+	if err := jobs.Finish(ctx, j.ID, job.StatusFailed, nil, time.Now()); err == nil {
+		t.Fatal("terminal generic job must not be overwritten after the first finish")
 	}
 }
 

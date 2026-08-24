@@ -76,6 +76,10 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 		if err != nil || claimed == nil {
 			return err
 		}
+		stopHeartbeat := startLeaseHeartbeat(ctx, deps.LockTTL, func(heartbeatCtx context.Context) error {
+			return deps.Jobs.Heartbeat(heartbeatCtx, claimed.ID, deps.WorkerID, deps.LockTTL)
+		})
+		defer stopHeartbeat()
 		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
 			return err
 		}
