@@ -83,7 +83,8 @@ func (r *bindAccountRepoStub) SetSessionStatus(ctx context.Context, _ int64, _ a
 	r.operations = append(r.operations, bindOperation(ctx, "session"))
 	return nil
 }
-func (r *bindAccountRepoStub) SetLastFriendSyncAt(context.Context, int64, time.Time) error {
+func (r *bindAccountRepoStub) SetLastFriendSyncAt(ctx context.Context, _ int64, _ time.Time) error {
+	r.operations = append(r.operations, bindOperation(ctx, "last_friend_sync"))
 	return nil
 }
 func (r *bindAccountRepoStub) SoftDelete(context.Context, int64) error                { return nil }

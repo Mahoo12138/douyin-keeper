@@ -166,17 +166,47 @@ func friendsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "syncing", Payload: json.RawMessage(`{}`), CreatedAt: now()}); err != nil {
 			return err
 		}
-		if err := deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
-			if err := deps.Friends.SyncBatch(tctx, acct.ID, items, seenIDs, seenConversationIDs, now()); err != nil {
-				return err
-			}
-			return deps.Accounts.SetLastFriendSyncAt(tctx, acct.ID, now())
-		}); err != nil {
+		if err := commitFriendsSyncSuccess(ctx, deps.Tx, deps.Jobs, deps.Friends, deps.Accounts,
+			claimed, acct.ID, items, seenIDs, seenConversationIDs, now); err != nil {
 			return fail(apperr.CodeInternal)
 		}
-		_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "success", Payload: mustJSON(map[string]int{"count": len(items)}), CreatedAt: now()})
-		return deps.Jobs.Finish(ctx, claimed.ID, job.StatusSucceeded, nil, now())
+		return nil
 	}
+}
+
+type friendSyncAccountWriter interface {
+	SetLastFriendSyncAt(context.Context, int64, time.Time) error
+}
+
+// commitFriendsSyncSuccess makes the Job terminal transition the first
+// guarded write in the transaction. If the lease reaper won the race, the
+// conditional Finish fails and the friend snapshot is rolled back with it.
+func commitFriendsSyncSuccess(
+	ctx context.Context,
+	tx job.TxManager,
+	j job.Repository,
+	friends friend.SyncRepository,
+	accounts friendSyncAccountWriter,
+	claimed *job.Job,
+	accountID int64,
+	items []friend.SyncItem,
+	seenPlatformIDs, seenConversationIDs []string,
+	now func() time.Time,
+) error {
+	return tx.WithinTx(ctx, func(tctx context.Context) error {
+		if err := j.Finish(tctx, claimed.ID, job.StatusSucceeded, nil, now()); err != nil {
+			return err
+		}
+		if err := friends.SyncBatch(tctx, accountID, items, seenPlatformIDs, seenConversationIDs, now()); err != nil {
+			return err
+		}
+		if err := accounts.SetLastFriendSyncAt(tctx, accountID, now()); err != nil {
+			return err
+		}
+		return j.AppendEvent(tctx, claimed.ID, job.JobEvent{
+			EventType: "success", Payload: mustJSON(map[string]int{"count": len(items)}), CreatedAt: now(),
+		})
+	})
 }
 
 func normalizeFriendItems(items []friendsListItem) ([]friend.SyncItem, []string, []string, error) {

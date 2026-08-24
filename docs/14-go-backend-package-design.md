@@ -284,7 +284,8 @@ Send Worker 在 Claim 后每 20 秒续租 `send_jobs`；heartbeat 只允许当�
 QR/SMS、Friends Sync 和 Session Check 等 Generic Job 也复用同一 heartbeat/终态 CAS
 边界，长 Sidecar 操作不会因 lease 到期而被误判或覆盖终态。绑定成功的加密 Session、
 账号写入与后续 Friends/Capability Outbox 还必须和 Job 成功终态处于同一事务，并先执行 Job 条件终结，
-防止 Reaper 与迟到 Worker 交错产生孤儿状态。
+防止 Reaper 与迟到 Worker 交错产生孤儿状态。Friends Sync 的好友快照与
+`last_friend_sync_at`、Session Check 的 `session_status=valid` 也遵循同一顺序，成功事件一并提交。
 
 `account` 同时提供 Scheduler 使用的 `SessionCheckRepository` 投影：每 30 分钟扫描
 绑定且 Session 为 `unknown/valid`、`last_session_check_at` 已过期的账号，并排除已有

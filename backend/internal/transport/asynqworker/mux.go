@@ -263,12 +263,8 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 			_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "error", Payload: json.RawMessage(fmt.Sprintf(`{"code":%q}`, code)), CreatedAt: deps.Now()})
 			return deps.Jobs.Finish(ctx, claimed.ID, job.StatusFailed, &code, deps.Now())
 		}
-		succeed := func() error {
-			_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "success", Payload: json.RawMessage(`{"valid":true}`), CreatedAt: deps.Now()})
-			return deps.Jobs.Finish(ctx, claimed.ID, job.StatusSucceeded, nil, deps.Now())
-		}
 		_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "started", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()})
-		if claimed.AccountID == nil || claimed.UserID == nil || deps.Sidecar == nil || deps.Redis == nil {
+		if claimed.AccountID == nil || claimed.UserID == nil || deps.Sidecar == nil || deps.Redis == nil || deps.Tx == nil {
 			return fail(apperr.CodeInternal)
 		}
 		acct, err := deps.Accounts.GetByID(ctx, *claimed.AccountID)
@@ -344,14 +340,39 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
 			return fail(apperr.CodeAdapterIncompatible)
 		}
-		if err := deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionValid, deps.Now()); err != nil {
+		if err := commitSessionCheckSuccess(ctx, deps.Tx, deps.Jobs, deps.Accounts, claimed, acct.ID, deps.Now); err != nil {
 			return fail(apperr.CodeInternal)
 		}
 		if log != nil {
 			log.Info("session check succeeded", "job_public_id", claimed.PublicID, "account_public_id", acct.PublicID)
 		}
-		return succeed()
+		return nil
 	}
+}
+
+// commitSessionCheckSuccess keeps the account's valid-session projection and
+// the Job success terminal state in one transaction. Finish is intentionally
+// first so an expired lease cannot be followed by a stale session write.
+func commitSessionCheckSuccess(
+	ctx context.Context,
+	tx job.TxManager,
+	j job.Repository,
+	accounts account.Repository,
+	claimed *job.Job,
+	accountID int64,
+	now func() time.Time,
+) error {
+	return tx.WithinTx(ctx, func(tctx context.Context) error {
+		if err := j.Finish(tctx, claimed.ID, job.StatusSucceeded, nil, now()); err != nil {
+			return err
+		}
+		if err := accounts.SetSessionStatus(tctx, accountID, account.SessionValid, now()); err != nil {
+			return err
+		}
+		return j.AppendEvent(tctx, claimed.ID, job.JobEvent{
+			EventType: "success", Payload: json.RawMessage(`{"valid":true}`), CreatedAt: now(),
+		})
+	})
 }
 
 // ServerConfig maps a worker pool to its queues (docs/15 §18).
