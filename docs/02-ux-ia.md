@@ -178,6 +178,8 @@ Tab：
 4. 今日任务执行完成；
 5. 系统维护。
 
+当前 V1.1 站内通知已接入 `GET /api/v1/notifications`、`POST /api/v1/notifications/{id}/read` 和 `POST /api/v1/notifications/read-all`。风险事件中的登录失效、安全验证、平台限流和 Adapter/浏览器能力异常会为账号所有者生成通知；同一账号同一风险码在同一 `Asia/Shanghai` 自然日内去重，通知不展示 Session、Cookie 或风险详情 JSON。通知页保留加载、失败、空数据、未读数量、单条已读和全部已读状态。
+
 ### 1.10 权益与兑换 `/entitlement`
 
 展示当前有效权益、到期时间、账号槽位、任务额度和功能列表，并提供卡密输入框。

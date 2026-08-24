@@ -62,8 +62,13 @@ type Service struct {
 	events   Repository
 	accounts AccountState
 	tx       TxManager
+	notifier Notifier
 	cooldown time.Duration
 	now      func() time.Time
+}
+
+type Notifier interface {
+	NotifyRisk(ctx context.Context, accountID int64, code string, severity string, createdAt time.Time) error
 }
 
 func NewService(events Repository, accounts AccountState, tx TxManager, cooldown time.Duration) *Service {
@@ -74,6 +79,11 @@ func NewService(events Repository, accounts AccountState, tx TxManager, cooldown
 }
 
 func (s *Service) SetNow(now func() time.Time) { s.now = now }
+
+func (s *Service) WithNotifier(notifier Notifier) *Service {
+	s.notifier = notifier
+	return s
+}
 
 // Apply records a stable risk event and applies the associated account action
 // atomically. It never changes session state for protocol/browser/data errors.
@@ -114,6 +124,14 @@ func (s *Service) Apply(ctx context.Context, accountID int64, code, sourceAdapte
 				return err
 			}
 		}
-		return s.events.Record(tctx, event)
+		if err := s.events.Record(tctx, event); err != nil {
+			return err
+		}
+		if s.notifier != nil {
+			if err := s.notifier.NotifyRisk(tctx, accountID, code, string(classification.Severity), now); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }

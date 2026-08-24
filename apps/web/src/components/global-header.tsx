@@ -10,6 +10,7 @@ const nav = [
   { to: '/friends', label: '好友与火花' },
   { to: '/tasks', label: '任务' },
   { to: '/history', label: '发送记录' },
+  { to: '/notifications', label: '通知' },
   { to: '/entitlement', label: '权益' },
 ] as const
 const navLinkClass = 'shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:px-3'

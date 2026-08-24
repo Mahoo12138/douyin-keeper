@@ -160,6 +160,18 @@ WECHAT_IDENTITY_NOT_LINKED
 
 不自动创建新 User。
 
+### `GET /notifications`
+
+返回当前用户未过期的站内通知，支持 `unread_only=true` 和 `limit`。响应包含当前未读总数；通知只返回面向用户的标题、正文、优先级和可选资源引用，不返回风险 `detail_json`、Session 或 Cookie。
+
+### `POST /notifications/{notification_id}/read`
+
+将当前用户拥有的单条通知标记为已读；通知不存在或不属于当前用户时返回 `404`。
+
+### `POST /notifications/read-all`
+
+将当前用户的全部未读通知标记为已读，并返回 `marked_count`。
+
 ## 4.1 Entitlement / 卡密兑换
 
 系统内部没有订单/支付 API。C 端只有授权查询与卡密兑换。

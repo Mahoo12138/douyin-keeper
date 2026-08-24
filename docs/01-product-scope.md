@@ -78,6 +78,8 @@
 - Account Capability 页面；
 - 登录态主动健康检查与到期提醒。
 
+当前已完成站内通知切片：风险事件会按账号归属生成登录失效、安全验证、限流和能力异常提醒，用户可在 PC `/notifications` 查看并标记已读；短信绑定、Sticker、会话列表和微信服务通知仍待后续接入真实 Sidecar/平台能力。
+
 ## 5. V1.2
 
 - 可选 Protocol Sender；

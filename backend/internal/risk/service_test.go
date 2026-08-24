@@ -40,6 +40,20 @@ type fakeRiskTx struct{}
 
 func (fakeRiskTx) WithinTx(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) }
 
+type fakeRiskNotifier struct {
+	calls    int
+	account  int64
+	code     string
+	severity string
+	created  time.Time
+}
+
+func (f *fakeRiskNotifier) NotifyRisk(_ context.Context, accountID int64, code, severity string, createdAt time.Time) error {
+	f.calls++
+	f.account, f.code, f.severity, f.created = accountID, code, severity, createdAt
+	return nil
+}
+
 func TestClassifyRiskActions(t *testing.T) {
 	tests := map[string]struct {
 		category Category
@@ -95,5 +109,20 @@ func TestApplySessionFailureDoesNotSetRiskCooldown(t *testing.T) {
 	}
 	if accounts.riskStatus != "" || accounts.cooldownUntil != nil {
 		t.Fatalf("session failure unexpectedly changed risk cooldown: %+v", accounts)
+	}
+}
+
+func TestApplyEmitsUserNotificationAfterRecordingRisk(t *testing.T) {
+	events := &fakeRiskEvents{}
+	accounts := &fakeRiskAccounts{}
+	notifier := &fakeRiskNotifier{}
+	service := NewService(events, accounts, fakeRiskTx{}, time.Minute).WithNotifier(notifier)
+	now := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	service.SetNow(func() time.Time { return now })
+	if err := service.Apply(context.Background(), 42, "SESSION_EXPIRED", "browser.consumer", nil); err != nil {
+		t.Fatal(err)
+	}
+	if notifier.calls != 1 || notifier.account != 42 || notifier.code != "SESSION_EXPIRED" || notifier.severity != string(SeverityCritical) || !notifier.created.Equal(now) {
+		t.Fatalf("notification call = %+v", notifier)
 	}
 }

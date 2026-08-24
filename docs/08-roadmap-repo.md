@@ -176,6 +176,8 @@ Sidecar Contract 另外维护 JSON Schema，版本化：
 - 通知；
 - Capability UI。
 
+当前已完成 M6 的站内通知切片：新增 `notifications` 持久化表、风险事件通知生成与去重、用户通知查询/单条已读/全部已读 API，以及统一 Web `/notifications` 页面；通知按账号所有者隔离，不返回 Session、Cookie 或风险详情。短信绑定和 Sticker 仍等待真实 Sidecar 流程，Capability UI 已在账号页提供能力快照展示。
+
 ### M7 — V1.2
 
 - Protocol Adapter；

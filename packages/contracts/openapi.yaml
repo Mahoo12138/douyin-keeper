@@ -591,6 +591,52 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Capability'
+  /notifications:
+    get:
+      operationId: listNotifications
+      parameters:
+      - name: unread_only
+        in: query
+        schema:
+          type: boolean
+          default: false
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Current user's in-app notifications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationList'
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      responses:
+        '200':
+          description: Number of notifications marked read
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - marked_count
+                properties:
+                  marked_count:
+                    type: integer
+                    minimum: 0
+  /notifications/{notificationId}/read:
+    post:
+      operationId: markNotificationRead
+      parameters:
+      - name: notificationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Notification marked read
   /accounts/{accountId}/friends:
     get:
       operationId: listFriends
@@ -2097,6 +2143,71 @@ components:
         checked_at:
           type: string
           format: date-time
+    Notification:
+      type: object
+      required:
+      - id
+      - type
+      - priority
+      - title
+      - body
+      - read_at
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        priority:
+          type: string
+          enum:
+          - info
+          - warning
+          - critical
+        title:
+          type: string
+        body:
+          type: string
+        resource_type:
+          type:
+          - string
+          - 'null'
+        resource_id:
+          type:
+          - string
+          - 'null'
+        read_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    NotificationList:
+      type: object
+      required:
+      - items
+      - unread_count
+      - next_cursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        unread_count:
+          type: integer
+          minimum: 0
+        next_cursor:
+          type:
+          - string
+          - 'null'
     Friend:
       type: object
       required:

@@ -23,6 +23,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/notification"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/outbox"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/send"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/task"
@@ -82,6 +83,7 @@ func main() {
 	sendRepo := postgres.NewSendRepo(pool)
 	capRepo := postgres.NewCapabilityRepo(pool)
 	adminRepo := postgres.NewAdminRepo(pool, rdb)
+	notificationRepo := postgres.NewNotificationRepo(pool)
 	outboxRepo := postgres.NewOutboxRepo(pool)
 
 	// ---- services ----
@@ -100,9 +102,10 @@ func main() {
 	sendsSvc := send.NewService(sendRepo, taskRepo, entSvc, entSvc, outboxRepo, tx)
 	jobsSvc := job.NewService(jobRepo)
 	adminSvc := admin.NewService(adminRepo)
+	notificationSvc := notification.NewService(notificationRepo)
 
 	srv := httpapi.NewServer(authSvc, entSvc, accountsSvc, friendsSvc, tasksSvc, sendsSvc, jobsSvc,
-		capRepo, adminSvc, []byte(cfg.AuthSigningKey), cfg.AuthRefreshTTL, pool, rdb)
+		capRepo, adminSvc, notificationSvc, []byte(cfg.AuthSigningKey), cfg.AuthRefreshTTL, pool, rdb)
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

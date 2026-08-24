@@ -20,6 +20,7 @@ import { Route as rootDashboardRouteImport } from './routes/(root)/dashboard'
 import { Route as rootEntitlementRouteImport } from './routes/(root)/entitlement'
 import { Route as rootFriendsRouteImport } from './routes/(root)/friends'
 import { Route as rootHistoryRouteImport } from './routes/(root)/history'
+import { Route as rootNotificationsRouteImport } from './routes/(root)/notifications'
 import { Route as rootTasksRouteImport } from './routes/(root)/tasks'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminAccountsRouteImport } from './routes/admin/accounts'
@@ -83,6 +84,11 @@ const rootFriendsRoute = rootFriendsRouteImport.update({
 const rootHistoryRoute = rootHistoryRouteImport.update({
   id: '/history',
   path: '/history',
+  getParentRoute: () => rootRouteRoute,
+} as any)
+const rootNotificationsRoute = rootNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
   getParentRoute: () => rootRouteRoute,
 } as any)
 const rootTasksRoute = rootTasksRouteImport.update({
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/entitlement': typeof rootEntitlementRoute
   '/friends': typeof rootFriendsRoute
   '/history': typeof rootHistoryRoute
+  '/notifications': typeof rootNotificationsRoute
   '/tasks': typeof rootTasksRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/adapters': typeof AdminAdaptersRoute
@@ -173,6 +180,7 @@ export interface FileRoutesByTo {
   '/entitlement': typeof rootEntitlementRoute
   '/friends': typeof rootFriendsRoute
   '/history': typeof rootHistoryRoute
+  '/notifications': typeof rootNotificationsRoute
   '/tasks': typeof rootTasksRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/adapters': typeof AdminAdaptersRoute
@@ -198,6 +206,7 @@ export interface FileRoutesById {
   '/(root)/entitlement': typeof rootEntitlementRoute
   '/(root)/friends': typeof rootFriendsRoute
   '/(root)/history': typeof rootHistoryRoute
+  '/(root)/notifications': typeof rootNotificationsRoute
   '/(root)/tasks': typeof rootTasksRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/adapters': typeof AdminAdaptersRoute
@@ -222,6 +231,7 @@ export interface FileRouteTypes {
     | '/entitlement'
     | '/friends'
     | '/history'
+    | '/notifications'
     | '/tasks'
     | '/admin/accounts'
     | '/admin/adapters'
@@ -243,6 +253,7 @@ export interface FileRouteTypes {
     | '/entitlement'
     | '/friends'
     | '/history'
+    | '/notifications'
     | '/tasks'
     | '/admin/accounts'
     | '/admin/adapters'
@@ -267,6 +278,7 @@ export interface FileRouteTypes {
     | '/(root)/entitlement'
     | '/(root)/friends'
     | '/(root)/history'
+    | '/(root)/notifications'
     | '/(root)/tasks'
     | '/admin/accounts'
     | '/admin/adapters'
@@ -364,6 +376,13 @@ declare module '@tanstack/react-router' {
       path: '/history'
       fullPath: '/history'
       preLoaderRoute: typeof rootHistoryRouteImport
+      parentRoute: typeof rootRouteRoute
+    }
+    '/(root)/notifications': {
+      id: '/(root)/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof rootNotificationsRouteImport
       parentRoute: typeof rootRouteRoute
     }
     '/(root)/tasks': {
@@ -466,6 +485,7 @@ interface rootRouteRouteChildren {
   rootEntitlementRoute: typeof rootEntitlementRoute
   rootFriendsRoute: typeof rootFriendsRoute
   rootHistoryRoute: typeof rootHistoryRoute
+  rootNotificationsRoute: typeof rootNotificationsRoute
   rootTasksRoute: typeof rootTasksRoute
 }
 
@@ -475,6 +495,7 @@ const rootRouteRouteChildren: rootRouteRouteChildren = {
   rootEntitlementRoute: rootEntitlementRoute,
   rootFriendsRoute: rootFriendsRoute,
   rootHistoryRoute: rootHistoryRoute,
+  rootNotificationsRoute: rootNotificationsRoute,
   rootTasksRoute: rootTasksRoute,
 }
 

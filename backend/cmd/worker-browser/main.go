@@ -68,7 +68,8 @@ func main() {
 	sendRepo := postgres.NewSendRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
 	healthService := capability.NewHealthService(postgres.NewCapabilityRepo(pool), capability.DefaultHealthPolicy())
-	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown)
+	notificationRepo := postgres.NewNotificationRepo(pool)
+	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown).WithNotifier(notificationRepo)
 	entitlementRepo := postgres.NewEntitlementRepo(pool)
 	entitlementSvc := entitlement.NewService(entitlementRepo, entitlementRepo, entitlementRepo, entitlementRepo,
 		postgres.NewUserLockRepo(pool), workerTx, nil)

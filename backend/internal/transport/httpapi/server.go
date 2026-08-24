@@ -19,6 +19,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/friend"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/notification"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/send"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/task"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/transport/webassets"
@@ -27,15 +28,16 @@ import (
 // Server injects services into handlers. It is a composition root owned by
 // cmd/api; no business logic should live here.
 type Server struct {
-	auth         *auth.Service
-	entitlements *entitlement.Service
-	accounts     *account.Service
-	friends      *friend.Service
-	tasks        *task.Service
-	sends        *send.Service
-	jobs         *job.Service
-	admin        *admin.Service
-	capabilities capability.Repository
+	auth          *auth.Service
+	entitlements  *entitlement.Service
+	accounts      *account.Service
+	friends       *friend.Service
+	tasks         *task.Service
+	sends         *send.Service
+	jobs          *job.Service
+	admin         *admin.Service
+	notifications *notification.Service
+	capabilities  capability.Repository
 
 	signingKey []byte
 	refreshTTL time.Duration
@@ -46,11 +48,11 @@ type Server struct {
 
 func NewServer(authSvc *auth.Service, ent *entitlement.Service, accounts *account.Service,
 	friends *friend.Service, tasks *task.Service, sends *send.Service, jobs *job.Service,
-	capabilities capability.Repository, adminSvc *admin.Service, signingKey []byte, refreshTTL time.Duration,
+	capabilities capability.Repository, adminSvc *admin.Service, notificationsSvc *notification.Service, signingKey []byte, refreshTTL time.Duration,
 	pg *pgxpool.Pool, redis *redis.Client) *Server {
 	return &Server{
 		auth: authSvc, entitlements: ent, accounts: accounts, friends: friends,
-		tasks: tasks, sends: sends, jobs: jobs, admin: adminSvc, capabilities: capabilities,
+		tasks: tasks, sends: sends, jobs: jobs, admin: adminSvc, notifications: notificationsSvc, capabilities: capabilities,
 		signingKey: signingKey, refreshTTL: refreshTTL, pg: pg, redis: redis,
 	}
 }
@@ -109,6 +111,9 @@ func (s *Server) Router() http.Handler {
 			private.Post("/auth/link-codes", s.handleCreateLinkCode)
 
 			private.Get("/me/entitlement", s.handleMyEntitlement)
+			private.Get("/notifications", s.handleListNotifications)
+			private.Post("/notifications/read-all", s.handleMarkAllNotificationsRead)
+			private.Post("/notifications/{notificationId}/read", s.handleMarkNotificationRead)
 			private.Post("/entitlements/redeem", s.handleRedeem)
 			private.Get("/entitlements/redemptions", s.handleListRedemptions)
 

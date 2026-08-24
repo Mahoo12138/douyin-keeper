@@ -298,6 +298,31 @@ export async function accountCapabilities(accessToken: string, accountId: string
   return data
 }
 
+export async function listNotifications(accessToken: string, options?: { unread_only?: boolean; limit?: number }) {
+  const { data, error } = await api.GET('/notifications', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { query: options },
+  })
+  if (error) throwApiError(error, 'notifications lookup failed')
+  return data
+}
+
+export async function markNotificationRead(accessToken: string, notificationId: string) {
+  const { error } = await api.POST('/notifications/{notificationId}/read', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { notificationId } },
+  })
+  if (error) throwApiError(error, 'notification read failed')
+}
+
+export async function markAllNotificationsRead(accessToken: string) {
+  const { data, error } = await api.POST('/notifications/read-all', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (error) throwApiError(error, 'notifications read-all failed')
+  return data
+}
+
 export async function listFriends(accessToken: string, accountId: string, options?: { limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/accounts/{accountId}/friends', {
     headers: { Authorization: `Bearer ${accessToken}` },
