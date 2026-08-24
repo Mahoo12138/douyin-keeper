@@ -416,6 +416,9 @@ MVP 允许：
 
 可选按 `kind=text|sticker` 筛选，返回当前用户自己的模板。
 
+列表默认返回 50 条，最多 100 条，可通过 `cursor` 按 `updated_at DESC, id DESC`
+继续读取；Web `/templates` 和任务编辑器使用“加载更多模板”读取后续页面。
+
 ### `POST /message-templates`
 
 ```json

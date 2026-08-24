@@ -14,10 +14,18 @@ type repositoryStub struct {
 	updated *Template
 	deleted int64
 	filter  ListFilter
+	page    []*Template
 }
 
 func (r *repositoryStub) ListByUser(_ context.Context, _ int64, filter ListFilter) ([]*Template, error) {
 	r.filter = filter
+	return []*Template{r.item}, nil
+}
+func (r *repositoryStub) ListByUserPage(_ context.Context, _ int64, filter ListFilter) ([]*Template, error) {
+	r.filter = filter
+	if r.page != nil {
+		return r.page, nil
+	}
 	return []*Template{r.item}, nil
 }
 func (r *repositoryStub) GetOwned(context.Context, int64, uuid.UUID) (*Template, error) {
@@ -74,5 +82,26 @@ func TestServiceValidatesListKind(t *testing.T) {
 	}
 	if _, err := svc.ListForUser(context.Background(), 7, ListFilter{Kind: KindSticker}); err != nil || repo.filter.Kind != KindSticker {
 		t.Fatalf("list filter = %+v, err=%v", repo.filter, err)
+	}
+}
+
+func TestServiceListsTemplateCursorPage(t *testing.T) {
+	base := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	repo := &repositoryStub{page: []*Template{
+		{ID: 3, UpdatedAt: base.Add(2 * time.Minute)},
+		{ID: 2, UpdatedAt: base.Add(time.Minute)},
+		{ID: 1, UpdatedAt: base},
+	}}
+	svc := NewService(repo)
+	cursorTime := base.Add(3 * time.Minute)
+	page, err := svc.ListPageForUser(context.Background(), 7, ListFilter{Kind: KindText, Limit: 2, AfterUpdatedAt: &cursorTime, AfterID: 9})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].ID != 3 || page.Items[1].ID != 2 || page.NextAfterID != 2 || page.NextUpdatedAt == nil {
+		t.Fatalf("page = %+v", page)
+	}
+	if repo.filter.Limit != 2 || repo.filter.Kind != KindText || repo.filter.AfterID != 9 || repo.filter.AfterUpdatedAt == nil || !repo.filter.AfterUpdatedAt.Equal(cursorTime) {
+		t.Fatalf("filter = %+v", repo.filter)
 	}
 }

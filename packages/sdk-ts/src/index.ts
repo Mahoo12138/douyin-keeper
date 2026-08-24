@@ -429,7 +429,7 @@ export type MessageTemplateInput = {
 
 export type MessageTemplatePatch = Partial<MessageTemplateInput>
 
-export async function listMessageTemplates(accessToken: string, options?: { kind?: MessageTemplateInput['kind'] }) {
+export async function listMessageTemplates(accessToken: string, options?: { kind?: MessageTemplateInput['kind']; limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/message-templates', {
     headers: { Authorization: `Bearer ${accessToken}` },
     params: { query: options },

@@ -33,7 +33,16 @@ type Template struct {
 }
 
 type ListFilter struct {
-	Kind string
+	Kind           string
+	Limit          int
+	AfterUpdatedAt *time.Time
+	AfterID        int64
+}
+
+type ListPage struct {
+	Items         []*Template
+	NextUpdatedAt *time.Time
+	NextAfterID   int64
 }
 
 type CreateInput struct {
@@ -56,6 +65,12 @@ type Repository interface {
 	SoftDelete(ctx context.Context, id int64) error
 }
 
+// PageRepository is the API-facing cursor projection. The legacy list method
+// remains available for callers that need the complete template snapshot.
+type PageRepository interface {
+	ListByUserPage(ctx context.Context, userID int64, filter ListFilter) ([]*Template, error)
+}
+
 type Service struct {
 	repo Repository
 	now  func() time.Time
@@ -64,10 +79,78 @@ type Service struct {
 func NewService(repo Repository) *Service { return &Service{repo: repo, now: time.Now} }
 
 func (s *Service) ListForUser(ctx context.Context, userID int64, filter ListFilter) ([]*Template, error) {
-	if filter.Kind != "" && filter.Kind != KindText && filter.Kind != KindSticker {
-		return nil, apperr.Validation(apperr.CodeConflict, "invalid template kind")
+	if err := validateListFilter(filter); err != nil {
+		return nil, err
 	}
 	return s.repo.ListByUser(ctx, userID, filter)
+}
+
+func (s *Service) ListPageForUser(ctx context.Context, userID int64, filter ListFilter) (ListPage, error) {
+	if err := validateListFilter(filter); err != nil {
+		return ListPage{}, err
+	}
+	filter = normalizeListFilter(filter)
+	if repo, ok := s.repo.(PageRepository); ok {
+		items, err := repo.ListByUserPage(ctx, userID, filter)
+		if err != nil {
+			return ListPage{}, err
+		}
+		return trimListPage(items, filter.Limit), nil
+	}
+	items, err := s.repo.ListByUser(ctx, userID, filter)
+	if err != nil {
+		return ListPage{}, err
+	}
+	if filter.AfterUpdatedAt != nil && filter.AfterID > 0 {
+		start := len(items)
+		for index, item := range items {
+			if item != nil && (item.UpdatedAt.Before(*filter.AfterUpdatedAt) ||
+				(item.UpdatedAt.Equal(*filter.AfterUpdatedAt) && item.ID < filter.AfterID)) {
+				start = index
+				break
+			}
+		}
+		if start < len(items) {
+			items = items[start:]
+		} else {
+			items = nil
+		}
+	}
+	return trimListPage(items, filter.Limit), nil
+}
+
+func validateListFilter(filter ListFilter) error {
+	if filter.Kind != "" && filter.Kind != KindText && filter.Kind != KindSticker {
+		return apperr.Validation(apperr.CodeConflict, "invalid template kind")
+	}
+	return nil
+}
+
+func normalizeListFilter(filter ListFilter) ListFilter {
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.AfterID < 0 {
+		filter.AfterID = 0
+	}
+	return filter
+}
+
+func trimListPage(items []*Template, limit int) ListPage {
+	page := ListPage{Items: items}
+	if len(items) <= limit {
+		return page
+	}
+	page.Items = items[:limit]
+	if last := page.Items[len(page.Items)-1]; last != nil && last.ID > 0 && !last.UpdatedAt.IsZero() {
+		updatedAt := last.UpdatedAt
+		page.NextUpdatedAt = &updatedAt
+		page.NextAfterID = last.ID
+	}
+	return page
 }
 
 func (s *Service) Create(ctx context.Context, userID int64, input CreateInput) (*Template, error) {

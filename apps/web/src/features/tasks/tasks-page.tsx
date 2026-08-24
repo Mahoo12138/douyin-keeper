@@ -29,7 +29,13 @@ export function TasksPage() {
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     enabled: !!token,
   })
-  const templatesQ = useQuery({ queryKey: ['message-templates'], queryFn: () => listMessageTemplates(token as string), enabled: !!token })
+  const templatesQ = useInfiniteQuery({
+    queryKey: ['message-templates'],
+    queryFn: ({ pageParam }) => listMessageTemplates(token as string, { limit: 50, cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    enabled: !!token,
+  })
   const entitlementQ = useQuery({ queryKey: ['entitlement'], queryFn: () => myEntitlement(token as string), enabled: !!token })
   const creatorFirstMessageAllowed = entitlementQ.data?.features?.creator_first_message === true
   const tasks = tasksQ.data?.pages.flatMap((page) => page.items) ?? []
@@ -67,7 +73,7 @@ export function TasksPage() {
 
   const enabledCount = tasks.filter((task) => task.enabled).length
   const readyFriends = (accountId: string) => (friendsByAccount.get(accountId) ?? []).filter((friend) => friend.platform_identity_status === 'resolved')
-  const templates: MessageTemplate[] = templatesQ.data?.items ?? []
+  const templates: MessageTemplate[] = templatesQ.data?.pages.flatMap((page) => page.items) ?? []
 
   function openCreate() {
     const account = accounts.find((item) => item.binding_status === 'bound') ?? accounts[0]
@@ -170,7 +176,7 @@ export function TasksPage() {
           {tasksQ.hasNextPage ? <div className="flex justify-center"><Button variant="outline" onClick={() => void tasksQ.fetchNextPage()} disabled={tasksQ.isFetchingNextPage}>{tasksQ.isFetchingNextPage ? '加载中…' : '加载更多任务'}</Button></div> : null}
         </CardContent>
       </Card>
-      {editor && <TaskEditorDrawer draft={editor.draft} accounts={accounts} friends={editorFriends} templates={templates} creatorFirstMessageAllowed={creatorFirstMessageAllowed} creatorFirstMessageLoading={entitlementQ.isLoading} saving={busyTaskId === (editor.draft.id ?? 'new')} onChange={(patch) => setEditor((current) => current ? { ...current, draft: { ...current.draft, ...patch } } : current)} onAccountChange={changeEditorAccount} onTemplateApply={applyTemplate} onClose={() => setEditor(null)} onSave={() => void saveTask()} />}
+      {editor && <TaskEditorDrawer draft={editor.draft} accounts={accounts} friends={editorFriends} templates={templates} templatesHasNextPage={templatesQ.hasNextPage} templatesLoadingMore={templatesQ.isFetchingNextPage} onTemplatesLoadMore={() => void templatesQ.fetchNextPage()} creatorFirstMessageAllowed={creatorFirstMessageAllowed} creatorFirstMessageLoading={entitlementQ.isLoading} saving={busyTaskId === (editor.draft.id ?? 'new')} onChange={(patch) => setEditor((current) => current ? { ...current, draft: { ...current.draft, ...patch } } : current)} onAccountChange={changeEditorAccount} onTemplateApply={applyTemplate} onClose={() => setEditor(null)} onSave={() => void saveTask()} />}
     </div>
   )
 }

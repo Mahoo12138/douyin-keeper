@@ -8,6 +8,9 @@ export function TaskEditorDrawer({
   accounts,
   friends,
   templates,
+  templatesHasNextPage,
+  templatesLoadingMore,
+  onTemplatesLoadMore,
   creatorFirstMessageAllowed,
   creatorFirstMessageLoading,
   saving,
@@ -21,6 +24,9 @@ export function TaskEditorDrawer({
   accounts: Account[]
   friends: Friend[]
   templates: MessageTemplate[]
+  templatesHasNextPage?: boolean
+  templatesLoadingMore?: boolean
+  onTemplatesLoadMore?: () => void
   creatorFirstMessageAllowed: boolean
   creatorFirstMessageLoading: boolean
   saving: boolean
@@ -77,6 +83,7 @@ export function TaskEditorDrawer({
               {templates.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.kind === 'sticker' ? '贴纸' : '文字'}</option>)}
             </select>
             <p className="text-xs text-muted-foreground">套用后仍可继续编辑，任务保存的是当前内容快照。</p>
+            {templatesHasNextPage && <Button type="button" variant="ghost" size="sm" onClick={onTemplatesLoadMore} disabled={templatesLoadingMore}>{templatesLoadingMore ? '加载中…' : '加载更多模板'}</Button>}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="task-message">{draft.messageKind === 'sticker' ? '贴纸 ID' : '消息内容'}</Label>

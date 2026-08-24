@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createMessageTemplate, deleteMessageTemplate, listMessageTemplates, updateMessageTemplate, type MessageTemplateInput, type MessageTemplatePatch } from '@douyin-keeper/sdk-ts'
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton } from '@douyin-keeper/ui-web'
@@ -16,7 +16,13 @@ export function MessageTemplatesPage() {
   const token = getToken()
   const queryClient = useQueryClient()
   const [editor, setEditor] = useState<Editor | null>(null)
-  const templatesQ = useQuery({ queryKey: ['message-templates'], queryFn: () => listMessageTemplates(token as string), enabled: !!token })
+  const templatesQ = useInfiniteQuery({
+    queryKey: ['message-templates'],
+    queryFn: ({ pageParam }) => listMessageTemplates(token as string, { limit: 50, cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    enabled: !!token,
+  })
   const saveMutation = useMutation({
     mutationFn: (input: Editor) => input.id ? updateMessageTemplate(token as string, input.id, editorPatch(input)) : createMessageTemplate(token as string, input),
     onSuccess: async () => {
@@ -35,7 +41,7 @@ export function MessageTemplatesPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : '删除模板失败'),
   })
 
-  const templates = templatesQ.data?.items ?? []
+  const templates = templatesQ.data?.pages.flatMap((page) => page.items) ?? []
   function save() {
     if (!editor) return
     const normalized = { ...editor, name: editor.name.trim(), body: editor.body.trim() }
@@ -55,7 +61,7 @@ export function MessageTemplatesPage() {
 
       <Card>
         <CardHeader><div className="flex items-center gap-3"><div className="rounded-lg bg-primary/10 p-2 text-primary"><FileText className="size-5" /></div><div><CardTitle>我的模板</CardTitle><CardDescription>{templates.length ? `共 ${templates.length} 个模板，套用到任务后会保存为任务自己的内容快照。` : '模板只属于当前账号用户，不会暴露给其他用户。'}</CardDescription></div></div></CardHeader>
-        <CardContent>{templatesQ.isLoading ? <TemplateLoading /> : templatesQ.isError ? <ErrorState onRetry={() => void templatesQ.refetch()} /> : templates.length ? <TemplateList templates={templates} deletingId={deleteMutation.isPending ? deleteMutation.variables : null} onEdit={(item) => setEditor({ id: item.id, name: item.name, kind: item.kind, body: item.body })} onDelete={(item) => { if (window.confirm(`确定删除“${item.name}”吗？`)) deleteMutation.mutate(item.id) }} /> : <EmptyState onCreate={() => setEditor({ ...emptyEditor })} />}</CardContent>
+        <CardContent>{templatesQ.isLoading ? <TemplateLoading /> : templatesQ.isError ? <ErrorState onRetry={() => void templatesQ.refetch()} /> : templates.length ? <><TemplateList templates={templates} deletingId={deleteMutation.isPending ? deleteMutation.variables : null} onEdit={(item) => setEditor({ id: item.id, name: item.name, kind: item.kind, body: item.body })} onDelete={(item) => { if (window.confirm(`确定删除“${item.name}”吗？`)) deleteMutation.mutate(item.id) }} />{templatesQ.hasNextPage && <div className="mt-6 flex justify-center"><Button variant="outline" onClick={() => void templatesQ.fetchNextPage()} disabled={templatesQ.isFetchingNextPage}>{templatesQ.isFetchingNextPage ? '加载中…' : '加载更多模板'}</Button></div>}</> : <EmptyState onCreate={() => setEditor({ ...emptyEditor })} />}</CardContent>
       </Card>
       <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/20"><Sparkles className="mt-0.5 size-4 shrink-0 text-amber-600" /><p className="text-muted-foreground">模板不会自动修改已有任务。任务页选择模板时会复制当前内容，避免后续编辑模板时意外改变正在执行的任务。</p></div>
     </div>

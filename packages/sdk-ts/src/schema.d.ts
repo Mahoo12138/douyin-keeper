@@ -2666,6 +2666,8 @@ export interface operations {
         parameters: {
             query?: {
                 kind?: "text" | "sticker";
+                limit?: number;
+                cursor?: string;
             };
             header?: never;
             path?: never;

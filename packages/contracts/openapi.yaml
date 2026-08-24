@@ -835,6 +835,19 @@ paths:
           enum:
           - text
           - sticker
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
       responses:
         '200':
           description: Current user's reusable message templates

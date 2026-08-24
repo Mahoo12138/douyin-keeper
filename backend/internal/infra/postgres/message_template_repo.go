@@ -48,6 +48,29 @@ func (r *MessageTemplateRepo) ListByUser(ctx context.Context, userID int64, filt
 	return items, rows.Err()
 }
 
+func (r *MessageTemplateRepo) ListByUserPage(ctx context.Context, userID int64, filter messagetemplate.ListFilter) ([]*messagetemplate.Template, error) {
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT `+messageTemplateCols+` FROM message_templates
+		WHERE user_id=$1 AND deleted_at IS NULL
+		  AND ($2 = '' OR kind=$2)
+		  AND ($3::timestamptz IS NULL OR (updated_at,id) < ($3::timestamptz,$4::bigint))
+		ORDER BY updated_at DESC, id DESC
+		LIMIT $5`, userID, filter.Kind, filter.AfterUpdatedAt, filter.AfterID, filter.Limit+1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*messagetemplate.Template, 0, filter.Limit+1)
+	for rows.Next() {
+		item, err := scanMessageTemplate(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func (r *MessageTemplateRepo) GetOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*messagetemplate.Template, error) {
 	item, err := scanMessageTemplate(From(ctx, r.pool).QueryRow(ctx, `
 		SELECT `+messageTemplateCols+` FROM message_templates
@@ -86,3 +109,4 @@ func (r *MessageTemplateRepo) SoftDelete(ctx context.Context, id int64) error {
 }
 
 var _ messagetemplate.Repository = (*MessageTemplateRepo)(nil)
+var _ messagetemplate.PageRepository = (*MessageTemplateRepo)(nil)
