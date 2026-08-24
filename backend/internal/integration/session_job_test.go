@@ -148,3 +148,30 @@ func TestJobCancelRequestIsConsumedAsCancelledTerminalState(t *testing.T) {
 		t.Fatalf("cancelled job mismatch: err=%v job=%+v", err, finished)
 	}
 }
+
+func TestJobCancelRequestCannotMarkFinishedJob(t *testing.T) {
+	ctx := context.Background()
+	j := &job.Job{PublicID: uuid.New(), Type: "account.session_check.browser",
+		Status: job.StatusQueued, Cancelable: true, CreatedAt: time.Now()}
+	jobs := postgres.NewJobRepo(pool)
+	if err := jobs.CreateJob(ctx, j); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := jobs.Claim(ctx, j.PublicID, "cancel-race-worker", time.Minute)
+	if err != nil || claimed == nil {
+		t.Fatalf("claim: err=%v job=%+v", err, claimed)
+	}
+	if err := jobs.Finish(ctx, j.ID, job.StatusSucceeded, nil, time.Now()); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	if err := jobs.RequestCancel(ctx, j.ID, time.Now()); err == nil {
+		t.Fatal("finished job must reject a late cancel request")
+	}
+	requested, err := jobs.IsCancelRequested(ctx, j.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requested {
+		t.Fatal("finished job must not receive a cancel marker")
+	}
+}

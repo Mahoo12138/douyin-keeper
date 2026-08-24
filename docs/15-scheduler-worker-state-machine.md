@@ -554,6 +554,10 @@ Worker：
 - 清理临时文件/profile；
 - 最终写 `cancelled`。
 
+取消标记的写入必须与 Job 状态条件放在同一个原子更新中；若 Job 已进入终态，取消请求返回
+冲突且不得补写 `cancel_requested_at`。这样即使 API 读取状态与写入之间发生竞态，也不会把已
+成功的 Job 标成待取消。
+
 如果已经产生平台成功结果，则不能“取消成功”，应保留 succeeded。
 
 ## 15. Entitlement 双检查

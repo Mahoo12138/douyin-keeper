@@ -143,9 +143,16 @@ func (r *JobRepo) AppendEvent(ctx context.Context, jobID int64, e job.JobEvent) 
 }
 
 func (r *JobRepo) RequestCancel(ctx context.Context, jobID int64, at time.Time) error {
-	_, err := From(ctx, r.pool).Exec(ctx, `
-		UPDATE jobs SET cancel_requested_at=$2 WHERE id=$1 AND cancelable`, jobID, at)
-	return err
+	tag, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE jobs SET cancel_requested_at=COALESCE(cancel_requested_at, $2)
+		WHERE id=$1 AND cancelable AND status IN ('queued','running','waiting_user')`, jobID, at)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return apperr.Conflict(apperr.CodeConflict, "job is no longer cancelable")
+	}
+	return nil
 }
 
 // FindExpiredLeases returns generic jobs whose worker lease expired while the
