@@ -5,7 +5,7 @@ configure daily interaction tasks per friend, and observe everything from a PC w
 Operators manage users, accounts, workers, risk, and entitlement via a PC admin console.
 
 The architecture, domain model, contracts, and state machines are **frozen in `docs/`** (authoritative, Chinese-language).
-The repository now includes the M0 foundation, the core M1–M3 account/friend/send backend flows, and functional PC account and friends surfaces with QR binding progress, capability snapshots, friend synchronization, filters, and spark-maintenance toggles. Tasks, history, Mini Program, and Admin surfaces continue to land incrementally. See `docs/08-roadmap-repo.md` for the roadmap (M0–M7).
+The repository now includes the M0 foundation, the core M1–M3 account/friend/send backend flows, and functional PC account, friends, and task surfaces with QR binding progress, capability snapshots, friend synchronization, filters, spark-maintenance toggles, task editing, and run-now actions. History, Mini Program, and Admin surfaces continue to land incrementally. See `docs/08-roadmap-repo.md` for the roadmap (M0–M7).
 
 ## Layout
 

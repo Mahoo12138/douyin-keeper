@@ -2,7 +2,7 @@
 // All data flows through the Go backend (docs/04 §2.3) — the SDK never talks
 // to a Node server.
 import createClient from 'openapi-fetch'
-import type { paths } from './schema.js'
+import type { components, paths } from './schema.js'
 
 export type { paths, components } from './schema.js'
 
@@ -119,6 +119,52 @@ export async function listTasks(accessToken: string) {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   if (error) throwApiError(error, 'tasks failed')
+  return data
+}
+
+export type CreateTaskInput = components['schemas']['CreateTaskRequest']
+export type UpdateTaskInput = {
+  enabled?: boolean
+  timezone?: string
+  window_start?: string
+  window_end?: string
+  message?: { kind: 'text' | 'sticker'; body?: string | null }
+  allow_first_message?: boolean
+}
+
+export async function createTask(accessToken: string, body: CreateTaskInput) {
+  const { data, error } = await api.POST('/tasks', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body,
+  })
+  if (error) throwApiError(error, 'task creation failed')
+  return data
+}
+
+export async function updateTask(accessToken: string, taskId: string, body: UpdateTaskInput) {
+  const { data, error } = await api.PATCH('/tasks/{taskId}', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { taskId } },
+    body,
+  })
+  if (error) throwApiError(error, 'task update failed')
+  return data
+}
+
+export async function deleteTask(accessToken: string, taskId: string) {
+  const { error } = await api.DELETE('/tasks/{taskId}', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { taskId } },
+  })
+  if (error) throwApiError(error, 'task deletion failed')
+}
+
+export async function runTaskNow(accessToken: string, taskId: string, idempotencyKey = crypto.randomUUID()) {
+  const { data, error } = await api.POST('/tasks/{taskId}/run-now', {
+    headers: { Authorization: `Bearer ${accessToken}`, 'Idempotency-Key': idempotencyKey },
+    params: { path: { taskId }, header: { 'Idempotency-Key': idempotencyKey } },
+  })
+  if (error) throwApiError(error, 'task run failed')
   return data
 }
 

@@ -148,6 +148,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tasks/{taskId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteTask"];
+        options?: never;
+        head?: never;
+        patch: operations["updateTask"];
+        trace?: never;
+    };
     "/tasks/{taskId}/run-now": {
         parameters: {
             query?: never;
@@ -851,6 +867,64 @@ export interface operations {
                     "application/json": components["schemas"]["SparkTask"];
                 };
             };
+        };
+    };
+    deleteTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    enabled?: boolean;
+                    timezone?: string;
+                    window_start?: string;
+                    window_end?: string;
+                    message?: {
+                        /** @enum {string} */
+                        kind: "text" | "sticker";
+                        body?: string | null;
+                    };
+                    allow_first_message?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated task */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SparkTask"];
+                };
+            };
+            409: components["responses"]["Conflict"];
         };
     };
     runTaskNow: {

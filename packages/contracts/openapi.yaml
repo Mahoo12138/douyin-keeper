@@ -197,6 +197,72 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SparkTask'
+  /tasks/{taskId}:
+    patch:
+      operationId: updateTask
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                enabled:
+                  type: boolean
+                timezone:
+                  type: string
+                window_start:
+                  type: string
+                  pattern: ^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$
+                window_end:
+                  type: string
+                  pattern: ^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$
+                message:
+                  type: object
+                  additionalProperties: false
+                  required:
+                  - kind
+                  properties:
+                    kind:
+                      type: string
+                      enum:
+                      - text
+                      - sticker
+                    body:
+                      type:
+                      - string
+                      - 'null'
+                allow_first_message:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SparkTask'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: deleteTask
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Deleted
   /tasks/{taskId}/run-now:
     post:
       operationId: runTaskNow
