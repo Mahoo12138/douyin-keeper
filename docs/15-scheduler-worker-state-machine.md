@@ -696,6 +696,8 @@ light
 interactive:
   account.bind.qr
   account.bind.sms.*
+  account.relogin.qr
+  account.relogin.sms
 
 browser:
   account.session_check.browser

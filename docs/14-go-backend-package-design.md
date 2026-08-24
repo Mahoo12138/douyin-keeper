@@ -624,6 +624,8 @@ MVP 单实例也保留 leader lock，便于以后水平扩容。
 ```text
 account.bind.qr
 account.bind.sms.* (future)
+account.relogin.qr
+account.relogin.sms
 ```
 
 ### worker-browser

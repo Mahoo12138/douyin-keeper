@@ -696,6 +696,10 @@ paths:
                   type: string
                   minLength: 5
                   maxLength: 32
+                account_id:
+                  type: string
+                  format: uuid
+                  description: Re-login an already-owned account instead of creating a new account.
       responses:
         '202':
           description: Binding job created

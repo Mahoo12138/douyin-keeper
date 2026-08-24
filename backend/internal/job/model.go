@@ -28,7 +28,7 @@ type Job struct {
 	PublicID          uuid.UUID
 	UserID            *int64
 	AccountID         *int64
-	Type              string // account.bind.qr | account.session_check.browser | ...
+	Type              string // account.bind.qr | account.relogin.qr | account.session_check.browser | ...
 	Status            Status
 	ErrorCode         *string
 	Cancelable        bool

@@ -51,6 +51,7 @@ const (
 	CodeQRExpired                 = "QR_EXPIRED"
 	CodeSMSExpired                = "SMS_CODE_EXPIRED"
 	CodeAccountIdentityUnresolved = "ACCOUNT_IDENTITY_UNRESOLVED"
+	CodeAccountIdentityMismatch   = "ACCOUNT_IDENTITY_MISMATCH"
 	CodeChallengeRequired         = "CHALLENGE_REQUIRED"
 	CodePlatformRateLimited       = "PLATFORM_RATE_LIMITED"
 	CodeAdapterUnavailable        = "ADAPTER_UNAVAILABLE"

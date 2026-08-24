@@ -164,33 +164,74 @@ func (s *Service) CreateBinding(ctx context.Context, userID int64, method, phone
 		if err := s.repo.Create(tctx, acct); err != nil {
 			return err
 		}
-		typ := "account.bind.qr"
-		kind := outbox.KindAccountBindQR
-		if method == "sms" {
-			typ = "account.bind.sms"
-			kind = outbox.KindAccountBindSMS
-		}
-		j := newPlatformJob(acct, typ, true, s.now())
-		if err := s.jobs.CreateJob(tctx, j); err != nil {
-			return err
-		}
-		payload := jobRefPayload(j.PublicID)
-		if method == "sms" {
-			payload = bindingJobPayload(j.PublicID, phone)
-		}
-		if err := s.outbox.Add(tctx, outbox.Message{
-			Kind: kind, AggregateType: "account", AggregateID: acct.PublicID.String(),
-			Payload: payload, DedupeKey: "account.binding:" + acct.PublicID.String(),
-		}); err != nil {
-			return err
-		}
-		jobPublicID = j.PublicID
-		return nil
+		jobPublicID, err = s.createBindingJob(tctx, acct, method, phone, false, "account.binding:"+acct.PublicID.String())
+		return err
 	})
 	if err != nil {
 		return uuid.Nil, err
 	}
 	return jobPublicID, nil
+}
+
+// Rebind starts a login flow for an already-owned account. It reuses the
+// existing account row and session replacement transaction; it never creates
+// another quota-consuming account. A failed re-login leaves the current
+// session and account identity untouched.
+func (s *Service) Rebind(ctx context.Context, userID int64, publicID uuid.UUID, method, phone string) (uuid.UUID, error) {
+	var acct *Account
+	var jobPublicID uuid.UUID
+	err := s.tx.WithinTx(ctx, func(tctx context.Context) error {
+		if s.userLock != nil {
+			if err := s.userLock.LockUserForUpdate(tctx, userID); err != nil {
+				return err
+			}
+		}
+		var err error
+		acct, err = s.repo.GetOwned(tctx, userID, publicID)
+		if err != nil {
+			return err
+		}
+		if acct.BindingStatus != BindingBound {
+			return apperr.Conflict(apperr.CodeConflict, "account is not bound")
+		}
+		jobPublicID, err = s.createBindingJob(tctx, acct, method, phone, true,
+			"account.rebinding:"+acct.PublicID.String()+":"+uuid.New().String())
+		return err
+	})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return jobPublicID, nil
+}
+
+func (s *Service) createBindingJob(ctx context.Context, acct *Account, method, phone string, rebind bool, dedupeKey string) (uuid.UUID, error) {
+	typ := "account.bind.qr"
+	kind := outbox.KindAccountBindQR
+	if rebind {
+		typ = "account.relogin.qr"
+	}
+	if method == "sms" {
+		typ = "account.bind.sms"
+		kind = outbox.KindAccountBindSMS
+		if rebind {
+			typ = "account.relogin.sms"
+		}
+	}
+	j := newPlatformJob(acct, typ, true, s.now())
+	if err := s.jobs.CreateJob(ctx, j); err != nil {
+		return uuid.Nil, err
+	}
+	payload := jobRefPayload(j.PublicID)
+	if method == "sms" {
+		payload = bindingJobPayload(j.PublicID, phone)
+	}
+	if err := s.outbox.Add(ctx, outbox.Message{
+		Kind: kind, AggregateType: "account", AggregateID: acct.PublicID.String(),
+		Payload: payload, DedupeKey: dedupeKey,
+	}); err != nil {
+		return uuid.Nil, err
+	}
+	return j.PublicID, nil
 }
 
 // RequestSessionCheck creates a generic job + outbox for worker-browser.
@@ -257,6 +298,11 @@ func (s *Service) Release(ctx context.Context, userID int64, publicID uuid.UUID)
 		return err
 	}
 	return s.tx.WithinTx(ctx, func(tctx context.Context) error {
+		if s.userLock != nil {
+			if err := s.userLock.LockUserForUpdate(tctx, userID); err != nil {
+				return err
+			}
+		}
 		return s.repo.SoftDelete(tctx, acct.ID)
 	})
 }

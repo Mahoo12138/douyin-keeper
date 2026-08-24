@@ -167,6 +167,23 @@ func TestMustJSONIsSafeForJobEvents(t *testing.T) {
 	}
 }
 
+func TestRebindProtectsSessionAndAccountIdentityBoundaries(t *testing.T) {
+	platformID := "platform-user"
+	acct := &account.Account{PlatformUserID: &platformID}
+	if !isRebindJob(&job.Job{Type: "account.relogin.qr"}) {
+		t.Fatal("re-login job type should be recognized")
+	}
+	if isRebindJob(&job.Job{Type: "account.bind.qr"}) {
+		t.Fatal("new binding job must not be treated as re-login")
+	}
+	if !rebindIdentityMatches(acct, bindIdentity{PlatformUserID: platformID}) {
+		t.Fatal("same platform identity should be accepted")
+	}
+	if rebindIdentityMatches(acct, bindIdentity{PlatformUserID: "another-user"}) {
+		t.Fatal("different platform identity must be rejected")
+	}
+}
+
 func TestCompleteBindFinalizesJobBeforeAccountAndOutboxCommit(t *testing.T) {
 	jobs := &bindJobRepoStub{}
 	accounts := &bindAccountRepoStub{}

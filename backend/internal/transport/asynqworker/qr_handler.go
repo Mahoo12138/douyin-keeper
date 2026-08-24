@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -265,6 +266,9 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 	if identity.PlatformUserID == "" {
 		return finishBindFailure(ctx, deps, claimed, apperr.CodeAccountIdentityUnresolved)
 	}
+	if isRebindJob(claimed) && !rebindIdentityMatches(acct, identity) {
+		return finishBindFailure(ctx, deps, claimed, apperr.CodeAccountIdentityMismatch)
+	}
 	if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "confirming", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()}); err != nil {
 		return err
 	}
@@ -409,18 +413,35 @@ func finishBindRiskFailure(ctx context.Context, deps QRBindDeps, claimed *job.Jo
 		return finishBindFailure(ctx, deps, claimed, code)
 	}
 	var fallback func(context.Context) error
-	switch code {
-	case apperr.CodeSessionExpired:
-		fallback = func(tctx context.Context) error {
-			return deps.Accounts.SetSessionStatus(tctx, acctID, account.SessionExpired, deps.Now())
-		}
-	case apperr.CodeChallengeRequired:
-		fallback = func(tctx context.Context) error {
-			return deps.Accounts.SetSessionStatus(tctx, acctID, account.SessionChallengeRequired, deps.Now())
+	if !isRebindJob(claimed) {
+		switch code {
+		case apperr.CodeSessionExpired:
+			fallback = func(tctx context.Context) error {
+				return deps.Accounts.SetSessionStatus(tctx, acctID, account.SessionExpired, deps.Now())
+			}
+		case apperr.CodeChallengeRequired:
+			fallback = func(tctx context.Context) error {
+				return deps.Accounts.SetSessionStatus(tctx, acctID, account.SessionChallengeRequired, deps.Now())
+			}
 		}
 	}
-	return commitWorkerFailureWithEvents(ctx, deps.Tx, deps.Jobs, deps.Risk, claimed, acctID, code,
+	// A re-login is an isolated replacement attempt. Do not pass the failure
+	// through the normal risk projection because SESSION_EXPIRED and
+	// CHALLENGE_REQUIRED would downgrade the still-valid old session.
+	risk := deps.Risk
+	if isRebindJob(claimed) {
+		risk = nil
+	}
+	return commitWorkerFailureWithEvents(ctx, deps.Tx, deps.Jobs, risk, claimed, acctID, code,
 		capability.AdapterBrowserConsumer, claimed.PublicID.String(), fallback, events, deps.Now)
+}
+
+func isRebindJob(claimed *job.Job) bool {
+	return claimed != nil && strings.HasPrefix(claimed.Type, "account.relogin.")
+}
+
+func rebindIdentityMatches(acct *account.Account, identity bindIdentity) bool {
+	return acct == nil || acct.PlatformUserID == nil || *acct.PlatformUserID == identity.PlatformUserID
 }
 
 func decodeResult(response *sidecar.Response, target any) error {

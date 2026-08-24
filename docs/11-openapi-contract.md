@@ -288,6 +288,16 @@ MVP：
 }
 ```
 
+`account_id` 可选：提供时表示对当前用户已拥有的账号重新登录，成功后替换该账号的
+Session；不提供时创建新的绑定账号。重新登录失败不会创建账号，也不会覆盖原有 Session。
+
+```json
+{
+  "method": "qr",
+  "account_id": "..."
+}
+```
+
 Response：
 
 ```json
@@ -714,6 +724,7 @@ JOB_NOT_CANCELABLE
 SESSION_EXPIRED
 QR_EXPIRED
 ACCOUNT_IDENTITY_UNRESOLVED
+ACCOUNT_IDENTITY_MISMATCH
 CHALLENGE_REQUIRED
 PLATFORM_RATE_LIMITED
 ```

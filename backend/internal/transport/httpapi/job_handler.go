@@ -164,7 +164,7 @@ func (s *Server) handleSubmitSMSVerification(w http.ResponseWriter, r *http.Requ
 		writeError(w, r, err)
 		return
 	}
-	if j.Type != "account.bind.sms" || j.Status != job.StatusWaiting {
+	if (j.Type != "account.bind.sms" && j.Type != "account.relogin.sms") || j.Status != job.StatusWaiting {
 		writeError(w, r, apperr.Conflict(apperr.CodeConflict, "sms binding is not waiting for verification"))
 		return
 	}

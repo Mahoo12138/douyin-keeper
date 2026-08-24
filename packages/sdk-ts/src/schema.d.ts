@@ -2499,6 +2499,11 @@ export interface operations {
                     /** @enum {string} */
                     method: "qr" | "sms";
                     phone?: string;
+                    /**
+                     * Format: uuid
+                     * @description Re-login an already-owned account instead of creating a new account.
+                     */
+                    account_id?: string;
                 };
             };
         };

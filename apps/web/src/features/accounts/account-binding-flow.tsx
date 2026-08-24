@@ -15,12 +15,12 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Inpu
 import { getToken } from '@/auth/session'
 import { AccountBindingPanel } from './account-binding-panel'
 import type { BindingState } from './account-types'
-import { bindingMethodLabel, isSMSPhoneValid, type BindingMethod } from './account-binding-utils'
+import { bindingErrorMessage, bindingMethodLabel, isSMSPhoneValid, type BindingMethod } from './account-binding-utils'
 
 type BindingFlowMode = 'embedded' | 'page'
 
-export function AccountBindingFlow({ mode = 'embedded', onSuccess }: { mode?: BindingFlowMode; onSuccess?: () => void }) {
-  const binding = useAccountBinding(onSuccess)
+export function AccountBindingFlow({ mode = 'embedded', accountId, onSuccess }: { mode?: BindingFlowMode; accountId?: string; onSuccess?: () => void }) {
+  const binding = useAccountBinding(accountId, onSuccess)
 
   if (mode === 'page') {
     return <BindingPage binding={binding} />
@@ -30,14 +30,14 @@ export function AccountBindingFlow({ mode = 'embedded', onSuccess }: { mode?: Bi
     <>
       <Button onClick={binding.openChoice} disabled={!!binding.binding}>
         <Smartphone />
-        {binding.binding ? '绑定进行中…' : '绑定抖音账号'}
+        {binding.binding ? '登录进行中…' : accountId ? '重新登录' : '绑定抖音账号'}
       </Button>
 
       {binding.bindingChoice && !binding.binding && (
         <BindingChoiceDialog binding={binding} />
       )}
 
-      {binding.binding && <AccountBindingPanel binding={binding.binding} submittingCode={binding.submittingCode} onSubmitSMSCode={binding.binding.method === 'sms' ? binding.submitSMSCode : undefined} onCancel={() => void binding.cancelBinding()} />}
+      {binding.binding && <AccountBindingPanel binding={binding.binding} relogin={binding.isRebinding} submittingCode={binding.submittingCode} onSubmitSMSCode={binding.binding.method === 'sms' ? binding.submitSMSCode : undefined} onCancel={() => void binding.cancelBinding()} />}
     </>
   )
 }
@@ -49,8 +49,8 @@ function BindingChoiceDialog({ binding }: { binding: BindingController }) {
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" role="presentation">
       <Card role="dialog" aria-modal="true" aria-labelledby="binding-choice-title" className="w-full max-w-md shadow-2xl">
         <CardHeader>
-          <CardTitle id="binding-choice-title">选择绑定方式</CardTitle>
-          <CardDescription>扫码适合快速绑定；短信方式需要输入抖音账号手机号和验证码。</CardDescription>
+          <CardTitle id="binding-choice-title">{binding.isRebinding ? '选择重新登录方式' : '选择绑定方式'}</CardTitle>
+          <CardDescription>{binding.isRebinding ? '重新登录会替换当前账号 Session，验证失败时不会改变原有登录态。' : '扫码适合快速绑定；短信方式需要输入抖音账号手机号和验证码。'}</CardDescription>
         </CardHeader>
         <BindingMethodForm binding={binding} embedded />
       </Card>
@@ -82,7 +82,7 @@ function BindingPage({ binding }: { binding: BindingController }) {
         </Card>
       )}
 
-      {binding.binding && <AccountBindingPanel binding={binding.binding} submittingCode={binding.submittingCode} onSubmitSMSCode={binding.binding.method === 'sms' ? binding.submitSMSCode : undefined} onCancel={() => void binding.cancelBinding()} />}
+      {binding.binding && <AccountBindingPanel binding={binding.binding} relogin={binding.isRebinding} submittingCode={binding.submittingCode} onSubmitSMSCode={binding.binding.method === 'sms' ? binding.submitSMSCode : undefined} onCancel={() => void binding.cancelBinding()} />}
     </div>
   )
 }
@@ -97,7 +97,7 @@ function BindingMethodForm({ binding, embedded = false }: { binding: BindingCont
     <form className="space-y-4" onSubmit={submit}>
       <CardContent className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor={embedded ? 'binding-method' : 'binding-page-method'}>绑定方式</Label>
+          <Label htmlFor={embedded ? 'binding-method' : 'binding-page-method'}>{binding.isRebinding ? '登录方式' : '绑定方式'}</Label>
           <select id={embedded ? 'binding-method' : 'binding-page-method'} value={binding.bindingMethod} onChange={(event) => binding.setBindingMethod(event.target.value as BindingMethod)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
             <option value="qr">{bindingMethodLabel('qr')}</option>
             <option value="sms">{bindingMethodLabel('sms')}</option>
@@ -112,14 +112,14 @@ function BindingMethodForm({ binding, embedded = false }: { binding: BindingCont
         )}
         <div className="flex justify-end gap-2">
           {embedded && <Button type="button" variant="outline" onClick={binding.closeChoice}>取消</Button>}
-          <Button type="submit">开始绑定</Button>
+          <Button type="submit">{binding.isRebinding ? '开始重新登录' : '开始绑定'}</Button>
         </div>
       </CardContent>
     </form>
   )
 }
 
-function useAccountBinding(onSuccess?: () => void) {
+function useAccountBinding(accountId?: string, onSuccess?: () => void) {
   const token = getToken()
   const queryClient = useQueryClient()
   const [binding, setBinding] = useState<BindingState | null>(null)
@@ -142,7 +142,7 @@ function useAccountBinding(onSuccess?: () => void) {
     setBindingChoice(false)
     setBinding({ method, status: 'queued', jobId: null, qr: null, expiresAt: null })
     try {
-      const job = await createAccountBinding(token, method, method === 'sms' ? phone : undefined)
+      const job = await createAccountBinding(token, method, method === 'sms' ? phone : undefined, accountId)
       const controller = new AbortController()
       bindingAbort.current = controller
       setBinding({ method, status: 'running', jobId: job.job_id, qr: null, expiresAt: null })
@@ -180,7 +180,7 @@ function useAccountBinding(onSuccess?: () => void) {
     if (event.event_type === 'success') {
       bindingAbort.current?.abort()
       setBinding(null)
-      toast.success('抖音账号绑定成功，首次好友同步已开始')
+      toast.success(accountId ? '重新登录成功，好友同步已开始' : '抖音账号绑定成功，首次好友同步已开始')
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
       onSuccess?.()
       return
@@ -188,7 +188,8 @@ function useAccountBinding(onSuccess?: () => void) {
     if (event.event_type === 'error' || event.event_type === 'challenge_required' || event.event_type === 'cancelled') {
       bindingAbort.current?.abort()
       setBinding((current) => current?.jobId === jobId ? { ...current, status: 'error' } : current)
-      toast.error(event.event_type === 'challenge_required' ? '需要完成平台安全验证' : '账号绑定未完成')
+      const code = typeof event.payload.code === 'string' ? event.payload.code : undefined
+      toast.error(bindingErrorMessage(event.event_type, code))
     }
     if (event.event_type === 'sms_code_invalid') toast.error('验证码错误，请重新输入')
   }
@@ -222,6 +223,7 @@ function useAccountBinding(onSuccess?: () => void) {
   }
 
   return {
+    isRebinding: !!accountId,
     binding,
     bindingChoice,
     bindingMethod,

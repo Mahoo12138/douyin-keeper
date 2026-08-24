@@ -12,3 +12,8 @@ test('admin job type labels fall back to unknown types for forward compatibility
   assert.equal(adminJobTypeLabel('future.job.type'), 'future.job.type')
   assert.equal(adminJobTypeLabel('send.protocol'), 'Protocol 发送')
 })
+
+test('admin job type presets expose QR and SMS re-login lifecycles', () => {
+  assert.equal(adminJobTypeLabel('account.relogin.qr'), '扫码重新登录')
+  assert.equal(adminJobTypeLabel('account.relogin.sms'), '短信重新登录')
+})

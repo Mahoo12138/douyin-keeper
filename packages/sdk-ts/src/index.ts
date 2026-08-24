@@ -322,10 +322,10 @@ export async function listAccounts(accessToken: string, options?: { limit?: numb
   return data
 }
 
-export async function createAccountBinding(accessToken: string, method: 'qr' | 'sms' = 'qr', phone?: string) {
+export async function createAccountBinding(accessToken: string, method: 'qr' | 'sms' = 'qr', phone?: string, accountId?: string) {
   const { data, error } = await api.POST('/accounts/bindings', {
     headers: { Authorization: `Bearer ${accessToken}` },
-    body: { method, ...(phone ? { phone } : {}) },
+    body: { method, ...(phone ? { phone } : {}), ...(accountId ? { account_id: accountId } : {}) },
   })
   if (error) throwApiError(error, 'binding failed')
   return data

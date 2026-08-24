@@ -156,6 +156,24 @@ func TestFinishBindRiskFailureKeepsChallengeEventAndRiskInJobTx(t *testing.T) {
 	}
 }
 
+func TestFinishRebindRiskFailureDoesNotProjectOntoOldSession(t *testing.T) {
+	j := &bindJobRepoStub{}
+	risk := &transactionalRiskStub{}
+	now := func() time.Time { return time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC) }
+	claimed := &job.Job{ID: 14, PublicID: uuid.New(), Type: "account.relogin.qr", Status: job.StatusWaiting}
+	deps := QRBindDeps{Jobs: j, Accounts: &bindAccountRepoStub{}, Tx: bindTxStub{}, Risk: risk, Now: now}
+
+	if err := finishBindRiskFailure(context.Background(), deps, claimed, 20, "CHALLENGE_REQUIRED"); err != nil {
+		t.Fatal(err)
+	}
+	if len(risk.operations) != 0 {
+		t.Fatalf("re-login failure projected risk onto the old account: %#v", risk.operations)
+	}
+	if len(j.operations) < 2 || j.operations[0] != "tx:finish" || j.operations[len(j.operations)-1] != "tx:event:error" {
+		t.Fatalf("job operations = %#v, want terminal error event", j.operations)
+	}
+}
+
 func TestFinishSendRiskFailureKeepsSendStateAndRiskInJobTx(t *testing.T) {
 	sends := &sendTerminalRepoStub{}
 	risk := &transactionalRiskStub{}

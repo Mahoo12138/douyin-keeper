@@ -26,7 +26,7 @@
 ### Accounts
 
 - `GET /api/accounts`
-- `POST /api/accounts/bindings`（`method=qr|sms`；SMS 额外接收手机号）
+- `POST /api/accounts/bindings`（`method=qr|sms`；SMS 额外接收手机号；可选 `account_id` 重新登录已有账号）
 - `POST /api/accounts/:id/session-check`
 - `POST /api/accounts/:id/friends-sync`
 - `POST /api/accounts/:id/pause`
@@ -198,6 +198,7 @@ Browser Worker 成功后更新 `last_session_check_at` 和 `session_status=valid
 - `SESSION_EXPIRED`
 - `QR_EXPIRED`
 - `ACCOUNT_IDENTITY_UNRESOLVED`
+- `ACCOUNT_IDENTITY_MISMATCH`（重新登录时扫码账号与原账号不一致）
 - `CHALLENGE_REQUIRED`
 - `PLATFORM_RATE_LIMITED`
 - `FRIEND_NOT_FOUND`

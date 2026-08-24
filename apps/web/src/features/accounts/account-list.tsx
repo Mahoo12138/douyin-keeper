@@ -4,6 +4,7 @@ import { ArrowRight, Pause, Play, RefreshCw, Smartphone, Trash2, UsersRound } fr
 
 import type { Account } from './account-types'
 import { bindingLabel, formatDate, riskLabel, sessionLabel, StatusBadge } from './account-status'
+import { AccountBindingFlow } from './account-binding-flow'
 
 export function AccountList({ accounts, selectedAccountId, busyAction, onSelect, onSession, onFriends, onPause, onRelease }: {
   accounts: Account[]
@@ -70,6 +71,7 @@ function AccountRow({ account, selected, busyAction, onSelect, onSession, onFrie
         </button>
         <div className="flex flex-wrap gap-2 lg:justify-end">
           <Button asChild variant="ghost" size="sm"><Link to="/accounts/$accountId" params={{ accountId: account.id }}>详情<ArrowRight /></Link></Button>
+          {account.binding_status === 'bound' && <AccountBindingFlow accountId={account.id} />}
           <Button variant="outline" size="sm" onClick={onSession} disabled={busyAction !== null}>
             <RefreshCw />
             会话检查

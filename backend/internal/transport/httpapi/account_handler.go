@@ -16,8 +16,9 @@ import (
 )
 
 type createBindingReq struct {
-	Method string `json:"method"`
-	Phone  string `json:"phone"`
+	Method    string `json:"method"`
+	Phone     string `json:"phone"`
+	AccountID string `json:"account_id"`
 }
 
 var smsPhonePattern = regexp.MustCompile(`^\+?[0-9][0-9 ()-]{3,30}$`)
@@ -88,10 +89,27 @@ func (s *Server) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, apperr.Validation(apperr.CodeConflict, "phone is required for sms binding"))
 		return
 	}
-	jobID, err := s.accounts.CreateBinding(r.Context(), p.UserID, req.Method, phone)
-	if err != nil {
-		writeError(w, r, err)
-		return
+	var (
+		jobID uuid.UUID
+		err   error
+	)
+	if strings.TrimSpace(req.AccountID) != "" {
+		accountID, parseErr := uuid.Parse(strings.TrimSpace(req.AccountID))
+		if parseErr != nil {
+			writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid account id"))
+			return
+		}
+		jobID, err = s.accounts.Rebind(r.Context(), p.UserID, accountID, req.Method, phone)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+	} else {
+		jobID, err = s.accounts.CreateBinding(r.Context(), p.UserID, req.Method, phone)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
 	}
 	writeAccepted(w, JobRef{JobID: jobID})
 }
