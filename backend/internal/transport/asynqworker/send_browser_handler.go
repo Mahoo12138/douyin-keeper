@@ -111,6 +111,9 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		if deps.Sends == nil || deps.Tasks == nil || deps.Targets == nil || deps.Tx == nil {
 			return fmt.Errorf("%s: dependencies are not configured", adapterConfig.name)
 		}
+		if err := validateSendPreflightDependencies(deps); err != nil {
+			return fmt.Errorf("%s: %w", adapterConfig.name, err)
+		}
 		claimed, err := deps.Sends.ClaimJob(ctx, jobPublicID, deps.WorkerID, deps.LockTTL)
 		if err != nil || claimed == nil {
 			return err
@@ -168,26 +171,22 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		if err != nil {
 			return failWithQuota(apperr.CodeAdapterIncompatible)
 		}
-		if deps.Capabilities != nil {
-			snapshot, capabilityErr := deps.Capabilities.GetByAccountAndName(ctx, acct.ID, spec.Capability)
-			if capabilityErr != nil {
-				return failWithQuota(apperr.CodeInternal)
-			}
-			if snapshot == nil || snapshot.Status != capability.StatusAvailable {
-				return failWithQuota(capabilitySendError(snapshot))
-			}
-			if snapshot.Adapter != nil && *snapshot.Adapter != "" && *snapshot.Adapter != adapterConfig.adapter {
-				return failWithQuota(apperr.CodeAdapterIncompatible)
-			}
-			if deps.Health != nil {
-				allowed, healthErr := deps.Health.Allow(ctx, adapterConfig.adapter)
-				if healthErr != nil {
-					return failWithQuota(apperr.CodeInternal)
-				}
-				if !allowed {
-					return failWithQuota(apperr.CodeAdapterUnavailable)
-				}
-			}
+		snapshot, capabilityErr := deps.Capabilities.GetByAccountAndName(ctx, acct.ID, spec.Capability)
+		if capabilityErr != nil {
+			return failWithQuota(apperr.CodeInternal)
+		}
+		if snapshot == nil || snapshot.Status != capability.StatusAvailable {
+			return failWithQuota(capabilitySendError(snapshot))
+		}
+		if snapshot.Adapter != nil && *snapshot.Adapter != "" && *snapshot.Adapter != adapterConfig.adapter {
+			return failWithQuota(apperr.CodeAdapterIncompatible)
+		}
+		allowed, healthErr := deps.Health.Allow(ctx, adapterConfig.adapter)
+		if healthErr != nil {
+			return failWithQuota(apperr.CodeInternal)
+		}
+		if !allowed {
+			return failWithQuota(apperr.CodeAdapterUnavailable)
 		}
 		decision, err := deps.Entitlement.Authorize(ctx, entitlement.AuthorizationRequest{
 			UserID: acct.UserID, Action: entitlement.ActionSendExecute,
@@ -299,6 +298,16 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		}
 		return nil
 	}
+}
+
+func validateSendPreflightDependencies(deps SessionCheckDeps) error {
+	if deps.Capabilities == nil {
+		return fmt.Errorf("capability snapshot repository is not configured")
+	}
+	if deps.Health == nil {
+		return fmt.Errorf("adapter health service is not configured")
+	}
+	return nil
 }
 
 func requiredTaskFeature(allowFirstMessage bool) string {

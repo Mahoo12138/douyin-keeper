@@ -118,6 +118,20 @@ func TestMessageSendSpecSelectsProtocolFirstMessageOperation(t *testing.T) {
 	}
 }
 
+func TestSendPreflightRequiresCapabilityAndHealth(t *testing.T) {
+	if err := validateSendPreflightDependencies(SessionCheckDeps{}); err == nil {
+		t.Fatal("send preflight should require capability snapshots")
+	}
+	deps := SessionCheckDeps{Capabilities: fallbackCapabilityRepo{}}
+	if err := validateSendPreflightDependencies(deps); err == nil || !strings.Contains(err.Error(), "adapter health") {
+		t.Fatalf("send preflight should require adapter health, got %v", err)
+	}
+	deps.Health = fallbackHealth{allowed: true}
+	if err := validateSendPreflightDependencies(deps); err != nil {
+		t.Fatalf("configured send preflight dependencies rejected: %v", err)
+	}
+}
+
 type fallbackSendRepo struct {
 	send.Repository
 	finished struct {
