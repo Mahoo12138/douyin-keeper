@@ -591,6 +591,10 @@ entitlement_grants
 - Logout All 一次撤销全部 AuthSession；
 - 微信 code 只由后端和微信服务端交换，不信任客户端直接传 OpenID。
 
+当前 HTTP Router 已将 Register/Login/Refresh/微信 Link/微信 Login 分别放入独立的
+IP fixed-window limiter；需要身份的 Link Code 与 Card Redeem 同时按 `user_id` 和客户端
+IP 限制，两个维度任一达到上限都会拒绝请求，避免只轮换 IP 或只切换账号绕过限制。
+
 ## 16. 测试冻结项
 
 必须有以下集成测试：

@@ -71,14 +71,13 @@ func (s *Server) Router() http.Handler {
 
 	// ---- API v1 ----
 	r.Route("/api/v1", func(api chi.Router) {
-		// Public auth endpoints (rate-limited per docs/13 §15).
+		// Public auth endpoints each get an independent IP window (docs/13 §15).
 		api.Group(func(public chi.Router) {
-			public.Use(RateLimit(30, time.Minute))
-			public.Post("/auth/register", s.handleRegister)
-			public.Post("/auth/login", s.handleLogin)
-			public.Post("/auth/refresh", s.handleRefresh)
-			public.Post("/auth/wechat-mini/link", s.handleWechatLink)
-			public.Post("/auth/wechat-mini/login", s.handleWechatLogin)
+			public.With(RateLimit(30, time.Minute)).Post("/auth/register", s.handleRegister)
+			public.With(RateLimit(30, time.Minute)).Post("/auth/login", s.handleLogin)
+			public.With(RateLimit(30, time.Minute)).Post("/auth/refresh", s.handleRefresh)
+			public.With(RateLimit(30, time.Minute)).Post("/auth/wechat-mini/link", s.handleWechatLink)
+			public.With(RateLimit(30, time.Minute)).Post("/auth/wechat-mini/login", s.handleWechatLogin)
 		})
 
 		api.With(RequiresRole(auth.RoleAdmin, s.signingKey, s.auth)).Get("/admin/users", s.handleAdminListUsers)
@@ -112,7 +111,7 @@ func (s *Server) Router() http.Handler {
 			private.Get("/me", s.handleMe)
 			private.Post("/auth/logout", s.handleLogout)
 			private.Post("/auth/logout-all", s.handleLogoutAll)
-			private.Post("/auth/link-codes", s.handleCreateLinkCode)
+			private.With(RateLimitUserAndIP(10, time.Minute)).Post("/auth/link-codes", s.handleCreateLinkCode)
 
 			private.Get("/me/entitlement", s.handleMyEntitlement)
 			private.Get("/notifications", s.handleListNotifications)
@@ -120,7 +119,7 @@ func (s *Server) Router() http.Handler {
 			private.Patch("/notifications/preferences", s.handlePatchNotificationPreferences)
 			private.Post("/notifications/read-all", s.handleMarkAllNotificationsRead)
 			private.Post("/notifications/{notificationId}/read", s.handleMarkNotificationRead)
-			private.Post("/entitlements/redeem", s.handleRedeem)
+			private.With(RateLimitUserAndIP(10, time.Minute)).Post("/entitlements/redeem", s.handleRedeem)
 			private.Get("/entitlements/redemptions", s.handleListRedemptions)
 
 			private.Get("/accounts", s.handleListAccounts)

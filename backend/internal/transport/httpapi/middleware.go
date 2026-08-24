@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -93,9 +95,9 @@ func (w *loggingWriter) Flush() {
 
 // rateLimiter is a minimal in-memory fixed-window limiter (docs/13 §15).
 type rateLimiter struct {
-	mu    sync.Mutex
+	mu     sync.Mutex
 	visits map[string][]time.Time
-	limit int
+	limit  int
 	window time.Duration
 }
 
@@ -104,31 +106,74 @@ func newRateLimiter(limit int, window time.Duration) *rateLimiter {
 }
 
 func (rl *rateLimiter) allow(key string) bool {
+	return rl.allowKeys(key)
+}
+
+func (rl *rateLimiter) allowKeys(keys ...string) bool {
+	unique := make([]string, 0, len(keys))
+	seenKeys := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		if _, seen := seenKeys[key]; seen {
+			continue
+		}
+		seenKeys[key] = struct{}{}
+		unique = append(unique, key)
+	}
+	if len(unique) == 0 {
+		return false
+	}
+
 	now := time.Now()
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	cutoff := now.Add(-rl.window)
-	seen := rl.visits[key]
-	kept := seen[:0]
-	for _, t := range seen {
-		if t.After(cutoff) {
-			kept = append(kept, t)
+	keptByKey := make(map[string][]time.Time, len(unique))
+	blocked := false
+	for _, key := range unique {
+		seen := rl.visits[key]
+		kept := seen[:0]
+		for _, visitedAt := range seen {
+			if visitedAt.After(cutoff) {
+				kept = append(kept, visitedAt)
+			}
+		}
+		if len(kept) >= rl.limit {
+			blocked = true
+		}
+		keptByKey[key] = kept
+	}
+	for key, kept := range keptByKey {
+		if len(kept) == 0 {
+			delete(rl.visits, key)
+		} else {
+			rl.visits[key] = kept
 		}
 	}
-	if len(kept) >= rl.limit {
-		rl.visits[key] = kept
+	if blocked {
 		return false
 	}
-	rl.visits[key] = append(kept, now)
+	for _, key := range unique {
+		rl.visits[key] = append(rl.visits[key], now)
+	}
 	return true
 }
 
-// RateLimit guards the auth/register endpoints per client IP.
+// RateLimit guards one route independently per client IP.
 func RateLimit(limit int, window time.Duration) func(http.Handler) http.Handler {
+	return RateLimitKeys(limit, window, func(r *http.Request) []string { return []string{"ip:" + clientIP(r)} })
+}
+
+// RateLimitKeys builds independent dimensions from the request. A request is
+// accepted only when every dimension has capacity, and a rejected request does
+// not consume a partial token in the other dimensions.
+func RateLimitKeys(limit int, window time.Duration, keys func(*http.Request) []string) func(http.Handler) http.Handler {
 	rl := newRateLimiter(limit, window)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !rl.allow(clientIP(r)) {
+			if keys == nil || !rl.allowKeys(keys(r)...) {
 				writeError(w, r, apperr.New(apperr.CodePlatformRateLimited, apperr.KindQuota, "too many requests"))
 				return
 			}
@@ -137,11 +182,27 @@ func RateLimit(limit int, window time.Duration) func(http.Handler) http.Handler 
 	}
 }
 
+// RateLimitUserAndIP protects authenticated abuse-sensitive operations such
+// as card redemption and link-code generation across both identity and source
+// network, including when one dimension is rotated.
+func RateLimitUserAndIP(limit int, window time.Duration) func(http.Handler) http.Handler {
+	return RateLimitKeys(limit, window, func(r *http.Request) []string {
+		keys := []string{"ip:" + clientIP(r)}
+		if principal, ok := auth.PrincipalFrom(r.Context()); ok {
+			keys = append(keys, "user:"+strconv.FormatInt(principal.UserID, 10))
+		}
+		return keys
+	})
+}
+
 func clientIP(r *http.Request) string {
 	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
 		return strings.TrimSpace(strings.Split(ip, ",")[0])
 	}
-	return strings.Split(r.RemoteAddr, ":")[0]
+	if host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr)); err == nil {
+		return host
+	}
+	return strings.TrimSpace(r.RemoteAddr)
 }
 
 // RequireAuth authenticates the Bearer token and loads the user (docs/13 §7).

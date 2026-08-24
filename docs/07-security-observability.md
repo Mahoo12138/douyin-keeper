@@ -172,3 +172,6 @@ HMAC-SHA-256(CARD_CODE_PEPPER_V{code_version}, normalized_code)
 `CARD_CODE_PEPPER_Vn` 必须与 Session/JWT/Auth Secret 分离；新版本卡密使用新 Pepper，旧 Pepper 保留到旧版本卡密兑换截止。完整卡密只在管理员生成后一次性导出，后续无法从数据库找回。
 
 兑换接口必须登录并做用户/IP 限流；日志、APM、Sentry 类错误追踪、Audit detail 都应对 `code` 字段做 redact。卡密撤销和权益撤销是两个不同动作：已兑换卡保持 `redeemed`，如需收回权限则 revoke 对应 Grant。
+
+当前实现中兑换和 Link Code 路由使用用户/IP 双维度 fixed-window limiter；公开认证路由
+分别使用独立的 IP limiter，避免注册、登录、刷新和微信入口共享同一个计数窗口。
