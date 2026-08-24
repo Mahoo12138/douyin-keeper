@@ -24,6 +24,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/cryptox"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/risk"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/session"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/transport/asynqworker"
@@ -67,6 +68,7 @@ func main() {
 	sendRepo := postgres.NewSendRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
 	healthService := capability.NewHealthService(postgres.NewCapabilityRepo(pool), capability.DefaultHealthPolicy())
+	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown)
 	entitlementRepo := postgres.NewEntitlementRepo(pool)
 	entitlementSvc := entitlement.NewService(entitlementRepo, entitlementRepo, entitlementRepo, entitlementRepo,
 		postgres.NewUserLockRepo(pool), workerTx, nil)
@@ -90,6 +92,7 @@ func main() {
 		Redis: rdb, Friends: friendRepo, Targets: friendRepo, Tasks: taskRepo, Sends: sendRepo,
 		Capabilities: postgres.NewCapabilityRepo(pool),
 		Health:       healthService,
+		Risk:         riskService,
 		Entitlement:  entitlementSvc, Quota: entitlementSvc, Tx: workerTx,
 		WorkerID: workerID, LockTTL: 2 * time.Minute,
 	}, log)

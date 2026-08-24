@@ -266,6 +266,11 @@ internal/transport/httpapi/entitlement_handler.go
 - error category；
 - cooldown/pause action policy。
 
+当前实现：Worker 将 Sidecar/平台稳定错误交给 `risk.Service`，由事务同时写入
+`risk_events` 与账号 Session/cooldown 状态；Scheduler 的 risk cleanup 会把已过期
+`cooling_down` 账号恢复为 `normal`。用户 `paused_at`、风险 cooldown 和 Session
+状态在发送 Worker 最终 preflight 中分别检查。
+
 ### `scheduler`
 
 只负责：

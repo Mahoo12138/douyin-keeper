@@ -86,6 +86,7 @@ func (r *TaskRepo) ListDue(ctx context.Context, now time.Time, limit int) ([]*ta
 		  AND f.deleted_at IS NULL
 		  AND f.identity_status = 'resolved'
 		  AND a.binding_status = 'bound'
+		  AND a.paused_at IS NULL
 		  AND a.risk_status = 'normal'
 		  AND a.session_status IN ('unknown','valid')
 		  AND (($1::timestamptz AT TIME ZONE t.timezone)::time >= t.window_start)

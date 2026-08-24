@@ -18,8 +18,11 @@ func NewRiskRepo(pool *pgxpool.Pool) *RiskRepo { return &RiskRepo{pool: pool} }
 
 func (r *RiskRepo) Record(ctx context.Context, e *risk.Event) error {
 	e.PublicID = uuid.New()
-	b, _ := json.Marshal(e.Detail)
-	if b == nil {
+	var b []byte
+	if e.Detail != nil {
+		b, _ = json.Marshal(e.Detail)
+	}
+	if len(b) == 0 {
 		b = []byte("{}")
 	}
 	return From(ctx, r.pool).QueryRow(ctx, `

@@ -14,11 +14,13 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/config"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/cryptox"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/risk"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/session"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/transport/asynqworker"
@@ -56,7 +58,10 @@ func main() {
 	}
 	jobRepo := postgres.NewJobRepo(pool)
 	accountRepo := postgres.NewAccountRepo(pool)
-	sessionSvc := session.NewService(postgres.NewSessionRepo(pool), postgres.NewTxManager(pool), cipher, cfg.SessionTempDir)
+	workerTx := postgres.NewTxManager(pool)
+	healthService := capability.NewHealthService(postgres.NewCapabilityRepo(pool), capability.DefaultHealthPolicy())
+	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown)
+	sessionSvc := session.NewService(postgres.NewSessionRepo(pool), workerTx, cipher, cfg.SessionTempDir)
 	sidecarScript := cfg.PlaywrightSidecarScript
 	if _, statErr := os.Stat(sidecarScript); os.IsNotExist(statErr) {
 		candidate := filepath.Join("..", sidecarScript)
@@ -75,7 +80,7 @@ func main() {
 	srv := asynqqueue.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr}, asynqworker.ServerConfig("interactive"))
 	mux := asynqworker.NewInteractiveMux(postgres.NewOutboxRepo(pool), asynqworker.QRBindDeps{
 		Jobs: jobRepo, Accounts: accountRepo, Sessions: sessionSvc, Sidecar: sidecarClient,
-		Redis: rdb, Tx: postgres.NewTxManager(pool), Outbox: postgres.NewOutboxRepo(pool),
+		Redis: rdb, Tx: workerTx, Outbox: postgres.NewOutboxRepo(pool), Health: healthService, Risk: riskService,
 		WorkerID: workerID, ProfileRoot: cfg.LoginProfileDir, LockTTL: 6 * time.Minute,
 	}, log)
 	log.Info("worker-interactive starting")

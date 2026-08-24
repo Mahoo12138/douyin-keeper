@@ -70,6 +70,7 @@ func main() {
 
 	outboxRepo := postgres.NewOutboxRepo(pool)
 	capabilityRepo := postgres.NewCapabilityRepo(pool)
+	accountRepo := postgres.NewAccountRepo(pool)
 	producer := asynqqueue.NewClient(asynq.RedisClientOpt{Addr: cfg.RedisAddr})
 	defer producer.Close()
 	tx := postgres.NewTxManager(pool)
@@ -84,6 +85,7 @@ func main() {
 	retryRunner := scheduler.NewRetryRunner(sendRepo, entitlementSvc, outboxRepo, tx, cfg.ScheduleBatchSize)
 	capabilityProbe := scheduler.NewCapabilityProbeRunner(capabilityRepo, outboxRepo, tx,
 		scheduler.DefaultCapabilityProbeInterval, cfg.ScheduleBatchSize)
+	riskCooldown := scheduler.NewRiskCooldownReaper(accountRepo, cfg.ScheduleBatchSize)
 
 	publisher := scheduler.NewPublisher(outboxRepo, producer, cfg.OutboxBatchSize,
 		cfg.OutboxPollInterval, log)
@@ -151,6 +153,11 @@ func main() {
 				} else if stats.Enqueued > 0 {
 					log.Info("capability probe scan completed", "scanned", stats.Scanned,
 						"enqueued", stats.Enqueued)
+				}
+				if n, err := riskCooldown.RunOnce(ctx); err != nil {
+					log.Error("risk cooldown cleanup failed", "err", err)
+				} else if n > 0 {
+					log.Info("risk cooldown cleanup completed", "count", n)
 				}
 			}
 		}

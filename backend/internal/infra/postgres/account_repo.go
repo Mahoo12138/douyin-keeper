@@ -111,6 +111,43 @@ func (r *AccountRepo) SetRiskStatus(ctx context.Context, accountID int64, risk a
 	return err
 }
 
+// ClearExpiredRiskCooldowns returns accounts whose platform cooldown has
+// elapsed to the normal risk state. The bounded CTE keeps scheduler cleanup
+// work small and safe when multiple leaders overlap.
+func (r *AccountRepo) ClearExpiredRiskCooldowns(ctx context.Context, now time.Time, limit int) (int, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		WITH expired AS (
+			SELECT id FROM douyin_accounts
+			WHERE risk_status = 'cooling_down'
+			  AND cooldown_until IS NOT NULL AND cooldown_until <= $1
+			  AND deleted_at IS NULL
+			ORDER BY id
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		)
+		UPDATE douyin_accounts a
+		SET risk_status = 'normal', cooldown_until = NULL, updated_at = $1
+		FROM expired
+		WHERE a.id = expired.id
+		RETURNING a.id`, now, limit)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return count, err
+		}
+		count++
+	}
+	return count, rows.Err()
+}
+
 func (r *AccountRepo) SetSessionStatus(ctx context.Context, accountID int64, status account.SessionStatus, checkedAt time.Time) error {
 	_, err := From(ctx, r.pool).Exec(ctx, `
 		UPDATE douyin_accounts SET session_status=$2, last_session_check_at=$3, updated_at=now() WHERE id=$1`,

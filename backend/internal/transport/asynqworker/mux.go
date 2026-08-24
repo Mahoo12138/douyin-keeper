@@ -68,7 +68,10 @@ type SessionCheckDeps struct {
 	Capabilities interface {
 		GetByAccountAndName(context.Context, int64, string) (*capability.Capability, error)
 	}
-	Health       capability.HealthObserver
+	Health capability.HealthObserver
+	Risk   interface {
+		Apply(context.Context, int64, string, string, map[string]any) error
+	}
 	Entitlement send.Gate
 	Quota       interface {
 		ReleaseDaily(context.Context, int64, string) error
@@ -238,7 +241,10 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 			if app, ok := apperr.As(err); ok {
 				code = app.Code
 			}
-			if code == apperr.CodeSessionExpired {
+			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, code, deps.Now)
+			if deps.Risk != nil {
+				observeWorkerRisk(ctx, deps.Risk, acct.ID, code, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+			} else if code == apperr.CodeSessionExpired {
 				_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, deps.Now())
 			}
 			return fail(code)
@@ -250,12 +256,22 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 			}
 			switch code {
 			case sidecar.ErrSessionExpired:
-				_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, deps.Now())
+				if deps.Risk != nil {
+					observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeSessionExpired, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+				} else {
+					_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, deps.Now())
+				}
 				return fail(apperr.CodeSessionExpired)
 			case sidecar.ErrChallengeRequired:
-				_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionChallengeRequired, deps.Now())
+				if deps.Risk != nil {
+					observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeChallengeRequired, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+				} else {
+					_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionChallengeRequired, deps.Now())
+				}
 				return fail(apperr.CodeChallengeRequired)
 			default:
+				observeWorkerRisk(ctx, deps.Risk, acct.ID, code, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+				observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, code, deps.Now)
 				return fail(code)
 			}
 		}
@@ -267,8 +283,9 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 		}
 		body, err := json.Marshal(response.Result)
 		if err != nil || json.Unmarshal(body, &result) != nil || !result.Valid {
-			_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, deps.Now())
-			return fail(apperr.CodeSessionExpired)
+			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
+			return fail(apperr.CodeAdapterIncompatible)
 		}
 		if err := deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionValid, deps.Now()); err != nil {
 			return fail(apperr.CodeInternal)

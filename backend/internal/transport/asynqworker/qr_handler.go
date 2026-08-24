@@ -14,6 +14,7 @@ import (
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/redislock"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/outbox"
@@ -28,8 +29,12 @@ type QRBindDeps struct {
 		WithTempFile(context.Context, int64, uuid.UUID, uuid.UUID, func(string) error) error
 	}
 	Sidecar sidecar.Client
-	Redis   *redis.Client
-	Tx      interface {
+	Health  capability.HealthObserver
+	Risk    interface {
+		Apply(context.Context, int64, string, string, map[string]any) error
+	}
+	Redis *redis.Client
+	Tx    interface {
 		WithinTx(context.Context, func(context.Context) error) error
 	}
 	Outbox      outbox.Outbox
@@ -142,13 +147,19 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			Input: map[string]any{"profile_dir": profileDir, "locale": "zh-CN"},
 		})
 		if err != nil {
+			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 			return fail(apperr.CodeAdapterUnavailable)
 		}
 		if code := sidecarErrorCode(startResponse); code != "" {
-			return fail(mapSidecarError(code))
+			mapped := mapSidecarError(code)
+			observeWorkerRisk(ctx, deps.Risk, acct.ID, mapped, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, mapped, deps.Now)
+			return fail(mapped)
 		}
 		var started qrStartResult
 		if err := decodeResult(startResponse, &started); err != nil || started.LoginHandle == "" || started.QR.Value == "" {
+			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
 			return fail(apperr.CodeAdapterIncompatible)
 		}
 		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
@@ -183,17 +194,27 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 				Input: map[string]any{"login_handle": started.LoginHandle, "export_session_file": exportPath},
 			})
 			if callErr != nil {
+				observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 				return fail(apperr.CodeAdapterUnavailable)
 			}
 			if code := sidecarErrorCode(response); code != "" {
-				return fail(mapSidecarError(code))
+				mapped := mapSidecarError(code)
+				observeWorkerRisk(ctx, deps.Risk, acct.ID, mapped, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+				observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, mapped, deps.Now)
+				return fail(mapped)
 			}
 			var polled qrPollResult
 			if err := decodeResult(response, &polled); err != nil {
+				observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+				observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
 				return fail(apperr.CodeAdapterIncompatible)
 			}
 			if polled.State == "challenge_required" {
-				_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionChallengeRequired, deps.Now())
+				if deps.Risk != nil {
+					observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeChallengeRequired, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+				} else {
+					_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionChallengeRequired, deps.Now())
+				}
 				_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "challenge_required", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()})
 				return fail(apperr.CodeChallengeRequired)
 			}
@@ -210,6 +231,8 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 				return completeQRBind(ctx, deps, claimed, acct, exportPath, polled)
 			}
 			if polled.State != "waiting" && polled.State != "scanned" {
+				observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+				observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
 				return fail(apperr.CodeAdapterIncompatible)
 			}
 			if err := sleepContext(ctx, deps.PollEvery); err != nil {
@@ -251,18 +274,33 @@ func completeQRBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct
 			return callErr
 		}
 		if code := sidecarErrorCode(response); code != "" {
-			return fmt.Errorf("session validation failed: %s", code)
+			return newSidecarCodeError(code)
 		}
 		var valid struct {
 			Valid bool `json:"valid"`
 		}
 		if err := decodeResult(response, &valid); err != nil || !valid.Valid {
-			return fmt.Errorf("session validation returned invalid")
+			return qrValidationError{}
 		}
 		return nil
 	}); err != nil {
-		_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, deps.Now())
-		return finishQRFailure(ctx, deps, claimed, apperr.CodeSessionExpired)
+		code := apperr.CodeAdapterUnavailable
+		if _, ok := err.(qrValidationError); ok {
+			code = apperr.CodeAdapterIncompatible
+		}
+		if responseCode, ok := sidecarResponseCode(err); ok {
+			code = mapSidecarError(responseCode)
+		}
+		if app, ok := apperr.As(err); ok {
+			code = app.Code
+		}
+		if deps.Risk != nil {
+			observeWorkerRisk(ctx, deps.Risk, acct.ID, code, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+		} else if code == apperr.CodeSessionExpired {
+			_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, deps.Now())
+		}
+		observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, code, deps.Now)
+		return finishQRFailure(ctx, deps, claimed, code)
 	}
 	if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
 		return err
@@ -287,6 +325,10 @@ func completeQRBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct
 	_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "success", Payload: json.RawMessage(`{"binding_status":"bound"}`), CreatedAt: deps.Now()})
 	return deps.Jobs.Finish(ctx, claimed.ID, job.StatusSucceeded, nil, deps.Now())
 }
+
+type qrValidationError struct{}
+
+func (qrValidationError) Error() string { return "session validation returned an invalid result" }
 
 func enqueueInitialFriendsSync(ctx context.Context, deps QRBindDeps, acct *account.Account) error {
 	userID, accountID := acct.UserID, acct.ID

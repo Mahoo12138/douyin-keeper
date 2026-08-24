@@ -272,6 +272,8 @@ Adapter 选择只产生“计划路由”。真正 Worker 开始前仍做 capabi
 `message.send.text.existing` snapshot：只有状态为 `available` 才允许进入
 Sidecar；snapshot 缺失、`degraded` 或 `unavailable` 时直接以
 `ADAPTER_UNAVAILABLE`（或快照中的兼容性错误）结束，并释放已预占的日配额。
+账号 `paused_at`、`risk_status=cooling_down/paused` 或有效 `cooldown_until` 同样
+直接结束发送，不调用 Sidecar。
 账号绑定成功后会通过 `capability.probe` 投递首次 `health.check`；Scheduler
 随后每 10 分钟为过期 snapshot 投递刷新任务。全局 `adapter_health` 在连续 3 次
 健康/兼容性失败后进入 `open` 10 分钟，open 期间发送 Worker 直接 fail closed，
@@ -676,6 +678,9 @@ Scheduler 周期任务：
 
 - cooldown_until passed -> normal；
 - 不自动改变 session_status。
+
+当前 Scheduler 每 60 秒以有界批次执行上述清理，并将变更持久化到
+`douyin_accounts`；Worker 记录风险事件与账号动作使用同一事务，避免只改状态而丢失审计事件。
 
 ## 21. 发送成功定义
 

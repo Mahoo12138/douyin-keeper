@@ -12,6 +12,7 @@ import (
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/friend"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/redislock"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
@@ -126,7 +127,10 @@ func friendsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 			if app, ok := apperr.As(err); ok {
 				code = app.Code
 			}
-			if code == apperr.CodeSessionExpired {
+			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, code, now)
+			if deps.Risk != nil {
+				observeWorkerRisk(ctx, deps.Risk, acct.ID, code, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+			} else if code == apperr.CodeSessionExpired {
 				_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, now())
 			} else if code == apperr.CodeChallengeRequired {
 				_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionChallengeRequired, now())
@@ -140,10 +144,14 @@ func friendsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 			return err
 		}
 		if !result.Complete {
+			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, now)
 			return fail(apperr.CodeAdapterIncompatible)
 		}
 		items, seenIDs, seenConversationIDs, err := normalizeFriendItems(result.Friends)
 		if err != nil {
+			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, now)
 			return fail(apperr.CodeAdapterIncompatible)
 		}
 		if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{

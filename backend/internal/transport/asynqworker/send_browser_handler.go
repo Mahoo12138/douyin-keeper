@@ -88,6 +88,15 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		if acct.BindingStatus != account.BindingBound {
 			return failWithQuota(apperr.CodeConflict)
 		}
+		if acct.PausedAt != nil {
+			return failWithQuota(apperr.CodeAccountPaused)
+		}
+		if acct.RiskStatus == account.RiskPaused {
+			return failWithQuota(apperr.CodeAccountPaused)
+		}
+		if acct.RiskStatus == account.RiskCoolingDown && (acct.CooldownUntil == nil || now().Before(*acct.CooldownUntil)) {
+			return failWithQuota(apperr.CodeAccountCooldownActive)
+		}
 		if acct.SessionStatus == account.SessionExpired {
 			return failWithQuota(apperr.CodeSessionExpired)
 		}
@@ -160,13 +169,19 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		})
 		if err != nil {
 			if errors.Is(err, sidecar.ErrProcessStart) {
+				observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 				nextAttemptAt := now().Add(sendRetryDelay(claimed.Attempt))
 				return finishSendRetry(ctx, deps, claimed, apperr.CodeAdapterUnavailable, nextAttemptAt, now)
 			}
 			if app, ok := apperr.As(err); ok && app.Code == apperr.CodeSessionExpired {
-				_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, now())
+				if deps.Risk != nil {
+					observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeSessionExpired, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+				} else {
+					_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, now())
+				}
 				return failWithQuota(apperr.CodeSessionExpired)
 			}
+			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 			return failWithQuota(apperr.CodeAdapterUnavailable)
 		}
 		if code := sendSidecarErrorCode(response); code != "" {
@@ -174,22 +189,29 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 			if deps.Health != nil && capability.IsCircuitFailureCode(code) {
 				_ = deps.Health.ObserveFailure(ctx, capability.AdapterBrowserConsumer, "", code, now())
 			}
+			if deps.Risk != nil {
+				observeWorkerRisk(ctx, deps.Risk, acct.ID, code, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+			}
 			if shouldRetrySend(response) {
 				nextAttemptAt := now().Add(sendRetryDelay(claimed.Attempt))
 				return finishSendRetry(ctx, deps, claimed, mapped, nextAttemptAt, now)
 			}
-			if mapped == apperr.CodeSessionExpired {
-				_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, now())
-			} else if mapped == apperr.CodeChallengeRequired {
-				_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionChallengeRequired, now())
-			} else if mapped == apperr.CodePlatformRateLimited {
-				cooldown := now().Add(10 * time.Minute)
-				_ = deps.Accounts.SetRiskStatus(ctx, acct.ID, account.RiskCoolingDown, &cooldown)
+			if deps.Risk == nil {
+				switch mapped {
+				case apperr.CodeSessionExpired:
+					_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, now())
+				case apperr.CodeChallengeRequired:
+					_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionChallengeRequired, now())
+				case apperr.CodePlatformRateLimited:
+					cooldown := now().Add(10 * time.Minute)
+					_ = deps.Accounts.SetRiskStatus(ctx, acct.ID, account.RiskCoolingDown, &cooldown)
+				}
 			}
 			return failWithQuota(mapped)
 		}
 		var result sendTextResult
 		if err := decodeResult(response, &result); err != nil || !result.Confirmed || result.PlatformMessageID == "" {
+			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 			if deps.Health != nil {
 				_ = deps.Health.ObserveFailure(ctx, capability.AdapterBrowserConsumer, "", sidecar.ErrAdapterIncompatible, now())
 			}

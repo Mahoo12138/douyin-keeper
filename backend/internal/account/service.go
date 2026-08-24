@@ -165,6 +165,10 @@ func (s *Service) Resume(ctx context.Context, userID int64, publicID uuid.UUID) 
 	if err != nil {
 		return err
 	}
+	now := s.now()
+	if acct.RiskStatus == RiskCoolingDown && (acct.CooldownUntil == nil || now.Before(*acct.CooldownUntil)) {
+		return apperr.Conflict(apperr.CodeAccountCooldownActive, "account cooldown is still active")
+	}
 	return s.repo.SetPaused(ctx, acct.ID, nil)
 }
 

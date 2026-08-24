@@ -80,6 +80,17 @@ func TestSchedulerCreatesDailyIntentAndOutboxOnce(t *testing.T) {
 	runner := scheduler.NewTickRunner(postgres.NewTaskRepo(pool), sends, ent, ent, relay, tx, 10)
 	// Keep the test deterministic even when it runs near a local-day boundary.
 	runner.SetNow(func() time.Time { return when })
+	pausedAt := when.Add(-time.Minute)
+	if err := accounts.SetPaused(ctx, acct.ID, &pausedAt); err != nil {
+		t.Fatal(err)
+	}
+	pausedStats, err := runner.RunOnce(ctx)
+	if err != nil || pausedStats.Scanned != 0 || pausedStats.Created != 0 {
+		t.Fatalf("paused account should not be scheduled: stats=%+v err=%v", pausedStats, err)
+	}
+	if err := accounts.SetPaused(ctx, acct.ID, nil); err != nil {
+		t.Fatal(err)
+	}
 
 	stats, err := runner.RunOnce(ctx)
 	if err != nil || stats.Scanned < 1 || stats.Created < 1 {

@@ -89,6 +89,12 @@ Playwright / Protocol Sidecar：
 
 - friend_ambiguous → 禁止发送，要求重新同步/确认。
 
+当前 Go `risk.Service` 会在同一 PostgreSQL 事务内记录 `risk_events` 并执行动作：
+`SESSION_EXPIRED` / `CHALLENGE_REQUIRED` 只更新 Session 状态，
+`PLATFORM_RATE_LIMITED` 设置账号 10 分钟 cooldown，协议/浏览器兼容性错误交给
+Adapter circuit breaker，网络错误只保留有界重试语义。Scheduler 每 60 秒清理已过期
+cooldown；风险事件不会携带 Session、Cookie 或消息正文。
+
 ## 5. 日志
 
 所有日志结构化：
