@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/friend"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
@@ -141,5 +142,66 @@ func TestSchedulerCreatesDailyIntentAndOutboxOnce(t *testing.T) {
 	usage, err := postgres.NewEntitlementRepo(pool).GetDailyUsage(ctx, userID, entitlement.EffectiveLocalDate(when))
 	if err != nil || usage == nil || usage.ReservedSendCount != 1 {
 		t.Fatalf("daily usage=%+v err=%v", usage, err)
+	}
+}
+
+func TestSchedulerSkipsExpiredEntitlementWithoutQueueingJob(t *testing.T) {
+	ctx := context.Background()
+	userID := newUser(t)
+	adminID := newUser(t)
+	ent := newEntSvc()
+	code, _ := seedCard(t, ent, adminID)
+	if _, _, err := ent.Redeem(ctx, userID, code); err != nil {
+		t.Fatalf("redeem: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE entitlement_grants
+		SET starts_at = now() - interval '2 days', expires_at = now() - interval '1 day'
+		WHERE user_id = $1 AND revoked_at IS NULL`, userID); err != nil {
+		t.Fatalf("expire grant: %v", err)
+	}
+
+	acct, f := seedBoundAccountAndFriend(t, userID)
+	when := time.Now().UTC().Truncate(time.Microsecond)
+	body := "expired entitlement should not send"
+	tk := &task.SparkTask{
+		PublicID: uuid.New(), UserID: userID, AccountID: acct.ID, FriendID: f.ID,
+		Enabled: true, Timezone: "Asia/Shanghai", WindowStart: "00:00:00", WindowEnd: "23:59:59",
+		MessageKind: "text", MessageBody: &body, CreatedAt: when, UpdatedAt: when,
+	}
+	if err := postgres.NewTaskRepo(pool).Create(ctx, tk); err != nil {
+		t.Fatalf("create due task: %v", err)
+	}
+
+	sends := postgres.NewSendRepo(pool)
+	runner := scheduler.NewTickRunner(postgres.NewTaskRepo(pool), sends, ent, ent,
+		postgres.NewOutboxRepo(pool), postgres.NewTxManager(pool), 10)
+	runner.SetNow(func() time.Time { return when })
+	stats, err := runner.RunOnce(ctx)
+	if err != nil || stats.Scanned != 1 || stats.Created != 1 || stats.Skipped != 1 {
+		t.Fatalf("expired entitlement stats=%+v err=%v", stats, err)
+	}
+
+	intents, err := sends.ListIntentsByUser(ctx, userID, send.IntentListFilter{})
+	if err != nil || len(intents) != 1 {
+		t.Fatalf("expired entitlement intents=%+v err=%v", intents, err)
+	}
+	intent := intents[0]
+	if intent.Status != send.IntentSkipped || intent.ErrorCode == nil || *intent.ErrorCode != apperr.CodeEntitlementExpired {
+		t.Fatalf("expired entitlement intent=%+v", intent)
+	}
+	if intent.LastJobID != nil {
+		t.Fatalf("expired entitlement created a job: %+v", intent)
+	}
+	if count, err := sends.CountJobsForIntent(ctx, intent.ID); err != nil || count != 0 {
+		t.Fatalf("expired entitlement job count=%d err=%v", count, err)
+	}
+	var outboxCount int
+	if err := pool.QueryRow(ctx, `
+		SELECT COUNT(*)::int FROM queue_outbox WHERE aggregate_id = $1`, intent.PublicID.String()).Scan(&outboxCount); err != nil {
+		t.Fatalf("count expired entitlement outbox: %v", err)
+	}
+	if outboxCount != 0 {
+		t.Fatalf("expired entitlement queued %d outbox messages", outboxCount)
 	}
 }

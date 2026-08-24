@@ -617,3 +617,7 @@ OpenID 提取、`session_key` 不外泄和微信服务暂时不可用的重试�
 当前已增加真实 PostgreSQL 并发配额覆盖：两个并发 Binding 只能占用一个
 `AccountQuota`，两个并发 Task Create 只能占用一个 `TaskQuota`；测试验证服务事务内的
 User 行锁、配额拒绝码和最终资源数量。
+
+管理员 Grant 撤销后会立即通过下一次 `Gate` 拒绝平台动作；权益过期时 Scheduler 只落下
+`ENTITLEMENT_EXPIRED` 的 `skipped Intent`，不创建 SendJob 或发送 Outbox。上述行为已由
+Admin Entitlement 与 Scheduler 集成测试覆盖。

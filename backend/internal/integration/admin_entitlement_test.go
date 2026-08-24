@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 )
@@ -85,6 +86,12 @@ func TestAdminEntitlementSummariesAndDisableAudit(t *testing.T) {
 	}
 	if err := ent.RevokeGrantByAdmin(ctx, actorID, adminGrant.PublicID, "integration revoke"); err != nil {
 		t.Fatal(err)
+	}
+	decision, err := ent.Authorize(ctx, entitlement.AuthorizationRequest{
+		UserID: adminGrantUserID, Action: entitlement.ActionSendExecute,
+	})
+	if err != nil || decision.Allowed || decision.ReasonCode != apperr.CodeEntitlementExpired {
+		t.Fatalf("revoked grant must be rejected immediately: decision=%+v err=%v", decision, err)
 	}
 	userGrants, err = ent.ListUserGrantSummaries(ctx, adminGrantUserID, 100)
 	if err != nil || len(userGrants) != 1 || userGrants[0].RevokedAt == nil || userGrants[0].RevokeReason == nil {
