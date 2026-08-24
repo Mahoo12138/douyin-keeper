@@ -98,7 +98,7 @@ export async function disableAdminEntitlementPlan(accessToken: string, planId: s
   if (error) throwApiError(error, 'admin entitlement plan disable failed')
 }
 
-export async function listAdminCardBatches(accessToken: string, options?: { limit?: number }) {
+export async function listAdminCardBatches(accessToken: string, options?: { limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/admin/card-batches', {
     headers: { Authorization: `Bearer ${accessToken}` },
     params: { query: options },
@@ -133,7 +133,7 @@ export async function disableAdminCardBatch(accessToken: string, batchId: string
   if (error) throwApiError(error, 'admin card batch disable failed')
 }
 
-export async function listAdminRedemptions(accessToken: string, options?: { limit?: number }) {
+export async function listAdminRedemptions(accessToken: string, options?: { limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/admin/redemptions', {
     headers: { Authorization: `Bearer ${accessToken}` },
     params: { query: options },

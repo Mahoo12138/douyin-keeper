@@ -151,6 +151,7 @@ paths:
       operationId: listAdminCardBatches
       parameters:
       - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Administrator card batch summaries
@@ -220,6 +221,7 @@ paths:
       operationId: listAdminRedemptions
       parameters:
       - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Administrator redemption and grant history without plaintext card codes

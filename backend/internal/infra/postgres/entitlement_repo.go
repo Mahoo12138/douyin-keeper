@@ -135,11 +135,16 @@ func (r *EntitlementRepo) CreateBatch(ctx context.Context, b *entitlement.CardBa
 }
 
 func (r *EntitlementRepo) ListSummaries(ctx context.Context, limit int) ([]entitlement.CardBatchSummary, error) {
-	return r.listBatchSummaries(ctx, limit, nil)
+	return r.listBatchSummaries(ctx, entitlement.BatchListFilter{Limit: limit}, nil)
+}
+
+func (r *EntitlementRepo) ListSummariesPage(ctx context.Context, filter entitlement.BatchListFilter) ([]entitlement.CardBatchSummary, error) {
+	filter.Limit++
+	return r.listBatchSummaries(ctx, filter, nil)
 }
 
 func (r *EntitlementRepo) GetSummaryByPublicID(ctx context.Context, publicID uuid.UUID) (entitlement.CardBatchSummary, error) {
-	items, err := r.listBatchSummaries(ctx, 1, &publicID)
+	items, err := r.listBatchSummaries(ctx, entitlement.BatchListFilter{Limit: 1}, &publicID)
 	if err != nil {
 		return entitlement.CardBatchSummary{}, err
 	}
@@ -149,10 +154,10 @@ func (r *EntitlementRepo) GetSummaryByPublicID(ctx context.Context, publicID uui
 	return items[0], nil
 }
 
-func (r *EntitlementRepo) listBatchSummaries(ctx context.Context, limit int, publicID *uuid.UUID) ([]entitlement.CardBatchSummary, error) {
-	var filter any
+func (r *EntitlementRepo) listBatchSummaries(ctx context.Context, filter entitlement.BatchListFilter, publicID *uuid.UUID) ([]entitlement.CardBatchSummary, error) {
+	var publicIDFilter any
 	if publicID != nil {
-		filter = *publicID
+		publicIDFilter = *publicID
 	}
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT b.id, b.public_id, b.entitlement_plan_id, b.name, b.duration_days, b.quantity,
@@ -167,9 +172,10 @@ func (r *EntitlementRepo) listBatchSummaries(ctx context.Context, limit int, pub
 		JOIN users u ON u.id=b.created_by
 		LEFT JOIN card_codes c ON c.batch_id=b.id
 		WHERE ($2::uuid IS NULL OR b.public_id=$2)
+		  AND ($3::timestamptz IS NULL OR (b.created_at,b.id) < ($3::timestamptz,$4::bigint))
 		GROUP BY b.id, p.code, p.name, u.display_name
 		ORDER BY b.created_at DESC, b.id DESC
-		LIMIT $1`, limit, filter)
+		LIMIT $1`, filter.Limit, publicIDFilter, filter.AfterCreatedAt, filter.AfterID)
 	if err != nil {
 		return nil, err
 	}
@@ -480,20 +486,25 @@ func (r *EntitlementRepo) RevokeGrantByPublicID(ctx context.Context, actorID int
 }
 
 func (r *EntitlementRepo) ListRedemptionSummaries(ctx context.Context, limit int) ([]entitlement.RedemptionSummary, error) {
-	return r.listGrantSummaries(ctx, limit, nil)
+	return r.listGrantSummaries(ctx, entitlement.RedemptionListFilter{Limit: limit})
+}
+
+func (r *EntitlementRepo) ListRedemptionSummariesPage(ctx context.Context, filter entitlement.RedemptionListFilter) ([]entitlement.RedemptionSummary, error) {
+	filter.Limit++
+	return r.listGrantSummaries(ctx, filter)
 }
 
 func (r *EntitlementRepo) ListUserGrantSummaries(ctx context.Context, userID int64, limit int) ([]entitlement.RedemptionSummary, error) {
-	return r.listGrantSummaries(ctx, limit, &userID)
+	return r.listGrantSummaries(ctx, entitlement.RedemptionListFilter{Limit: limit, UserID: &userID})
 }
 
-func (r *EntitlementRepo) listGrantSummaries(ctx context.Context, limit int, userID *int64) ([]entitlement.RedemptionSummary, error) {
+func (r *EntitlementRepo) listGrantSummaries(ctx context.Context, filter entitlement.RedemptionListFilter) ([]entitlement.RedemptionSummary, error) {
 	var userFilter any
-	if userID != nil {
-		userFilter = *userID
+	if filter.UserID != nil {
+		userFilter = *filter.UserID
 	}
 	rows, err := From(ctx, r.pool).Query(ctx, `
-		SELECT g.public_id, u.public_id, u.display_name, p.public_id, p.code, p.name, g.source_type,
+		SELECT g.id, g.public_id, u.public_id, u.display_name, p.public_id, p.code, p.name, g.source_type,
 			g.starts_at, g.expires_at, c.redeemed_at, g.revoked_at, g.revoke_reason,
 			c.code_fingerprint, g.created_at
 		FROM entitlement_grants g
@@ -501,8 +512,9 @@ func (r *EntitlementRepo) listGrantSummaries(ctx context.Context, limit int, use
 		JOIN entitlement_plans p ON p.id=g.entitlement_plan_id
 		LEFT JOIN card_codes c ON c.id=g.source_card_id
 		WHERE ($2::bigint IS NULL OR g.user_id=$2)
+		  AND ($3::timestamptz IS NULL OR (g.created_at,g.id) < ($3::timestamptz,$4::bigint))
 		ORDER BY g.created_at DESC, g.id DESC
-		LIMIT $1`, limit, userFilter)
+		LIMIT $1`, filter.Limit, userFilter, filter.AfterCreatedAt, filter.AfterID)
 	if err != nil {
 		return nil, err
 	}
@@ -511,6 +523,7 @@ func (r *EntitlementRepo) listGrantSummaries(ctx context.Context, limit int, use
 	for rows.Next() {
 		var item entitlement.RedemptionSummary
 		if err := rows.Scan(
+			&item.GrantID,
 			&item.GrantPublicID, &item.UserPublicID, &item.UserDisplayName, &item.PlanPublicID, &item.PlanCode, &item.PlanName,
 			&item.SourceType, &item.StartsAt, &item.ExpiresAt, &item.RedeemedAt, &item.RevokedAt, &item.RevokeReason,
 			&item.CodeFingerprint, &item.CreatedAt,
@@ -596,3 +609,5 @@ func (r *EntitlementRepo) Record(ctx context.Context, actorID *int64, action, re
 }
 
 var _ entitlement.AuditSink = (*EntitlementRepo)(nil)
+var _ entitlement.BatchPageRepository = (*EntitlementRepo)(nil)
+var _ entitlement.GrantPageRepository = (*EntitlementRepo)(nil)

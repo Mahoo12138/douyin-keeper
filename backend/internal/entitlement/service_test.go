@@ -45,7 +45,10 @@ func (u entitlementUsageStub) ReleaseDailySend(context.Context, int64, string) e
 	return nil
 }
 
-type entitlementGrantStub struct{ grant *Grant }
+type entitlementGrantStub struct {
+	grant       *Grant
+	redemptions []RedemptionSummary
+}
 
 func (r entitlementGrantStub) CreateGrant(context.Context, *Grant) error { return nil }
 func (r entitlementGrantStub) GetLastNonRevokedGrant(context.Context, int64) (*Grant, error) {
@@ -59,7 +62,10 @@ func (r entitlementGrantStub) GetGrantBySourceCardID(context.Context, int64) (*G
 }
 func (r entitlementGrantStub) RevokeGrant(context.Context, int64, int64, string) error { return nil }
 func (r entitlementGrantStub) ListRedemptionSummaries(context.Context, int) ([]RedemptionSummary, error) {
-	return nil, nil
+	return r.redemptions, nil
+}
+func (r entitlementGrantStub) ListRedemptionSummariesPage(context.Context, RedemptionListFilter) ([]RedemptionSummary, error) {
+	return r.redemptions, nil
 }
 func (r entitlementGrantStub) ListUserGrantSummaries(context.Context, int64, int) ([]RedemptionSummary, error) {
 	return nil, nil

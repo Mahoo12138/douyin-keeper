@@ -43,6 +43,14 @@ type GrantRepository interface {
 	RevokeGrantByPublicID(ctx context.Context, actorID int64, publicID uuid.UUID, reason string) error
 }
 
+type BatchPageRepository interface {
+	ListSummariesPage(ctx context.Context, filter BatchListFilter) ([]CardBatchSummary, error)
+}
+
+type GrantPageRepository interface {
+	ListRedemptionSummariesPage(ctx context.Context, filter RedemptionListFilter) ([]RedemptionSummary, error)
+}
+
 // UsageRepository atomically reserves/updates daily send counters.
 type UsageRepository interface {
 	// ReserveDailySend atomically increments the reservation iff below the

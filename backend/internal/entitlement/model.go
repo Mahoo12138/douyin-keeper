@@ -67,7 +67,20 @@ type CardBatchSummary struct {
 	RevokedCount         int
 }
 
+type BatchListFilter struct {
+	Limit          int
+	AfterCreatedAt *time.Time
+	AfterID        int64
+}
+
+type BatchListPage struct {
+	Items         []CardBatchSummary
+	NextCreatedAt *time.Time
+	NextAfterID   int64
+}
+
 type RedemptionSummary struct {
+	GrantID         int64
 	GrantPublicID   uuid.UUID
 	UserPublicID    uuid.UUID
 	UserDisplayName string
@@ -82,6 +95,19 @@ type RedemptionSummary struct {
 	RevokeReason    *string
 	CodeFingerprint *string
 	CreatedAt       time.Time
+}
+
+type RedemptionListFilter struct {
+	Limit          int
+	AfterCreatedAt *time.Time
+	AfterID        int64
+	UserID         *int64
+}
+
+type RedemptionListPage struct {
+	Items         []RedemptionSummary
+	NextCreatedAt *time.Time
+	NextAfterID   int64
 }
 
 type CardCodeSummary struct {

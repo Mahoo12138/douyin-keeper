@@ -377,6 +377,60 @@ func (s *Service) ListBatchSummaries(ctx context.Context, limit int) ([]CardBatc
 	return s.batches.ListSummaries(ctx, limit)
 }
 
+func (s *Service) ListBatchSummariesPage(ctx context.Context, filter BatchListFilter) (BatchListPage, error) {
+	filter.Limit = normalizeEntitlementLimit(filter.Limit, 50, 100)
+	if filter.AfterID < 0 {
+		filter.AfterID = 0
+	}
+	var (
+		items []CardBatchSummary
+		err   error
+	)
+	if repo, ok := s.batches.(BatchPageRepository); ok {
+		items, err = repo.ListSummariesPage(ctx, filter)
+	} else {
+		items, err = s.batches.ListSummaries(ctx, filter.Limit)
+		items = filterBatchCursor(items, filter)
+	}
+	if err != nil {
+		return BatchListPage{}, err
+	}
+	return trimBatchListPage(items, filter.Limit), nil
+}
+
+func filterBatchCursor(items []CardBatchSummary, filter BatchListFilter) []CardBatchSummary {
+	if filter.AfterCreatedAt == nil || filter.AfterID <= 0 {
+		return items
+	}
+	start := len(items)
+	for index, item := range items {
+		if item.CreatedAt.Before(*filter.AfterCreatedAt) ||
+			(item.CreatedAt.Equal(*filter.AfterCreatedAt) && item.ID < filter.AfterID) {
+			start = index
+			break
+		}
+	}
+	if start >= len(items) {
+		return nil
+	}
+	return items[start:]
+}
+
+func trimBatchListPage(items []CardBatchSummary, limit int) BatchListPage {
+	page := BatchListPage{Items: items}
+	if len(items) <= limit {
+		return page
+	}
+	page.Items = items[:limit]
+	last := page.Items[len(page.Items)-1]
+	if last.ID > 0 && !last.CreatedAt.IsZero() {
+		createdAt := last.CreatedAt
+		page.NextCreatedAt = &createdAt
+		page.NextAfterID = last.ID
+	}
+	return page
+}
+
 func (s *Service) GetBatchSummary(ctx context.Context, publicID uuid.UUID) (CardBatchSummary, error) {
 	return s.batches.GetSummaryByPublicID(ctx, publicID)
 }
@@ -389,6 +443,60 @@ func (s *Service) ListRedemptionSummaries(ctx context.Context, limit int) ([]Red
 		limit = 100
 	}
 	return s.grants.ListRedemptionSummaries(ctx, limit)
+}
+
+func (s *Service) ListRedemptionSummariesPage(ctx context.Context, filter RedemptionListFilter) (RedemptionListPage, error) {
+	filter.Limit = normalizeEntitlementLimit(filter.Limit, 50, 100)
+	if filter.AfterID < 0 {
+		filter.AfterID = 0
+	}
+	var (
+		items []RedemptionSummary
+		err   error
+	)
+	if repo, ok := s.grants.(GrantPageRepository); ok {
+		items, err = repo.ListRedemptionSummariesPage(ctx, filter)
+	} else {
+		items, err = s.grants.ListRedemptionSummaries(ctx, filter.Limit)
+		items = filterRedemptionCursor(items, filter)
+	}
+	if err != nil {
+		return RedemptionListPage{}, err
+	}
+	return trimRedemptionListPage(items, filter.Limit), nil
+}
+
+func filterRedemptionCursor(items []RedemptionSummary, filter RedemptionListFilter) []RedemptionSummary {
+	if filter.AfterCreatedAt == nil || filter.AfterID <= 0 {
+		return items
+	}
+	start := len(items)
+	for index, item := range items {
+		if item.CreatedAt.Before(*filter.AfterCreatedAt) ||
+			(item.CreatedAt.Equal(*filter.AfterCreatedAt) && item.GrantID < filter.AfterID) {
+			start = index
+			break
+		}
+	}
+	if start >= len(items) {
+		return nil
+	}
+	return items[start:]
+}
+
+func trimRedemptionListPage(items []RedemptionSummary, limit int) RedemptionListPage {
+	page := RedemptionListPage{Items: items}
+	if len(items) <= limit {
+		return page
+	}
+	page.Items = items[:limit]
+	last := page.Items[len(page.Items)-1]
+	if last.GrantID > 0 && !last.CreatedAt.IsZero() {
+		createdAt := last.CreatedAt
+		page.NextCreatedAt = &createdAt
+		page.NextAfterID = last.GrantID
+	}
+	return page
 }
 
 func (s *Service) ListUserGrantSummaries(ctx context.Context, userID int64, limit int) ([]RedemptionSummary, error) {
@@ -415,6 +523,16 @@ func (s *Service) ListCardCodeSummaries(ctx context.Context, batchPublicID uuid.
 		limit = 1000
 	}
 	return s.batches.ListCodeSummaries(ctx, batchPublicID, limit)
+}
+
+func normalizeEntitlementLimit(limit, fallback, maximum int) int {
+	if limit <= 0 {
+		return fallback
+	}
+	if limit > maximum {
+		return maximum
+	}
+	return limit
 }
 
 func (s *Service) RevokeUnusedCodeByAdmin(ctx context.Context, actorID int64, batchPublicID uuid.UUID, codeID int64, reason string) error {
