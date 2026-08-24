@@ -2,10 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Menu, ShieldCheck, Sparkles, LogOut, X } from 'lucide-react'
 import { useState } from 'react'
-import { Avatar, AvatarFallback, Button, ThemeToggle } from '@douyin-keeper/ui-web'
-import { me, myEntitlement } from '@douyin-keeper/sdk-ts'
+import { Avatar, AvatarFallback, Badge, Button, ThemeToggle } from '@douyin-keeper/ui-web'
+import { listNotifications, me, myEntitlement } from '@douyin-keeper/sdk-ts'
 
 import { getToken, signOut as signOutSession } from '@/auth/session'
+import { notificationUnreadLabel } from '@/features/notifications/notification-summary-utils'
 
 const nav = [
   { to: '/dashboard', label: '概览' },
@@ -37,8 +38,15 @@ export function GlobalHeader() {
     enabled: !!token,
     staleTime: 60_000,
   })
+  const notificationSummaryQ = useQuery({
+    queryKey: ['notification-summary', token],
+    queryFn: () => listNotifications(token as string, { limit: 1 }),
+    enabled: !!token,
+    staleTime: 60_000,
+  })
   const displayName = identityQ.data?.display_name || '账号'
   const initials = displayName.slice(0, 1).toUpperCase()
+  const unreadLabel = notificationUnreadLabel(notificationSummaryQ.data?.unread_count)
   const entitlementLabel = entitlementQ.data?.active
     ? `${entitlementQ.data.plan_code ?? '当前权益'} · 到期 ${formatEntitlementDate(entitlementQ.data.expires_at)}`
     : '未激活权益'
@@ -68,7 +76,7 @@ export function GlobalHeader() {
                 className={navLinkClass}
                 activeProps={{ className: `${navLinkClass} bg-accent text-accent-foreground font-medium` }}
               >
-                {n.label}
+                <NavLabel label={n.label} unreadLabel={n.to === '/notifications' ? unreadLabel : undefined} />
               </Link>
             ))}
           </div>
@@ -119,13 +127,17 @@ export function GlobalHeader() {
       {mobileNavOpen && <div className="border-t bg-background md:hidden">
         <nav className="mx-auto grid max-w-6xl gap-1 px-4 py-3 sm:px-6" aria-label="主导航">
           <Link to="/entitlement" onClick={closeMobileNav} className="px-3 pb-2 text-xs text-primary hover:underline">{displayName} · {entitlementLabel}</Link>
-          {nav.map((n) => <Link key={n.to} to={n.to} onClick={closeMobileNav} className={`${navLinkClass} min-h-10 flex items-center`} activeProps={{ className: `${navLinkClass} min-h-10 flex items-center bg-accent text-accent-foreground font-medium` }}>{n.label}</Link>)}
+          {nav.map((n) => <Link key={n.to} to={n.to} onClick={closeMobileNav} className={`${navLinkClass} min-h-10 flex items-center`} activeProps={{ className: `${navLinkClass} min-h-10 flex items-center bg-accent text-accent-foreground font-medium` }}><NavLabel label={n.label} unreadLabel={n.to === '/notifications' ? unreadLabel : undefined} /></Link>)}
           {identityQ.data?.role === 'admin' && <Link to="/admin" onClick={closeMobileNav} className="flex min-h-10 items-center gap-2 rounded-md px-3 py-1.5 text-sm text-primary hover:bg-accent"><ShieldCheck className="size-4" />管理控制台</Link>}
           <button type="button" className="flex min-h-10 items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm text-destructive hover:bg-destructive/10" onClick={() => { closeMobileNav(); void signOut() }}><LogOut className="size-4" />退出登录</button>
         </nav>
       </div>}
     </header>
   )
+}
+
+function NavLabel({ label, unreadLabel }: { label: string; unreadLabel?: string }) {
+  return <span className="inline-flex items-center gap-1.5">{label}{unreadLabel ? <Badge variant="warning" className="px-1.5 py-0 text-[10px]" aria-label={`${unreadLabel} 条未读通知`}>{unreadLabel}</Badge> : null}</span>
 }
 
 function formatEntitlementDate(value: string | null | undefined) {

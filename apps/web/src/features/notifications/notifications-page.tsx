@@ -19,11 +19,11 @@ export function NotificationsPage() {
   })
   const markReadMutation = useMutation({
     mutationFn: (id: string) => markNotificationRead(token as string, id),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['notifications'] }); void queryClient.invalidateQueries({ queryKey: ['notification-summary'] }) },
   })
   const markAllMutation = useMutation({
     mutationFn: () => markAllNotificationsRead(token as string),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['notifications'] }); void queryClient.invalidateQueries({ queryKey: ['notification-summary'] }) },
   })
   const items = notificationsQ.data?.pages.flatMap((page) => page.items) ?? []
   const unreadCount = notificationsQ.data?.pages[0]?.unread_count ?? 0
