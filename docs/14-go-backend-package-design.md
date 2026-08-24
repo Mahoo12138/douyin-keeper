@@ -272,8 +272,10 @@ internal/transport/httpapi/entitlement_handler.go
 `available`；缺失、未探测或不可用均 fail closed。全局
 `adapter_health` 由同一探测事务更新：连续 3 次健康/兼容性失败进入
 `open` 10 分钟，发送 Worker 在 open 期间不调用 Sidecar；成功探测或确认发送
-后清零失败计数。Scheduler 每 10 分钟扫描过期 snapshot，通过 outbox 投递新的
-`capability.probe`。`disabled` 状态只允许管理策略显式恢复。
+后清零失败计数。健康结果带有 `checked_at`，Repository 只接受不早于当前记录的
+观测，避免异步 probe/send 结果乱序覆盖更新的成功或失败。Scheduler 每 10 分钟扫描
+过期 snapshot，通过 outbox 投递新的 `capability.probe`。`disabled` 状态只允许管理
+策略显式恢复。
 
 `account` 同时提供 Scheduler 使用的 `SessionCheckRepository` 投影：每 30 分钟扫描
 绑定且 Session 为 `unknown/valid`、`last_session_check_at` 已过期的账号，并排除已有

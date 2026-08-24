@@ -96,6 +96,43 @@ func TestCapabilityRepoUpsertAndLookup(t *testing.T) {
 	}
 }
 
+func TestCapabilityRepoIgnoresStaleAdapterHealthObservations(t *testing.T) {
+	ctx := context.Background()
+	repo := postgres.NewCapabilityRepo(pool)
+	adapter := "test.adapter.health.ordering"
+	first := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	newer := first.Add(2 * time.Minute)
+
+	if err := repo.RecordAdapterSuccess(ctx, adapter, "1.0.0", newer); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.RecordAdapterFailure(ctx, adapter, "1.0.0", "ADAPTER_INCOMPATIBLE", 3, newer.Add(10*time.Minute), first); err != nil {
+		t.Fatal(err)
+	}
+	health, err := repo.GetAdapterHealth(ctx, adapter)
+	if err != nil || health == nil {
+		t.Fatalf("lookup after stale failure: health=%+v err=%v", health, err)
+	}
+	if health.Status != capability.AdapterStatusHealthy || health.FailureCount != 0 || !health.CheckedAt.Equal(newer) {
+		t.Fatalf("stale failure regressed newer success: %+v", health)
+	}
+
+	laterFailure := newer.Add(time.Minute)
+	if err := repo.RecordAdapterFailure(ctx, adapter, "1.0.0", "ADAPTER_INCOMPATIBLE", 3, laterFailure.Add(10*time.Minute), laterFailure); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.RecordAdapterSuccess(ctx, adapter, "1.0.0", newer.Add(30*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	health, err = repo.GetAdapterHealth(ctx, adapter)
+	if err != nil || health == nil {
+		t.Fatalf("lookup after stale success: health=%+v err=%v", health, err)
+	}
+	if health.Status != capability.AdapterStatusDegraded || health.FailureCount != 1 || !health.CheckedAt.Equal(laterFailure) {
+		t.Fatalf("stale success regressed newer failure: %+v", health)
+	}
+}
+
 func TestDisabledAdapterCannotBecomeFallbackRoute(t *testing.T) {
 	ctx := context.Background()
 	actorID := newUser(t)

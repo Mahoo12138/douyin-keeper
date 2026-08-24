@@ -115,7 +115,8 @@ func (r *CapabilityRepo) RecordAdapterSuccess(ctx context.Context, adapter, vers
 			error_code = CASE WHEN adapter_health.status = 'disabled' THEN adapter_health.error_code ELSE NULL END,
 			failure_count = CASE WHEN adapter_health.status = 'disabled' THEN adapter_health.failure_count ELSE 0 END,
 			circuit_open_until = CASE WHEN adapter_health.status = 'disabled' THEN adapter_health.circuit_open_until ELSE NULL END,
-			checked_at = EXCLUDED.checked_at`, adapter, version, checkedAt)
+			checked_at = EXCLUDED.checked_at
+		WHERE EXCLUDED.checked_at >= adapter_health.checked_at`, adapter, version, checkedAt)
 	return err
 }
 
@@ -143,7 +144,8 @@ func (r *CapabilityRepo) RecordAdapterFailure(ctx context.Context, adapter, vers
 				WHEN adapter_health.failure_count + 1 >= $4 THEN $5
 				ELSE NULL::timestamptz
 			END,
-			checked_at = EXCLUDED.checked_at`, adapter, version, errorCode, threshold, openUntil, checkedAt)
+			checked_at = EXCLUDED.checked_at
+		WHERE EXCLUDED.checked_at >= adapter_health.checked_at`, adapter, version, errorCode, threshold, openUntil, checkedAt)
 	return err
 }
 
