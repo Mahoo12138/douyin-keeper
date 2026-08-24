@@ -45,6 +45,24 @@ func (r *SendRepo) CreateIntent(ctx context.Context, in *send.SendIntent) error 
 		in.LocalDate, in.ScheduledAt, in.Status, in.CreatedAt, in.UpdatedAt).Scan(&in.ID)
 }
 
+// CreateScheduledIntent inserts one daily scheduled intent. The partial
+// unique index absorbs duplicate scheduler ticks, so callers only reserve
+// quota after this method reports inserted=true.
+func (r *SendRepo) CreateScheduledIntent(ctx context.Context, in *send.SendIntent) (bool, error) {
+	err := From(ctx, r.pool).QueryRow(ctx, `
+		INSERT INTO send_intents (public_id, intent_type, task_id, account_id, friend_id,
+			local_date, scheduled_at, status, created_at, updated_at)
+		VALUES ($1,'scheduled',$2,$3,$4,$5::date,$6,$7,$8,$9)
+		ON CONFLICT DO NOTHING
+		RETURNING id
+	`, in.PublicID, in.TaskID, in.AccountID, in.FriendID, in.LocalDate,
+		in.ScheduledAt, in.Status, in.CreatedAt, in.UpdatedAt).Scan(&in.ID)
+	if err == pgx.ErrNoRows {
+		return false, nil
+	}
+	return err == nil, err
+}
+
 func (r *SendRepo) GetIntentOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*send.SendIntent, error) {
 	in, err := scanIntent(From(ctx, r.pool).QueryRow(ctx, `
 		SELECT `+intentCols+`

@@ -40,6 +40,8 @@ type Config struct {
 	// Scheduler / outbox (docs/15)
 	OutboxBatchSize    int
 	OutboxPollInterval time.Duration
+	ScheduleBatchSize  int
+	ScheduleInterval   time.Duration
 }
 
 func env(key, def string) string {
@@ -73,6 +75,8 @@ func Load() *Config {
 
 		OutboxBatchSize:    intEnv("OUTBOX_BATCH_SIZE", 100),
 		OutboxPollInterval: dur("OUTBOX_POLL_INTERVAL", 5*time.Second),
+		ScheduleBatchSize:  intEnv("SCHEDULE_BATCH_SIZE", 100),
+		ScheduleInterval:   dur("SCHEDULE_INTERVAL", 30*time.Second),
 	}
 }
 

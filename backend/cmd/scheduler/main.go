@@ -15,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/config"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/redislock"
@@ -69,6 +70,14 @@ func main() {
 	outboxRepo := postgres.NewOutboxRepo(pool)
 	producer := asynqqueue.NewClient(asynq.RedisClientOpt{Addr: cfg.RedisAddr})
 	defer producer.Close()
+	tx := postgres.NewTxManager(pool)
+	planRepo := postgres.NewEntitlementRepo(pool)
+	entitlementSvc := entitlement.NewService(planRepo, planRepo, planRepo, planRepo,
+		postgres.NewUserLockRepo(pool), tx, nil)
+	taskRepo := postgres.NewTaskRepo(pool)
+	sendRepo := postgres.NewSendRepo(pool)
+	tick := scheduler.NewTickRunner(taskRepo, sendRepo, entitlementSvc, entitlementSvc,
+		outboxRepo, tx, cfg.ScheduleBatchSize)
 
 	publisher := scheduler.NewPublisher(outboxRepo, producer, cfg.OutboxBatchSize,
 		cfg.OutboxPollInterval, log)
@@ -85,6 +94,24 @@ func main() {
 				if err := lock.Renew(ctx); err != nil {
 					log.Error("leader renewal failed", "err", err)
 				}
+			}
+		}
+	}()
+
+	go func() {
+		t := time.NewTicker(cfg.ScheduleInterval)
+		defer t.Stop()
+		for {
+			if stats, err := tick.RunOnce(ctx); err != nil {
+				log.Error("scheduler tick failed", "err", err)
+			} else if stats.Created > 0 || stats.Skipped > 0 {
+				log.Info("scheduler tick completed", "scanned", stats.Scanned,
+					"created", stats.Created, "skipped", stats.Skipped)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
 			}
 		}
 	}()

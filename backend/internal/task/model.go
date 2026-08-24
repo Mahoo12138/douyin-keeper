@@ -86,6 +86,16 @@ func (t *SparkTask) ValidMessage() bool {
 	}
 }
 
+// ValidTimezone prevents an invalid IANA zone from making the scheduler's
+// PostgreSQL local-time query fail for the whole tick.
+func (t *SparkTask) ValidTimezone() bool {
+	if t.Timezone == "" {
+		return false
+	}
+	_, err := time.LoadLocation(t.Timezone)
+	return err == nil
+}
+
 // Repository is implemented by infra/postgres.
 type Repository interface {
 	ListByUser(ctx context.Context, userID int64) ([]*SparkTask, error)
@@ -95,6 +105,13 @@ type Repository interface {
 	Update(ctx context.Context, t *SparkTask) error
 	SoftDelete(ctx context.Context, id int64) error
 	CountTasks(ctx context.Context, userID int64) (int, error)
+}
+
+// DueRepository is the scheduler-facing read slice. The database query
+// applies the account/friend gates that are safe to evaluate without a
+// platform call; entitlement is checked again in the scheduler transaction.
+type DueRepository interface {
+	ListDue(ctx context.Context, now time.Time, limit int) ([]*SparkTask, error)
 }
 
 // AccountLookup / FriendLookup give the task service ownership checks without
@@ -150,6 +167,13 @@ func (s *Service) Create(ctx context.Context, userID int64, in CreateInput) (*Sp
 		MessageKind: in.MessageKind, MessageBody: in.MessageBody}
 	if !probe.ValidWindow() {
 		return nil, apperr.Validation(apperr.CodeConflict, "window_start must be before window_end (HH:MM:SS)")
+	}
+	probe.Timezone = in.Timezone
+	if probe.Timezone == "" {
+		probe.Timezone = "Asia/Shanghai"
+	}
+	if !probe.ValidTimezone() {
+		return nil, apperr.Validation(apperr.CodeConflict, "timezone must be a valid IANA timezone")
 	}
 	if !probe.ValidMessage() {
 		return nil, apperr.Validation(apperr.CodeConflict, "text tasks require a message body")
@@ -218,6 +242,9 @@ func (s *Service) Update(ctx context.Context, userID int64, publicID uuid.UUID, 
 	applyPatch(existing, p)
 	if !existing.ValidWindow() {
 		return nil, apperr.Validation(apperr.CodeConflict, "window_start must be before window_end (HH:MM:SS)")
+	}
+	if !existing.ValidTimezone() {
+		return nil, apperr.Validation(apperr.CodeConflict, "timezone must be a valid IANA timezone")
 	}
 	if !existing.ValidMessage() {
 		return nil, apperr.Validation(apperr.CodeConflict, "text tasks require a message body")

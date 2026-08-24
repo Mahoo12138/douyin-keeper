@@ -90,6 +90,7 @@ type SendJob struct {
 
 type Repository interface {
 	CreateIntent(ctx context.Context, in *SendIntent) error
+	CreateScheduledIntent(ctx context.Context, in *SendIntent) (bool, error)
 	GetIntentByID(ctx context.Context, intentID int64) (*SendIntent, error)
 	GetIntentByPublicID(ctx context.Context, publicID uuid.UUID) (*SendIntent, error)
 	GetIntentOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*SendIntent, error)

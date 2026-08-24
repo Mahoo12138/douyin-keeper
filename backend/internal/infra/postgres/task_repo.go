@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -65,6 +66,45 @@ func (r *TaskRepo) GetByID(ctx context.Context, taskID int64) (*task.SparkTask, 
 		return nil, mapNoRows(err, apperr.CodeNotFound, "task not found")
 	}
 	return t, nil
+}
+
+// ListDue returns enabled tasks whose local wall clock is inside the current
+// window. Account/friend state is only a coarse prefilter; the scheduler
+// transaction performs the entitlement and quota checks before creating an
+// intent (docs/15 §3.1).
+func (r *TaskRepo) ListDue(ctx context.Context, now time.Time, limit int) ([]*task.SparkTask, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT `+taskCols+` FROM spark_tasks t
+		JOIN douyin_accounts a ON a.id = t.account_id
+		JOIN friends f ON f.id = t.friend_id AND f.account_id = t.account_id
+		WHERE t.enabled
+		  AND t.deleted_at IS NULL
+		  AND a.deleted_at IS NULL
+		  AND f.deleted_at IS NULL
+		  AND f.identity_status = 'resolved'
+		  AND a.binding_status = 'bound'
+		  AND a.risk_status = 'normal'
+		  AND a.session_status IN ('unknown','valid')
+		  AND (($1::timestamptz AT TIME ZONE t.timezone)::time >= t.window_start)
+		  AND (($1::timestamptz AT TIME ZONE t.timezone)::time < t.window_end)
+		ORDER BY t.id
+		LIMIT $2`, now, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*task.SparkTask
+	for rows.Next() {
+		t, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
 }
 
 func (r *TaskRepo) GetOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*task.SparkTask, error) {
