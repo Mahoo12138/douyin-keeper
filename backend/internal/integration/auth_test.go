@@ -168,12 +168,15 @@ func TestLogoutAllRevokesSessions(t *testing.T) {
 		t.Fatalf("register: %v", err)
 	}
 	sess, _ := svc.Login(ctx, username, "password123", auth.ClientWeb)
-	// except=0: keep nothing; revoke every session of the user.
-	if err := svc.LogoutAll(ctx, res.User.ID, 0); err != nil {
+	// Logout-all revokes every session, including the session that initiated it.
+	if err := svc.LogoutAll(ctx, res.User.ID); err != nil {
 		t.Fatalf("logout-all: %v", err)
 	}
-	// Any refresh of the surviving session must fail (session revoked).
+	// Refresh of either session must fail (both sessions are revoked).
 	if _, err := svc.Refresh(ctx, sess.RefreshToken, auth.ClientWeb); err == nil {
-		t.Fatalf("expected refresh to fail after logout-all")
+		t.Fatalf("expected second session refresh to fail after logout-all")
+	}
+	if _, err := svc.Refresh(ctx, res.RefreshToken, auth.ClientWeb); err == nil {
+		t.Fatalf("expected current session refresh to fail after logout-all")
 	}
 }

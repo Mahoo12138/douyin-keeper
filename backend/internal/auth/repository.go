@@ -30,7 +30,7 @@ type SessionRepository interface {
 	GetSessionByID(ctx context.Context, id int64) (*AuthSession, error)
 	TouchSession(ctx context.Context, id int64, at time.Time) error
 	RevokeSession(ctx context.Context, id int64, reason string) error
-	RevokeAllSessions(ctx context.Context, userID int64, exceptSessionID int64) error
+	RevokeAllSessions(ctx context.Context, userID int64) error
 
 	CreateRefreshToken(ctx context.Context, t *RefreshTokenRow) error
 	// GetRefreshTokenByHashForUpdate locks the row (reuse detection).

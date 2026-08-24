@@ -101,7 +101,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLogoutAll(w http.ResponseWriter, r *http.Request) {
 	p := auth.MustPrincipal(r.Context())
-	if err := s.auth.LogoutAll(r.Context(), p.UserID, p.SessionID); err != nil {
+	if err := s.auth.LogoutAll(r.Context(), p.UserID); err != nil {
 		writeError(w, r, err)
 		return
 	}

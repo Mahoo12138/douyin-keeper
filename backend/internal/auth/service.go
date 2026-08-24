@@ -203,9 +203,9 @@ func (s *Service) Logout(ctx context.Context, sessionID int64) error {
 	})
 }
 
-// LogoutAll revokes every session of the user except the current one.
-func (s *Service) LogoutAll(ctx context.Context, userID int64, exceptSessionID int64) error {
-	return s.sessions.RevokeAllSessions(ctx, userID, exceptSessionID)
+// LogoutAll revokes every session of the user, including the current one.
+func (s *Service) LogoutAll(ctx context.Context, userID int64) error {
+	return s.sessions.RevokeAllSessions(ctx, userID)
 }
 
 // GetUserByPublicID resolves the current user for GET /me.

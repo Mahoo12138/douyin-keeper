@@ -69,10 +69,10 @@ func (r *AuthSessionRepo) RevokeSession(ctx context.Context, id int64, reason st
 	return err
 }
 
-func (r *AuthSessionRepo) RevokeAllSessions(ctx context.Context, userID int64, exceptSessionID int64) error {
+func (r *AuthSessionRepo) RevokeAllSessions(ctx context.Context, userID int64) error {
 	_, err := From(ctx, r.pool).Exec(ctx, `
 		UPDATE auth_sessions SET revoked_at = now(), revoke_reason = 'logout-all'
-		WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL`, userID, exceptSessionID)
+		WHERE user_id = $1 AND revoked_at IS NULL`, userID)
 	return err
 }
 
