@@ -8,6 +8,7 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Inpu
 import { login } from '@douyin-keeper/sdk-ts'
 
 import { setToken } from '@/auth/session'
+import { canActivate } from '@/lib/auth-guard'
 
 const schema = z.object({
   username: z.string().min(1, '请输入用户名'),
@@ -18,7 +19,7 @@ type Form = z.infer<typeof schema>
 
 export const Route = createFileRoute('/(auth)/signin')({
   beforeLoad: async () => {
-    // already signed in → dashboard
+    if (await canActivate()) throw redirect({ to: '/dashboard' })
   },
   component: SignInPage,
 })
@@ -75,5 +76,3 @@ function SignInPage() {
     </Card>
   )
 }
-
-void redirect

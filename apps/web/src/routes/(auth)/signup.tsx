@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Link, createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -8,6 +8,7 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Inpu
 import { register } from '@douyin-keeper/sdk-ts'
 
 import { setToken } from '@/auth/session'
+import { canActivate } from '@/lib/auth-guard'
 
 const schema = z.object({
   username: z.string().min(3, '用户名至少 3 个字符').max(64),
@@ -18,6 +19,9 @@ const schema = z.object({
 type Form = z.infer<typeof schema>
 
 export const Route = createFileRoute('/(auth)/signup')({
+  beforeLoad: async () => {
+    if (await canActivate()) throw redirect({ to: '/dashboard' })
+  },
   component: SignUpPage,
 })
 
