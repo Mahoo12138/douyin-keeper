@@ -285,6 +285,11 @@ Docker Compose 使用 YAML，不使用 XML。
 
 `deploy/compose/docker-compose.yml`
 
+提交前可运行 `pnpm deployment:check` 验证生产/开发 Compose 都能被 Docker Compose 解析，
+生产服务拓扑与端口暴露符合本文约定，两个 `.env.example` 模板保持同步，并且 Backend/Worker
+Dockerfile 仍包含统一 SPA 嵌入与 Playwright Sidecar 运行时。该检查只在临时目录生成测试用的
+`.env`，不会修改仓库根目录或提交真实 Secret。
+
 ## 7. Compose 服务
 
 正式建议：
@@ -346,6 +351,9 @@ appendfsync everysec
 ```text
 .env.example
 ```
+
+`deploy/.env.example` 仅作为部署目录旁的导航副本，必须与根目录模板保持键和值同步；实际部署
+仍只复制根目录 `.env.example` 为根目录 `.env`。
 
 自部署时复制为根目录 `.env`，并通过 `docker compose --env-file .env -f deploy/compose/docker-compose.yml ...` 启动；这样 Compose 自身的变量插值和容器 `env_file` 使用同一份配置。
 

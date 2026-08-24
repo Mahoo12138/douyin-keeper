@@ -82,6 +82,12 @@ pnpm build:spa                  # dists consumed by go:embed (docs/16)
 See `docs/16-deployment-packaging.md` and `deploy/compose/docker-compose.yml`. Two business images
 (`keeper-backend`, `keeper-worker`) + postgres + redis are the only production units.
 
+Validate the Compose topology, synchronized environment templates, and Docker image contracts with:
+
+```bash
+pnpm deployment:check
+```
+
 ## More
 
 - Design docs: `docs/00-index.md` (start here)

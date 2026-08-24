@@ -12,6 +12,7 @@
     "build:web": "pnpm --filter @douyin-keeper/web build",
     "build:spa": "pnpm build:web && node scripts/stage-webassets.mjs",
     "typecheck": "pnpm -r typecheck",
-    "contracts:check": "node packages/contracts/validate.mjs"
+    "contracts:check": "node packages/contracts/validate.mjs",
+    "deployment:check": "node scripts/validate-deployment.mjs"
   }
 }
