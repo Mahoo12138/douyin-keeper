@@ -541,6 +541,11 @@ paths:
                   type: string
                   enum:
                   - qr
+                  - sms
+                phone:
+                  type: string
+                  minLength: 5
+                  maxLength: 32
       responses:
         '202':
           description: Binding job created
@@ -955,6 +960,46 @@ paths:
       responses:
         '202':
           description: Cancellation requested
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /jobs/{jobId}/sms-verify:
+    post:
+      operationId: submitSMSVerification
+      description: Submit a short-lived SMS code to an owned waiting SMS binding job. The code is never persisted.
+      parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - code
+              properties:
+                code:
+                  type: string
+                  pattern: ^[0-9]{4,8}$
+      responses:
+        '202':
+          description: Verification code accepted for delivery to the waiting worker
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - status
+                properties:
+                  status:
+                    type: string
+                    enum:
+                    - verification_submitted
         '409':
           $ref: '#/components/responses/Conflict'
   /auth/register:

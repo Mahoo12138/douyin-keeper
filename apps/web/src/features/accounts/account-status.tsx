@@ -21,6 +21,7 @@ export function riskLabel(status: Account['risk_status']) {
 export function capabilityLabel(name: string) {
   return {
     'login.qr': '扫码登录',
+    'login.sms': '短信验证码登录',
     'session.validate': '会话验证',
     'friends.sync': '好友同步',
     'message.send.text.existing': '已有会话发送文字',

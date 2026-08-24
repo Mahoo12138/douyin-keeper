@@ -57,10 +57,11 @@ func (s *Service) GetOwned(ctx context.Context, userID int64, publicID uuid.UUID
 	return s.repo.GetOwned(ctx, userID, publicID)
 }
 
-// CreateBinding starts a QR binding: quota-gated, the account is created in
-// 'binding' state (occupies a slot), a generic job and an outbox message are
-// written in the same tx (docs/14 §5).
-func (s *Service) CreateBinding(ctx context.Context, userID int64, method string) (uuid.UUID, error) {
+// CreateBinding starts a QR or SMS binding: quota-gated, the account is
+// created in 'binding' state (occupies a slot), a generic job and an outbox
+// message are written in the same tx (docs/14 §5). SMS phone input is carried
+// only in the short-lived outbox handoff; it is never emitted as a job event.
+func (s *Service) CreateBinding(ctx context.Context, userID int64, method, phone string) (uuid.UUID, error) {
 	dec, err := s.gate.Authorize(ctx, entitlement.AuthorizationRequest{
 		UserID: userID, Action: entitlement.ActionAccountBind,
 	})
@@ -100,9 +101,13 @@ func (s *Service) CreateBinding(ctx context.Context, userID int64, method string
 		if err := s.jobs.CreateJob(tctx, j); err != nil {
 			return err
 		}
+		payload := jobRefPayload(j.PublicID)
+		if method == "sms" {
+			payload = bindingJobPayload(j.PublicID, phone)
+		}
 		if err := s.outbox.Add(tctx, outbox.Message{
 			Kind: kind, AggregateType: "account", AggregateID: acct.PublicID.String(),
-			Payload: jobRefPayload(j.PublicID), DedupeKey: "account.binding:" + acct.PublicID.String(),
+			Payload: payload, DedupeKey: "account.binding:" + acct.PublicID.String(),
 		}); err != nil {
 			return err
 		}
@@ -219,6 +224,11 @@ func newPlatformJob(acct *Account, typ string, cancelable bool, now time.Time) *
 
 func jobRefPayload(jobPublicID uuid.UUID) json.RawMessage {
 	b, _ := json.Marshal(map[string]string{"job_id": jobPublicID.String()})
+	return b
+}
+
+func bindingJobPayload(jobPublicID uuid.UUID, phone string) json.RawMessage {
+	b, _ := json.Marshal(map[string]string{"job_id": jobPublicID.String(), "phone": phone})
 	return b
 }
 

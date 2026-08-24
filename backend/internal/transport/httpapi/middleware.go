@@ -83,6 +83,14 @@ func (w *loggingWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
+// Flush preserves streaming responses such as Job SSE through AccessLog.
+// Wrapping ResponseWriter must not accidentally make http.Flusher disappear.
+func (w *loggingWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
 // rateLimiter is a minimal in-memory fixed-window limiter (docs/13 §15).
 type rateLimiter struct {
 	mu    sync.Mutex

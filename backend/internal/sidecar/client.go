@@ -67,6 +67,8 @@ const (
 	ErrDeadlineExceeded       = "DEADLINE_EXCEEDED"
 	ErrSessionExpired         = "SESSION_EXPIRED"
 	ErrQRExpired              = "QR_EXPIRED"
+	ErrSMSCodeInvalid         = "SMS_CODE_INVALID"
+	ErrSMSCodeExpired         = "SMS_CODE_EXPIRED"
 	ErrLoginHandleNotFound    = "LOGIN_HANDLE_NOT_FOUND"
 	ErrChallengeRequired      = "CHALLENGE_REQUIRED"
 	ErrPlatformRateLimited    = "PLATFORM_RATE_LIMITED"

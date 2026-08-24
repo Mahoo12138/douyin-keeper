@@ -55,13 +55,15 @@ type qrStartResult struct {
 }
 
 type qrPollResult struct {
-	State           string `json:"state"`
-	SessionExported bool   `json:"session_exported"`
-	Identity        struct {
-		PlatformUserID string  `json:"platform_user_id"`
-		Nickname       string  `json:"nickname"`
-		AvatarURL      *string `json:"avatar_url"`
-	} `json:"identity"`
+	State           string       `json:"state"`
+	SessionExported bool         `json:"session_exported"`
+	Identity        bindIdentity `json:"identity"`
+}
+
+type bindIdentity struct {
+	PlatformUserID string  `json:"platform_user_id"`
+	Nickname       string  `json:"nickname"`
+	AvatarURL      *string `json:"avatar_url"`
 }
 
 func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, *asynq.Task) error {
@@ -244,25 +246,29 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 }
 
 func completeQRBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *account.Account, exportPath string, result qrPollResult) error {
+	return completeBind(ctx, deps, claimed, acct, exportPath, result.Identity)
+}
+
+func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *account.Account, exportPath string, identity bindIdentity) error {
 	if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
 		return err
 	}
-	if result.Identity.PlatformUserID == "" {
-		return finishQRFailure(ctx, deps, claimed, apperr.CodeAccountIdentityUnresolved)
+	if identity.PlatformUserID == "" {
+		return finishBindFailure(ctx, deps, claimed, apperr.CodeAccountIdentityUnresolved)
 	}
 	if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "confirming", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()}); err != nil {
 		return err
 	}
 	plaintext, err := os.ReadFile(exportPath)
 	if err != nil {
-		return finishQRFailure(ctx, deps, claimed, apperr.CodeAdapterIncompatible)
+		return finishBindFailure(ctx, deps, claimed, apperr.CodeAdapterIncompatible)
 	}
 	_ = os.Remove(exportPath)
 	if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
 		return err
 	}
 	if err := deps.Sessions.Store(ctx, acct.ID, acct.UserPublicID, acct.PublicID, plaintext); err != nil {
-		return finishQRFailure(ctx, deps, claimed, apperr.CodeInternal)
+		return finishBindFailure(ctx, deps, claimed, apperr.CodeInternal)
 	}
 	if err := deps.Sessions.WithTempFile(ctx, acct.ID, acct.UserPublicID, acct.PublicID, func(path string) error {
 		response, callErr := deps.Sidecar.Call(ctx, sidecar.Request{
@@ -300,16 +306,16 @@ func completeQRBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct
 			_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, deps.Now())
 		}
 		observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, code, deps.Now)
-		return finishQRFailure(ctx, deps, claimed, code)
+		return finishBindFailure(ctx, deps, claimed, code)
 	}
 	if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
 		return err
 	}
 	if deps.Tx == nil || deps.Outbox == nil {
-		return finishQRFailure(ctx, deps, claimed, apperr.CodeInternal)
+		return finishBindFailure(ctx, deps, claimed, apperr.CodeInternal)
 	}
 	if err := deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
-		if err := deps.Accounts.SetIdentity(tctx, acct.ID, result.Identity.PlatformUserID, result.Identity.Nickname, result.Identity.AvatarURL); err != nil {
+		if err := deps.Accounts.SetIdentity(tctx, acct.ID, identity.PlatformUserID, identity.Nickname, identity.AvatarURL); err != nil {
 			return err
 		}
 		if err := deps.Accounts.SetSessionStatus(tctx, acct.ID, account.SessionValid, deps.Now()); err != nil {
@@ -320,7 +326,7 @@ func completeQRBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct
 		}
 		return enqueueInitialFriendsSync(tctx, deps, acct)
 	}); err != nil {
-		return finishQRFailure(ctx, deps, claimed, apperr.CodeInternal)
+		return finishBindFailure(ctx, deps, claimed, apperr.CodeInternal)
 	}
 	_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "success", Payload: json.RawMessage(`{"binding_status":"bound"}`), CreatedAt: deps.Now()})
 	return deps.Jobs.Finish(ctx, claimed.ID, job.StatusSucceeded, nil, deps.Now())
@@ -358,7 +364,7 @@ func enqueueInitialFriendsSync(ctx context.Context, deps QRBindDeps, acct *accou
 	})
 }
 
-func finishQRFailure(ctx context.Context, deps QRBindDeps, claimed *job.Job, code string) error {
+func finishBindFailure(ctx context.Context, deps QRBindDeps, claimed *job.Job, code string) error {
 	_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "error", Payload: mustJSON(map[string]string{"code": code}), CreatedAt: deps.Now()})
 	return deps.Jobs.Finish(ctx, claimed.ID, job.StatusFailed, &code, deps.Now())
 }
@@ -391,6 +397,8 @@ func mapSidecarError(code string) string {
 	switch code {
 	case sidecar.ErrQRExpired:
 		return apperr.CodeQRExpired
+	case sidecar.ErrSMSCodeExpired:
+		return apperr.CodeSMSExpired
 	case sidecar.ErrChallengeRequired:
 		return apperr.CodeChallengeRequired
 	case sidecar.ErrSessionExpired:

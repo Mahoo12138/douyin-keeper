@@ -232,6 +232,43 @@ Input：
 
 此时必须停止自动流程，交由用户处理；Sidecar 不提供验证规避逻辑。
 
+## 6.1 SMS Login
+
+`login.sms.start` 使用独立临时 `profile_dir` 启动手机号登录并触发平台发送
+验证码：
+
+```json
+{
+  "profile_dir": "/run/douyin-keeper/login/job-public-id",
+  "phone": "+86 13800138000",
+  "locale": "zh-CN"
+}
+```
+
+Result 只返回短生命周期的 `login_handle` 和过期时间：
+
+```json
+{
+  "login_handle": "sms_0191...",
+  "expires_at": "2026-08-23T17:05:00+08:00"
+}
+```
+
+验证码由 Go API 通过 `POST /api/v1/jobs/{jobId}/sms-verify` 接收后写入带 TTL 的
+Redis 临时键，worker 取出即删除，再调用 `login.sms.verify`：
+
+```json
+{
+  "login_handle": "sms_0191...",
+  "code": "123456",
+  "export_session_file": "/run/douyin-keeper/session-export/job.json"
+}
+```
+
+验证码不会写入数据库、Job Event、日志或 Sidecar 返回消息。验证码错误返回
+`SMS_CODE_INVALID` 并允许用户重新提交；过期返回 `SMS_CODE_EXPIRED`；安全验证返回
+`challenge_required` 并终止流程。
+
 ## 7. Session Validate
 
 `session.validate`：
@@ -437,6 +474,8 @@ SIDECAR_INTERNAL_ERROR
 
 SESSION_EXPIRED
 QR_EXPIRED
+SMS_CODE_INVALID
+SMS_CODE_EXPIRED
 LOGIN_HANDLE_NOT_FOUND
 CHALLENGE_REQUIRED
 PLATFORM_RATE_LIMITED

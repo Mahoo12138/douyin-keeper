@@ -78,9 +78,9 @@
 - Account Capability 页面；
 - 登录态主动健康检查与到期提醒。
 
-当前已完成站内通知切片，以及 Sticker 任务的契约、任务配置和 browser worker 路由；
-真实平台贴纸发送仍依赖后续接入的 Sidecar 实现和账号 capability 探测。短信绑定、
-会话列表和微信服务通知仍待后续接入真实 Sidecar/平台能力。
+当前已完成站内通知切片、SMS Binding 的异步状态机与安全验证码通道，以及 Sticker
+任务的契约、任务配置和 browser worker 路由。真实抖音页面 selector 和贴纸发送仍
+依赖 Sidecar 环境联调；会话列表和微信服务通知仍待后续接入真实平台能力。
 
 ## 5. V1.2
 

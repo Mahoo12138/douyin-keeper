@@ -134,6 +134,10 @@ func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindD
 			mux.HandleFunc(kind, qrBindHandler(loader, *qrDeps))
 			continue
 		}
+		if kind == asynqqueue.KindAccountBindSMS && qrDeps != nil {
+			mux.HandleFunc(kind, smsBindHandler(loader, *qrDeps))
+			continue
+		}
 		if kind == asynqqueue.KindSessionCheckBrowser && sessionDeps != nil {
 			mux.HandleFunc(kind, sessionCheckHandler(loader, *sessionDeps, log))
 			continue

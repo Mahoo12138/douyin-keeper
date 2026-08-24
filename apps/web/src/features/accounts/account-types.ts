@@ -4,6 +4,7 @@ export type Account = components['schemas']['Account']
 export type Capability = components['schemas']['Capability']
 
 export type BindingState = {
+  method: 'qr' | 'sms'
   status: 'queued' | 'running' | 'waiting_user' | 'scanned' | 'confirming' | 'error'
   jobId: string | null
   qr: string | null

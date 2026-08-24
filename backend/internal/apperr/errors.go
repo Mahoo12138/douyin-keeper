@@ -48,6 +48,7 @@ const (
 	CodeTargetIdentityMismatch    = "TARGET_IDENTITY_MISMATCH"
 	CodeSessionExpired            = "SESSION_EXPIRED"
 	CodeQRExpired                 = "QR_EXPIRED"
+	CodeSMSExpired                = "SMS_CODE_EXPIRED"
 	CodeAccountIdentityUnresolved = "ACCOUNT_IDENTITY_UNRESOLVED"
 	CodeChallengeRequired         = "CHALLENGE_REQUIRED"
 	CodePlatformRateLimited       = "PLATFORM_RATE_LIMITED"

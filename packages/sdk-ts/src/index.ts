@@ -262,10 +262,10 @@ export async function listAccounts(accessToken: string) {
   return data
 }
 
-export async function createAccountBinding(accessToken: string) {
+export async function createAccountBinding(accessToken: string, method: 'qr' | 'sms' = 'qr', phone?: string) {
   const { data, error } = await api.POST('/accounts/bindings', {
     headers: { Authorization: `Bearer ${accessToken}` },
-    body: { method: 'qr' },
+    body: { method, ...(phone ? { phone } : {}) },
   })
   if (error) throwApiError(error, 'binding failed')
   return data
@@ -437,6 +437,16 @@ export async function cancelJob(accessToken: string, jobId: string) {
     params: { path: { jobId } },
   })
   if (error) throwApiError(error, 'job cancellation failed')
+  return data
+}
+
+export async function submitSMSVerification(accessToken: string, jobId: string, code: string) {
+  const { data, error } = await api.POST('/jobs/{jobId}/sms-verify', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { jobId } },
+    body: { code },
+  })
+  if (error) throwApiError(error, 'SMS verification failed')
   return data
 }
 

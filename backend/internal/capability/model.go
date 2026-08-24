@@ -12,6 +12,7 @@ import (
 
 const (
 	NameLoginQR             = "login.qr"
+	NameLoginSMS            = "login.sms"
 	NameSessionValidate     = "session.validate"
 	NameFriendsSync         = "friends.sync"
 	NameMessageTextExisting = "message.send.text.existing"
@@ -38,7 +39,7 @@ const (
 	StatusUnknown     = "unknown"
 )
 
-var KnownNames = []string{NameLoginQR, NameSessionValidate, NameFriendsSync, NameMessageTextExisting,
+var KnownNames = []string{NameLoginQR, NameLoginSMS, NameSessionValidate, NameFriendsSync, NameMessageTextExisting,
 	NameMessageTextFirst, NameMessageSticker}
 
 type Capability struct {

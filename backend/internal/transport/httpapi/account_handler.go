@@ -3,6 +3,8 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -12,7 +14,10 @@ import (
 
 type createBindingReq struct {
 	Method string `json:"method"`
+	Phone  string `json:"phone"`
 }
+
+var smsPhonePattern = regexp.MustCompile(`^\+?[0-9][0-9 ()-]{3,30}$`)
 
 func (s *Server) handleListAccounts(w http.ResponseWriter, r *http.Request) {
 	p := auth.MustPrincipal(r.Context())
@@ -39,7 +44,12 @@ func (s *Server) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, apperr.Validation(apperr.CodeConflict, "method must be qr or sms"))
 		return
 	}
-	jobID, err := s.accounts.CreateBinding(r.Context(), p.UserID, req.Method)
+	phone := strings.TrimSpace(req.Phone)
+	if req.Method == "sms" && !smsPhonePattern.MatchString(phone) {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "phone is required for sms binding"))
+		return
+	}
+	jobID, err := s.accounts.CreateBinding(r.Context(), p.UserID, req.Method, phone)
 	if err != nil {
 		writeError(w, r, err)
 		return

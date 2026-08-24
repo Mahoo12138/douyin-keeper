@@ -123,6 +123,36 @@ def test_qr_poll_rejects_unknown_handle():
         assert exc.code == protocol.ERR_LOGIN_HANDLE_NOT_FOUND
 
 
+def test_sms_start_rejects_relative_profile_dir():
+    import sms_login
+
+    try:
+        sms_login.start({"profile_dir": "relative/profile", "phone": "13800138000"})
+        assert False, "expected ProtocolError"
+    except protocol.ProtocolError as exc:
+        assert exc.code == protocol.ERR_INVALID_REQUEST
+
+
+def test_sms_verify_rejects_invalid_code():
+    import sms_login
+
+    try:
+        sms_login.verify({"login_handle": "sms_missing", "code": "12a4"})
+        assert False, "expected ProtocolError"
+    except protocol.ProtocolError as exc:
+        assert exc.code == protocol.ERR_INVALID_REQUEST
+
+
+def test_sms_verify_rejects_unknown_handle():
+    import sms_login
+
+    try:
+        sms_login.verify({"login_handle": "sms_missing", "code": "123456"})
+        assert False, "expected ProtocolError"
+    except protocol.ProtocolError as exc:
+        assert exc.code == protocol.ERR_LOGIN_HANDLE_NOT_FOUND
+
+
 def test_friends_list_rejects_missing_session_file():
     import friends_list
 

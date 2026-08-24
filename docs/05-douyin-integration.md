@@ -56,11 +56,13 @@ Adapter 通过 Capability 声明支持范围。
 
 V1.1：
 
+- API 只接收用户输入的手机号用于启动流程；后端不代收短信；
 - 同一次 SMS Binding 使用独立临时 Profile；
 - `start` 与 `verify` 复用 Profile；
 - Profile 有 TTL；
+- `sms_code_required` 事件只通知过期时间，不携带手机号或验证码；
+- 验证码通过 `POST /jobs/{jobId}/sms-verify` 进入 Redis 短时键，worker 使用一次后立即删除；
 - 完成/取消/超时自动删除；
-- 后端不代收短信；
 - 出现安全验证则进入 `challenge_required`，停止自动流程。
 
 ## 4. 多账号隔离
@@ -156,6 +158,7 @@ Protocol 作为可选、实验性 Adapter。
 
 ```json
 {
+  "login.sms": "available",
   "session.validate": "available",
   "friends.sync": "available",
   "message.send.text.existing": "available",

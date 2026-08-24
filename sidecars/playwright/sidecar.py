@@ -5,7 +5,7 @@ Usage:
     echo '{"protocol_version":1,"request_id":"x","op":"health.check","deadline_ms":5000,"input":{}}' \\
       | python sidecar.py
 
-The baseline supports health.check, local session.validate, QR login, and
+The baseline supports health.check, local session.validate, QR/SMS login, and
 friends.list. Message sending is a separate adapter increment.
 stdout carries protocol messages only; logs go to stderr.
 """
@@ -17,6 +17,7 @@ import protocol
 import friends_list
 import message_send
 import qr_login
+import sms_login
 
 
 def handle(req):
@@ -37,6 +38,10 @@ def handle(req):
             return protocol.success(req, qr_login.start(req.get("input")), "browser.consumer", duration_ms=duration())
         if op == "login.qr.poll":
             return protocol.success(req, qr_login.poll(req.get("input")), "browser.consumer", duration_ms=duration())
+        if op == "login.sms.start":
+            return protocol.success(req, sms_login.start(req.get("input")), "browser.consumer", duration_ms=duration())
+        if op == "login.sms.verify":
+            return protocol.success(req, sms_login.verify(req.get("input")), "browser.consumer", duration_ms=duration())
         if op == "friends.list":
             return protocol.success(req, friends_list.list_friends(req.get("input")), "browser.consumer", duration_ms=duration())
         if op == "message.send_text":

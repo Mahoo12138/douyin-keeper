@@ -9,10 +9,11 @@ import {
   getJob,
   listAccounts,
   streamJobEvents,
+  submitSMSVerification,
   syncAccountFriends,
   type JobEventEnvelope,
 } from '@douyin-keeper/sdk-ts'
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton } from '@douyin-keeper/ui-web'
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton } from '@douyin-keeper/ui-web'
 import { Smartphone } from 'lucide-react'
 
 import { getToken } from '@/auth/session'
@@ -26,6 +27,10 @@ export function AccountsPage() {
   const queryClient = useQueryClient()
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
   const [binding, setBinding] = useState<BindingState | null>(null)
+  const [bindingChoice, setBindingChoice] = useState(false)
+  const [bindingMethod, setBindingMethod] = useState<'qr' | 'sms'>('qr')
+  const [bindingPhone, setBindingPhone] = useState('')
+  const [submittingCode, setSubmittingCode] = useState(false)
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const bindingAbort = useRef<AbortController | null>(null)
 
@@ -43,15 +48,21 @@ export function AccountsPage() {
 
   useEffect(() => () => bindingAbort.current?.abort(), [])
 
-  async function startBinding() {
+  async function startBinding(method: 'qr' | 'sms' = bindingMethod) {
     if (!token) return
+    const phone = bindingPhone.trim()
+    if (method === 'sms' && !/^\+?[0-9][0-9 ()-]{3,30}$/.test(phone)) {
+      toast.error('请输入有效的手机号')
+      return
+    }
     bindingAbort.current?.abort()
-    setBinding({ status: 'queued', jobId: null, qr: null, expiresAt: null })
+    setBindingChoice(false)
+    setBinding({ method, status: 'queued', jobId: null, qr: null, expiresAt: null })
     try {
-      const job = await createAccountBinding(token)
+      const job = await createAccountBinding(token, method, method === 'sms' ? phone : undefined)
       const controller = new AbortController()
       bindingAbort.current = controller
-      setBinding({ status: 'running', jobId: job.job_id, qr: null, expiresAt: null })
+      setBinding({ method, status: 'running', jobId: job.job_id, qr: null, expiresAt: null })
       void streamJobEvents(token, job.job_id, (event) => {
         handleBindingEvent(event, job.job_id)
       }, controller.signal).catch((error) => {
@@ -71,8 +82,13 @@ export function AccountsPage() {
       const format = event.payload.format
       const expiresAt = event.payload.expires_at
       if (format === 'data_url' && typeof value === 'string') {
-        setBinding({ status: 'waiting_user', jobId, qr: value, expiresAt: typeof expiresAt === 'string' ? expiresAt : null })
+        setBinding((current) => current?.jobId === jobId ? { ...current, status: 'waiting_user', qr: value, expiresAt: typeof expiresAt === 'string' ? expiresAt : null } : current)
       }
+      return
+    }
+    if (event.event_type === 'sms_code_required') {
+      const expiresAt = event.payload.expires_at
+      setBinding((current) => current?.jobId === jobId ? { ...current, status: 'waiting_user', qr: null, expiresAt: typeof expiresAt === 'string' ? expiresAt : null } : current)
       return
     }
     if (event.event_type === 'scanned' || event.event_type === 'confirming') {
@@ -91,6 +107,22 @@ export function AccountsPage() {
       bindingAbort.current?.abort()
       setBinding((current) => current?.jobId === jobId ? { ...current, status: 'error' } : current)
       toast.error(event.event_type === 'challenge_required' ? '需要完成平台安全验证' : '账号绑定未完成')
+    }
+    if (event.event_type === 'sms_code_invalid') {
+      toast.error('验证码错误，请重新输入')
+    }
+  }
+
+  async function submitSMSCode(code: string) {
+    if (!token || !binding?.jobId) return
+    setSubmittingCode(true)
+    try {
+      await submitSMSVerification(token, binding.jobId, code)
+      toast.success('验证码已提交，正在验证')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '验证码提交失败')
+    } finally {
+      setSubmittingCode(false)
     }
   }
 
@@ -137,13 +169,26 @@ export function AccountsPage() {
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">抖音账号</h1>
           <p className="mt-1 text-sm text-muted-foreground">管理登录状态、能力快照与好友同步。</p>
         </div>
-        <Button onClick={() => void startBinding()} disabled={!!binding}>
+        <Button onClick={() => setBindingChoice(true)} disabled={!!binding}>
           <Smartphone />
           {binding ? '绑定进行中…' : '绑定抖音账号'}
         </Button>
       </div>
 
-      {binding && <AccountBindingPanel binding={binding} onCancel={() => void cancelBinding()} />}
+      {bindingChoice && !binding && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" role="presentation">
+          <Card role="dialog" aria-modal="true" aria-labelledby="binding-choice-title" className="w-full max-w-md shadow-2xl">
+            <CardHeader><CardTitle id="binding-choice-title">选择绑定方式</CardTitle><CardDescription>扫码适合快速绑定；短信方式需要输入抖音账号手机号和验证码。</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5"><Label htmlFor="binding-method">绑定方式</Label><select id="binding-method" value={bindingMethod} onChange={(event) => setBindingMethod(event.target.value as 'qr' | 'sms')} className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"><option value="qr">扫码登录</option><option value="sms">短信验证码登录</option></select></div>
+              {bindingMethod === 'sms' && <div className="space-y-1.5"><Label htmlFor="binding-phone">手机号</Label><Input id="binding-phone" type="tel" inputMode="tel" autoComplete="tel" value={bindingPhone} onChange={(event) => setBindingPhone(event.target.value)} placeholder="例如 +86 13800138000" /><p className="text-xs text-muted-foreground">手机号只用于本次登录流程，不写入账号资料。</p></div>}
+              <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setBindingChoice(false)}>取消</Button><Button onClick={() => void startBinding()}>开始绑定</Button></div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {binding && <AccountBindingPanel binding={binding} submittingCode={submittingCode} onSubmitSMSCode={binding.method === 'sms' ? submitSMSCode : undefined} onCancel={() => void cancelBinding()} />}
 
       <Card>
         <CardHeader>

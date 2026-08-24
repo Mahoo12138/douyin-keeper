@@ -645,6 +645,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/{jobId}/sms-verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Submit a short-lived SMS code to an owned waiting SMS binding job. The code is never persisted. */
+        post: operations["submitSMSVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/register": {
         parameters: {
             query?: never;
@@ -2043,7 +2060,8 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    method: "qr";
+                    method: "qr" | "sms";
+                    phone?: string;
                 };
             };
         };
@@ -2497,6 +2515,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
+    submitSMSVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Verification code accepted for delivery to the waiting worker */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "verification_submitted";
+                    };
+                };
             };
             409: components["responses"]["Conflict"];
         };

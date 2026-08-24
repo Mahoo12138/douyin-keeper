@@ -5,14 +5,19 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
 )
+
+var smsVerificationCodePattern = regexp.MustCompile(`^[0-9]{4,8}$`)
 
 func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
 	p := auth.MustPrincipal(r.Context())
@@ -133,4 +138,43 @@ func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeAccepted(w, map[string]any{"status": "cancel_requested"})
+}
+
+func (s *Server) handleSubmitSMSVerification(w http.ResponseWriter, r *http.Request) {
+	p := auth.MustPrincipal(r.Context())
+	id, err := uuid.Parse(pathParam(r, "jobId"))
+	if err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid job id"))
+		return
+	}
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid body"))
+		return
+	}
+	code := strings.TrimSpace(req.Code)
+	if !smsVerificationCodePattern.MatchString(code) {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "code must be 4 to 8 digits"))
+		return
+	}
+	j, err := s.jobs.Get(r.Context(), &p.UserID, id)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if j.Type != "account.bind.sms" || j.Status != job.StatusWaiting {
+		writeError(w, r, apperr.Conflict(apperr.CodeConflict, "sms binding is not waiting for verification"))
+		return
+	}
+	if s.redis == nil {
+		writeError(w, r, apperr.New(apperr.CodeInternal, apperr.KindInternal, "redis is unavailable"))
+		return
+	}
+	if err := s.redis.Set(r.Context(), job.SMSVerificationKey(id), code, job.SMSVerificationTTL).Err(); err != nil {
+		writeError(w, r, apperr.New(apperr.CodeInternal, apperr.KindInternal, "verification code delivery failed"))
+		return
+	}
+	writeAccepted(w, map[string]any{"status": "verification_submitted"})
 }

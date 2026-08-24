@@ -32,6 +32,8 @@ ERR_UNSUPPORTED_OPERATION = "UNSUPPORTED_OPERATION"
 ERR_SESSION_EXPIRED = "SESSION_EXPIRED"
 ERR_ADAPTER_UNAVAILABLE = "ADAPTER_UNAVAILABLE"
 ERR_QR_EXPIRED = "QR_EXPIRED"
+ERR_SMS_CODE_INVALID = "SMS_CODE_INVALID"
+ERR_SMS_CODE_EXPIRED = "SMS_CODE_EXPIRED"
 ERR_LOGIN_HANDLE_NOT_FOUND = "LOGIN_HANDLE_NOT_FOUND"
 ERR_CHALLENGE_REQUIRED = "CHALLENGE_REQUIRED"
 ERR_PLATFORM_RATE_LIMITED = "PLATFORM_RATE_LIMITED"
@@ -105,6 +107,7 @@ def health_result():
         "version": "0.1.0",
         "capabilities": [
             "login.qr",
+            "login.sms",
             "session.validate",
             "friends.sync",
             "message.send.text.existing",

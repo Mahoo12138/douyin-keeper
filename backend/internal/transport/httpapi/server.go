@@ -142,6 +142,7 @@ func (s *Server) Router() http.Handler {
 			private.Get("/jobs/{jobId}", s.handleGetJob)
 			private.Get("/jobs/{jobId}/events", s.handleJobEvents)
 			private.Post("/jobs/{jobId}/cancel", s.handleCancelJob)
+			private.Post("/jobs/{jobId}/sms-verify", s.handleSubmitSMSVerification)
 		})
 	})
 

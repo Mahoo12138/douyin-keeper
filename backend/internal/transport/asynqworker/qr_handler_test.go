@@ -34,6 +34,9 @@ func TestQRResultDecoders(t *testing.T) {
 	if got := mapSidecarError(sidecar.ErrQRExpired); got != apperr.CodeQRExpired {
 		t.Fatalf("mapped QR expiry = %q", got)
 	}
+	if got := mapSidecarError(sidecar.ErrSMSCodeExpired); got != apperr.CodeSMSExpired {
+		t.Fatalf("mapped SMS expiry = %q", got)
+	}
 }
 
 func TestSleepContextStopsOnCancellation(t *testing.T) {

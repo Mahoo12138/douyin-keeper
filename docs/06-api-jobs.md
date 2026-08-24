@@ -22,7 +22,7 @@
 ### Accounts
 
 - `GET /api/accounts`
-- `POST /api/accounts/bindings`
+- `POST /api/accounts/bindings`（`method=qr|sms`；SMS 额外接收手机号）
 - `POST /api/accounts/:id/session-check`
 - `POST /api/accounts/:id/friends-sync`
 - `POST /api/accounts/:id/pause`
@@ -53,6 +53,7 @@
 - `GET /api/jobs/:id`
 - `GET /api/jobs/:id/events`
 - `POST /api/jobs/:id/cancel`
+- `POST /api/jobs/:id/sms-verify`（验证码只进入 Redis 短时键，不落库）
 
 ### Admin
 

@@ -6,6 +6,19 @@ import (
 	"testing"
 )
 
+func TestSMSVerificationCodePattern(t *testing.T) {
+	for _, value := range []string{"1234", "12345678"} {
+		if !smsVerificationCodePattern.MatchString(value) {
+			t.Errorf("code %q should be accepted", value)
+		}
+	}
+	for _, value := range []string{"123", "123456789", "12a456", ""} {
+		if smsVerificationCodePattern.MatchString(value) {
+			t.Errorf("code %q should be rejected", value)
+		}
+	}
+}
+
 func TestLastEventIDRejectsInvalidAndNegativeValues(t *testing.T) {
 	valid := httptest.NewRequest("GET", "/jobs/1/events", nil)
 	valid.Header.Set("Last-Event-ID", "12")

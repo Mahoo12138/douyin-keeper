@@ -49,6 +49,12 @@ type JobEvent struct {
 	CreatedAt time.Time
 }
 
+const SMSVerificationTTL = 2 * time.Minute
+
+func SMSVerificationKey(publicID uuid.UUID) string {
+	return "job:sms-verification:" + publicID.String()
+}
+
 // Repository is implemented by infra/postgres.
 type Repository interface {
 	CreateJob(ctx context.Context, j *Job) error
