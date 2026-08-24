@@ -20,6 +20,7 @@ import friends_list
 import message_send
 import conversation_archive
 import conversation_list
+import sticker_send
 import qr_login
 import sms_login
 
@@ -85,6 +86,8 @@ def handle(req):
             return protocol.success(req, friends_list.list_friends(req.get("input")), "browser.consumer", duration_ms=duration())
         if op == "message.send_text":
             return protocol.success(req, message_send.send_text(req.get("input")), "browser.consumer", duration_ms=duration())
+        if op == "message.send_sticker":
+            return protocol.success(req, sticker_send.send_sticker(req.get("input")), "browser.consumer", duration_ms=duration())
         if op == "conversations.archive":
             return protocol.success(req, conversation_archive.archive(req.get("input")), "browser.consumer", duration_ms=duration())
         if op == "conversations.list":

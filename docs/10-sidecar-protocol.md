@@ -502,6 +502,11 @@ Success：
 返回 `confirmed=true` 和 `platform_message_id`；贴纸能力不可用时返回稳定错误码，
 Go worker 会 fail-closed。
 
+当前 Sidecar 已完成 `session`、双重目标 ID 和 `sticker_id` 的输入校验；真实贴纸 selector
+尚未部署时返回 `ADAPTER_UNAVAILABLE`，并在 `error.detail` 标明
+`{"operation":"message.send_sticker","reason":"selector_not_configured"}`，不得返回
+成功 envelope。
+
 ## 10.2 Send First Message（V1.2）
 
 `message.send_first` 只允许使用稳定的 `platform_user_id`，因为此时可能还没有会话 ID：

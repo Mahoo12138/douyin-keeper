@@ -161,6 +161,50 @@ def test_platform_conversation_list_rejects_missing_session_before_adapter_call(
         assert exc.code == protocol.ERR_INVALID_REQUEST
 
 
+def test_sticker_send_validates_and_fails_closed_until_selector_exists():
+    import sidecar
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
+        json.dump({"cookies": []}, state)
+        state.flush()
+        req = make_req("message.send_sticker")
+        req["input"] = {
+            "session": {"kind": "playwright_storage_state_file", "path": state.name},
+            "target": {
+                "platform_user_id": "user-1",
+                "platform_conversation_id": "conversation-1",
+            },
+            "message": {"sticker_id": "sticker-001"},
+        }
+        out = sidecar.handle(req)
+    assert out["ok"] is False
+    assert out["error"]["code"] == protocol.ERR_ADAPTER_UNAVAILABLE
+    assert out["error"]["detail"] == {
+        "operation": "message.send_sticker",
+        "reason": "selector_not_configured",
+    }
+
+
+def test_sticker_send_rejects_unstable_or_incomplete_target_before_adapter_call():
+    import sticker_send
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
+        json.dump({"cookies": []}, state)
+        state.flush()
+        base = {"session": {"kind": "playwright_storage_state_file", "path": state.name}}
+        invalid_inputs = [
+            {**base, "target": {}, "message": {"sticker_id": "sticker-001"}},
+            {**base, "target": {"platform_user_id": "user-1", "platform_conversation_id": "conversation-1"}, "message": {"sticker_id": ""}},
+            {**base, "target": {"platform_user_id": "user-1", "platform_conversation_id": "conversation-1"}, "message": {"sticker_id": "x" * 257}},
+        ]
+        for input_data in invalid_inputs:
+            try:
+                sticker_send.send_sticker(input_data)
+                assert False, "expected ProtocolError"
+            except protocol.ProtocolError as exc:
+                assert exc.code == protocol.ERR_INVALID_REQUEST
+
+
 def test_sidecar_failures_keep_browser_adapter_identity():
     import sidecar
 
