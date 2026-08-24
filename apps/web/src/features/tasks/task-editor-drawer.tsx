@@ -1,4 +1,4 @@
-import { Button, Input, Label, Switch } from '@douyin-keeper/ui-web'
+import { Button, Input, Label, Switch, useOverlayBehavior } from '@douyin-keeper/ui-web'
 import { X } from 'lucide-react'
 
 import type { Account, Friend, MessageTemplate, TaskDraft } from './task-types'
@@ -37,11 +37,12 @@ export function TaskEditorDrawer({
   onSave: () => void
 }) {
   const firstMessageToggleDisabled = creatorFirstMessageLoading || (!creatorFirstMessageAllowed && !draft.allowFirstMessage)
+  const drawerRef = useOverlayBehavior<HTMLElement>(true, onClose)
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="presentation">
       <button className="absolute inset-0 cursor-default bg-black/30" aria-label="关闭任务编辑" onClick={onClose} />
-      <aside role="dialog" aria-modal="true" aria-labelledby="task-editor-title" className="relative flex h-full w-full max-w-xl flex-col bg-background shadow-2xl">
+      <aside ref={drawerRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="task-editor-title" className="relative flex h-full w-full max-w-xl flex-col bg-background shadow-2xl">
         <div className="flex items-start justify-between border-b p-6">
           <div>
             <h2 id="task-editor-title" className="text-lg font-semibold">{draft.id ? '编辑火花任务' : '新建火花任务'}</h2>

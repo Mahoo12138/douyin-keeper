@@ -10,7 +10,7 @@ import {
   type JobEventEnvelope,
 } from '@douyin-keeper/sdk-ts'
 import { ArrowLeft, Smartphone } from 'lucide-react'
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from '@douyin-keeper/ui-web'
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, useOverlayBehavior } from '@douyin-keeper/ui-web'
 
 import { getToken } from '@/auth/session'
 import { AccountBindingPanel } from './account-binding-panel'
@@ -45,9 +45,11 @@ export function AccountBindingFlow({ mode = 'embedded', accountId, onSuccess }: 
 type BindingController = ReturnType<typeof useAccountBinding>
 
 function BindingChoiceDialog({ binding }: { binding: BindingController }) {
+  const dialogRef = useOverlayBehavior<HTMLDivElement>(true, binding.closeChoice)
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" role="presentation">
-      <Card role="dialog" aria-modal="true" aria-labelledby="binding-choice-title" className="w-full max-w-md shadow-2xl">
+      <Card ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="binding-choice-title" className="w-full max-w-md shadow-2xl">
         <CardHeader>
           <CardTitle id="binding-choice-title">{binding.isRebinding ? '选择重新登录方式' : '选择绑定方式'}</CardTitle>
           <CardDescription>{binding.isRebinding ? '重新登录会替换当前账号 Session，验证失败时不会改变原有登录态。' : '扫码适合快速绑定；短信方式需要输入抖音账号手机号和验证码。'}</CardDescription>
