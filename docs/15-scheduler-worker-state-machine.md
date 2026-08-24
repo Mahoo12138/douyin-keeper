@@ -123,6 +123,11 @@ LIMIT 100;
 
 发布失败：增加 attempts + backoff；超过阈值进入 `dead` 并告警。
 
+Publisher 使用 `outbox:<public_id>` 作为确定性的 Asynq Task ID。若入队返回
+Task ID 冲突，表示相同 Outbox 消息已由此前的投递写入队列（通常是写入队列后、
+回写 `published` 前进程崩溃）；该结果按成功处理并回写 `published`，不得增加
+attempts 或进入失败退避。
+
 Asynq Task 本身仍可设置 Unique/Dedupe，作为第二道保险，但业务正确性不依赖它。
 
 ## 3. Scheduler Tick

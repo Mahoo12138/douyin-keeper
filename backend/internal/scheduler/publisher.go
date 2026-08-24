@@ -4,11 +4,13 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
@@ -19,8 +21,8 @@ import (
 // (docs/15 §2.2). It can run concurrently on multiple instances; PostgreSQL
 // sharding keeps them safe.
 type Publisher struct {
-	outbox     *postgres.OutboxRepo
-	producer   *asynqqueue.Client
+	outbox     publisherOutbox
+	producer   publisherProducer
 	batchSize  int
 	interval   time.Duration
 	instanceID string
@@ -28,12 +30,22 @@ type Publisher struct {
 	metrics    *telemetry.Metrics
 }
 
+type publisherOutbox interface {
+	ClaimPending(context.Context, int, string, time.Duration) ([]postgres.PendingMessage, error)
+	MarkPublished(context.Context, int64) error
+	MarkFailed(context.Context, int64, int, time.Time, string) error
+}
+
+type publisherProducer interface {
+	Enqueue(context.Context, asynqqueue.Message) error
+}
+
 func (p *Publisher) WithMetrics(metrics *telemetry.Metrics) *Publisher {
 	p.metrics = metrics
 	return p
 }
 
-func NewPublisher(outbox *postgres.OutboxRepo, producer *asynqqueue.Client,
+func NewPublisher(outbox publisherOutbox, producer publisherProducer,
 	batchSize int, interval time.Duration, log *slog.Logger) *Publisher {
 	return &Publisher{
 		outbox: outbox, producer: producer, batchSize: batchSize, interval: interval,
@@ -84,6 +96,12 @@ func (p *Publisher) relay(ctx context.Context, m postgres.PendingMessage) error 
 		ID: m.PublicID, Kind: m.Kind, WorkerPayload: payload,
 	})
 	if err != nil {
+		// The Task ID is deterministic (outbox:<public_id>). If the task is
+		// already present, a previous relay succeeded but likely crashed before
+		// recording the outbox state. Treat the conflict as idempotent success.
+		if errors.Is(err, asynq.ErrTaskIDConflict) {
+			return p.outbox.MarkPublished(ctx, m.ID)
+		}
 		// Backoff + dead-letter after MaxOutboxAttempts (docs/15 §2.2).
 		attempts := m.Attempts + 1
 		backoff := time.Duration(1<<min(attempts-1, 5)) * time.Second
