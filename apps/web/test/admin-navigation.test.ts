@@ -10,6 +10,7 @@ test('admin navigation stays aligned with the unified SPA route contract', () =>
     '/admin/accounts',
     '/admin/risks',
     '/admin/workers',
+    '/admin/jobs',
     '/admin/adapters',
     '/admin/settings',
     '/admin/entitlement',

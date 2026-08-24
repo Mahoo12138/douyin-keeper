@@ -624,6 +624,9 @@ POST /admin/users/{id}/entitlement-grants
 排序；`category`、`severity`、`code` 筛选条件随 `cursor` 继续读取风险列表。
 `GET /admin/audit-logs` 默认返回 50 条、最多 100 条，按 `created_at DESC, id DESC`
 排序；`action`、`resource_type`、`actor` 筛选条件随 `cursor` 继续读取审计列表。
+`GET /admin/jobs` 默认返回 50 条、最多 100 条，按 `created_at DESC, id DESC` 排序；支持
+`status`、`type` 筛选并随 `cursor` 继续读取。Job 列表只返回生命周期元数据，不返回
+`job_events.payload_json`、Session、Cookie 或消息正文。
 `GET /admin/entitlement-plans` 默认返回 50 条、最多 100 条，按 `id ASC` 排序并通过 `cursor`
 继续读取方案；`GET /admin/card-batches` 与 `GET /admin/redemptions` 默认返回 50 条、最多 100 条，均按
 `created_at DESC, id DESC` 排序，并通过 `cursor` 继续读取；页面不返回完整卡密明文。

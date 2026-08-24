@@ -197,6 +197,15 @@ export async function getAdminRuntime(accessToken: string) {
   return data
 }
 
+export async function listAdminJobs(accessToken: string, options?: { status?: components['schemas']['AdminJob']['status']; type?: string; limit?: number; cursor?: string }) {
+  const { data, error } = await api.GET('/admin/jobs', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { query: options },
+  })
+  if (error) throwApiError(error, 'admin jobs lookup failed')
+  return data
+}
+
 export async function getAdminOverview(accessToken: string) {
   const { data, error } = await api.GET('/admin/overview', {
     headers: { Authorization: `Bearer ${accessToken}` },

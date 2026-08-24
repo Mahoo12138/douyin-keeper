@@ -14,6 +14,8 @@ type repositoryStub struct {
 	limit           int
 	userItems       []UserSummary
 	userFilter      UserListFilter
+	jobItems        []JobSummary
+	jobFilter       JobListFilter
 	accountItems    []AccountSummary
 	accountFilter   AccountListFilter
 	riskItems       []RiskSummary
@@ -43,6 +45,11 @@ func (r *repositoryStub) ListUserSummaries(_ context.Context, limit int) ([]User
 func (r *repositoryStub) ListUserSummariesPage(_ context.Context, filter UserListFilter) ([]UserSummary, error) {
 	r.userFilter = filter
 	return r.userItems, nil
+}
+
+func (r *repositoryStub) ListJobSummaries(_ context.Context, filter JobListFilter) ([]JobSummary, error) {
+	r.jobFilter = filter
+	return r.jobItems, nil
 }
 
 func (r *repositoryStub) ListAccountSummaries(_ context.Context, limit int) ([]AccountSummary, error) {
@@ -151,6 +158,28 @@ func TestServiceListsUserCursorPage(t *testing.T) {
 	}
 	if repo.userFilter.Limit != 2 || repo.userFilter.AfterID != 9 || repo.userFilter.AfterCreatedAt == nil {
 		t.Fatalf("filter = %+v", repo.userFilter)
+	}
+}
+
+func TestServiceListsJobCursorPageAndPreservesFilters(t *testing.T) {
+	base := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	repo := &repositoryStub{jobItems: []JobSummary{
+		{ID: 3, CreatedAt: base.Add(2 * time.Minute)},
+		{ID: 2, CreatedAt: base.Add(time.Minute)},
+		{ID: 1, CreatedAt: base},
+	}}
+	page, err := NewService(repo).ListJobsPage(context.Background(), JobListFilter{
+		Status: "failed", Type: "account.bind.qr", Limit: 2,
+		AfterID: 9, AfterCreatedAt: func() *time.Time { value := base.Add(3 * time.Minute); return &value }(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].ID != 3 || page.Items[1].ID != 2 || page.NextAfterID != 2 || page.NextCreatedAt == nil {
+		t.Fatalf("page = %+v", page)
+	}
+	if repo.jobFilter.Status != "failed" || repo.jobFilter.Type != "account.bind.qr" || repo.jobFilter.Limit != 3 || repo.jobFilter.AfterID != 9 || repo.jobFilter.AfterCreatedAt == nil {
+		t.Fatalf("filter = %+v", repo.jobFilter)
 	}
 }
 

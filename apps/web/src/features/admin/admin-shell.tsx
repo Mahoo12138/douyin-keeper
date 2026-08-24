@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
-import { CircleGauge, LayoutDashboard, LogOut, Menu, ScrollText, Settings, Settings2, ShieldAlert, Smartphone, Ticket, UsersRound, X } from 'lucide-react'
+import { CircleGauge, ClipboardList, LayoutDashboard, LogOut, Menu, ScrollText, Settings, Settings2, ShieldAlert, Smartphone, Ticket, UsersRound, X } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Button, ThemeToggle } from '@douyin-keeper/ui-web'
 import { signOut as signOutSession } from '@/auth/session'
@@ -13,6 +13,7 @@ export const adminNav: AdminNavItem[] = [
   { to: '/admin/accounts', label: '抖音账号', icon: Smartphone },
   { to: '/admin/risks', label: '风险中心', icon: ShieldAlert },
   { to: '/admin/workers', label: 'Worker / 队列', icon: CircleGauge },
+  { to: '/admin/jobs', label: 'Generic Jobs', icon: ClipboardList },
   { to: '/admin/adapters', label: 'Adapter', icon: Settings2 },
   { to: '/admin/settings', label: '站点设置', icon: Settings },
   { to: '/admin/entitlement', label: '权益与卡密', icon: Ticket },

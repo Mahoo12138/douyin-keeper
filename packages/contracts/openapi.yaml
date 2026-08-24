@@ -393,6 +393,47 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminRuntime'
+  /admin/jobs:
+    get:
+      operationId: listAdminJobs
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - queued
+          - running
+          - waiting_user
+          - succeeded
+          - failed
+          - cancelled
+      - name: type
+        in: query
+        schema:
+          type: string
+          maxLength: 100
+      responses:
+        '200':
+          description: Redacted generic Job lifecycle summaries
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - next_cursor
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminJob'
+                  next_cursor:
+                    type:
+                    - string
+                    - 'null'
   /admin/adapters:
     get:
       operationId: listAdminAdapters
@@ -2088,6 +2129,77 @@ components:
           format: date-time
         created_at:
           type: string
+          format: date-time
+    AdminJob:
+      type: object
+      required:
+      - id
+      - type
+      - status
+      - cancelable
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        type:
+          type: string
+        status:
+          type: string
+          enum:
+          - queued
+          - running
+          - waiting_user
+          - succeeded
+          - failed
+          - cancelled
+        error_code:
+          type:
+          - string
+          - 'null'
+        cancelable:
+          type: boolean
+        cancel_requested_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        worker_id:
+          type:
+          - string
+          - 'null'
+        heartbeat_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        lease_expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        finished_at:
+          type:
+          - string
+          - 'null'
           format: date-time
     AdminWorkerPool:
       type: object

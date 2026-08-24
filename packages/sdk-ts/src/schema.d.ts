@@ -292,6 +292,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAdminJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/adapters": {
         parameters: {
             query?: never;
@@ -1199,6 +1215,32 @@ export interface components {
             revoked_at?: string | null;
             /** Format: date-time */
             created_at: string;
+        };
+        AdminJob: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            user_id?: string | null;
+            /** Format: uuid */
+            account_id?: string | null;
+            type: string;
+            /** @enum {string} */
+            status: "queued" | "running" | "waiting_user" | "succeeded" | "failed" | "cancelled";
+            error_code?: string | null;
+            cancelable: boolean;
+            /** Format: date-time */
+            cancel_requested_at?: string | null;
+            worker_id?: string | null;
+            /** Format: date-time */
+            heartbeat_at?: string | null;
+            /** Format: date-time */
+            lease_expires_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            started_at?: string | null;
+            /** Format: date-time */
+            finished_at?: string | null;
         };
         AdminWorkerPool: {
             name: string;
@@ -2137,6 +2179,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminRuntime"];
+                };
+            };
+        };
+    };
+    listAdminJobs: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                status?: "queued" | "running" | "waiting_user" | "succeeded" | "failed" | "cancelled";
+                type?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redacted generic Job lifecycle summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminJob"][];
+                        next_cursor: string | null;
+                    };
                 };
             };
         };

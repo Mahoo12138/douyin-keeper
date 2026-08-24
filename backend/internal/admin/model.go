@@ -62,6 +62,42 @@ type UserListPage struct {
 	NextAfterID   int64
 }
 
+// JobSummary is the redacted operational projection of a generic Job. Event
+// payloads are intentionally excluded; they may contain platform details or
+// user-provided data and remain available only through the owner-scoped Job
+// event API.
+type JobSummary struct {
+	ID                int64
+	PublicID          uuid.UUID
+	UserPublicID      *uuid.UUID
+	AccountPublicID   *uuid.UUID
+	Type              string
+	Status            string
+	ErrorCode         *string
+	Cancelable        bool
+	CancelRequestedAt *time.Time
+	WorkerID          *string
+	HeartbeatAt       *time.Time
+	LeaseExpiresAt    *time.Time
+	CreatedAt         time.Time
+	StartedAt         *time.Time
+	FinishedAt        *time.Time
+}
+
+type JobListFilter struct {
+	Status         string
+	Type           string
+	Limit          int
+	AfterCreatedAt *time.Time
+	AfterID        int64
+}
+
+type JobListPage struct {
+	Items         []JobSummary
+	NextCreatedAt *time.Time
+	NextAfterID   int64
+}
+
 type AccountCapability struct {
 	Name      string
 	Status    string
@@ -256,6 +292,7 @@ type Setting struct {
 
 type Repository interface {
 	ListUserSummaries(ctx context.Context, limit int) ([]UserSummary, error)
+	ListJobSummaries(ctx context.Context, filter JobListFilter) ([]JobSummary, error)
 	ListAccountSummaries(ctx context.Context, limit int) ([]AccountSummary, error)
 	GetRuntimeSummary(ctx context.Context) (RuntimeSummary, error)
 	GetOverviewSummary(ctx context.Context) (OverviewSummary, error)
@@ -270,6 +307,10 @@ type Repository interface {
 
 type UserPageRepository interface {
 	ListUserSummariesPage(ctx context.Context, filter UserListFilter) ([]UserSummary, error)
+}
+
+type JobPageRepository interface {
+	ListJobSummariesPage(ctx context.Context, filter JobListFilter) ([]JobSummary, error)
 }
 
 type AccountPageRepository interface {
@@ -294,6 +335,57 @@ func NewService(repo Repository) *Service {
 
 func (s *Service) ListUsers(ctx context.Context, limit int) ([]UserSummary, error) {
 	return s.repo.ListUserSummaries(ctx, normalizeLimit(limit))
+}
+
+func (s *Service) ListJobsPage(ctx context.Context, filter JobListFilter) (JobListPage, error) {
+	filter.Limit = normalizeLimit(filter.Limit)
+	if filter.AfterID < 0 {
+		filter.AfterID = 0
+	}
+	if repo, ok := s.repo.(JobPageRepository); ok {
+		items, err := repo.ListJobSummariesPage(ctx, filter)
+		if err != nil {
+			return JobListPage{}, err
+		}
+		return trimJobListPage(items, filter.Limit), nil
+	}
+	fallbackFilter := filter
+	fallbackFilter.Limit++
+	items, err := s.repo.ListJobSummaries(ctx, fallbackFilter)
+	if err != nil {
+		return JobListPage{}, err
+	}
+	if filter.AfterCreatedAt != nil && filter.AfterID > 0 {
+		start := len(items)
+		for index, item := range items {
+			if item.CreatedAt.Before(*filter.AfterCreatedAt) ||
+				(item.CreatedAt.Equal(*filter.AfterCreatedAt) && item.ID < filter.AfterID) {
+				start = index
+				break
+			}
+		}
+		if start < len(items) {
+			items = items[start:]
+		} else {
+			items = nil
+		}
+	}
+	return trimJobListPage(items, filter.Limit), nil
+}
+
+func trimJobListPage(items []JobSummary, limit int) JobListPage {
+	page := JobListPage{Items: items}
+	if len(items) <= limit {
+		return page
+	}
+	page.Items = items[:limit]
+	last := page.Items[len(page.Items)-1]
+	if last.ID > 0 && !last.CreatedAt.IsZero() {
+		createdAt := last.CreatedAt
+		page.NextCreatedAt = &createdAt
+		page.NextAfterID = last.ID
+	}
+	return page
 }
 
 func (s *Service) ListUsersPage(ctx context.Context, filter UserListFilter) (UserListPage, error) {

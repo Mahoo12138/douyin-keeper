@@ -38,6 +38,67 @@ func (r *AdminRepo) ListUserSummariesPage(ctx context.Context, filter admin.User
 	return r.listUserSummaries(ctx, filter)
 }
 
+func (r *AdminRepo) ListJobSummaries(ctx context.Context, filter admin.JobListFilter) ([]admin.JobSummary, error) {
+	return r.listJobSummaries(ctx, filter)
+}
+
+func (r *AdminRepo) ListJobSummariesPage(ctx context.Context, filter admin.JobListFilter) ([]admin.JobSummary, error) {
+	filter.Limit++
+	return r.listJobSummaries(ctx, filter)
+}
+
+func (r *AdminRepo) listJobSummaries(ctx context.Context, filter admin.JobListFilter) ([]admin.JobSummary, error) {
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT
+			j.id,
+			j.public_id,
+			u.public_id,
+			a.public_id,
+			j.type,
+			j.status,
+			j.error_code,
+			j.cancelable,
+			j.cancel_requested_at,
+			j.worker_id,
+			j.heartbeat_at,
+			j.lease_expires_at,
+			j.created_at,
+			j.started_at,
+			j.finished_at
+		FROM jobs j
+		LEFT JOIN users u ON u.id = j.user_id
+		LEFT JOIN douyin_accounts a ON a.id = j.account_id
+		WHERE ($1 = '' OR j.status = $1)
+		  AND ($2 = '' OR j.type = $2)
+		  AND ($3::timestamptz IS NULL OR (j.created_at,j.id) < ($3::timestamptz,$4::bigint))
+		ORDER BY j.created_at DESC, j.id DESC
+		LIMIT $5`, filter.Status, filter.Type, filter.AfterCreatedAt, filter.AfterID, filter.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]admin.JobSummary, 0)
+	for rows.Next() {
+		var item admin.JobSummary
+		var userPublicID, accountPublicID *uuid.UUID
+		if err := rows.Scan(
+			&item.ID, &item.PublicID, &userPublicID, &accountPublicID, &item.Type, &item.Status,
+			&item.ErrorCode, &item.Cancelable, &item.CancelRequestedAt, &item.WorkerID,
+			&item.HeartbeatAt, &item.LeaseExpiresAt, &item.CreatedAt, &item.StartedAt, &item.FinishedAt,
+		); err != nil {
+			return nil, err
+		}
+		item.UserPublicID = userPublicID
+		item.AccountPublicID = accountPublicID
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func (r *AdminRepo) listUserSummaries(ctx context.Context, filter admin.UserListFilter) ([]admin.UserSummary, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT
