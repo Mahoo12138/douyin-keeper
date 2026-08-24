@@ -107,3 +107,48 @@ func TestWithTempFileRemovesFileOnCallbackError(t *testing.T) {
 		t.Fatal("must not mark failed validation as validated")
 	}
 }
+
+func TestCleanupStaleTempFilesRemovesOnlyOldSessionFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	oldPath := filepath.Join(tempDir, "session-old.json")
+	freshPath := filepath.Join(tempDir, "session-fresh.json")
+	unrelatedPath := filepath.Join(tempDir, "keep.txt")
+	for _, path := range []string{oldPath, freshPath, unrelatedPath} {
+		if err := os.WriteFile(path, []byte("opaque"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Chtimes(oldPath, now.Add(-2*time.Hour), now.Add(-2*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(freshPath, now.Add(-5*time.Minute), now.Add(-5*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewService(&fakeRepo{}, fakeTx{}, testCipher(t), tempDir)
+	svc.now = func() time.Time { return now }
+	removed, err := svc.CleanupStaleTempFiles(time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed != 1 {
+		t.Fatalf("removed %d files, want 1", removed)
+	}
+	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+		t.Fatalf("stale session file still exists: %v", err)
+	}
+	for _, path := range []string{freshPath, unrelatedPath} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("file %q should be preserved: %v", path, err)
+		}
+	}
+}
+
+func TestCleanupStaleTempFilesTreatsMissingDirectoryAsClean(t *testing.T) {
+	svc := NewService(&fakeRepo{}, fakeTx{}, testCipher(t), filepath.Join(t.TempDir(), "missing"))
+	removed, err := svc.CleanupStaleTempFiles(time.Hour)
+	if err != nil || removed != 0 {
+		t.Fatalf("removed=%d err=%v, want clean no-op", removed, err)
+	}
+}

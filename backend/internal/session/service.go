@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,8 +24,55 @@ type Service struct {
 	now     func() time.Time
 }
 
+// DefaultTempFileMaxAge is longer than any normal Sidecar request, while
+// still bounding how long decrypted session material can survive a crash.
+const DefaultTempFileMaxAge = time.Hour
+
 func NewService(repo Repository, tx TxManager, cipher Cipher, tempDir string) *Service {
 	return &Service{repo: repo, tx: tx, cipher: cipher, tempDir: tempDir, now: time.Now}
+}
+
+// CleanupStaleTempFiles removes only old session temp files owned by this
+// service. A worker may share the directory with another worker, so fresh
+// files are preserved; stale files are safe crash leftovers because normal
+// WithTempFile calls never keep them open beyond the Sidecar operation.
+func (s *Service) CleanupStaleTempFiles(maxAge time.Duration) (int, error) {
+	if maxAge <= 0 {
+		return 0, fmt.Errorf("session temp max age must be positive")
+	}
+	entries, err := os.ReadDir(s.tempDir)
+	if os.IsNotExist(err) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("read session temp directory: %w", err)
+	}
+	cutoff := s.now().Add(-maxAge)
+	removed := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		matched, err := filepath.Match("session-*.json", entry.Name())
+		if err != nil {
+			return removed, fmt.Errorf("match session temp file: %w", err)
+		}
+		if !matched {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return removed, fmt.Errorf("inspect session temp file %q: %w", entry.Name(), err)
+		}
+		if !info.Mode().IsRegular() || info.ModTime().After(cutoff) {
+			continue
+		}
+		if err := os.Remove(filepath.Join(s.tempDir, entry.Name())); err != nil {
+			return removed, fmt.Errorf("remove stale session temp file %q: %w", entry.Name(), err)
+		}
+		removed++
+	}
+	return removed, nil
 }
 
 func aad(userPublicID, accountPublicID uuid.UUID, keyVersion int) []byte {

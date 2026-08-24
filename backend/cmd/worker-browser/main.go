@@ -78,6 +78,10 @@ func main() {
 	entitlementSvc := entitlement.NewService(entitlementRepo, entitlementRepo, entitlementRepo, entitlementRepo,
 		postgres.NewUserLockRepo(pool), workerTx, nil)
 	sessionSvc := session.NewService(postgres.NewSessionRepo(pool), workerTx, cipher, cfg.SessionTempDir)
+	if _, err := sessionSvc.CleanupStaleTempFiles(session.DefaultTempFileMaxAge); err != nil {
+		log.Error("session temp cleanup failed", "err", err)
+		os.Exit(1)
+	}
 	sidecarScript := cfg.PlaywrightSidecarScript
 	if _, statErr := os.Stat(sidecarScript); os.IsNotExist(statErr) {
 		candidate := filepath.Join("..", sidecarScript)

@@ -102,7 +102,8 @@ MVP：
 3. Request 只传 `session_file`；
 4. Sidecar 读取；
 5. Worker 在请求结束后删除文件；
-6. Sidecar 不回传其内容。
+6. Worker 启动时清理超过 1 小时的 `session-*.json` 孤儿文件；
+7. Sidecar 不回传其内容。
 
 ```json
 {
