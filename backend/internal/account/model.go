@@ -20,35 +20,36 @@ const (
 type SessionStatus string
 
 const (
-	SessionUnknown          SessionStatus = "unknown"
-	SessionValid            SessionStatus = "valid"
-	SessionExpired          SessionStatus = "expired"
+	SessionUnknown           SessionStatus = "unknown"
+	SessionValid             SessionStatus = "valid"
+	SessionExpired           SessionStatus = "expired"
 	SessionChallengeRequired SessionStatus = "challenge_required"
 )
 
 type RiskStatus string
 
 const (
-	RiskNormal     RiskStatus = "normal"
+	RiskNormal      RiskStatus = "normal"
 	RiskCoolingDown RiskStatus = "cooling_down"
-	RiskPaused     RiskStatus = "paused"
+	RiskPaused      RiskStatus = "paused"
 )
 
 type Account struct {
-	ID                int64
-	PublicID          uuid.UUID
-	UserID            int64
-	PlatformUserID    *string
-	Nickname          string
-	AvatarURL         *string
-	BindingStatus     BindingStatus
-	SessionStatus     SessionStatus
-	RiskStatus        RiskStatus
-	PausedAt          *time.Time
-	CooldownUntil     *time.Time
+	ID                 int64
+	PublicID           uuid.UUID
+	UserID             int64
+	UserPublicID       uuid.UUID
+	PlatformUserID     *string
+	Nickname           string
+	AvatarURL          *string
+	BindingStatus      BindingStatus
+	SessionStatus      SessionStatus
+	RiskStatus         RiskStatus
+	PausedAt           *time.Time
+	CooldownUntil      *time.Time
 	LastSessionCheckAt *time.Time
-	LastFriendSyncAt  *time.Time
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	DeletedAt         *time.Time
+	LastFriendSyncAt   *time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	DeletedAt          *time.Time
 }

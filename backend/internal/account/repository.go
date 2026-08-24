@@ -12,6 +12,8 @@ import (
 type Repository interface {
 	ListOwned(ctx context.Context, userID int64) ([]*Account, error)
 	GetOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*Account, error)
+	// GetByID is an internal worker lookup. It is not exposed to C-side handlers.
+	GetByID(ctx context.Context, accountID int64) (*Account, error)
 	Create(ctx context.Context, a *Account) error
 	SetBindingStatus(ctx context.Context, accountID int64, status BindingStatus) error
 	SetPaused(ctx context.Context, accountID int64, at *time.Time) error

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -54,6 +55,26 @@ func (r *JobRepo) GetOwned(ctx context.Context, userID *int64, publicID uuid.UUI
 		return nil, mapNoRows(err, apperr.CodeNotFound, "job not found")
 	}
 	return j, nil
+}
+
+func (r *JobRepo) Claim(ctx context.Context, publicID uuid.UUID, workerID string, lease time.Duration) (*job.Job, error) {
+	j, err := scanJob(From(ctx, r.pool).QueryRow(ctx, `
+		UPDATE jobs SET status='running', worker_id=$2,
+			started_at=COALESCE(started_at, now()), heartbeat_at=now(),
+			lease_expires_at=now()+$3::interval
+		WHERE public_id=$1 AND status='queued'
+		RETURNING `+jobCols, publicID, workerID, lease.String()))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return j, err
+}
+
+func (r *JobRepo) Finish(ctx context.Context, jobID int64, status job.Status, errorCode *string, at time.Time) error {
+	_, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE jobs SET status=$2, error_code=$3, finished_at=$4,
+			heartbeat_at=NULL, lease_expires_at=NULL WHERE id=$1`, jobID, status, errorCode, at)
+	return err
 }
 
 func (r *JobRepo) ListEvents(ctx context.Context, jobID int64) ([]job.JobEvent, error) {

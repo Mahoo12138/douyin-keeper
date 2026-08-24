@@ -5,9 +5,9 @@ Usage:
     echo '{"protocol_version":1,"request_id":"x","op":"health.check","deadline_ms":5000,"input":{}}' \\
       | python sidecar.py
 
-Only health.check works at M0; all other ops return UNSUPPORTED_OPERATION.
-Real Douyin adapters (QR login, session validate, friends.list, message.send_*)
-land with M1/M3. stdout carries protocol messages only; logs go to stderr.
+The M1 baseline supports health.check and local session.validate. Browser
+login, friend sync and message sending are separate adapter increments.
+stdout carries protocol messages only; logs go to stderr.
 """
 
 import sys
@@ -23,6 +23,13 @@ def handle(req):
     try:
         if op == "health.check":
             return protocol.success(req, protocol.health_result(), "browser.consumer", duration_ms=duration())
+        if op == "session.validate":
+            return protocol.success(
+                req,
+                protocol.validate_session(req.get("input")),
+                "browser.consumer",
+                duration_ms=duration(),
+            )
         # Placeholders for ops requiring a browser context (M1/M3).
         return protocol.unsupported(req)
     except protocol.ProtocolError as exc:

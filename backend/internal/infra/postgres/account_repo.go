@@ -20,13 +20,13 @@ type AccountRepo struct {
 
 func NewAccountRepo(pool *pgxpool.Pool) *AccountRepo { return &AccountRepo{pool: pool} }
 
-const accountCols = `id, public_id, user_id, platform_user_id, nickname, avatar_url,
-	binding_status, session_status, risk_status, paused_at, cooldown_until,
-	last_session_check_at, last_friend_sync_at, created_at, updated_at, deleted_at`
+const accountCols = `a.id, a.public_id, a.user_id, u.public_id, a.platform_user_id, a.nickname, a.avatar_url,
+	a.binding_status, a.session_status, a.risk_status, a.paused_at, a.cooldown_until,
+	a.last_session_check_at, a.last_friend_sync_at, a.created_at, a.updated_at, a.deleted_at`
 
 func scanAccount(row pgx.Row) (*account.Account, error) {
 	var a account.Account
-	err := row.Scan(&a.ID, &a.PublicID, &a.UserID, &a.PlatformUserID, &a.Nickname, &a.AvatarURL,
+	err := row.Scan(&a.ID, &a.PublicID, &a.UserID, &a.UserPublicID, &a.PlatformUserID, &a.Nickname, &a.AvatarURL,
 		&a.BindingStatus, &a.SessionStatus, &a.RiskStatus, &a.PausedAt, &a.CooldownUntil,
 		&a.LastSessionCheckAt, &a.LastFriendSyncAt, &a.CreatedAt, &a.UpdatedAt, &a.DeletedAt)
 	if err != nil {
@@ -37,9 +37,10 @@ func scanAccount(row pgx.Row) (*account.Account, error) {
 
 func (r *AccountRepo) ListOwned(ctx context.Context, userID int64) ([]*account.Account, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
-		SELECT `+accountCols+` FROM douyin_accounts
-		WHERE user_id=$1 AND deleted_at IS NULL
-		ORDER BY id DESC`, userID)
+		SELECT `+accountCols+` FROM douyin_accounts a
+		JOIN users u ON u.id = a.user_id
+		WHERE a.user_id=$1 AND a.deleted_at IS NULL
+		ORDER BY a.id DESC`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -57,8 +58,20 @@ func (r *AccountRepo) ListOwned(ctx context.Context, userID int64) ([]*account.A
 
 func (r *AccountRepo) GetOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*account.Account, error) {
 	a, err := scanAccount(From(ctx, r.pool).QueryRow(ctx, `
-		SELECT `+accountCols+` FROM douyin_accounts
-		WHERE public_id=$1 AND user_id=$2 AND deleted_at IS NULL`, publicID, userID))
+		SELECT `+accountCols+` FROM douyin_accounts a
+		JOIN users u ON u.id = a.user_id
+		WHERE a.public_id=$1 AND a.user_id=$2 AND a.deleted_at IS NULL`, publicID, userID))
+	if err != nil {
+		return nil, mapNoRows(err, apperr.CodeNotFound, "account not found")
+	}
+	return a, nil
+}
+
+func (r *AccountRepo) GetByID(ctx context.Context, accountID int64) (*account.Account, error) {
+	a, err := scanAccount(From(ctx, r.pool).QueryRow(ctx, `
+		SELECT `+accountCols+` FROM douyin_accounts a
+		JOIN users u ON u.id = a.user_id
+		WHERE a.id=$1 AND a.deleted_at IS NULL`, accountID))
 	if err != nil {
 		return nil, mapNoRows(err, apperr.CodeNotFound, "account not found")
 	}

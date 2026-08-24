@@ -11,18 +11,23 @@ import (
 )
 
 type Config struct {
-	HTTPAddr string
+	HTTPAddr    string
 	DatabaseURL string
 	RedisAddr   string
 
 	// Auth (docs/13)
-	AuthAccessTTL   time.Duration
-	AuthRefreshTTL  time.Duration
-	AuthSigningKey  string
+	AuthAccessTTL     time.Duration
+	AuthRefreshTTL    time.Duration
+	AuthSigningKey    string
 	AuthRefreshPepper string
 
 	// Crypto (docs/09 session envelope)
 	SessionMasterKey string
+	SessionTempDir   string
+
+	// Browser adapter (docs/10)
+	PlaywrightSidecarCommand string
+	PlaywrightSidecarScript  string
 
 	// Entitlement card codes (docs/12)
 	CardCodePepperDK1 string
@@ -45,16 +50,19 @@ func env(key, def string) string {
 
 func Load() *Config {
 	return &Config{
-		HTTPAddr:     env("HTTP_ADDR", ":8080"),
-		DatabaseURL:  os.Getenv("DATABASE_URL"),
-		RedisAddr:    env("REDIS_ADDR", "localhost:6379"),
+		HTTPAddr:    env("HTTP_ADDR", ":8080"),
+		DatabaseURL: os.Getenv("DATABASE_URL"),
+		RedisAddr:   env("REDIS_ADDR", "localhost:6379"),
 
-		AuthAccessTTL:    dur("AUTH_ACCESS_TTL", 15*time.Minute),
-		AuthRefreshTTL:   dur("AUTH_REFRESH_TTL", 30*24*time.Hour),
-		AuthSigningKey:   os.Getenv("AUTH_SIGNING_KEY"),
+		AuthAccessTTL:     dur("AUTH_ACCESS_TTL", 15*time.Minute),
+		AuthRefreshTTL:    dur("AUTH_REFRESH_TTL", 30*24*time.Hour),
+		AuthSigningKey:    os.Getenv("AUTH_SIGNING_KEY"),
 		AuthRefreshPepper: os.Getenv("AUTH_REFRESH_PEPPER"),
 
-		SessionMasterKey: os.Getenv("SESSION_MASTER_KEY"),
+		SessionMasterKey:         os.Getenv("SESSION_MASTER_KEY"),
+		SessionTempDir:           env("SESSION_TEMP_DIR", "/tmp/douyin-keeper/session"),
+		PlaywrightSidecarCommand: env("PLAYWRIGHT_SIDECAR_COMMAND", "python3"),
+		PlaywrightSidecarScript:  env("PLAYWRIGHT_SIDECAR_SCRIPT", "sidecars/playwright/sidecar.py"),
 
 		CardCodePepperDK1: os.Getenv("CARD_CODE_PEPPER_DK1"),
 

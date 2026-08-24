@@ -5,6 +5,7 @@ stdout, logs on stderr. It never touches the database, Redis, or secrets.
 """
 
 import json
+import os
 import sys
 import time
 
@@ -101,6 +102,54 @@ def health_result():
             "message.send.text.existing",
         ],
     }
+
+
+def _session_file(input_data):
+    if not isinstance(input_data, dict):
+        raise ProtocolError(ERR_INVALID_REQUEST, "input must be an object")
+    session = input_data.get("session")
+    if not isinstance(session, dict) or session.get("kind") != "playwright_storage_state_file":
+        raise ProtocolError(ERR_INVALID_REQUEST, "session must reference a storage state file")
+    path = session.get("path")
+    if not isinstance(path, str) or not path:
+        raise ProtocolError(ERR_INVALID_REQUEST, "session.path is required")
+    if not os.path.isfile(path):
+        raise ProtocolError(ERR_SESSION_EXPIRED, "session file is unavailable")
+    return path
+
+
+def validate_session(input_data):
+    """Perform the cheap, sidecar-local validation used before a browser job.
+
+    The worker owns encryption/decryption. The sidecar only receives a short
+    lived storage-state file and never returns its contents. A later adapter
+    can add a live page check without changing this result contract.
+    """
+    path = _session_file(input_data)
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            state = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ProtocolError(ERR_SESSION_EXPIRED, "session state cannot be read") from exc
+    if not isinstance(state, dict):
+        raise ProtocolError(ERR_SESSION_EXPIRED, "session state is invalid")
+
+    cookies = state.get("cookies")
+    if not isinstance(cookies, list):
+        raise ProtocolError(ERR_SESSION_EXPIRED, "session state has no cookies")
+    has_session = any(
+        isinstance(cookie, dict)
+        and isinstance(cookie.get("value"), str)
+        and cookie["value"].strip()
+        and (
+            str(cookie.get("name", "")).startswith("sessionid")
+            or cookie.get("name") == "sid_tt"
+        )
+        for cookie in cookies
+    )
+    if not has_session:
+        raise ProtocolError(ERR_SESSION_EXPIRED, "session cookie is missing")
+    return {"valid": True, "identity": {}, "capability_hints": ["session.validate"]}
 
 
 def unsupported(req):

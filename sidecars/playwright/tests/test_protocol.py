@@ -3,6 +3,7 @@
 import json
 import sys
 import os
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -53,6 +54,31 @@ def test_unsupported_op_is_structured_failure():
     assert out["error"]["code"] == protocol.ERR_UNSUPPORTED_OPERATION
 
 
+def test_validate_session_accepts_sessionid_cookie():
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
+        json.dump({"cookies": [{"name": "sessionid", "value": "opaque"}]}, state)
+        state.flush()
+        req = make_req("session.validate")
+        req["input"] = {
+            "session": {"kind": "playwright_storage_state_file", "path": state.name}
+        }
+        out = protocol.validate_session(req["input"])
+    assert out["valid"] is True
+
+
+def test_validate_session_rejects_missing_cookie():
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
+        json.dump({"cookies": []}, state)
+        state.flush()
+        try:
+            protocol.validate_session(
+                {"session": {"kind": "playwright_storage_state_file", "path": state.name}}
+            )
+            assert False, "expected ProtocolError"
+        except protocol.ProtocolError as exc:
+            assert exc.code == protocol.ERR_SESSION_EXPIRED
+
+
 def test_ndjson_roundtrip_through_handler():
     import sidecar
 
@@ -60,3 +86,18 @@ def test_ndjson_roundtrip_through_handler():
     out = json.loads(protocol.json_dumps(sidecar.handle(req)))
     assert out["ok"] is True
     assert out["result"]["status"] == "healthy"
+
+
+def test_session_validate_handler():
+    import sidecar
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
+        json.dump({"cookies": [{"name": "sid_tt", "value": "opaque"}]}, state)
+        state.flush()
+        req = make_req("session.validate")
+        req["input"] = {
+            "session": {"kind": "playwright_storage_state_file", "path": state.name}
+        }
+        out = sidecar.handle(req)
+    assert out["ok"] is True
+    assert out["result"]["valid"] is True
