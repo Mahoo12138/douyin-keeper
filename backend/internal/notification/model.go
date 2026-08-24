@@ -22,7 +22,8 @@ const (
 type Type string
 
 const (
-	TypeRiskEvent Type = "risk_event"
+	TypeRiskEvent         Type = "risk_event"
+	TypeEntitlementExpiry Type = "entitlement_expiry"
 )
 
 type DeliveryStatus string

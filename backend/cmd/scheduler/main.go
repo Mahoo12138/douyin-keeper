@@ -74,6 +74,7 @@ func main() {
 	jobRepo := postgres.NewJobRepo(pool)
 	capabilityRepo := postgres.NewCapabilityRepo(pool)
 	accountRepo := postgres.NewAccountRepo(pool)
+	notificationRepo := postgres.NewNotificationRepo(pool)
 	producer := asynqqueue.NewClient(asynq.RedisClientOpt{Addr: cfg.RedisAddr})
 	defer producer.Close()
 	tx := postgres.NewTxManager(pool)
@@ -92,6 +93,7 @@ func main() {
 	sessionHealthCheck := scheduler.NewSessionHealthCheckRunner(accountRepo, jobRepo, outboxRepo, tx,
 		scheduler.DefaultSessionHealthCheckInterval, cfg.ScheduleBatchSize)
 	riskCooldown := scheduler.NewRiskCooldownReaper(accountRepo, cfg.ScheduleBatchSize)
+	expiryReminder := scheduler.NewEntitlementExpiryReminder(planRepo, notificationRepo, cfg.ScheduleBatchSize)
 
 	publisher := scheduler.NewPublisher(outboxRepo, producer, cfg.OutboxBatchSize,
 		cfg.OutboxPollInterval, log).WithMetrics(metrics)
@@ -176,6 +178,12 @@ func main() {
 					log.Error("risk cooldown cleanup failed", "err", err)
 				} else if n > 0 {
 					log.Info("risk cooldown cleanup completed", "count", n)
+				}
+				if stats, err := expiryReminder.RunOnce(ctx); err != nil {
+					log.Error("entitlement expiry reminder scan failed", "err", err)
+				} else if stats.Created > 0 {
+					log.Info("entitlement expiry reminder scan completed", "scanned", stats.Scanned,
+						"notifications", stats.Created)
 				}
 			}
 		}

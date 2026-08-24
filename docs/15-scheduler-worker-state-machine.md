@@ -33,6 +33,10 @@ flowchart LR
 加载通知，已发送/已跳过的 delivery 直接幂等 ACK；微信临时失败写入 `failed` 后返回
 错误，交给 Asynq 重试。
 
+权益到期提醒是 Scheduler 的独立站内通知扫描：每 60 秒以有界批次查询当前已生效且
+7 天内到期的 Grant，只在剩余 7 天、3 天或 1 天时生成通知。其 dedupe key 包含 Grant
+和阈值，数据库唯一约束保证重复扫描幂等；该类型不创建微信 delivery 或 outbox。
+
 ## 1.1 Container Mapping
 
 逻辑组件与 Docker 镜像不是一一对应。生产部署中：

@@ -125,6 +125,19 @@ type Grant struct {
 	Plan *Plan // joined
 }
 
+// ExpiringGrant is the scheduler-safe projection used for entitlement expiry
+// reminders. It contains no card code, session, or account secret.
+type ExpiringGrant struct {
+	UserID    int64
+	PublicID  uuid.UUID
+	PlanCode  string
+	ExpiresAt time.Time
+}
+
+type ExpiringGrantRepository interface {
+	ListExpiringGrants(ctx context.Context, now, until time.Time, limit int) ([]ExpiringGrant, error)
+}
+
 // EffectiveEntitlement is the API-visible authorization snapshot.
 type EffectiveEntitlement struct {
 	Active         bool

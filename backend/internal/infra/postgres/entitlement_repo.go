@@ -397,6 +397,43 @@ func (r *EntitlementRepo) GetGrantBySourceCardID(ctx context.Context, cardID int
 	return g, nil
 }
 
+func (r *EntitlementRepo) ListExpiringGrants(ctx context.Context, now, until time.Time, limit int) ([]entitlement.ExpiringGrant, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT g.user_id, g.public_id, p.code, g.expires_at
+		FROM entitlement_grants g
+		JOIN entitlement_plans p ON p.id=g.entitlement_plan_id
+		LEFT JOIN notifications n ON n.user_id=g.user_id
+		  AND n.dedupe_key = 'entitlement-expiry:' || g.public_id::text || ':' ||
+		    CASE
+		      WHEN g.expires_at <= $1 + interval '1 day' THEN '1'
+		      WHEN g.expires_at <= $1 + interval '3 days' THEN '3'
+		      ELSE '7'
+		    END
+		WHERE g.revoked_at IS NULL AND g.starts_at <= $1
+		  AND g.expires_at > $1 AND g.expires_at <= $2 AND n.id IS NULL
+		ORDER BY g.expires_at, g.id
+		LIMIT $3`, now, until, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]entitlement.ExpiringGrant, 0)
+	for rows.Next() {
+		var item entitlement.ExpiringGrant
+		if err := rows.Scan(&item.UserID, &item.PublicID, &item.PlanCode, &item.ExpiresAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func (r *EntitlementRepo) RevokeGrant(ctx context.Context, grantID, byUserID int64, reason string) error {
 	_, err := From(ctx, r.pool).Exec(ctx, `
 		UPDATE entitlement_grants SET revoked_at=now(), revoked_by=$2, revoke_reason=$3

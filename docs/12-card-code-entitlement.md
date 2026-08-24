@@ -435,6 +435,11 @@ Scheduler 和 Manual Send 都检查；最终 Worker 执行前再次确认，防�
 
 权益剩余 7 天 / 3 天 / 1 天时可产生站内通知。
 
+当前实现由 Scheduler 每 60 秒以有界批次扫描正在生效且 7 天内到期的 Grant，按
+`entitlement_grant + 7/3/1 天`阈值生成站内通知；通知使用
+`entitlement-expiry:{grant_public_id}:{days}` 去重键，因此重复扫描不会重复展示。该提醒
+只进入统一 Web/小程序通知列表，不自动发送微信模板消息；通知过期时间与 Grant 到期时间一致。
+
 过期后页面进入“只读 + 可兑换”状态，不做强制退出登录。
 
 ## 12. Admin 页面

@@ -106,6 +106,35 @@ func (r *NotificationRepo) Create(ctx context.Context, item *notification.Notifi
 	return err
 }
 
+// CreateIfAbsent inserts a notification only when its user-scoped dedupe key
+// is new. It is used by periodic producers that need accurate created counts.
+func (r *NotificationRepo) CreateIfAbsent(ctx context.Context, item *notification.Notification) (bool, error) {
+	if item.PublicID == uuid.Nil {
+		item.PublicID = uuid.New()
+	}
+	createdAt := item.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+	var publicID uuid.UUID
+	err := From(ctx, r.pool).QueryRow(ctx, `
+		INSERT INTO notifications
+			(public_id, user_id, type, priority, title, body, resource_type, resource_id, dedupe_key, created_at, expires_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULLIF($9,''),$10,$11)
+		ON CONFLICT (user_id, dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
+		RETURNING public_id`,
+		item.PublicID, item.UserID, item.Type, item.Priority, item.Title, item.Body,
+		item.ResourceType, item.ResourceID, item.DedupeKey, createdAt, item.ExpiresAt).Scan(&publicID)
+	if err == pgx.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	item.PublicID = publicID
+	return true, nil
+}
+
 func (r *NotificationRepo) NotifyRisk(ctx context.Context, accountID int64, code, severity string, createdAt time.Time) error {
 	if severity == string(notification.PriorityInfo) {
 		return nil
