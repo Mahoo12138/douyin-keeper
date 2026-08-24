@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { HelpCircle, Menu, ShieldCheck, Sparkles, LogOut, X } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Avatar, AvatarFallback, Badge, Button, ThemeToggle } from '@douyin-keeper/ui-web'
 import { listNotifications, me, myEntitlement } from '@douyin-keeper/sdk-ts'
 
 import { getToken, signOut as signOutSession } from '@/auth/session'
+import { useMobileNavDismissed } from '@/features/navigation/mobile-nav'
 import { notificationUnreadLabel } from '@/features/notifications/notification-summary-utils'
 
 const nav = [
@@ -23,6 +24,7 @@ const nav = [
 const navLinkClass = 'shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:px-3'
 
 export function GlobalHeader() {
+  const location = useLocation()
   const navigate = useNavigate()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const token = getToken()
@@ -56,9 +58,11 @@ export function GlobalHeader() {
     void navigate({ to: '/signin' })
   }
 
-  function closeMobileNav() {
+  const closeMobileNav = useCallback(() => {
     setMobileNavOpen(false)
-  }
+  }, [])
+  useMobileNavDismissed(mobileNavOpen, closeMobileNav)
+  useEffect(() => closeMobileNav(), [closeMobileNav, location.pathname])
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur-sm">
@@ -119,13 +123,15 @@ export function GlobalHeader() {
             size="icon"
             className="md:hidden"
             aria-label={mobileNavOpen ? '关闭导航菜单' : '打开导航菜单'}
+            aria-expanded={mobileNavOpen}
+            aria-controls="global-mobile-nav"
             onClick={() => setMobileNavOpen((open) => !open)}
           >
             {mobileNavOpen ? <X /> : <Menu />}
           </Button>
         </div>
       </div>
-      {mobileNavOpen && <div className="border-t bg-background md:hidden">
+      {mobileNavOpen && <div id="global-mobile-nav" className="border-t bg-background md:hidden">
         <nav className="mx-auto grid max-w-6xl gap-1 px-4 py-3 sm:px-6" aria-label="主导航">
           <Link to="/entitlement" onClick={closeMobileNav} className="px-3 pb-2 text-xs text-primary hover:underline">{displayName} · {entitlementLabel}</Link>
           <Link to="/help" onClick={closeMobileNav} className="flex min-h-10 items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-accent"><HelpCircle className="size-4" />帮助与安全边界</Link>
