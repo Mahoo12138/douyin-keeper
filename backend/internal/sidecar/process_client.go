@@ -10,8 +10,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // ProcessClient speaks the v1 NDJSON contract to one long-lived sidecar
@@ -112,6 +114,9 @@ func (c *ProcessClient) Call(ctx context.Context, req Request) (*Response, error
 	}
 	if !isJSONObject(req.Input) {
 		return nil, errors.New("sidecar: input must be a JSON object")
+	}
+	if err := validateOperationInput(req.Op, req.Input); err != nil {
+		return nil, err
 	}
 	callCtx := ctx
 	var cancel context.CancelFunc
@@ -259,15 +264,106 @@ func mustObject(raw json.RawMessage) map[string]json.RawMessage {
 }
 
 func isJSONObject(value any) bool {
+	_, err := jsonObject(value)
+	return err == nil
+}
+
+func jsonObject(value any) (map[string]json.RawMessage, error) {
 	data, err := json.Marshal(value)
 	if err != nil {
-		return false
+		return nil, err
 	}
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(data, &object); err != nil {
-		return false
+		return nil, err
 	}
-	return object != nil
+	if object == nil {
+		return nil, errors.New("not a JSON object")
+	}
+	return object, nil
+}
+
+func validateOperationInput(op string, input any) error {
+	if op != OpsMessageSendFirst {
+		return nil
+	}
+	object, err := jsonObject(input)
+	if err != nil {
+		return errors.New("sidecar: message.send_first input must be a JSON object")
+	}
+	if err := rejectUnknownFields(object, "session", "target", "message"); err != nil {
+		return fmt.Errorf("sidecar: message.send_first %w", err)
+	}
+	if err := requireJSONObjectField(object, "session"); err != nil {
+		return fmt.Errorf("sidecar: message.send_first %w", err)
+	}
+	target, err := objectField(object, "target")
+	if err != nil {
+		return fmt.Errorf("sidecar: message.send_first %w", err)
+	}
+	if err := rejectUnknownFields(target, "platform_user_id"); err != nil {
+		return fmt.Errorf("sidecar: message.send_first target %w", err)
+	}
+	userID, err := stringField(target, "platform_user_id")
+	if err != nil || strings.TrimSpace(userID) == "" || utf8.RuneCountInString(userID) > 256 {
+		return errors.New("sidecar: message.send_first target.platform_user_id must be 1..256 characters")
+	}
+	message, err := objectField(object, "message")
+	if err != nil {
+		return fmt.Errorf("sidecar: message.send_first %w", err)
+	}
+	if err := rejectUnknownFields(message, "text"); err != nil {
+		return fmt.Errorf("sidecar: message.send_first message %w", err)
+	}
+	text, err := stringField(message, "text")
+	if err != nil || strings.TrimSpace(text) == "" || utf8.RuneCountInString(text) > 2000 {
+		return errors.New("sidecar: message.send_first message.text must be 1..2000 characters")
+	}
+	return nil
+}
+
+func rejectUnknownFields(object map[string]json.RawMessage, allowed ...string) error {
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, field := range allowed {
+		allowedSet[field] = struct{}{}
+	}
+	for field := range object {
+		if _, ok := allowedSet[field]; !ok {
+			return fmt.Errorf("contains unknown field %q", field)
+		}
+	}
+	return nil
+}
+
+func requireJSONObjectField(object map[string]json.RawMessage, field string) error {
+	if _, err := objectField(object, field); err != nil {
+		return err
+	}
+	return nil
+}
+
+func objectField(object map[string]json.RawMessage, field string) (map[string]json.RawMessage, error) {
+	raw, ok := object[field]
+	if !ok {
+		return nil, fmt.Errorf("%s must be an object", field)
+	}
+	value, err := jsonObject(raw)
+	if err != nil {
+		return nil, fmt.Errorf("%s must be an object", field)
+	}
+	return value, nil
+}
+
+func stringField(object map[string]json.RawMessage, field string) (string, error) {
+	raw, ok := object[field]
+	if !ok {
+		return "", fmt.Errorf("%s is required", field)
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "", fmt.Errorf("%s must be a string", field)
+	}
+	return value, nil
 }
 
 // Close terminates the child process and is safe to call more than once.

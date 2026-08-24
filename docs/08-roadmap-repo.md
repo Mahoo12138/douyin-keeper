@@ -227,7 +227,9 @@ outcome 未知时保持 fail-closed；真实 Protocol SDK 和平台 selector 仍
 未部署时由带 `protocol.im` 身份的 unavailable client fail-closed，不会由 stub handler ACK，
 也不会把协议任务误交给 Browser Sidecar。Creator 首聊已完成本地权益闸门：任务创建/编辑和
 发送 worker 最终执行都会校验 `creator_first_message`，并为 `message.send_first` 预留
-协议路由；真实平台首聊动作仍等待 Sidecar 契约与 selector 联调。
+协议路由；Go `ProcessClient` 已冻结只含 `platform_user_id` 的输入契约，真实 Platform/Creator
+adapter 未部署时仍由 `protocol.im` lane fail-closed，且不会把协议任务误交给 Browser Sidecar；
+真实平台首聊动作仍等待 Sidecar SDK 与 selector 联调。
 Resolver 的 fallback 也会检查全局 Adapter health；Browser 被禁用或熔断时返回无 Adapter
 的不可用计划，首聊则继续保留 `protocol.im` 路由身份并 fail-closed。
 Protocol 发送在明确收到 `outcome=not_sent`（或 `platform_write_accepted=false`）且 Browser

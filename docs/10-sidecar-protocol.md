@@ -533,6 +533,11 @@ Sidecar 必须通过平台明确的 Creator 首聊结果确认发送；不能因
 成功就返回 `confirmed=true`。未实现或未通过能力探测时返回
 `UNSUPPORTED_OPERATION`/`ADAPTER_UNAVAILABLE`，Go worker 不得降级为已有会话发送。
 
+当前 Go `ProcessClient` 已在传输边界冻结该输入边界：顶层只允许 `session`、`target`、`message`，
+target 只允许 `platform_user_id`，message 只允许非空 `text`；真实 Creator/Protocol adapter
+尚未部署时，协议 lane 使用带 `protocol.im` 身份的 unavailable client fail-closed。Playwright
+Browser Sidecar 不接收该协议任务，仍返回 `UNSUPPORTED_OPERATION`，避免把首聊误当作已有会话发送。
+
 ## 11. 错误码
 
 Sidecar 至少支持：

@@ -98,6 +98,43 @@ func TestProcessClientNormalizesAndValidatesRequestEnvelope(t *testing.T) {
 	}
 }
 
+func TestProcessClientValidatesFirstMessageInputBeforeStartingAdapter(t *testing.T) {
+	client := NewProcessClient("/definitely/missing/douyin-sidecar")
+	base := map[string]any{
+		"session": map[string]any{"kind": "playwright_storage_state_file", "path": "/tmp/session.json"},
+		"target":  map[string]any{"platform_user_id": "user-1"},
+		"message": map[string]any{"text": "hello"},
+	}
+	invalid := []map[string]any{
+		{"session": base["session"], "target": map[string]any{"platform_user_id": "user-1", "platform_conversation_id": "conversation-1"}, "message": base["message"]},
+		{"session": base["session"], "target": base["target"], "message": map[string]any{"text": "   "}},
+		{"session": base["session"], "target": base["target"], "message": map[string]any{"text": "hello", "sticker_id": "sticker-1"}},
+	}
+	for _, input := range invalid {
+		_, err := client.Call(context.Background(), Request{RequestID: "r1", Op: OpsMessageSendFirst, Input: input})
+		if err == nil || strings.Contains(err.Error(), ErrProcessStart.Error()) {
+			t.Fatalf("invalid first-message input should be rejected before process start: %v", err)
+		}
+	}
+}
+
+func TestProcessClientAcceptsValidFirstMessageInput(t *testing.T) {
+	script := `while IFS= read -r line; do printf '%s\n' '{"protocol_version":1,"request_id":"r1","ok":true,"result":{},"meta":{"adapter":"protocol.im","adapter_version":"test","duration_ms":0}}'; done`
+	client := NewProcessClient("sh", "-c", script)
+	defer client.Close()
+	_, err := client.Call(context.Background(), Request{
+		RequestID: "r1", Op: OpsMessageSendFirst,
+		Input: map[string]any{
+			"session": map[string]any{"kind": "playwright_storage_state_file", "path": "/tmp/session.json"},
+			"target":  map[string]any{"platform_user_id": "user-1"},
+			"message": map[string]any{"text": "hello"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("valid first-message input should reach adapter: %v", err)
+	}
+}
+
 func TestProcessClientRejectsInconsistentResponseEnvelope(t *testing.T) {
 	script := `while IFS= read -r line; do printf '%s\n' '{"protocol_version":1,"request_id":"r1","ok":true,"error":{"code":"BAD","retryable":false,"message":"bad"},"result":{},"meta":{"adapter":"test","adapter_version":"1","duration_ms":0}}'; done`
 	client := NewProcessClient("sh", "-c", script)
