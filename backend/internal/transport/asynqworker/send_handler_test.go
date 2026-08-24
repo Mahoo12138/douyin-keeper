@@ -301,3 +301,19 @@ func TestFinishSendFallbackCreatesQueuedBrowserAttempt(t *testing.T) {
 		t.Fatalf("fallback outbox payload = %s, err=%v", relay.messages[0].Payload, err)
 	}
 }
+
+func TestFinishTerminalIntentJobDoesNotRewriteIntentOrQuota(t *testing.T) {
+	repo := &fallbackSendRepo{}
+	claimed := &send.SendJob{ID: 17, IntentID: 23, Status: send.JobRunning}
+	code := apperr.CodeAccountReleased
+	intent := &send.SendIntent{ID: claimed.IntentID, Status: send.IntentCancelled, ErrorCode: &code}
+	if err := finishTerminalIntentJob(context.Background(), SessionCheckDeps{Sends: repo, Tx: fallbackTx{}}, claimed, intent, time.Now); err != nil {
+		t.Fatal(err)
+	}
+	if repo.finished.id != claimed.ID || repo.finished.status != send.JobCancelled || repo.finished.code != code {
+		t.Fatalf("finished stale job = %+v", repo.finished)
+	}
+	if len(repo.statuses) != 0 {
+		t.Fatalf("terminal intent was rewritten: %v", repo.statuses)
+	}
+}

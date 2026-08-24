@@ -126,6 +126,12 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		if err != nil {
 			return finishSend(ctx, deps, claimed, send.JobFailed, apperr.CodeInternal, false, nil, send.IntentFailed, now, adapterConfig.adapter)
 		}
+		if intent == nil {
+			return finishSend(ctx, deps, claimed, send.JobFailed, apperr.CodeInternal, false, nil, send.IntentFailed, now, adapterConfig.adapter)
+		}
+		if intent.Status.Terminal() {
+			return finishTerminalIntentJob(ctx, deps, claimed, intent, now)
+		}
 		fail := func(code string) error {
 			return finishSend(ctx, deps, claimed, send.JobFailed, code, false, nil, send.IntentFailed, now, adapterConfig.adapter)
 		}
@@ -394,6 +400,15 @@ func finishSend(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJo
 		observeSendMetric(deps.Metrics, adapter, string(intentStatus))
 	}
 	return err
+}
+
+// finishTerminalIntentJob closes a queued attempt whose intent was finalized
+// by another transaction (for example account release). It must not move the
+// intent back to running or touch quota a second time.
+func finishTerminalIntentJob(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, intent *send.SendIntent, now func() time.Time) error {
+	return deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
+		return deps.Sends.FinishJob(tctx, claimed.ID, send.JobCancelled, intent.ErrorCode, false, nil, now())
+	})
 }
 
 func finishSendWithQuota(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, jobStatus send.JobStatus, code string, retryable bool, messageID *string, intentStatus send.IntentStatus, userID int64, localDate *string, now func() time.Time, adapter string) error {

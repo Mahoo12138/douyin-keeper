@@ -314,6 +314,10 @@ Adapter。
 
 `CAS queued -> running` 使 Redis 重复投递不会执行两次。
 
+Claim 后读取 Intent 时若已是 `succeeded/failed/skipped/cancelled` 终态，Worker 必须
+fail-closed：只将本次陈旧 queued attempt 关闭为 `cancelled`，不把 Intent 改回 `running`，
+也不重复释放或增加 quota。
+
 账号锁取得后必须重新读取账号状态并执行一次最终 preflight；不能继续使用 claim 前的旧快照，
 以阻断解绑、暂停、风险冷却或 Session 失效与平台调用之间的竞态。
 
