@@ -66,6 +66,8 @@ const (
 	ErrUnsupportedOperation   = "UNSUPPORTED_OPERATION"
 	ErrDeadlineExceeded       = "DEADLINE_EXCEEDED"
 	ErrSessionExpired         = "SESSION_EXPIRED"
+	ErrQRExpired              = "QR_EXPIRED"
+	ErrLoginHandleNotFound    = "LOGIN_HANDLE_NOT_FOUND"
 	ErrChallengeRequired      = "CHALLENGE_REQUIRED"
 	ErrPlatformRateLimited    = "PLATFORM_RATE_LIMITED"
 	ErrFriendNotFound         = "FRIEND_NOT_FOUND"

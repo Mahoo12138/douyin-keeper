@@ -101,3 +101,23 @@ def test_session_validate_handler():
         out = sidecar.handle(req)
     assert out["ok"] is True
     assert out["result"]["valid"] is True
+
+
+def test_qr_start_rejects_relative_profile_dir():
+    import qr_login
+
+    try:
+        qr_login.start({"profile_dir": "relative/profile", "locale": "zh-CN"})
+        assert False, "expected ProtocolError"
+    except protocol.ProtocolError as exc:
+        assert exc.code == protocol.ERR_INVALID_REQUEST
+
+
+def test_qr_poll_rejects_unknown_handle():
+    import qr_login
+
+    try:
+        qr_login.poll({"login_handle": "qr_missing"})
+        assert False, "expected ProtocolError"
+    except protocol.ProtocolError as exc:
+        assert exc.code == protocol.ERR_LOGIN_HANDLE_NOT_FOUND

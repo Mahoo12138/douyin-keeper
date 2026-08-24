@@ -1,0 +1,83 @@
+"""Small Playwright runtime boundary used by browser-backed sidecar ops.
+
+Importing this module does not require Playwright to be installed; the
+dependency is loaded only when a browser operation is actually requested.
+"""
+
+import os
+from contextlib import contextmanager
+
+
+_BROWSER_ARGS = (
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+)
+
+
+def _playwright_factory():
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return None
+    return sync_playwright
+
+
+def _headed():
+    return os.environ.get("PLAYWRIGHT_HEADLESS", "1").lower() not in ("1", "true", "yes")
+
+
+def _prepare_page(context, page):
+    try:
+        context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined});")
+    except Exception:
+        pass
+    try:
+        page.set_default_timeout(20_000)
+        page.set_default_navigation_timeout(60_000)
+    except Exception:
+        pass
+
+
+@contextmanager
+def launch(user_data_dir, locale="zh-CN"):
+    factory = _playwright_factory()
+    if factory is None:
+        raise RuntimeError("playwright_missing")
+    pw = factory().start()
+    context = None
+    try:
+        os.makedirs(user_data_dir, mode=0o700, exist_ok=True)
+        context = pw.chromium.launch_persistent_context(
+            user_data_dir,
+            headless=not _headed(),
+            args=list(_BROWSER_ARGS),
+            locale=locale,
+            timezone_id="Asia/Shanghai",
+            viewport={"width": 1280, "height": 720},
+        )
+        page = context.pages[0] if context.pages else context.new_page()
+        _prepare_page(context, page)
+        yield pw, None, context, page
+    finally:
+        if context is not None:
+            try:
+                context.close()
+            except Exception:
+                pass
+        try:
+            pw.stop()
+        except Exception:
+            pass
+
+
+def export_state(context, path):
+    if not isinstance(path, str) or not os.path.isabs(path):
+        raise ValueError("storage state path must be absolute")
+    parent = os.path.dirname(path)
+    os.makedirs(parent, mode=0o700, exist_ok=True)
+    os.chmod(parent, 0o700)
+    context.storage_state(path=path)
+    os.chmod(path, 0o600)
+    if not os.path.isfile(path) or os.path.getsize(path) < 8:
+        raise RuntimeError("storage state export failed")

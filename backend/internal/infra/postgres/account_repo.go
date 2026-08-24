@@ -91,6 +91,13 @@ func (r *AccountRepo) SetBindingStatus(ctx context.Context, accountID int64, sta
 	return err
 }
 
+func (r *AccountRepo) SetIdentity(ctx context.Context, accountID int64, platformUserID, nickname string, avatarURL *string) error {
+	_, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE douyin_accounts SET platform_user_id=$2, nickname=$3, avatar_url=$4, updated_at=now()
+		WHERE id=$1 AND deleted_at IS NULL`, accountID, platformUserID, nickname, avatarURL)
+	return err
+}
+
 func (r *AccountRepo) SetPaused(ctx context.Context, accountID int64, at *time.Time) error {
 	_, err := From(ctx, r.pool).Exec(ctx, `
 		UPDATE douyin_accounts SET paused_at=$2, updated_at=now() WHERE id=$1`, accountID, at)

@@ -16,6 +16,7 @@ type Repository interface {
 	GetByID(ctx context.Context, accountID int64) (*Account, error)
 	Create(ctx context.Context, a *Account) error
 	SetBindingStatus(ctx context.Context, accountID int64, status BindingStatus) error
+	SetIdentity(ctx context.Context, accountID int64, platformUserID, nickname string, avatarURL *string) error
 	SetPaused(ctx context.Context, accountID int64, at *time.Time) error
 	SetRiskStatus(ctx context.Context, accountID int64, risk RiskStatus, cooldownUntil *time.Time) error
 	SetSessionStatus(ctx context.Context, accountID int64, status SessionStatus, checkedAt time.Time) error

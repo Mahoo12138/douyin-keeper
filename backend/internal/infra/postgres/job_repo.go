@@ -77,6 +77,14 @@ func (r *JobRepo) Finish(ctx context.Context, jobID int64, status job.Status, er
 	return err
 }
 
+func (r *JobRepo) MarkWaiting(ctx context.Context, jobID int64, lease time.Duration) error {
+	_, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE jobs SET status='waiting_user', heartbeat_at=now(),
+			lease_expires_at=now()+make_interval(secs => $2)
+		WHERE id=$1 AND status IN ('running','waiting_user')`, jobID, lease.Seconds())
+	return err
+}
+
 func (r *JobRepo) ListEvents(ctx context.Context, jobID int64) ([]job.JobEvent, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT seq, event_type, payload_json, created_at FROM job_events

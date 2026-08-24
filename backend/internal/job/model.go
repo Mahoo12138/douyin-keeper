@@ -57,6 +57,7 @@ type Repository interface {
 	// Claim performs the worker-side queued -> running CAS. A nil result means
 	// another delivery already claimed or completed the job.
 	Claim(ctx context.Context, publicID uuid.UUID, workerID string, lease time.Duration) (*Job, error)
+	MarkWaiting(ctx context.Context, jobID int64, lease time.Duration) error
 	Finish(ctx context.Context, jobID int64, status Status, errorCode *string, at time.Time) error
 	ListEvents(ctx context.Context, jobID int64) ([]JobEvent, error)
 	AppendEvent(ctx context.Context, jobID int64, event JobEvent) error

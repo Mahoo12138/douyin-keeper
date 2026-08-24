@@ -24,6 +24,7 @@ type Config struct {
 	// Crypto (docs/09 session envelope)
 	SessionMasterKey string
 	SessionTempDir   string
+	LoginProfileDir  string
 
 	// Browser adapter (docs/10)
 	PlaywrightSidecarCommand string
@@ -61,6 +62,7 @@ func Load() *Config {
 
 		SessionMasterKey:         os.Getenv("SESSION_MASTER_KEY"),
 		SessionTempDir:           env("SESSION_TEMP_DIR", "/tmp/douyin-keeper/session"),
+		LoginProfileDir:          env("LOGIN_PROFILE_DIR", "/tmp/douyin-keeper/login"),
 		PlaywrightSidecarCommand: env("PLAYWRIGHT_SIDECAR_COMMAND", "python3"),
 		PlaywrightSidecarScript:  env("PLAYWRIGHT_SIDECAR_SCRIPT", "sidecars/playwright/sidecar.py"),
 

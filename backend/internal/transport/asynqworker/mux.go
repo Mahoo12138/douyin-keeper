@@ -41,7 +41,7 @@ var outboxKinds = []string{
 // NewMux registers a stub handler for every outbox kind. The handler pulls
 // the payload by stable id only — never secrets (docs/14 §10).
 func NewMux(loader PayloadLoader, log *slog.Logger) *asynq.ServeMux {
-	return newMux(loader, nil, log)
+	return newMux(loader, nil, nil, log)
 }
 
 // SessionCheckDeps wires the first real browser job. Other browser jobs stay
@@ -60,13 +60,21 @@ type SessionCheckDeps struct {
 }
 
 func NewBrowserMux(loader PayloadLoader, deps SessionCheckDeps, log *slog.Logger) *asynq.ServeMux {
-	return newMux(loader, &deps, log)
+	return newMux(loader, &deps, nil, log)
 }
 
-func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, log *slog.Logger) *asynq.ServeMux {
+func NewInteractiveMux(loader PayloadLoader, deps QRBindDeps, log *slog.Logger) *asynq.ServeMux {
+	return newMux(loader, nil, &deps, log)
+}
+
+func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindDeps, log *slog.Logger) *asynq.ServeMux {
 	mux := asynq.NewServeMux()
 	for _, kind := range outboxKinds {
 		kind := kind
+		if kind == asynqqueue.KindAccountBindQR && qrDeps != nil {
+			mux.HandleFunc(kind, qrBindHandler(loader, *qrDeps))
+			continue
+		}
 		if kind == asynqqueue.KindSessionCheckBrowser && sessionDeps != nil {
 			mux.HandleFunc(kind, sessionCheckHandler(loader, *sessionDeps, log))
 			continue

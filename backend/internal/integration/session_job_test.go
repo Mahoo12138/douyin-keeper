@@ -76,6 +76,20 @@ func TestAccountSessionRoundTripAndJobClaim(t *testing.T) {
 	if err != nil || second != nil {
 		t.Fatalf("duplicate claim should be absorbed: err=%v job=%+v", err, second)
 	}
+	if err := jobs.MarkWaiting(ctx, j.ID, 90*time.Second); err != nil {
+		t.Fatalf("mark waiting failed: %v", err)
+	}
+	if waiting, err := jobs.GetOwned(ctx, &userID, j.PublicID); err != nil || waiting.Status != job.StatusWaiting {
+		t.Fatalf("waiting state was not persisted: err=%v job=%+v", err, waiting)
+	}
+	platformID := "integration-" + uuid.NewString()
+	if err := accounts.SetIdentity(ctx, acct.ID, platformID, "Integration User", nil); err != nil {
+		t.Fatalf("set identity: %v", err)
+	}
+	loaded, err = accounts.GetByID(ctx, acct.ID)
+	if err != nil || loaded.PlatformUserID == nil || *loaded.PlatformUserID != platformID || loaded.Nickname != "Integration User" {
+		t.Fatalf("identity was not persisted: err=%v account=%+v", err, loaded)
+	}
 	payload, _ := json.Marshal(map[string]bool{"valid": true})
 	if err := jobs.AppendEvent(ctx, j.ID, job.JobEvent{EventType: "success", Payload: payload, CreatedAt: time.Now()}); err != nil {
 		t.Fatal(err)
