@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { getMe, myEntitlement, redeemCardCode } from '../src/lib/api'
+import { getMe, listMyEntitlementGrants, myEntitlement, redeemCardCode } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -62,5 +62,14 @@ describe('mini API auth recovery', () => {
     expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/me/entitlement')
     expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/entitlements/redeem')
     expect(requestMock.mock.calls[1]?.[0]?.data).toEqual({ code: 'DK1-ABCD' })
+  })
+
+  it('loads paginated entitlement redemption history', async () => {
+    requestMock.mockResolvedValueOnce({ statusCode: 200, data: { items: [{ id: 'grant-1' }], next_cursor: 'cursor-2' } })
+
+    const result = await listMyEntitlementGrants('access-1', { limit: 10, cursor: 'cursor-1' })
+
+    expect(result.next_cursor).toBe('cursor-2')
+    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/entitlements/redemptions?limit=10&cursor=cursor-1')
   })
 })

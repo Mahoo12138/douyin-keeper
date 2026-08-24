@@ -308,7 +308,7 @@ cursor 分页和“加载更多模板”；任务编辑抽屉也可继续加载�
 
 MVP 中抖音账号首次绑定仍推荐在 PC 完成。小程序对未绑定账号显示“请在 PC 完成首次绑定”。
 
-当前实现已接入 `wx.login()`、服务端 `jscode2session` 身份交换、微信登录、PC 一次性绑定码、本地退出登录、“微信服务通知”订阅授权，以及权益状态/到期时间展示和 DK1 卡密兑换；兑换成功后立即刷新当前权益，失败保留输入状态并展示错误。后端未配置完整的微信 AppID/Secret 时，接口明确返回 `WECHAT_IDENTITY_NOT_LINKED`，小程序提示用户先在 PC 端完成绑定，不伪造登录成功。服务端只保存 `wechat_mini` 的 provider subject，不持久化微信 `session_key`。
+当前实现已接入 `wx.login()`、服务端 `jscode2session` 身份交换、微信登录、PC 一次性绑定码、本地退出登录、“微信服务通知”订阅授权，以及权益状态/到期时间、最近兑换记录展示和 DK1 卡密兑换；兑换成功后立即刷新当前权益与记录，记录支持继续加载，失败保留输入状态并展示错误。后端未配置完整的微信 AppID/Secret 时，接口明确返回 `WECHAT_IDENTITY_NOT_LINKED`，小程序提示用户先在 PC 端完成绑定，不伪造登录成功。服务端只保存 `wechat_mini` 的 provider subject，不持久化微信 `session_key`。
 
 ---
 

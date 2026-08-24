@@ -74,6 +74,14 @@ export function redeemCardCode(token: string, code: string) {
   })
 }
 
+export function listMyEntitlementGrants(token: string, options: { limit?: number; cursor?: string } = {}) {
+  const query = new URLSearchParams()
+  if (options.limit) query.set('limit', String(options.limit))
+  if (options.cursor) query.set('cursor', options.cursor)
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return request<Collection<components['schemas']['EntitlementGrant']>>(`/entitlements/redemptions${suffix}`, { token })
+}
+
 export function updateNotificationPreferences(token: string, wechatEnabled: boolean) {
   return request<components['schemas']['NotificationPreferences']>('/notifications/preferences', {
     method: 'PATCH', token, data: { wechat_enabled: wechatEnabled },
