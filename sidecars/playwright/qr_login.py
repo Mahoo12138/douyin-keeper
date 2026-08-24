@@ -272,6 +272,17 @@ def start(input_data):
         raise
 
 
+def cleanup_expired(now=None):
+    if now is None:
+        now = datetime.now(timezone.utc)
+    with _lock:
+        expired = [handle for handle, item in _sessions.items() if now >= item.expires_at]
+        items = [_sessions.pop(handle) for handle in expired]
+    for item in items:
+        item.close()
+    return len(items)
+
+
 def poll(input_data):
     input_data = _input_object(input_data)
     handle = input_data.get("login_handle")

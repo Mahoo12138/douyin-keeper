@@ -200,7 +200,9 @@ Result：
 }
 ```
 
-`login_handle` 只在该 Sidecar 实例/临时 profile 生命周期内有效。
+`login_handle` 只在该 Sidecar 实例/临时 profile 生命周期内有效。Sidecar 会周期清理
+已过期且未再次 poll/verify 的 handle 并关闭对应 Playwright context；Worker 仍负责在
+Job 完成、取消或 lease 回收时删除临时 Profile。
 
 ### `login.qr.poll`
 

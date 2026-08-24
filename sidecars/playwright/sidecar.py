@@ -11,6 +11,7 @@ stdout carries protocol messages only; logs go to stderr.
 """
 
 import sys
+import threading
 import time
 
 import protocol
@@ -20,7 +21,21 @@ import qr_login
 import sms_login
 
 
+def cleanup_expired_handles():
+    return qr_login.cleanup_expired() + sms_login.cleanup_expired()
+
+
+def _cleanup_loop():
+    while True:
+        time.sleep(10)
+        try:
+            cleanup_expired_handles()
+        except Exception as exc:  # noqa: BLE001 — cleanup must not kill the protocol loop
+            protocol.log(f"expired handle cleanup failed: {exc!r}")
+
+
 def handle(req):
+    cleanup_expired_handles()
     started = time.monotonic()
     op = req["op"]
     duration = lambda: int((time.monotonic() - started) * 1000)
@@ -77,4 +92,5 @@ def main():
 
 
 if __name__ == "__main__":
+    threading.Thread(target=_cleanup_loop, name="sidecar-cleanup", daemon=True).start()
     main()

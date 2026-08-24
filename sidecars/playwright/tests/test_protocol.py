@@ -4,6 +4,7 @@ import json
 import sys
 import os
 import tempfile
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -106,6 +107,27 @@ def test_message_confirmation_requires_a_new_platform_message_id():
 
     page = FakePage([["message-old"]])
     assert message_send._new_message_id(page, "same text", {"message-old"}) == ""
+
+
+def test_expired_login_handles_are_closed():
+    import qr_login
+    import sms_login
+
+    class ExpiredItem:
+        def __init__(self):
+            self.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    qr_item = ExpiredItem()
+    sms_item = ExpiredItem()
+    qr_login._sessions["test-expired-qr"] = qr_item
+    sms_login._sessions["test-expired-sms"] = sms_item
+    assert qr_login.cleanup_expired() == 1
+    assert sms_login.cleanup_expired() == 1
+    assert qr_item.closed and sms_item.closed
 
 
 def test_validate_session_accepts_sessionid_cookie():
