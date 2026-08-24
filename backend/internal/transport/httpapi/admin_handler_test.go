@@ -70,3 +70,18 @@ func TestAdminRuntimeViewIncludesPoolsQueuesAndHealth(t *testing.T) {
 		t.Fatalf("runtime pools/queues = %+v / %+v", view.Pools, view.Queues)
 	}
 }
+
+func TestAdminAdapterViewIncludesHealthAndControlState(t *testing.T) {
+	checkedAt := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	errorCode := "ADAPTER_INCOMPATIBLE"
+	view := adminAdapterViewFrom(admin.AdapterHealthSummary{
+		Name: "browser.consumer", Status: "down", Enabled: true, Executable: true,
+		ErrorCode: &errorCode, FailureCount: 3, CheckedAt: &checkedAt,
+	})
+	if view.Name != "browser.consumer" || view.Status != "down" || !view.Enabled || !view.Executable || view.FailureCount != 3 {
+		t.Fatalf("adapter view = %+v", view)
+	}
+	if view.ErrorCode == nil || *view.ErrorCode != errorCode || view.CheckedAt == nil || *view.CheckedAt != "2026-08-24T09:00:00Z" {
+		t.Fatalf("adapter health details = %+v", view)
+	}
+}

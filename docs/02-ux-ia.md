@@ -342,8 +342,12 @@ MVP 中抖音账号首次绑定仍推荐在 PC 完成。小程序对未绑定账
 
 支持管理员临时关闭某个 Adapter，业务层自动选择其余可用能力。
 
+当前 M5 已接入管理员 Adapter 健康页：统一 Web Admin 通过 `/admin/adapters` 展示
+browser.consumer、browser.creator、protocol.im 的健康、版本、失败次数、熔断和最近检查状态；
+`PATCH /admin/adapters/{adapter}` 只允许管理员启停已登记 Adapter，启停动作写入 `audit_logs`。
+未产生过探针记录时显示“未上报”，不把缺少健康记录误判为故障。
 
-### 3.5 权益与卡密
+### 3.6 权益与卡密
 
 子页面：
 

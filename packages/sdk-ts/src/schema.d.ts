@@ -68,6 +68,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/adapters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAdminAdapters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/adapters/{adapter}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateAdminAdapter"];
+        trace?: never;
+    };
     "/accounts": {
         parameters: {
             query?: never;
@@ -600,6 +632,20 @@ export interface components {
             /** Format: date-time */
             scheduler_leader_expires_at?: string | null;
         };
+        AdminAdapter: {
+            name: string;
+            /** @enum {string} */
+            status: "healthy" | "degraded" | "down" | "disabled" | "unknown";
+            enabled: boolean;
+            executable: boolean;
+            version?: string | null;
+            error_code?: string | null;
+            failure_count: number;
+            /** Format: date-time */
+            circuit_open_until?: string | null;
+            /** Format: date-time */
+            checked_at?: string | null;
+        };
         Account: {
             /** Format: uuid */
             id: string;
@@ -965,6 +1011,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminRuntime"];
+                };
+            };
+        };
+    };
+    listAdminAdapters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrator adapter health summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminAdapter"][];
+                    };
+                };
+            };
+        };
+    };
+    updateAdminAdapter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                adapter: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    enabled: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated adapter state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAdapter"];
                 };
             };
         };

@@ -510,6 +510,7 @@ GET  /admin/jobs
 GET  /admin/risks
 GET  /admin/workers
 GET  /admin/adapters
+PATCH /admin/adapters/{adapter}
 GET  /admin/settings
 PATCH /admin/settings/{key}
 GET  /admin/audit-logs

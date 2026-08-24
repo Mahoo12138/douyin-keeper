@@ -3,10 +3,28 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+var ErrUnknownAdapter = errors.New("admin: unknown adapter")
+
+var KnownAdapters = []string{
+	"browser.consumer",
+	"browser.creator",
+	"protocol.im",
+}
+
+func IsKnownAdapter(name string) bool {
+	for _, adapter := range KnownAdapters {
+		if adapter == name {
+			return true
+		}
+	}
+	return false
+}
 
 type UserSummary struct {
 	PublicID             uuid.UUID
@@ -96,10 +114,24 @@ type RuntimeSummary struct {
 	SchedulerLeaderExpires *time.Time
 }
 
+type AdapterHealthSummary struct {
+	Name             string
+	Status           string
+	Enabled          bool
+	Executable       bool
+	Version          *string
+	ErrorCode        *string
+	FailureCount     int
+	CircuitOpenUntil *time.Time
+	CheckedAt        *time.Time
+}
+
 type Repository interface {
 	ListUserSummaries(ctx context.Context, limit int) ([]UserSummary, error)
 	ListAccountSummaries(ctx context.Context, limit int) ([]AccountSummary, error)
 	GetRuntimeSummary(ctx context.Context) (RuntimeSummary, error)
+	ListAdapterHealth(ctx context.Context) ([]AdapterHealthSummary, error)
+	SetAdapterEnabled(ctx context.Context, actorID int64, adapter string, enabled bool) (AdapterHealthSummary, error)
 }
 
 type Service struct {
@@ -120,6 +152,17 @@ func (s *Service) ListAccounts(ctx context.Context, limit int) ([]AccountSummary
 
 func (s *Service) Runtime(ctx context.Context) (RuntimeSummary, error) {
 	return s.repo.GetRuntimeSummary(ctx)
+}
+
+func (s *Service) ListAdapters(ctx context.Context) ([]AdapterHealthSummary, error) {
+	return s.repo.ListAdapterHealth(ctx)
+}
+
+func (s *Service) SetAdapterEnabled(ctx context.Context, actorID int64, adapter string, enabled bool) (AdapterHealthSummary, error) {
+	if !IsKnownAdapter(adapter) {
+		return AdapterHealthSummary{}, ErrUnknownAdapter
+	}
+	return s.repo.SetAdapterEnabled(ctx, actorID, adapter, enabled)
 }
 
 func normalizeLimit(limit int) int {

@@ -2,11 +2,16 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
 type repositoryStub struct {
-	limit int
+	limit       int
+	adapter     AdapterHealthSummary
+	actorID     int64
+	adapterName string
+	enabled     bool
 }
 
 func (r *repositoryStub) ListUserSummaries(_ context.Context, limit int) ([]UserSummary, error) {
@@ -21,6 +26,15 @@ func (r *repositoryStub) ListAccountSummaries(_ context.Context, limit int) ([]A
 
 func (r *repositoryStub) GetRuntimeSummary(context.Context) (RuntimeSummary, error) {
 	return RuntimeSummary{RunningJobs: 3}, nil
+}
+
+func (r *repositoryStub) ListAdapterHealth(context.Context) ([]AdapterHealthSummary, error) {
+	return []AdapterHealthSummary{r.adapter}, nil
+}
+
+func (r *repositoryStub) SetAdapterEnabled(_ context.Context, actorID int64, adapter string, enabled bool) (AdapterHealthSummary, error) {
+	r.actorID, r.adapterName, r.enabled = actorID, adapter, enabled
+	return r.adapter, nil
 }
 
 func TestServiceClampsUserListLimit(t *testing.T) {
@@ -75,5 +89,27 @@ func TestServiceReturnsRuntimeSummary(t *testing.T) {
 	}
 	if summary.RunningJobs != 3 {
 		t.Fatalf("running jobs = %d, want 3", summary.RunningJobs)
+	}
+}
+
+func TestServiceListsAndTogglesKnownAdapter(t *testing.T) {
+	repo := &repositoryStub{adapter: AdapterHealthSummary{Name: "browser.consumer", Status: "disabled"}}
+	service := NewService(repo)
+	items, err := service.ListAdapters(context.Background())
+	if err != nil || len(items) != 1 || items[0].Status != "disabled" {
+		t.Fatalf("ListAdapters() = %+v, err = %v", items, err)
+	}
+	if _, err := service.SetAdapterEnabled(context.Background(), 42, "browser.consumer", true); err != nil {
+		t.Fatalf("SetAdapterEnabled() error = %v", err)
+	}
+	if repo.actorID != 42 || repo.adapterName != "browser.consumer" || !repo.enabled {
+		t.Fatalf("toggle request = actor %d adapter %q enabled %v", repo.actorID, repo.adapterName, repo.enabled)
+	}
+}
+
+func TestServiceRejectsUnknownAdapter(t *testing.T) {
+	_, err := NewService(&repositoryStub{}).SetAdapterEnabled(context.Background(), 42, "unknown", true)
+	if !errors.Is(err, ErrUnknownAdapter) {
+		t.Fatalf("error = %v, want ErrUnknownAdapter", err)
 	}
 }

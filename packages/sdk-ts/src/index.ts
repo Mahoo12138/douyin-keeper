@@ -60,6 +60,24 @@ export async function getAdminRuntime(accessToken: string) {
   return data
 }
 
+export async function listAdminAdapters(accessToken: string) {
+  const { data, error } = await api.GET('/admin/adapters', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (error) throwApiError(error, 'admin adapters lookup failed')
+  return data
+}
+
+export async function updateAdminAdapter(accessToken: string, adapter: string, enabled: boolean) {
+  const { data, error } = await api.PATCH('/admin/adapters/{adapter}', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { adapter } },
+    body: { enabled },
+  })
+  if (error) throwApiError(error, 'admin adapter update failed')
+  return data
+}
+
 export async function redeemCardCode(accessToken: string, code: string) {
   const { data, error } = await api.POST('/entitlements/redeem', {
     headers: { Authorization: `Bearer ${accessToken}` },

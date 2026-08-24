@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/hibiken/asynq"
@@ -191,6 +192,108 @@ func (r *AdminRepo) ListAccountSummaries(ctx context.Context, limit int) ([]admi
 		return nil, err
 	}
 	return items, nil
+}
+
+func (r *AdminRepo) ListAdapterHealth(ctx context.Context) ([]admin.AdapterHealthSummary, error) {
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT catalog.adapter, catalog.executable,
+			h.status, h.version, h.error_code, h.failure_count,
+			h.circuit_open_until, h.checked_at
+		FROM (VALUES
+			('browser.consumer', TRUE),
+			('browser.creator', FALSE),
+			('protocol.im', FALSE)
+		) AS catalog(adapter, executable)
+		LEFT JOIN adapter_health h ON h.adapter = catalog.adapter
+		ORDER BY catalog.adapter`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]admin.AdapterHealthSummary, 0, len(admin.KnownAdapters))
+	for rows.Next() {
+		var item admin.AdapterHealthSummary
+		var rawStatus *string
+		var failureCount *int
+		if err := rows.Scan(
+			&item.Name, &item.Executable, &rawStatus, &item.Version, &item.ErrorCode,
+			&failureCount, &item.CircuitOpenUntil, &item.CheckedAt,
+		); err != nil {
+			return nil, err
+		}
+		item.Status = adapterHealthStatus(rawStatus)
+		item.Enabled = item.Status != "disabled"
+		if failureCount != nil {
+			item.FailureCount = *failureCount
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *AdminRepo) SetAdapterEnabled(ctx context.Context, actorID int64, adapter string, enabled bool) (admin.AdapterHealthSummary, error) {
+	if !admin.IsKnownAdapter(adapter) {
+		return admin.AdapterHealthSummary{}, admin.ErrUnknownAdapter
+	}
+	if actorID <= 0 {
+		return admin.AdapterHealthSummary{}, fmt.Errorf("admin: invalid actor")
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return admin.AdapterHealthSummary{}, err
+	}
+	defer tx.Rollback(ctx) // safe after commit
+
+	if enabled {
+		_, err = tx.Exec(ctx, `DELETE FROM adapter_health WHERE adapter=$1 AND status='disabled'`, adapter)
+	} else {
+		_, err = tx.Exec(ctx, `
+			INSERT INTO adapter_health (adapter, status, failure_count, checked_at)
+			VALUES ($1, 'disabled', 0, now())
+			ON CONFLICT (adapter) DO UPDATE SET status='disabled'`, adapter)
+	}
+	if err != nil {
+		return admin.AdapterHealthSummary{}, err
+	}
+	detail, _ := json.Marshal(map[string]any{"enabled": enabled})
+	action := "adapter.disable"
+	if enabled {
+		action = "adapter.enable"
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, detail_json)
+		VALUES ($1,$2,'adapter',$3,$4)`, actorID, action, adapter, detail)
+	if err != nil {
+		return admin.AdapterHealthSummary{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return admin.AdapterHealthSummary{}, err
+	}
+
+	items, err := r.ListAdapterHealth(ctx)
+	if err != nil {
+		return admin.AdapterHealthSummary{}, err
+	}
+	for _, item := range items {
+		if item.Name == adapter {
+			return item, nil
+		}
+	}
+	return admin.AdapterHealthSummary{}, fmt.Errorf("admin: adapter %q disappeared after update", adapter)
+}
+
+func adapterHealthStatus(raw *string) string {
+	if raw == nil || *raw == "" {
+		return "unknown"
+	}
+	if *raw == "open" {
+		return "down"
+	}
+	return *raw
 }
 
 const schedulerLeaderKey = "lock:scheduler:leader"

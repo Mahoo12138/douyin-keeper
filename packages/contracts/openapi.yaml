@@ -75,6 +75,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminRuntime'
+  /admin/adapters:
+    get:
+      operationId: listAdminAdapters
+      responses:
+        '200':
+          description: Administrator adapter health summaries
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminAdapter'
+  /admin/adapters/{adapter}:
+    patch:
+      operationId: updateAdminAdapter
+      parameters:
+      - name: adapter
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - enabled
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated adapter state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAdapter'
   /accounts:
     get:
       operationId: listAccounts
@@ -1004,6 +1048,50 @@ components:
         scheduler_online:
           type: boolean
         scheduler_leader_expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    AdminAdapter:
+      type: object
+      required:
+      - name
+      - status
+      - enabled
+      - executable
+      - failure_count
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+          - healthy
+          - degraded
+          - down
+          - disabled
+          - unknown
+        enabled:
+          type: boolean
+        executable:
+          type: boolean
+        version:
+          type:
+          - string
+          - 'null'
+        error_code:
+          type:
+          - string
+          - 'null'
+        failure_count:
+          type: integer
+          minimum: 0
+        circuit_open_until:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        checked_at:
           type:
           - string
           - 'null'
