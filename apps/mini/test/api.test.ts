@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { getMe, listMyEntitlementGrants, listNotifications, markAllNotificationsRead, markNotificationRead, myEntitlement, redeemCardCode, runTaskNow, updateTask } from '../src/lib/api'
+import { checkAccountSession, getMe, listMyEntitlementGrants, listNotifications, markAllNotificationsRead, markNotificationRead, myEntitlement, redeemCardCode, runTaskNow, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -118,5 +118,15 @@ describe('mini API auth recovery', () => {
     expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/tasks/task-1/run-now')
     expect(requestMock.mock.calls[0]?.[0]?.method).toBe('POST')
     expect(requestMock.mock.calls[0]?.[0]?.header['Idempotency-Key']).toBe('00000000-0000-4000-8000-000000000001')
+  })
+
+  it('submits an account session check job', async () => {
+    requestMock.mockResolvedValueOnce({ statusCode: 202, data: { job_id: 'job-1' } })
+
+    const result = await checkAccountSession('access-1', 'account-1')
+
+    expect(result.job_id).toBe('job-1')
+    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/accounts/account-1/session-check')
+    expect(requestMock.mock.calls[0]?.[0]?.method).toBe('POST')
   })
 })

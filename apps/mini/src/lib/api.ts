@@ -153,6 +153,12 @@ export function runTaskNow(token: string, taskId: string, idempotencyKey: string
   })
 }
 
+export function checkAccountSession(token: string, accountId: string) {
+  return request<components['schemas']['JobRef']>(`/accounts/${accountId}/session-check`, {
+    method: 'POST', token,
+  })
+}
+
 export type SendHistoryOptions = { from?: string; to?: string; status?: components['schemas']['SendIntent']['status'] }
 
 export function listSendIntents(token: string, options: SendHistoryOptions = {}) {
