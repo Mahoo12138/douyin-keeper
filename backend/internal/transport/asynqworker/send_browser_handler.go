@@ -425,6 +425,7 @@ func finishSendWithRiskAndQuota(ctx context.Context, deps SessionCheckDeps, clai
 		return deps.Quota.IncrFailed(tctx, userID, *localDate)
 	})
 	if err == nil {
+		observeWorkerRiskMetrics(deps.Risk, riskCode)
 		observeSendMetric(deps.Metrics, adapter, string(intentStatus))
 	}
 	return err
@@ -513,6 +514,7 @@ func finishSendRetryWithRisk(ctx context.Context, deps SessionCheckDeps, claimed
 		return nil
 	})
 	if err == nil {
+		observeWorkerRiskMetrics(deps.Risk, riskCode)
 		observeSendMetric(deps.Metrics, adapter, string(send.IntentRetryWait))
 	}
 	return err
@@ -564,6 +566,7 @@ func finishSendFallbackWithRisk(ctx context.Context, deps SessionCheckDeps, clai
 		return deps.Outbox.Add(tctx, outboxMessageForSendAdapter(job.PublicID, browser, now()))
 	})
 	if err == nil {
+		observeWorkerRiskMetrics(deps.Risk, riskCode)
 		observeSendMetric(deps.Metrics, adapter, string(send.IntentQueued))
 	}
 	return err

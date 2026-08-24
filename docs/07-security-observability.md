@@ -135,7 +135,9 @@ Prometheus/OpenTelemetry 指标：
 通过 `GET /metrics` 暴露，Scheduler/Worker 通过内部 `METRICS_ADDR`（默认
 `:9090`）暴露。标签只使用受控的任务类型、Adapter、状态和风险分类/代码，禁止把
 用户 ID、账号 ID、URL 参数或任何凭据写入时间序列。HTTP 请求使用 chi 路由模板，避免
-动态 ID 造成高基数；队列延迟从 Outbox 的 `available_at` 到发布时刻观测。
+动态 ID 造成高基数；队列延迟从 Outbox 的 `available_at` 到发布时刻观测。风险事务通过
+`ApplyInTx` 接入 Worker 终态时，`risk_event_total` 与 `session_expired_total` 只在外层
+事务成功提交后计数，避免回滚的风险事件污染指标。
 
 核心 SLO：
 

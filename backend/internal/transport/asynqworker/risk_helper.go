@@ -17,6 +17,10 @@ type riskApplierInTx interface {
 	ApplyInTx(context.Context, int64, string, string, map[string]any) error
 }
 
+type riskMetricsObserver interface {
+	ObserveMetrics(string)
+}
+
 func observeWorkerRisk(ctx context.Context, applier riskApplier, accountID int64, code, adapter string, jobID string) {
 	if applier == nil {
 		return
@@ -41,6 +45,15 @@ func applyWorkerRiskInTx(ctx context.Context, applier riskApplier, accountID int
 		detail["job_id"] = jobID
 	}
 	return txApplier.ApplyInTx(ctx, accountID, code, adapter, detail)
+}
+
+func observeWorkerRiskMetrics(applier riskApplier, code string) {
+	if applier == nil || code == "" {
+		return
+	}
+	if observer, ok := applier.(riskMetricsObserver); ok {
+		observer.ObserveMetrics(code)
+	}
 }
 
 func commitWorkerFailure(
@@ -71,7 +84,7 @@ func commitWorkerFailureWithEvents(
 	events []job.JobEvent,
 	now func() time.Time,
 ) error {
-	return tx.WithinTx(ctx, func(tctx context.Context) error {
+	err := tx.WithinTx(ctx, func(tctx context.Context) error {
 		if err := j.Finish(tctx, claimed.ID, job.StatusFailed, &code, now()); err != nil {
 			return err
 		}
@@ -93,6 +106,10 @@ func commitWorkerFailureWithEvents(
 			EventType: "error", Payload: mustJSON(map[string]string{"code": code}), CreatedAt: now(),
 		})
 	})
+	if err == nil {
+		observeWorkerRiskMetrics(applier, code)
+	}
+	return err
 }
 
 func observeWorkerHealthFailure(ctx context.Context, health capability.HealthObserver, adapter, code string, now func() time.Time) {

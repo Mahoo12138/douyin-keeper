@@ -102,7 +102,7 @@ func (s *Service) Apply(ctx context.Context, accountID int64, code, sourceAdapte
 		return s.ApplyInTx(tctx, accountID, code, sourceAdapter, detail)
 	})
 	if err == nil {
-		s.observeMetrics(code)
+		s.ObserveMetrics(code)
 	}
 	return err
 }
@@ -157,7 +157,10 @@ func (s *Service) ApplyInTx(ctx context.Context, accountID int64, code, sourceAd
 	return nil
 }
 
-func (s *Service) observeMetrics(code string) {
+// ObserveMetrics records counters after the caller's transaction has
+// committed. Worker paths that use ApplyInTx call this from their successful
+// terminal transaction boundary instead of counting rolled-back work.
+func (s *Service) ObserveMetrics(code string) {
 	classification := Classify(code)
 	s.metrics.AddCounter("risk_event_total", 1,
 		telemetry.Label{Name: "category", Value: string(classification.Category)},

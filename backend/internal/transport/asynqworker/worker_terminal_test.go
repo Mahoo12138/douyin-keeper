@@ -26,6 +26,15 @@ type transactionalRiskStub struct {
 	operations []string
 }
 
+type metricRiskStub struct {
+	transactionalRiskStub
+	metrics []string
+}
+
+func (r *metricRiskStub) ObserveMetrics(code string) {
+	r.metrics = append(r.metrics, code)
+}
+
 type sendTerminalRepoStub struct {
 	send.Repository
 	operations []string
@@ -107,6 +116,21 @@ func TestCommitWorkerFailureFinalizesJobBeforeRiskProjection(t *testing.T) {
 		if len(operation) < len("tx:") || operation[:len("tx:")] != "tx:" {
 			t.Fatalf("risk failure side effect escaped completion transaction: %q", operation)
 		}
+	}
+}
+
+func TestCommitWorkerFailureCountsRiskOnlyAfterCommit(t *testing.T) {
+	j := &bindJobRepoStub{}
+	risk := &metricRiskStub{}
+	now := func() time.Time { return time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC) }
+	claimed := &job.Job{ID: 16, PublicID: uuid.New(), Status: job.StatusRunning}
+
+	if err := commitWorkerFailure(context.Background(), bindTxStub{}, j, risk, claimed, 20,
+		"SESSION_EXPIRED", "browser.consumer", claimed.PublicID.String(), nil, now); err != nil {
+		t.Fatal(err)
+	}
+	if len(risk.metrics) != 1 || risk.metrics[0] != "SESSION_EXPIRED" {
+		t.Fatalf("risk metrics = %#v, want one post-commit observation", risk.metrics)
 	}
 }
 
