@@ -10,6 +10,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/friend"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/send"
 )
 
 type friendSyncStub struct {
@@ -23,6 +24,21 @@ func (r *friendSyncStub) SyncBatch(ctx context.Context, _ int64, _ []friend.Sync
 
 type transactionalRiskStub struct {
 	operations []string
+}
+
+type sendTerminalRepoStub struct {
+	send.Repository
+	operations []string
+}
+
+func (r *sendTerminalRepoStub) FinishJob(ctx context.Context, _ int64, _ send.JobStatus, _ *string, _ bool, _ *string, _ time.Time) error {
+	r.operations = append(r.operations, bindOperation(ctx, "send_finish"))
+	return nil
+}
+
+func (r *sendTerminalRepoStub) SetIntentStatus(ctx context.Context, _ int64, _ send.IntentStatus, _ *string, _ *time.Time, _ time.Time) error {
+	r.operations = append(r.operations, bindOperation(ctx, "intent_status"))
+	return nil
 }
 
 func (r *transactionalRiskStub) Apply(context.Context, int64, string, string, map[string]any) error {
@@ -112,6 +128,49 @@ func TestFinishBindRiskFailureKeepsChallengeEventAndRiskInJobTx(t *testing.T) {
 	for _, operation := range append(j.operations, risk.operations...) {
 		if len(operation) < len("tx:") || operation[:len("tx:")] != "tx:" {
 			t.Fatalf("binding failure side effect escaped completion transaction: %q", operation)
+		}
+	}
+}
+
+func TestFinishSendRiskFailureKeepsSendStateAndRiskInJobTx(t *testing.T) {
+	sends := &sendTerminalRepoStub{}
+	risk := &transactionalRiskStub{}
+	claimed := &send.SendJob{ID: 14, PublicID: uuid.New(), IntentID: 24, AccountID: 34, FriendID: 44}
+	now := func() time.Time { return time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC) }
+
+	if err := finishSendWithRiskAndQuota(context.Background(), SessionCheckDeps{
+		Sends: sends, Tx: bindTxStub{}, Risk: risk,
+	}, claimed, send.JobFailed, "SESSION_EXPIRED", false, nil, send.IntentFailed,
+		55, nil, now, "browser.consumer", "SESSION_EXPIRED", nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(sends.operations) == 0 || sends.operations[0] != "tx:send_finish" {
+		t.Fatalf("send operations = %#v, want send finish first", sends.operations)
+	}
+	for _, operation := range append(sends.operations, risk.operations...) {
+		if len(operation) < len("tx:") || operation[:len("tx:")] != "tx:" {
+			t.Fatalf("send failure side effect escaped completion transaction: %q", operation)
+		}
+	}
+}
+
+func TestFinishSendRetryWithRiskKeepsRetryStateAndRiskInJobTx(t *testing.T) {
+	sends := &sendTerminalRepoStub{}
+	risk := &transactionalRiskStub{}
+	claimed := &send.SendJob{ID: 15, PublicID: uuid.New(), IntentID: 25, AccountID: 35, FriendID: 45}
+	now := func() time.Time { return time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC) }
+
+	if err := finishSendRetryWithRisk(context.Background(), SessionCheckDeps{
+		Sends: sends, Tx: bindTxStub{}, Risk: risk,
+	}, claimed, "NETWORK_TIMEOUT", now().Add(time.Minute), now, "browser.consumer", "NETWORK_TIMEOUT"); err != nil {
+		t.Fatal(err)
+	}
+	if len(sends.operations) == 0 || sends.operations[0] != "tx:send_finish" {
+		t.Fatalf("send retry operations = %#v, want transaction finish first", sends.operations)
+	}
+	for _, operation := range append(sends.operations, risk.operations...) {
+		if len(operation) < len("tx:") || operation[:len("tx:")] != "tx:" {
+			t.Fatalf("send retry side effect escaped completion transaction: %q", operation)
 		}
 	}
 }

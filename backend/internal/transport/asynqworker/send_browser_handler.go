@@ -233,43 +233,24 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		})
 		if err != nil {
 			if errors.Is(err, sidecar.ErrProcessStart) {
-				observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, adapterConfig.adapter, claimed.PublicID.String())
 				nextAttemptAt := now().Add(sendRetryDelay(claimed.Attempt))
-				return finishSendRetry(ctx, deps, claimed, apperr.CodeAdapterUnavailable, nextAttemptAt, now, adapterConfig.adapter)
+				return finishSendRetryWithRisk(ctx, deps, claimed, apperr.CodeAdapterUnavailable, nextAttemptAt, now, adapterConfig.adapter, apperr.CodeAdapterUnavailable)
 			}
 			if app, ok := apperr.As(err); ok && app.Code == apperr.CodeSessionExpired {
-				if deps.Risk != nil {
-					observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeSessionExpired, adapterConfig.adapter, claimed.PublicID.String())
-				} else {
-					_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, now())
-				}
-				return failWithQuota(apperr.CodeSessionExpired)
+				return finishSendWithRiskAndQuota(ctx, deps, claimed, send.JobFailed, apperr.CodeSessionExpired, false, nil, send.IntentFailed,
+					acct.UserID, intent.LocalDate, now, adapterConfig.adapter, apperr.CodeSessionExpired, sendRiskFallback(deps, acct.ID, apperr.CodeSessionExpired, now))
 			}
-			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, adapterConfig.adapter, claimed.PublicID.String())
-			return failWithQuota(apperr.CodeAdapterUnavailable)
+			return finishSendWithRiskAndQuota(ctx, deps, claimed, send.JobFailed, apperr.CodeAdapterUnavailable, false, nil, send.IntentFailed,
+				acct.UserID, intent.LocalDate, now, adapterConfig.adapter, apperr.CodeAdapterUnavailable, nil)
 		}
 		if code := sendSidecarErrorCode(response); code != "" {
 			mapped := mapSendSidecarError(code)
 			if deps.Health != nil && capability.IsCircuitFailureCode(code) {
 				_ = deps.Health.ObserveFailure(ctx, adapterConfig.adapter, "", code, now())
 			}
-			if deps.Risk != nil {
-				observeWorkerRisk(ctx, deps.Risk, acct.ID, code, adapterConfig.adapter, claimed.PublicID.String())
-			}
 			if shouldRetrySend(response) {
 				nextAttemptAt := now().Add(sendRetryDelay(claimed.Attempt))
-				return finishSendRetry(ctx, deps, claimed, mapped, nextAttemptAt, now, adapterConfig.adapter)
-			}
-			if deps.Risk == nil {
-				switch mapped {
-				case apperr.CodeSessionExpired:
-					_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, now())
-				case apperr.CodeChallengeRequired:
-					_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionChallengeRequired, now())
-				case apperr.CodePlatformRateLimited:
-					cooldown := now().Add(10 * time.Minute)
-					_ = deps.Accounts.SetRiskStatus(ctx, acct.ID, account.RiskCoolingDown, &cooldown)
-				}
+				return finishSendRetryWithRisk(ctx, deps, claimed, mapped, nextAttemptAt, now, adapterConfig.adapter, mapped)
 			}
 			if !tk.AllowFirstMessage && claimed.Attempt < send.MaxSendAttempts && deps.Outbox != nil &&
 				send.CanFallback(adapterConfig.adapter, capability.AdapterBrowserConsumer, code, failureEvidenceFromResponse(response)) {
@@ -278,18 +259,19 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 					return failWithQuota(apperr.CodeInternal)
 				}
 				if available {
-					return finishSendFallback(ctx, deps, claimed, mapped, now, adapterConfig.adapter)
+					return finishSendFallbackWithRisk(ctx, deps, claimed, mapped, now, adapterConfig.adapter, mapped, sendRiskFallback(deps, acct.ID, mapped, now))
 				}
 			}
-			return failWithQuota(mapped)
+			return finishSendWithRiskAndQuota(ctx, deps, claimed, send.JobFailed, mapped, false, nil, send.IntentFailed,
+				acct.UserID, intent.LocalDate, now, adapterConfig.adapter, mapped, sendRiskFallback(deps, acct.ID, mapped, now))
 		}
 		var result sendMessageResult
 		if err := decodeResult(response, &result); err != nil || !result.Confirmed || result.PlatformMessageID == "" {
-			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, adapterConfig.adapter, claimed.PublicID.String())
 			if deps.Health != nil {
 				_ = deps.Health.ObserveFailure(ctx, adapterConfig.adapter, "", sidecar.ErrAdapterIncompatible, now())
 			}
-			return failWithQuota(apperr.CodeAdapterIncompatible)
+			return finishSendWithRiskAndQuota(ctx, deps, claimed, send.JobFailed, apperr.CodeAdapterIncompatible, false, nil, send.IntentFailed,
+				acct.UserID, intent.LocalDate, now, adapterConfig.adapter, apperr.CodeAdapterIncompatible, nil)
 		}
 		if deps.Health != nil {
 			_ = deps.Health.ObserveSuccess(ctx, adapterConfig.adapter, "", now())
@@ -399,6 +381,11 @@ func finishTerminalIntentJob(ctx context.Context, deps SessionCheckDeps, claimed
 }
 
 func finishSendWithQuota(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, jobStatus send.JobStatus, code string, retryable bool, messageID *string, intentStatus send.IntentStatus, userID int64, localDate *string, now func() time.Time, adapter string) error {
+	return finishSendWithRiskAndQuota(ctx, deps, claimed, jobStatus, code, retryable, messageID, intentStatus,
+		userID, localDate, now, adapter, "", nil)
+}
+
+func finishSendWithRiskAndQuota(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, jobStatus send.JobStatus, code string, retryable bool, messageID *string, intentStatus send.IntentStatus, userID int64, localDate *string, now func() time.Time, adapter, riskCode string, riskFallback func(context.Context) error) error {
 	err := deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
 		var errorCode *string
 		if code != "" {
@@ -409,6 +396,17 @@ func finishSendWithQuota(ctx context.Context, deps SessionCheckDeps, claimed *se
 		}
 		if err := deps.Sends.SetIntentStatus(tctx, claimed.IntentID, intentStatus, errorCode, nil, now()); err != nil {
 			return err
+		}
+		if riskCode != "" {
+			if deps.Risk != nil {
+				if err := applyWorkerRiskInTx(tctx, deps.Risk, claimed.AccountID, riskCode, adapter, claimed.PublicID.String()); err != nil {
+					return err
+				}
+			} else if riskFallback != nil {
+				if err := riskFallback(tctx); err != nil {
+					return err
+				}
+			}
 		}
 		if jobStatus == send.JobSucceeded {
 			if localDate != nil && *localDate != "" {
@@ -496,12 +494,23 @@ func sendRetryDelay(attempt int) time.Duration {
 
 func finishSendRetry(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, code string,
 	nextAttemptAt time.Time, now func() time.Time, adapter string) error {
+	return finishSendRetryWithRisk(ctx, deps, claimed, code, nextAttemptAt, now, adapter, "")
+}
+
+func finishSendRetryWithRisk(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, code string,
+	nextAttemptAt time.Time, now func() time.Time, adapter, riskCode string) error {
 	err := deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
 		errorCode := code
 		if err := deps.Sends.FinishJob(tctx, claimed.ID, send.JobFailed, &errorCode, true, nil, now()); err != nil {
 			return err
 		}
-		return deps.Sends.SetIntentStatus(tctx, claimed.IntentID, send.IntentRetryWait, &errorCode, &nextAttemptAt, now())
+		if err := deps.Sends.SetIntentStatus(tctx, claimed.IntentID, send.IntentRetryWait, &errorCode, &nextAttemptAt, now()); err != nil {
+			return err
+		}
+		if riskCode != "" && deps.Risk != nil {
+			return applyWorkerRiskInTx(tctx, deps.Risk, claimed.AccountID, riskCode, adapter, claimed.PublicID.String())
+		}
+		return nil
 	})
 	if err == nil {
 		observeSendMetric(deps.Metrics, adapter, string(send.IntentRetryWait))
@@ -511,6 +520,11 @@ func finishSendRetry(ctx context.Context, deps SessionCheckDeps, claimed *send.S
 
 func finishSendFallback(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, code string,
 	now func() time.Time, adapter string) error {
+	return finishSendFallbackWithRisk(ctx, deps, claimed, code, now, adapter, "", nil)
+}
+
+func finishSendFallbackWithRisk(ctx context.Context, deps SessionCheckDeps, claimed *send.SendJob, code string,
+	now func() time.Time, adapter, riskCode string, riskFallback func(context.Context) error) error {
 	if deps.Sends == nil || deps.Outbox == nil || deps.Tx == nil || claimed == nil || claimed.Attempt >= send.MaxSendAttempts {
 		return fmt.Errorf("send fallback: dependencies are not configured or attempt limit reached")
 	}
@@ -522,6 +536,17 @@ func finishSendFallback(ctx context.Context, deps SessionCheckDeps, claimed *sen
 		errorCode := code
 		if err := deps.Sends.FinishJob(tctx, claimed.ID, send.JobFailed, &errorCode, false, nil, now()); err != nil {
 			return err
+		}
+		if riskCode != "" {
+			if deps.Risk != nil {
+				if err := applyWorkerRiskInTx(tctx, deps.Risk, claimed.AccountID, riskCode, adapter, claimed.PublicID.String()); err != nil {
+					return err
+				}
+			} else if riskFallback != nil {
+				if err := riskFallback(tctx); err != nil {
+					return err
+				}
+			}
 		}
 		job := &send.SendJob{
 			PublicID: uuid.New(), IntentID: claimed.IntentID, AccountID: claimed.AccountID, FriendID: claimed.FriendID,
@@ -542,4 +567,24 @@ func finishSendFallback(ctx context.Context, deps SessionCheckDeps, claimed *sen
 		observeSendMetric(deps.Metrics, adapter, string(send.IntentQueued))
 	}
 	return err
+}
+
+func sendRiskFallback(deps SessionCheckDeps, accountID int64, code string, now func() time.Time) func(context.Context) error {
+	switch code {
+	case apperr.CodeSessionExpired:
+		return func(ctx context.Context) error {
+			return deps.Accounts.SetSessionStatus(ctx, accountID, account.SessionExpired, now())
+		}
+	case apperr.CodeChallengeRequired:
+		return func(ctx context.Context) error {
+			return deps.Accounts.SetSessionStatus(ctx, accountID, account.SessionChallengeRequired, now())
+		}
+	case apperr.CodePlatformRateLimited:
+		return func(ctx context.Context) error {
+			cooldown := now().Add(10 * time.Minute)
+			return deps.Accounts.SetRiskStatus(ctx, accountID, account.RiskCoolingDown, &cooldown)
+		}
+	default:
+		return nil
+	}
 }

@@ -405,6 +405,9 @@ Session、账号身份和 Outbox；任一步失败都回滚，不能让旧 Worke
 的 `session_status=valid` 也必须在 Job 成功终态事务中提交，并由成功事件记录同一结果。
 QR/SMS 绑定失败时，风险事件、Session 状态和 `challenge_required` 事件同样纳入 Job 失败
 事务，Job 条件终结仍是事务中的第一步。
+Send Worker 的失败终态、Intent 状态、风险事件/账号动作和日配额结算也必须共用同一事务；
+安全重试写入 `retry_wait`、Adapter fallback 创建下一 Attempt 时，旧 SendJob 的终态与风险
+投影同样在该事务内提交，不能先独立记录风险再改变 SendJob/Intent。
 
 Scheduler/Reaper 查找：
 

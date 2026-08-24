@@ -321,6 +321,8 @@ Task Service 在开启 `allow_first_message` 时要求 Entitlement Gate 的
 状态在发送 Worker 最终 preflight 中分别检查。若风险结果属于 Generic Job 的失败终态，
 Worker 使用 `ApplyInTx` 接入调用方事务，并先条件终结 Job，再提交风险事件与账号动作；
 普通独立风险观测仍由 `Apply` 自己开启事务。
+Send Worker 的 `SendJob`/Intent 失败、重试等待和 fallback Attempt 也沿用同一调用方事务，
+把风险投影与配额结算、Intent 状态一起提交。
 
 ### `scheduler`
 
