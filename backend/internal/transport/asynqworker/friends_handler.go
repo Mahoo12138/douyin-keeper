@@ -132,31 +132,19 @@ func friendsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 				code = app.Code
 			}
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, code, now)
-			if deps.Risk != nil {
-				observeWorkerRisk(ctx, deps.Risk, acct.ID, code, capability.AdapterBrowserConsumer, claimed.PublicID.String())
-			} else if code == apperr.CodeSessionExpired {
-				_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, now())
-			} else if code == apperr.CodeChallengeRequired {
-				_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionChallengeRequired, now())
-			} else if code == apperr.CodePlatformRateLimited {
-				cooldown := now().Add(10 * time.Minute)
-				_ = deps.Accounts.SetRiskStatus(ctx, acct.ID, account.RiskCoolingDown, &cooldown)
-			}
-			return fail(code)
+			return finishFriendsFailure(ctx, deps, claimed, acct.ID, code, now)
 		}
 		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, now); cancelled || err != nil {
 			return err
 		}
 		if !result.Complete {
-			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, now)
-			return fail(apperr.CodeAdapterIncompatible)
+			return finishFriendsFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible, now)
 		}
 		items, seenIDs, seenConversationIDs, err := normalizeFriendItems(result.Friends)
 		if err != nil {
-			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, now)
-			return fail(apperr.CodeAdapterIncompatible)
+			return finishFriendsFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible, now)
 		}
 		if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{
 			EventType: "fetched", Payload: mustJSON(map[string]int{"count": len(items)}), CreatedAt: now(),
@@ -172,6 +160,27 @@ func friendsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		}
 		return nil
 	}
+}
+
+func finishFriendsFailure(ctx context.Context, deps SessionCheckDeps, claimed *job.Job, accountID int64, code string, now func() time.Time) error {
+	var fallback func(context.Context) error
+	switch code {
+	case apperr.CodeSessionExpired:
+		fallback = func(tctx context.Context) error {
+			return deps.Accounts.SetSessionStatus(tctx, accountID, account.SessionExpired, now())
+		}
+	case apperr.CodeChallengeRequired:
+		fallback = func(tctx context.Context) error {
+			return deps.Accounts.SetSessionStatus(tctx, accountID, account.SessionChallengeRequired, now())
+		}
+	case apperr.CodePlatformRateLimited:
+		fallback = func(tctx context.Context) error {
+			cooldown := now().Add(10 * time.Minute)
+			return deps.Accounts.SetRiskStatus(tctx, accountID, account.RiskCoolingDown, &cooldown)
+		}
+	}
+	return commitWorkerFailure(ctx, deps.Tx, deps.Jobs, deps.Risk, claimed, accountID, code,
+		capability.AdapterBrowserConsumer, claimed.PublicID.String(), fallback, now)
 }
 
 type friendSyncAccountWriter interface {

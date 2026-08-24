@@ -316,7 +316,9 @@ Task Service 在开启 `allow_first_message` 时要求 Entitlement Gate 的
 当前实现：Worker 将 Sidecar/平台稳定错误交给 `risk.Service`，由事务同时写入
 `risk_events` 与账号 Session/cooldown 状态；Scheduler 的 risk cleanup 会把已过期
 `cooling_down` 账号恢复为 `normal`。用户 `paused_at`、风险 cooldown 和 Session
-状态在发送 Worker 最终 preflight 中分别检查。
+状态在发送 Worker 最终 preflight 中分别检查。若风险结果属于 Generic Job 的失败终态，
+Worker 使用 `ApplyInTx` 接入调用方事务，并先条件终结 Job，再提交风险事件与账号动作；
+普通独立风险观测仍由 `Apply` 自己开启事务。
 
 ### `scheduler`
 

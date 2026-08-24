@@ -21,6 +21,19 @@ func (r *friendSyncStub) SyncBatch(ctx context.Context, _ int64, _ []friend.Sync
 	return nil
 }
 
+type transactionalRiskStub struct {
+	operations []string
+}
+
+func (r *transactionalRiskStub) Apply(context.Context, int64, string, string, map[string]any) error {
+	return nil
+}
+
+func (r *transactionalRiskStub) ApplyInTx(ctx context.Context, _ int64, _, _ string, _ map[string]any) error {
+	r.operations = append(r.operations, bindOperation(ctx, "risk"))
+	return nil
+}
+
 func TestCommitFriendsSyncSuccessFinalizesJobBeforeSnapshot(t *testing.T) {
 	j := &bindJobRepoStub{}
 	accounts := &bindAccountRepoStub{}
@@ -57,6 +70,26 @@ func TestCommitSessionCheckSuccessFinalizesJobBeforeSessionState(t *testing.T) {
 	for _, operation := range append(j.operations, accounts.operations...) {
 		if len(operation) < len("tx:") || operation[:len("tx:")] != "tx:" {
 			t.Fatalf("session check side effect escaped completion transaction: %q", operation)
+		}
+	}
+}
+
+func TestCommitWorkerFailureFinalizesJobBeforeRiskProjection(t *testing.T) {
+	j := &bindJobRepoStub{}
+	risk := &transactionalRiskStub{}
+	now := func() time.Time { return time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC) }
+	claimed := &job.Job{ID: 12, PublicID: uuid.New(), Status: job.StatusRunning}
+
+	if err := commitWorkerFailure(context.Background(), bindTxStub{}, j, risk, claimed, 20,
+		"SESSION_EXPIRED", "browser.consumer", claimed.PublicID.String(), nil, now); err != nil {
+		t.Fatal(err)
+	}
+	if len(j.operations) == 0 || j.operations[0] != "tx:finish" {
+		t.Fatalf("job operations = %#v, want transaction finish first", j.operations)
+	}
+	for _, operation := range append(j.operations, risk.operations...) {
+		if len(operation) < len("tx:") || operation[:len("tx:")] != "tx:" {
+			t.Fatalf("risk failure side effect escaped completion transaction: %q", operation)
 		}
 	}
 }

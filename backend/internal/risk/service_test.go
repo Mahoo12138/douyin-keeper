@@ -40,6 +40,12 @@ type fakeRiskTx struct{}
 
 func (fakeRiskTx) WithinTx(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) }
 
+type rejectingRiskTx struct{}
+
+func (rejectingRiskTx) WithinTx(context.Context, func(context.Context) error) error {
+	return context.Canceled
+}
+
 type fakeRiskNotifier struct {
 	calls    int
 	account  int64
@@ -92,6 +98,21 @@ func TestApplyRecordsEventAndAppliesCooldownAtomically(t *testing.T) {
 	}
 	if events.events[0].SourceAdapter == nil || *events.events[0].SourceAdapter != "browser.consumer" || events.events[0].CooldownUntil == nil {
 		t.Fatalf("event metadata mismatch: %+v", events.events[0])
+	}
+}
+
+func TestApplyInTxUsesCallerTransaction(t *testing.T) {
+	events := &fakeRiskEvents{}
+	accounts := &fakeRiskAccounts{}
+	service := NewService(events, accounts, rejectingRiskTx{}, time.Minute)
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	service.SetNow(func() time.Time { return now })
+
+	if err := service.ApplyInTx(context.Background(), 42, "SESSION_EXPIRED", "browser.consumer", nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(events.events) != 1 || accounts.sessionStatus != account.SessionExpired {
+		t.Fatalf("ApplyInTx did not commit through caller transaction: events=%d accounts=%+v", len(events.events), accounts)
 	}
 }
 

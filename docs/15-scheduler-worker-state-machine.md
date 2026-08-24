@@ -767,7 +767,9 @@ Scheduler 周期任务：
   通过站内通知提醒账号所有者，Scheduler 不重复探测已进入人工处理状态的账号。
 
 当前 Scheduler 每 60 秒以有界批次执行上述清理，并将变更持久化到
-`douyin_accounts`；Worker 记录风险事件与账号动作使用同一事务，避免只改状态而丢失审计事件。
+`douyin_accounts`；Worker 记录风险事件与账号动作使用同一事务，避免只改状态而丢失审计事件；
+当风险结果同时结束 Generic Job 时，使用 `risk.Service.ApplyInTx` 纳入 Job 事务，并先完成
+Job 条件终结，避免迟到 Worker 在 Reaper 之后写入风险副作用。
 
 ## 21. 发送成功定义
 

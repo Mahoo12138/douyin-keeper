@@ -295,12 +295,7 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 				code = app.Code
 			}
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, code, deps.Now)
-			if deps.Risk != nil {
-				observeWorkerRisk(ctx, deps.Risk, acct.ID, code, capability.AdapterBrowserConsumer, claimed.PublicID.String())
-			} else if code == apperr.CodeSessionExpired {
-				_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, deps.Now())
-			}
-			return fail(code)
+			return finishSessionCheckFailure(ctx, deps, claimed, acct.ID, code)
 		}
 		if response == nil || !response.OK {
 			code := apperr.CodeAdapterUnavailable
@@ -309,23 +304,12 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 			}
 			switch code {
 			case sidecar.ErrSessionExpired:
-				if deps.Risk != nil {
-					observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeSessionExpired, capability.AdapterBrowserConsumer, claimed.PublicID.String())
-				} else {
-					_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, deps.Now())
-				}
-				return fail(apperr.CodeSessionExpired)
+				return finishSessionCheckFailure(ctx, deps, claimed, acct.ID, apperr.CodeSessionExpired)
 			case sidecar.ErrChallengeRequired:
-				if deps.Risk != nil {
-					observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeChallengeRequired, capability.AdapterBrowserConsumer, claimed.PublicID.String())
-				} else {
-					_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionChallengeRequired, deps.Now())
-				}
-				return fail(apperr.CodeChallengeRequired)
+				return finishSessionCheckFailure(ctx, deps, claimed, acct.ID, apperr.CodeChallengeRequired)
 			default:
-				observeWorkerRisk(ctx, deps.Risk, acct.ID, code, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 				observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, code, deps.Now)
-				return fail(code)
+				return finishSessionCheckFailure(ctx, deps, claimed, acct.ID, code)
 			}
 		}
 		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
@@ -336,9 +320,8 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 		}
 		body, err := json.Marshal(response.Result)
 		if err != nil || json.Unmarshal(body, &result) != nil || !result.Valid {
-			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
-			return fail(apperr.CodeAdapterIncompatible)
+			return finishSessionCheckFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
 		}
 		if err := commitSessionCheckSuccess(ctx, deps.Tx, deps.Jobs, deps.Accounts, claimed, acct.ID, deps.Now); err != nil {
 			return fail(apperr.CodeInternal)
@@ -348,6 +331,22 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 		}
 		return nil
 	}
+}
+
+func finishSessionCheckFailure(ctx context.Context, deps SessionCheckDeps, claimed *job.Job, accountID int64, code string) error {
+	var fallback func(context.Context) error
+	switch code {
+	case apperr.CodeSessionExpired:
+		fallback = func(tctx context.Context) error {
+			return deps.Accounts.SetSessionStatus(tctx, accountID, account.SessionExpired, deps.Now())
+		}
+	case apperr.CodeChallengeRequired:
+		fallback = func(tctx context.Context) error {
+			return deps.Accounts.SetSessionStatus(tctx, accountID, account.SessionChallengeRequired, deps.Now())
+		}
+	}
+	return commitWorkerFailure(ctx, deps.Tx, deps.Jobs, deps.Risk, claimed, accountID, code,
+		capability.AdapterBrowserConsumer, claimed.PublicID.String(), fallback, deps.Now)
 }
 
 // commitSessionCheckSuccess keeps the account's valid-session projection and

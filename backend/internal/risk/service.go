@@ -98,6 +98,22 @@ func (s *Service) Apply(ctx context.Context, accountID int64, code, sourceAdapte
 	if s == nil || s.events == nil || s.accounts == nil || s.tx == nil {
 		return fmt.Errorf("risk service is not configured")
 	}
+	err := s.tx.WithinTx(ctx, func(tctx context.Context) error {
+		return s.ApplyInTx(tctx, accountID, code, sourceAdapter, detail)
+	})
+	if err == nil {
+		s.observeMetrics(code)
+	}
+	return err
+}
+
+// ApplyInTx records the risk event and account action using the transaction
+// already carried by ctx. Worker terminal side effects can therefore guard
+// Job.Finish first and commit the risk projection with the same outcome.
+func (s *Service) ApplyInTx(ctx context.Context, accountID int64, code, sourceAdapter string, detail map[string]any) error {
+	if s == nil || s.events == nil || s.accounts == nil {
+		return fmt.Errorf("risk service is not configured")
+	}
 	if accountID <= 0 || code == "" {
 		return fmt.Errorf("risk event requires account_id and code")
 	}
@@ -118,36 +134,35 @@ func (s *Service) Apply(ctx context.Context, accountID int64, code, sourceAdapte
 		action := classification.Action
 		event.Action = &action
 	}
-	err := s.tx.WithinTx(ctx, func(tctx context.Context) error {
-		if classification.SessionStatus != nil {
-			if err := s.accounts.SetSessionStatus(tctx, accountID, *classification.SessionStatus, now); err != nil {
-				return err
-			}
-		}
-		if classification.CoolingDown {
-			until := now.Add(s.cooldown)
-			event.CooldownUntil = &until
-			if err := s.accounts.SetRiskStatus(tctx, accountID, account.RiskCoolingDown, &until); err != nil {
-				return err
-			}
-		}
-		if err := s.events.Record(tctx, event); err != nil {
+	if classification.SessionStatus != nil {
+		if err := s.accounts.SetSessionStatus(ctx, accountID, *classification.SessionStatus, now); err != nil {
 			return err
 		}
-		if s.notifier != nil {
-			if err := s.notifier.NotifyRisk(tctx, accountID, code, string(classification.Severity), now); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err == nil {
-		s.metrics.AddCounter("risk_event_total", 1,
-			telemetry.Label{Name: "category", Value: string(classification.Category)},
-			telemetry.Label{Name: "code", Value: code})
-		if classification.Action == "session_expired" {
-			s.metrics.AddCounter("session_expired_total", 1)
+	}
+	if classification.CoolingDown {
+		until := now.Add(s.cooldown)
+		event.CooldownUntil = &until
+		if err := s.accounts.SetRiskStatus(ctx, accountID, account.RiskCoolingDown, &until); err != nil {
+			return err
 		}
 	}
-	return err
+	if err := s.events.Record(ctx, event); err != nil {
+		return err
+	}
+	if s.notifier != nil {
+		if err := s.notifier.NotifyRisk(ctx, accountID, code, string(classification.Severity), now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) observeMetrics(code string) {
+	classification := Classify(code)
+	s.metrics.AddCounter("risk_event_total", 1,
+		telemetry.Label{Name: "category", Value: string(classification.Category)},
+		telemetry.Label{Name: "code", Value: code})
+	if classification.Action == "session_expired" {
+		s.metrics.AddCounter("session_expired_total", 1)
+	}
 }
