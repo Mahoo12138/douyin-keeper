@@ -78,12 +78,20 @@ IPv4 loopback（`127.0.0.1`），与 README 中的访问地址一致；生产运
 
 ```text
 backend/internal/transport/webassets/
-├─ embed.go
+├─ webassets.go
+├─ fallback/
+│  └─ index.html
 └─ dist/
+   ├─ .gitkeep
    └─ web/
 ```
 
-`embed.go`：
+仓库保留一个 `fallback/index.html` 和 `dist/.gitkeep`，保证 fresh checkout 可以执行 Go
+编译和基础启动检查；fallback 不是生产前端。发布构建必须先运行 `pnpm build:spa`，该命令
+只重建 `dist/web` 并写入带 hash 的统一 Web/Admin SPA 资源，Docker backend 构建阶段也会
+重新生成并覆盖该目录。
+
+`webassets.go`：
 
 ```go
 package webassets
