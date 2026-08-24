@@ -148,7 +148,9 @@ API 路由优先于 SPA fallback。微信小程序独立发布，不进入 Backe
 - Browser Send
 - Session Browser Check
 
-使用全局 Browser Semaphore，例如 `max_browsers=3`。
+使用 Redis 全局 Browser Semaphore（key=`semaphore:browser`），例如
+`MAX_GLOBAL_BROWSERS=3`。`WORKER_BROWSER_CONCURRENCY` 只控制单个 worker
+进程的 queue concurrency，二者必须分开配置；Sidecar 调用持有带 TTL 的租约并自动续租。
 
 ### `worker-light`
 

@@ -338,12 +338,16 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 }
 
 // ServerConfig maps a worker pool to its queues (docs/15 §18).
-func ServerConfig(pool string) map[string]int {
+func ServerConfig(pool string, browserConcurrency ...int) map[string]int {
 	switch pool {
 	case "interactive":
 		return map[string]int{asynqqueue.QueueInteractive: 2}
 	case "browser":
-		return map[string]int{asynqqueue.QueueBrowser: 3}
+		concurrency := 3
+		if len(browserConcurrency) > 0 && browserConcurrency[0] > 0 {
+			concurrency = browserConcurrency[0]
+		}
+		return map[string]int{asynqqueue.QueueBrowser: concurrency}
 	default: // light
 		return map[string]int{asynqqueue.QueueLight: 8}
 	}

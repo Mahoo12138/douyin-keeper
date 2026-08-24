@@ -613,7 +613,9 @@ TARGET_IDENTITY_MISMATCH
 semaphore:browser
 ```
 
-Redis token/semaphore 或单 Worker 进程本地 semaphore 均可。
+当前实现使用 Redis Sorted Set token semaphore：key 为 `semaphore:browser`，每个槽位
+是带 TTL 的租约，Sidecar 调用期间自动续租，结束后按 owner token 释放；租约过期时由
+下一次 acquire 原子清理。这样多个 `worker-browser` 进程共享同一容量上限。
 
 如果部署多个 browser worker，必须使用全局 semaphore 或按每实例容量精确分配。
 
@@ -622,9 +624,11 @@ Redis token/semaphore 或单 Worker 进程本地 semaphore 均可。
 ```text
 WORKER_BROWSER_CONCURRENCY
 MAX_GLOBAL_BROWSERS
+BROWSER_SEMAPHORE_TTL
 ```
 
-二者分离。
+前者是单进程 queue concurrency，后两者控制全局租约；默认值分别为 `3`、`3` 和 `2m`。
+`worker-light` 的 Protocol Sidecar 不占用 Browser Semaphore。
 
 ## 18. Queue 拆分
 

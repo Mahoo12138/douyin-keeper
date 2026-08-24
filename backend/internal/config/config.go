@@ -29,6 +29,9 @@ type Config struct {
 	// Browser adapter (docs/10)
 	PlaywrightSidecarCommand string
 	PlaywrightSidecarScript  string
+	BrowserConcurrency       int
+	MaxGlobalBrowsers        int
+	BrowserSemaphoreTTL      time.Duration
 
 	// Entitlement card codes (docs/12)
 	CardCodePepperDK1 string
@@ -71,6 +74,9 @@ func Load() *Config {
 		LoginProfileDir:          env("LOGIN_PROFILE_DIR", "/tmp/douyin-keeper/login"),
 		PlaywrightSidecarCommand: env("PLAYWRIGHT_SIDECAR_COMMAND", "python3"),
 		PlaywrightSidecarScript:  env("PLAYWRIGHT_SIDECAR_SCRIPT", "sidecars/playwright/sidecar.py"),
+		BrowserConcurrency:       positiveIntEnv("WORKER_BROWSER_CONCURRENCY", 3),
+		MaxGlobalBrowsers:        positiveIntEnv("MAX_GLOBAL_BROWSERS", 3),
+		BrowserSemaphoreTTL:      positiveDur("BROWSER_SEMAPHORE_TTL", 2*time.Minute),
 
 		CardCodePepperDK1: os.Getenv("CARD_CODE_PEPPER_DK1"),
 
@@ -104,6 +110,22 @@ func intEnv(key string, def int) int {
 		}
 	}
 	return def
+}
+
+func positiveIntEnv(key string, def int) int {
+	value := intEnv(key, def)
+	if value <= 0 {
+		return def
+	}
+	return value
+}
+
+func positiveDur(key string, def time.Duration) time.Duration {
+	value := dur(key, def)
+	if value <= 0 {
+		return def
+	}
+	return value
 }
 
 // Require verifies that the given named settings are set. Call the groups the

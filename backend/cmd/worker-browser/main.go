@@ -23,6 +23,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/cryptox"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/redislock"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/risk"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/session"
@@ -82,8 +83,10 @@ func main() {
 			sidecarScript = candidate
 		}
 	}
-	sidecarClient := sidecar.NewProcessClient(cfg.PlaywrightSidecarCommand, sidecarScript)
-	defer sidecarClient.Close()
+	processClient := sidecar.NewProcessClient(cfg.PlaywrightSidecarCommand, sidecarScript)
+	defer processClient.Close()
+	sidecarClient := sidecar.NewSemaphoreClient(processClient, rdb, redislock.BrowserSemaphoreKey,
+		cfg.MaxGlobalBrowsers, cfg.BrowserSemaphoreTTL)
 	workerID, _ := os.Hostname()
 	if workerID == "" {
 		workerID = "worker-browser"
@@ -98,7 +101,7 @@ func main() {
 		Entitlement:  entitlementSvc, Quota: entitlementSvc, Tx: workerTx,
 		WorkerID: workerID, LockTTL: 2 * time.Minute,
 	}, log)
-	srv := asynqqueue.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr}, asynqworker.ServerConfig("browser"))
+	srv := asynqqueue.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr}, asynqworker.ServerConfig("browser", cfg.BrowserConcurrency))
 	log.Info("worker-browser starting")
 	if err := asynqqueue.RunServer(srv, mux, ctx); err != nil {
 		log.Error("worker exited", "err", err)

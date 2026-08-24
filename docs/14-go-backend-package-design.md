@@ -649,6 +649,17 @@ Telemetry
 SitePolicy
 ```
 
+浏览器 Worker 的容量配置必须同时保留进程内与跨进程两个维度：
+
+```text
+WORKER_BROWSER_CONCURRENCY  # 单个 worker-browser 的 Asynq queue concurrency
+MAX_GLOBAL_BROWSERS         # 所有 worker-browser 进程共享的 Redis semaphore 上限
+BROWSER_SEMAPHORE_TTL       # 浏览器 Sidecar 调用的租约 TTL，默认 2m，调用期间自动续租
+```
+
+全局 key 固定为 `semaphore:browser`，由 `infra/redislock` 使用 owner token 和过期租约
+保证释放安全；`worker-light` 与 `worker-interactive` 不接入该 semaphore。
+
 Secret 只从环境变量/Secret Manager 注入。
 
 不要提交真实 `.env`。
