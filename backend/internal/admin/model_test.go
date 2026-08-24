@@ -11,26 +11,28 @@ import (
 )
 
 type repositoryStub struct {
-	limit          int
-	userItems      []UserSummary
-	userFilter     UserListFilter
-	accountItems   []AccountSummary
-	accountFilter  AccountListFilter
-	riskItems      []RiskSummary
-	riskPageFilter RiskFilter
-	adapter        AdapterHealthSummary
-	actorID        int64
-	adapterName    string
-	enabled        bool
-	accountActorID int64
-	accountID      uuid.UUID
-	accountPaused  bool
-	riskFilter     RiskFilter
-	auditFilter    AuditFilter
-	setting        Setting
-	settingActorID int64
-	settingKey     string
-	settingValue   json.RawMessage
+	limit           int
+	userItems       []UserSummary
+	userFilter      UserListFilter
+	accountItems    []AccountSummary
+	accountFilter   AccountListFilter
+	riskItems       []RiskSummary
+	riskPageFilter  RiskFilter
+	auditItems      []AuditSummary
+	auditPageFilter AuditFilter
+	adapter         AdapterHealthSummary
+	actorID         int64
+	adapterName     string
+	enabled         bool
+	accountActorID  int64
+	accountID       uuid.UUID
+	accountPaused   bool
+	riskFilter      RiskFilter
+	auditFilter     AuditFilter
+	setting         Setting
+	settingActorID  int64
+	settingKey      string
+	settingValue    json.RawMessage
 }
 
 func (r *repositoryStub) ListUserSummaries(_ context.Context, limit int) ([]UserSummary, error) {
@@ -90,7 +92,15 @@ func (r *repositoryStub) ListRiskSummariesPage(_ context.Context, filter RiskFil
 
 func (r *repositoryStub) ListAuditSummaries(_ context.Context, filter AuditFilter) ([]AuditSummary, error) {
 	r.auditFilter = filter
+	if r.auditItems != nil {
+		return r.auditItems, nil
+	}
 	return []AuditSummary{{Action: "adapter.disable"}}, nil
+}
+
+func (r *repositoryStub) ListAuditSummariesPage(_ context.Context, filter AuditFilter) ([]AuditSummary, error) {
+	r.auditPageFilter = filter
+	return r.auditItems, nil
 }
 
 func (r *repositoryStub) ListSettings(context.Context) ([]Setting, error) {
@@ -179,6 +189,25 @@ func TestServiceListsRiskCursorPage(t *testing.T) {
 	}
 	if repo.riskPageFilter.Limit != 2 || repo.riskPageFilter.Category != "AUTH" || repo.riskPageFilter.Severity != "critical" || repo.riskPageFilter.Code != "expired" {
 		t.Fatalf("filter = %+v", repo.riskPageFilter)
+	}
+}
+
+func TestServiceListsAuditCursorPage(t *testing.T) {
+	base := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	repo := &repositoryStub{auditItems: []AuditSummary{
+		{ID: 3, CreatedAt: base.Add(2 * time.Minute)},
+		{ID: 2, CreatedAt: base.Add(time.Minute)},
+		{ID: 1, CreatedAt: base},
+	}}
+	page, err := NewService(repo).ListAuditLogsPage(context.Background(), AuditFilter{Action: "adapter.disable", ResourceType: "adapter", Actor: "admin", Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].ID != 3 || page.Items[1].ID != 2 || page.NextAfterID != 2 || page.NextCreatedAt == nil {
+		t.Fatalf("page = %+v", page)
+	}
+	if repo.auditPageFilter.Limit != 2 || repo.auditPageFilter.Action != "adapter.disable" || repo.auditPageFilter.ResourceType != "adapter" || repo.auditPageFilter.Actor != "admin" {
+		t.Fatalf("filter = %+v", repo.auditPageFilter)
 	}
 }
 

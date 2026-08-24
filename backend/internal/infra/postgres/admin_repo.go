@@ -338,6 +338,15 @@ func (r *AdminRepo) listRiskSummaries(ctx context.Context, filter admin.RiskFilt
 }
 
 func (r *AdminRepo) ListAuditSummaries(ctx context.Context, filter admin.AuditFilter) ([]admin.AuditSummary, error) {
+	return r.listAuditSummaries(ctx, filter)
+}
+
+func (r *AdminRepo) ListAuditSummariesPage(ctx context.Context, filter admin.AuditFilter) ([]admin.AuditSummary, error) {
+	filter.Limit++
+	return r.listAuditSummaries(ctx, filter)
+}
+
+func (r *AdminRepo) listAuditSummaries(ctx context.Context, filter admin.AuditFilter) ([]admin.AuditSummary, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT l.id, u.display_name, l.action, l.resource_type, l.resource_id,
 			(l.detail_json <> '{}'::jsonb), l.created_at
@@ -346,8 +355,9 @@ func (r *AdminRepo) ListAuditSummaries(ctx context.Context, filter admin.AuditFi
 		WHERE ($1 = '' OR l.action = $1)
 		  AND ($2 = '' OR l.resource_type = $2)
 		  AND ($3 = '' OR COALESCE(u.display_name, '') ILIKE '%' || $3 || '%')
+		  AND ($4::timestamptz IS NULL OR (l.created_at,l.id) < ($4::timestamptz,$5::bigint))
 		ORDER BY l.created_at DESC, l.id DESC
-		LIMIT $4`, filter.Action, filter.ResourceType, filter.Actor, filter.Limit)
+		LIMIT $6`, filter.Action, filter.ResourceType, filter.Actor, filter.AfterCreatedAt, filter.AfterID, filter.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -759,3 +769,4 @@ var _ admin.Repository = (*AdminRepo)(nil)
 var _ admin.UserPageRepository = (*AdminRepo)(nil)
 var _ admin.AccountPageRepository = (*AdminRepo)(nil)
 var _ admin.RiskPageRepository = (*AdminRepo)(nil)
+var _ admin.AuditPageRepository = (*AdminRepo)(nil)

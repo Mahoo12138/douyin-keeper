@@ -2219,6 +2219,7 @@ export interface operations {
                 resource_type?: string;
                 actor?: string;
                 limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
             path?: never;

@@ -487,6 +487,7 @@ paths:
           type: string
           maxLength: 100
       - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Administrator audit log summaries without raw detail JSON
