@@ -15,6 +15,7 @@ import time
 
 import protocol
 import friends_list
+import message_send
 import qr_login
 
 
@@ -38,6 +39,8 @@ def handle(req):
             return protocol.success(req, qr_login.poll(req.get("input")), "browser.consumer", duration_ms=duration())
         if op == "friends.list":
             return protocol.success(req, friends_list.list_friends(req.get("input")), "browser.consumer", duration_ms=duration())
+        if op == "message.send_text":
+            return protocol.success(req, message_send.send_text(req.get("input")), "browser.consumer", duration_ms=duration())
         # Placeholders for ops requiring additional browser adapters.
         return protocol.unsupported(req)
     except protocol.ProtocolError as exc:

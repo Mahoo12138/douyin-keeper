@@ -1,6 +1,6 @@
 // Package asynqworker wires Asynq handlers to the outbox kinds. Session check
-// and friends sync are the first real browser operations; remaining platform
-// adapters are kept explicit until their contracts are implemented.
+// friends sync and confirmed text sends are real browser operations; remaining
+// platform adapters are kept explicit until their contracts are implemented.
 package asynqworker
 
 import (
@@ -21,7 +21,10 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/redislock"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/outbox"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/send"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/task"
 )
 
 type PayloadLoader interface {
@@ -42,7 +45,7 @@ var outboxKinds = []string{
 // NewMux registers a stub handler for every outbox kind. The handler pulls
 // the payload by stable id only — never secrets (docs/14 §10).
 func NewMux(loader PayloadLoader, log *slog.Logger) *asynq.ServeMux {
-	return newMux(loader, nil, nil, log)
+	return newMux(loader, nil, nil, nil, log)
 }
 
 // SessionCheckDeps wires the session-check and friends-sync browser jobs.
@@ -53,9 +56,20 @@ type SessionCheckDeps struct {
 	Sessions interface {
 		WithTempFile(context.Context, int64, uuid.UUID, uuid.UUID, func(string) error) error
 	}
-	Sidecar  sidecar.Client
-	Redis    *redis.Client
-	Friends  friend.SyncRepository
+	Sidecar sidecar.Client
+	Redis   *redis.Client
+	Friends friend.SyncRepository
+	Targets friend.SendTargetRepository
+	Tasks   interface {
+		GetByID(context.Context, int64) (*task.SparkTask, error)
+	}
+	Sends       send.Repository
+	Entitlement send.Gate
+	Quota       interface {
+		ReleaseDaily(context.Context, int64, string) error
+		IncrSucceeded(context.Context, int64, string) error
+		IncrFailed(context.Context, int64, string) error
+	}
 	Tx       job.TxManager
 	WorkerID string
 	LockTTL  time.Duration
@@ -63,14 +77,25 @@ type SessionCheckDeps struct {
 }
 
 func NewBrowserMux(loader PayloadLoader, deps SessionCheckDeps, log *slog.Logger) *asynq.ServeMux {
-	return newMux(loader, &deps, nil, log)
+	return newMux(loader, &deps, nil, nil, log)
 }
 
 func NewInteractiveMux(loader PayloadLoader, deps QRBindDeps, log *slog.Logger) *asynq.ServeMux {
-	return newMux(loader, nil, &deps, log)
+	return newMux(loader, nil, &deps, nil, log)
 }
 
-func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindDeps, log *slog.Logger) *asynq.ServeMux {
+type SendDispatchDeps struct {
+	Sends  send.Repository
+	Outbox outbox.Outbox
+	Tx     job.TxManager
+	Now    func() time.Time
+}
+
+func NewLightMux(loader PayloadLoader, deps SendDispatchDeps, log *slog.Logger) *asynq.ServeMux {
+	return newMux(loader, nil, nil, &deps, log)
+}
+
+func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindDeps, dispatchDeps *SendDispatchDeps, log *slog.Logger) *asynq.ServeMux {
 	mux := asynq.NewServeMux()
 	for _, kind := range outboxKinds {
 		kind := kind
@@ -84,6 +109,14 @@ func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindD
 		}
 		if kind == asynqqueue.KindFriendsSyncBrowser && sessionDeps != nil && sessionDeps.Friends != nil {
 			mux.HandleFunc(kind, friendsSyncHandler(loader, *sessionDeps))
+			continue
+		}
+		if kind == asynqqueue.KindSendDispatch && dispatchDeps != nil {
+			mux.HandleFunc(kind, sendDispatchHandler(loader, *dispatchDeps))
+			continue
+		}
+		if kind == asynqqueue.KindSendBrowser && sessionDeps != nil && sessionDeps.Sends != nil {
+			mux.HandleFunc(kind, sendBrowserHandler(loader, *sessionDeps))
 			continue
 		}
 		mux.HandleFunc(kind, func(ctx context.Context, t *asynq.Task) error {

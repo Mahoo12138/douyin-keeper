@@ -39,7 +39,9 @@ func main() {
 	defer pool.Close()
 
 	srv := asynqqueue.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr}, asynqworker.ServerConfig("light"))
-	mux := asynqworker.NewMux(postgres.NewOutboxRepo(pool), log)
+	mux := asynqworker.NewLightMux(postgres.NewOutboxRepo(pool), asynqworker.SendDispatchDeps{
+		Sends: postgres.NewSendRepo(pool), Outbox: postgres.NewOutboxRepo(pool), Tx: postgres.NewTxManager(pool),
+	}, log)
 	log.Info("worker-light starting")
 	if err := asynqqueue.RunServer(srv, mux, ctx); err != nil {
 		log.Error("worker exited", "err", err)

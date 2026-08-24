@@ -55,6 +55,18 @@ func (r *TaskRepo) ListByUser(ctx context.Context, userID int64) ([]*task.SparkT
 	return out, rows.Err()
 }
 
+func (r *TaskRepo) GetByID(ctx context.Context, taskID int64) (*task.SparkTask, error) {
+	t, err := scanTask(From(ctx, r.pool).QueryRow(ctx, `
+		SELECT `+taskCols+` FROM spark_tasks t
+		JOIN douyin_accounts a ON a.id = t.account_id
+		JOIN friends f ON f.id = t.friend_id
+		WHERE t.id=$1 AND t.deleted_at IS NULL AND a.deleted_at IS NULL`, taskID))
+	if err != nil {
+		return nil, mapNoRows(err, apperr.CodeNotFound, "task not found")
+	}
+	return t, nil
+}
+
 func (r *TaskRepo) GetOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*task.SparkTask, error) {
 	t, err := scanTask(From(ctx, r.pool).QueryRow(ctx, `
 		SELECT `+taskCols+` FROM spark_tasks t

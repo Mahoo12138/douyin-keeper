@@ -35,13 +35,13 @@ type TxManager interface {
 }
 
 type Service struct {
-	repo    Repository
-	tasks   TaskLookup
-	gate    Gate
-	quota   QuotaBox
-	outbox  outbox.Outbox
-	tx      TxManager
-	now     func() time.Time
+	repo   Repository
+	tasks  TaskLookup
+	gate   Gate
+	quota  QuotaBox
+	outbox outbox.Outbox
+	tx     TxManager
+	now    func() time.Time
 }
 
 func NewService(repo Repository, tasks TaskLookup, gate Gate, quota QuotaBox,
@@ -81,7 +81,7 @@ func (s *Service) RunNow(ctx context.Context, userID int64, taskPublicID uuid.UU
 		in := &SendIntent{
 			PublicID: uuid.New(), IntentType: IntentManual, RequestID: &requestID,
 			TaskID: &tk.ID, AccountID: tk.AccountID, FriendID: tk.FriendID,
-			ScheduledAt: now, Status: IntentQueued, CreatedAt: now, UpdatedAt: now,
+			LocalDate: &date, ScheduledAt: now, Status: IntentQueued, CreatedAt: now, UpdatedAt: now,
 		}
 		if err := s.repo.CreateIntent(tctx, in); err != nil {
 			return err

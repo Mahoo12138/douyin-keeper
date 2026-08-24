@@ -89,6 +89,7 @@ func (t *SparkTask) ValidMessage() bool {
 // Repository is implemented by infra/postgres.
 type Repository interface {
 	ListByUser(ctx context.Context, userID int64) ([]*SparkTask, error)
+	GetByID(ctx context.Context, taskID int64) (*SparkTask, error)
 	GetOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*SparkTask, error)
 	Create(ctx context.Context, t *SparkTask) error
 	Update(ctx context.Context, t *SparkTask) error

@@ -131,3 +131,19 @@ def test_friends_list_rejects_missing_session_file():
         assert False, "expected ProtocolError"
     except protocol.ProtocolError as exc:
         assert exc.code == protocol.ERR_SESSION_EXPIRED
+
+
+def test_message_send_rejects_missing_target_ids():
+    import message_send
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
+        json.dump({"cookies": []}, state)
+        state.flush()
+        try:
+            message_send.send_text({
+                "session": {"kind": "playwright_storage_state_file", "path": state.name},
+                "target": {}, "message": {"text": "hello"},
+            })
+            assert False, "expected ProtocolError"
+        except protocol.ProtocolError as exc:
+            assert exc.code == protocol.ERR_INVALID_REQUEST

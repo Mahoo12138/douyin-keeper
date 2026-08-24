@@ -79,6 +79,19 @@ type SyncRepository interface {
 	SyncBatch(ctx context.Context, accountID int64, items []SyncItem, seenPlatformIDs, seenConversationIDs []string, at time.Time) error
 }
 
+type SendTarget struct {
+	PlatformUserID         string
+	PlatformConversationID string
+	Channel                string
+}
+
+// SendTargetRepository exposes only the stable, already-resolved routing data
+// needed by the send worker. Display names are intentionally absent.
+type SendTargetRepository interface {
+	GetSendTarget(ctx context.Context, accountID, friendID int64) (*SendTarget, error)
+	MarkLastSent(ctx context.Context, friendID int64, at time.Time) error
+}
+
 // Gate is the entitlement slice used by the friend service.
 type Gate interface {
 	Authorize(ctx context.Context, req entitlement.AuthorizationRequest) (entitlement.AuthorizationDecision, error)

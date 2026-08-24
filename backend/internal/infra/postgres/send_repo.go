@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -57,6 +58,24 @@ func (r *SendRepo) GetIntentOwned(ctx context.Context, userID int64, publicID uu
 	return in, nil
 }
 
+func (r *SendRepo) GetIntentByPublicID(ctx context.Context, publicID uuid.UUID) (*send.SendIntent, error) {
+	in, err := scanIntent(From(ctx, r.pool).QueryRow(ctx, `
+		SELECT `+intentCols+` FROM send_intents si WHERE si.public_id=$1`, publicID))
+	if err != nil {
+		return nil, mapNoRows(err, apperr.CodeNotFound, "intent not found")
+	}
+	return in, nil
+}
+
+func (r *SendRepo) GetIntentByID(ctx context.Context, intentID int64) (*send.SendIntent, error) {
+	in, err := scanIntent(From(ctx, r.pool).QueryRow(ctx,
+		`SELECT `+intentCols+` FROM send_intents si WHERE si.id=$1`, intentID))
+	if err != nil {
+		return nil, mapNoRows(err, apperr.CodeNotFound, "intent not found")
+	}
+	return in, nil
+}
+
 func (r *SendRepo) ListIntentsByUser(ctx context.Context, userID int64) ([]*send.SendIntent, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT `+intentCols+`, a.public_id AS account_public_id, f.public_id AS friend_public_id
@@ -90,6 +109,10 @@ const sendJobCols = `j.id, j.public_id, j.intent_id, j.account_id, j.friend_id, 
 	j.selected_adapter, j.status, j.error_code, j.retryable, j.platform_message_id, j.worker_id,
 	j.heartbeat_at, j.lease_expires_at, j.started_at, j.finished_at, j.created_at`
 
+const sendJobReturnCols = `id, public_id, intent_id, account_id, friend_id, attempt,
+	selected_adapter, status, error_code, retryable, platform_message_id, worker_id,
+	heartbeat_at, lease_expires_at, started_at, finished_at, created_at`
+
 func scanSendJob(row pgx.Row) (*send.SendJob, error) {
 	var j send.SendJob
 	err := row.Scan(&j.ID, &j.PublicID, &j.IntentID, &j.AccountID, &j.FriendID, &j.Attempt,
@@ -120,6 +143,42 @@ func (r *SendRepo) GetJobOwned(ctx context.Context, userID int64, publicID uuid.
 		return nil, mapNoRows(err, apperr.CodeNotFound, "send job not found")
 	}
 	return j, nil
+}
+
+func (r *SendRepo) GetJobByPublicID(ctx context.Context, publicID uuid.UUID) (*send.SendJob, error) {
+	j, err := scanSendJob(From(ctx, r.pool).QueryRow(ctx,
+		`SELECT `+sendJobCols+` FROM send_jobs j WHERE j.public_id=$1`, publicID))
+	if err != nil {
+		return nil, mapNoRows(err, apperr.CodeNotFound, "send job not found")
+	}
+	return j, nil
+}
+
+func (r *SendRepo) ClaimJob(ctx context.Context, publicID uuid.UUID, workerID string, lease time.Duration) (*send.SendJob, error) {
+	j, err := scanSendJob(From(ctx, r.pool).QueryRow(ctx, `
+		UPDATE send_jobs SET status='running', worker_id=$2, started_at=COALESCE(started_at, now()),
+			heartbeat_at=now(), lease_expires_at=now()+make_interval(secs => $3)
+		WHERE public_id=$1 AND status='queued'
+		RETURNING `+sendJobReturnCols, publicID, workerID, lease.Seconds()))
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	return j, err
+}
+
+func (r *SendRepo) FinishJob(ctx context.Context, jobID int64, status send.JobStatus, errorCode *string, retryable bool, platformMessageID *string, at time.Time) error {
+	_, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE send_jobs SET status=$2, error_code=$3, retryable=$4, platform_message_id=$5,
+			finished_at=$6, heartbeat_at=NULL, lease_expires_at=NULL WHERE id=$1`,
+		jobID, status, errorCode, retryable, platformMessageID, at)
+	return err
+}
+
+func (r *SendRepo) SetIntentStatus(ctx context.Context, intentID int64, status send.IntentStatus, errorCode *string, nextAttemptAt *time.Time, at time.Time) error {
+	_, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE send_intents SET status=$2, error_code=$3, next_attempt_at=$4, updated_at=$5 WHERE id=$1`,
+		intentID, status, errorCode, nextAttemptAt, at)
+	return err
 }
 
 func (r *SendRepo) SetIntentLastJob(ctx context.Context, intentID, jobID int64) error {

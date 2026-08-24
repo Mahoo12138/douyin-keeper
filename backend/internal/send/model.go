@@ -45,21 +45,21 @@ const (
 )
 
 type SendIntent struct {
-	ID          int64
-	PublicID    uuid.UUID
-	IntentType  IntentType
-	RequestID   *uuid.UUID
-	TaskID      *int64
-	AccountID   int64
-	FriendID    int64
-	LocalDate   *string
-	ScheduledAt time.Time
-	Status      IntentStatus
-	ErrorCode   *string
+	ID            int64
+	PublicID      uuid.UUID
+	IntentType    IntentType
+	RequestID     *uuid.UUID
+	TaskID        *int64
+	AccountID     int64
+	FriendID      int64
+	LocalDate     *string
+	ScheduledAt   time.Time
+	Status        IntentStatus
+	ErrorCode     *string
 	NextAttemptAt *time.Time
-	LastJobID   *int64
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	LastJobID     *int64
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 
 	// Joined for API responses (repo fills them).
 	AccountPublicID uuid.UUID
@@ -90,10 +90,16 @@ type SendJob struct {
 
 type Repository interface {
 	CreateIntent(ctx context.Context, in *SendIntent) error
+	GetIntentByID(ctx context.Context, intentID int64) (*SendIntent, error)
+	GetIntentByPublicID(ctx context.Context, publicID uuid.UUID) (*SendIntent, error)
 	GetIntentOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*SendIntent, error)
 	ListIntentsByUser(ctx context.Context, userID int64) ([]*SendIntent, error)
 	CreateJob(ctx context.Context, j *SendJob) error
+	GetJobByPublicID(ctx context.Context, publicID uuid.UUID) (*SendJob, error)
 	GetJobOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*SendJob, error)
+	ClaimJob(ctx context.Context, publicID uuid.UUID, workerID string, lease time.Duration) (*SendJob, error)
+	FinishJob(ctx context.Context, jobID int64, status JobStatus, errorCode *string, retryable bool, platformMessageID *string, at time.Time) error
+	SetIntentStatus(ctx context.Context, intentID int64, status IntentStatus, errorCode *string, nextAttemptAt *time.Time, at time.Time) error
 	SetIntentLastJob(ctx context.Context, intentID, jobID int64) error
 	CountJobsForIntent(ctx context.Context, intentID int64) (int, error)
 }

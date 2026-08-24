@@ -80,6 +80,38 @@ func (r *FriendRepo) UpdateSparkEnabled(ctx context.Context, friendID int64, ena
 	return err
 }
 
+func (r *FriendRepo) GetSendTarget(ctx context.Context, accountID, friendID int64) (*friend.SendTarget, error) {
+	var target friend.SendTarget
+	var platformUserID *string
+	var identityStatus friend.IdentityStatus
+	if err := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT platform_user_id, identity_status
+		FROM friends
+		WHERE id=$1 AND account_id=$2 AND deleted_at IS NULL`, friendID, accountID).
+		Scan(&platformUserID, &identityStatus); err != nil {
+		return nil, mapNoRows(err, apperr.CodeNotFound, "friend not found")
+	}
+	if platformUserID == nil || *platformUserID == "" || identityStatus != friend.IdentityResolved {
+		return nil, apperr.New(apperr.CodeFriendIdentityUnsolid, apperr.KindConflict, "friend identity is unresolved")
+	}
+	if err := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT platform_conversation_id, channel
+		FROM conversations
+		WHERE account_id=$1 AND friend_id=$2
+		ORDER BY updated_at DESC LIMIT 1`, accountID, friendID).
+		Scan(&target.PlatformConversationID, &target.Channel); err != nil {
+		return nil, mapNoRows(err, apperr.CodeConversationNotFound, "conversation not found")
+	}
+	target.PlatformUserID = *platformUserID
+	return &target, nil
+}
+
+func (r *FriendRepo) MarkLastSent(ctx context.Context, friendID int64, at time.Time) error {
+	_, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE friends SET last_sent_at=$2, updated_at=$2 WHERE id=$1 AND deleted_at IS NULL`, friendID, at)
+	return err
+}
+
 // SyncBatch applies one complete friends.list result. The caller supplies a
 // transaction context; user-owned fields such as spark_enabled and
 // last_sent_at are deliberately omitted from every update.
