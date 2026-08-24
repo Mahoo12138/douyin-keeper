@@ -274,8 +274,9 @@ internal/transport/httpapi/entitlement_handler.go
 `open` 10 分钟，发送 Worker 在 open 期间不调用 Sidecar；成功探测或确认发送
 后清零失败计数。健康结果带有 `checked_at`，Repository 只接受不早于当前记录的
 观测，避免异步 probe/send 结果乱序覆盖更新的成功或失败。Scheduler 每 10 分钟扫描
-过期 snapshot，通过 outbox 投递新的 `capability.probe`。`disabled` 状态只允许管理
-策略显式恢复。
+过期 snapshot，通过 outbox 投递新的 `capability.probe`；扫描时会排除同账户仍在
+`pending/publishing` 或本刷新窗口内已 `published` 的 probe，避免 Worker 延迟时重复堆积。
+`disabled` 状态只允许管理策略显式恢复。
 
 Send Worker 在 Claim 后每 20 秒续租 `send_jobs`；heartbeat 只允许当前
 `running + worker_id` 更新。最终结果写入同样要求 Job 仍为 `running`，因此 lease

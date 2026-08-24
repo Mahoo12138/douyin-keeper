@@ -297,7 +297,9 @@ Sidecar；snapshot 缺失、`degraded` 或 `unavailable` 时直接以
 账号 `paused_at`、`risk_status=cooling_down/paused` 或有效 `cooldown_until` 同样
 直接结束发送，不调用 Sidecar。
 账号绑定成功后会通过 `capability.probe` 投递首次 `health.check`；Scheduler
-随后每 10 分钟为过期 snapshot 投递刷新任务。全局 `adapter_health` 在连续 3 次
+随后每 10 分钟为过期 snapshot 投递刷新任务；扫描会排除同账户仍在 `pending/publishing`
+或本刷新窗口内已 `published` 的 probe，避免异步 Worker 延迟导致重复堆积。全局
+`adapter_health` 在连续 3 次
 健康/兼容性失败后进入 `open` 10 分钟，open 期间发送 Worker 直接 fail closed，
 成功探测或确认发送后恢复 healthy。由于 probe 和发送结果通过异步 Worker 回写，
 健康记录按 `checked_at` 单调更新；旧结果不得覆盖更新的健康状态或重新打开已恢复的

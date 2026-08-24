@@ -72,6 +72,14 @@ func (r *CapabilityRepo) ListStaleProbeTargets(ctx context.Context, before time.
 		  ON c.account_id = a.id AND c.capability = $1
 		WHERE a.binding_status = 'bound' AND a.deleted_at IS NULL
 		  AND (c.checked_at IS NULL OR c.checked_at <= $2)
+		  AND NOT EXISTS (
+			SELECT 1 FROM queue_outbox o
+			WHERE o.kind = 'capability.probe'
+			  AND o.aggregate_type = 'account'
+			  AND o.aggregate_id = a.public_id::text
+			  AND (o.status IN ('pending', 'publishing')
+			       OR (o.status = 'published' AND o.created_at > $2))
+		  )
 		ORDER BY a.id
 		LIMIT $3`, capability.NameMessageTextExisting, before, limit)
 	if err != nil {
