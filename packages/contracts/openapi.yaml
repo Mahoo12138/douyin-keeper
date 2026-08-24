@@ -693,6 +693,125 @@ paths:
                     type:
                     - string
                     - 'null'
+  /message-templates:
+    get:
+      operationId: listMessageTemplates
+      parameters:
+      - name: kind
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - text
+          - sticker
+      responses:
+        '200':
+          description: Current user's reusable message templates
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - next_cursor
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MessageTemplate'
+                  next_cursor:
+                    type:
+                    - string
+                    - 'null'
+    post:
+      operationId: createMessageTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - name
+              - kind
+              - body
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                kind:
+                  type: string
+                  enum:
+                  - text
+                  - sticker
+                body:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+      responses:
+        '201':
+          description: Created message template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageTemplate'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /message-templates/{templateId}:
+    patch:
+      operationId: updateMessageTemplate
+      parameters:
+      - name: templateId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                kind:
+                  type: string
+                  enum:
+                  - text
+                  - sticker
+                body:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+      responses:
+        '200':
+          description: Updated message template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageTemplate'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: deleteMessageTemplate
+      parameters:
+      - name: templateId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Message template deleted
   /friends/{friendId}:
     patch:
       operationId: updateFriend
@@ -2370,6 +2489,34 @@ components:
           type:
           - string
           - 'null'
+          format: date-time
+    MessageTemplate:
+      type: object
+      required:
+      - id
+      - name
+      - kind
+      - body
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        kind:
+          type: string
+          enum:
+          - text
+          - sticker
+        body:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
           format: date-time
     SparkTask:
       type: object

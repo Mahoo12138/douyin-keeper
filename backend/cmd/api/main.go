@@ -24,6 +24,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/messagetemplate"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/notification"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/outbox"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/send"
@@ -81,6 +82,7 @@ func main() {
 	jobRepo := postgres.NewJobRepo(pool)
 	friendRepo := postgres.NewFriendRepo(pool)
 	conversationRepo := postgres.NewConversationRepo(pool)
+	messageTemplateRepo := postgres.NewMessageTemplateRepo(pool)
 	taskRepo := postgres.NewTaskRepo(pool)
 	sendRepo := postgres.NewSendRepo(pool)
 	capRepo := postgres.NewCapabilityRepo(pool)
@@ -101,13 +103,14 @@ func main() {
 	accountsSvc := account.NewService(acctRepo, tx, entSvc, userLock, jobRepo, outboxRepo)
 	friendsSvc := friend.NewService(friendRepo, entSvc)
 	conversationSvc := conversation.NewService(conversationRepo)
+	messageTemplateSvc := messagetemplate.NewService(messageTemplateRepo)
 	tasksSvc := task.NewService(taskRepo, acctRepo, friendRepo, entSvc, userLock, tx)
 	sendsSvc := send.NewService(sendRepo, taskRepo, entSvc, entSvc, outboxRepo, tx)
 	jobsSvc := job.NewService(jobRepo)
 	adminSvc := admin.NewService(adminRepo)
 	notificationSvc := notification.NewService(notificationRepo)
 
-	srv := httpapi.NewServer(authSvc, entSvc, accountsSvc, friendsSvc, conversationSvc, tasksSvc, sendsSvc, jobsSvc,
+	srv := httpapi.NewServer(authSvc, entSvc, accountsSvc, friendsSvc, conversationSvc, messageTemplateSvc, tasksSvc, sendsSvc, jobsSvc,
 		capRepo, adminSvc, notificationSvc, []byte(cfg.AuthSigningKey), cfg.AuthRefreshTTL, pool, rdb)
 
 	httpServer := &http.Server{

@@ -341,6 +341,33 @@ CREATE TABLE conversations (
 );
 ```
 
+## 5.1 消息模板
+
+### message_templates
+
+```sql
+CREATE TABLE message_templates (
+  id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  public_id   UUID NOT NULL UNIQUE,
+  user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  kind        TEXT NOT NULL CHECK (kind IN ('text','sticker')),
+  body        TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at  TIMESTAMPTZ,
+  CHECK (char_length(btrim(name)) BETWEEN 1 AND 80),
+  CHECK (char_length(body) BETWEEN 1 AND 500)
+);
+
+CREATE UNIQUE INDEX ux_message_template_user_name
+  ON message_templates(user_id, name) WHERE deleted_at IS NULL;
+CREATE INDEX ix_message_template_user_updated
+  ON message_templates(user_id, updated_at DESC) WHERE deleted_at IS NULL;
+```
+
+模板删除使用软删除，任务不会持有模板外键；任务套用模板时保存内容快照。
+
 ## 6. 火花任务
 
 ### spark_tasks
@@ -636,6 +663,9 @@ Admin 使用独立 Repository / Policy，不通过隐藏的 `is_admin` 参数复
 ```
 
 原则：migration 只前进，不修改已发布 migration；修复通过新 migration 完成。
+
+当前仓库实际迁移已包含：`000001_init.sql`、`000002_notifications.sql`、
+`000003_message_templates.sql`；后续结构变更继续追加新文件。
 
 ## 13. MVP 冻结项
 

@@ -23,6 +23,7 @@ import { Route as rootFriendsRouteImport } from './routes/(root)/friends'
 import { Route as rootHistoryRouteImport } from './routes/(root)/history'
 import { Route as rootNotificationsRouteImport } from './routes/(root)/notifications'
 import { Route as rootTasksRouteImport } from './routes/(root)/tasks'
+import { Route as rootTemplatesRouteImport } from './routes/(root)/templates'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminAccountsRouteImport } from './routes/admin/accounts'
 import { Route as AdminAdaptersRouteImport } from './routes/admin/adapters'
@@ -102,6 +103,11 @@ const rootTasksRoute = rootTasksRouteImport.update({
   path: '/tasks',
   getParentRoute: () => rootRouteRoute,
 } as any)
+const rootTemplatesRoute = rootTemplatesRouteImport.update({
+  id: '/templates',
+  path: '/templates',
+  getParentRoute: () => rootRouteRoute,
+} as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -167,6 +173,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof rootHistoryRoute
   '/notifications': typeof rootNotificationsRoute
   '/tasks': typeof rootTasksRoute
+  '/templates': typeof rootTemplatesRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/adapters': typeof AdminAdaptersRoute
   '/admin/audit': typeof AdminAuditRoute
@@ -190,6 +197,7 @@ export interface FileRoutesByTo {
   '/history': typeof rootHistoryRoute
   '/notifications': typeof rootNotificationsRoute
   '/tasks': typeof rootTasksRoute
+  '/templates': typeof rootTemplatesRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/adapters': typeof AdminAdaptersRoute
   '/admin/audit': typeof AdminAuditRoute
@@ -217,6 +225,7 @@ export interface FileRoutesById {
   '/(root)/history': typeof rootHistoryRoute
   '/(root)/notifications': typeof rootNotificationsRoute
   '/(root)/tasks': typeof rootTasksRoute
+  '/(root)/templates': typeof rootTemplatesRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/adapters': typeof AdminAdaptersRoute
   '/admin/audit': typeof AdminAuditRoute
@@ -243,6 +252,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/notifications'
     | '/tasks'
+    | '/templates'
     | '/admin/accounts'
     | '/admin/adapters'
     | '/admin/audit'
@@ -266,6 +276,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/notifications'
     | '/tasks'
+    | '/templates'
     | '/admin/accounts'
     | '/admin/adapters'
     | '/admin/audit'
@@ -292,6 +303,7 @@ export interface FileRouteTypes {
     | '/(root)/history'
     | '/(root)/notifications'
     | '/(root)/tasks'
+    | '/(root)/templates'
     | '/admin/accounts'
     | '/admin/adapters'
     | '/admin/audit'
@@ -411,6 +423,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof rootTasksRouteImport
       parentRoute: typeof rootRouteRoute
     }
+    '/(root)/templates': {
+      id: '/(root)/templates'
+      path: '/templates'
+      fullPath: '/templates'
+      preLoaderRoute: typeof rootTemplatesRouteImport
+      parentRoute: typeof rootRouteRoute
+    }
     '/admin/': {
       id: '/admin/'
       path: '/'
@@ -507,6 +526,7 @@ interface rootRouteRouteChildren {
   rootHistoryRoute: typeof rootHistoryRoute
   rootNotificationsRoute: typeof rootNotificationsRoute
   rootTasksRoute: typeof rootTasksRoute
+  rootTemplatesRoute: typeof rootTemplatesRoute
 }
 
 const rootRouteRouteChildren: rootRouteRouteChildren = {
@@ -518,6 +538,7 @@ const rootRouteRouteChildren: rootRouteRouteChildren = {
   rootHistoryRoute: rootHistoryRoute,
   rootNotificationsRoute: rootNotificationsRoute,
   rootTasksRoute: rootTasksRoute,
+  rootTemplatesRoute: rootTemplatesRoute,
 }
 
 const rootRouteRouteWithChildren = rootRouteRoute._addFileChildren(

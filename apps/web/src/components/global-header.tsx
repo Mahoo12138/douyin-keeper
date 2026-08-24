@@ -10,6 +10,7 @@ const nav = [
   { to: '/friends', label: '好友与火花' },
   { to: '/conversations', label: '会话' },
   { to: '/tasks', label: '任务' },
+  { to: '/templates', label: '模板' },
   { to: '/history', label: '发送记录' },
   { to: '/notifications', label: '通知' },
   { to: '/entitlement', label: '权益' },

@@ -341,6 +341,50 @@ export async function listConversations(accessToken: string, accountId: string, 
   return data
 }
 
+export type MessageTemplateInput = {
+  name: string
+  kind: 'text' | 'sticker'
+  body: string
+}
+
+export type MessageTemplatePatch = Partial<MessageTemplateInput>
+
+export async function listMessageTemplates(accessToken: string, options?: { kind?: MessageTemplateInput['kind'] }) {
+  const { data, error } = await api.GET('/message-templates', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { query: options },
+  })
+  if (error) throwApiError(error, 'message templates lookup failed')
+  return data
+}
+
+export async function createMessageTemplate(accessToken: string, body: MessageTemplateInput) {
+  const { data, error } = await api.POST('/message-templates', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body,
+  })
+  if (error) throwApiError(error, 'message template creation failed')
+  return data
+}
+
+export async function updateMessageTemplate(accessToken: string, templateId: string, body: MessageTemplatePatch) {
+  const { data, error } = await api.PATCH('/message-templates/{templateId}', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { templateId } },
+    body,
+  })
+  if (error) throwApiError(error, 'message template update failed')
+  return data
+}
+
+export async function deleteMessageTemplate(accessToken: string, templateId: string) {
+  const { error } = await api.DELETE('/message-templates/{templateId}', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { templateId } },
+  })
+  if (error) throwApiError(error, 'message template deletion failed')
+}
+
 export async function updateFriend(accessToken: string, friendId: string, sparkEnabled: boolean) {
   const { data, error } = await api.PATCH('/friends/{friendId}', {
     headers: { Authorization: `Bearer ${accessToken}` },

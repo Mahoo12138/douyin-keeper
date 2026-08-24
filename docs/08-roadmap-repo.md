@@ -178,10 +178,12 @@ M2 当前实现还提供独立的会话列表 API 和 `/conversations` 页面：
 
 - SMS Binding：已完成 API、验证码短时输入通道、interactive worker 状态机和 Web 交互；真实平台 selector 仍需在 Sidecar 环境联调；
 - Sticker 任务配置、`message.send_sticker` worker 路由和 fail-closed 校验；真实平台 Sidecar 实现仍待接入；
+- 消息模板池：用户隔离的文字/贴纸模板 CRUD、统一 Web `/templates` 页面，以及任务编辑器的内容快照套用；
 - 通知；
 - Capability UI。
 
 当前已完成 M6 的站内通知切片：新增 `notifications` 持久化表、风险事件通知生成与去重、用户通知查询/单条已读/全部已读 API，以及统一 Web `/notifications` 页面；通知按账号所有者隔离，不返回 Session、Cookie 或风险详情。Sticker 已完成任务配置、契约和 browser worker 路由，真实平台发送仍等待 Sidecar 实现；SMS Binding 已完成端到端状态机和安全输入通道，真实抖音页面 selector 仍需 Sidecar 环境联调，Capability UI 已在账号页提供能力快照展示。
+消息模板池已完成用户隔离存储、OpenAPI/SDK、CRUD 页面和任务编辑器套用；模板套用保存为任务快照，不产生隐式联动。
 
 ### M7 — V1.2
 

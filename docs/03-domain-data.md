@@ -7,6 +7,7 @@ erDiagram
     USER ||--o{ AUTH_IDENTITY : has
     USER ||--o{ DOUYIN_ACCOUNT : owns
     USER ||--o{ ENTITLEMENT_GRANT : receives
+    USER ||--o{ MESSAGE_TEMPLATE : owns
     ENTITLEMENT_PLAN ||--o{ ENTITLEMENT_GRANT : defines
     ENTITLEMENT_PLAN ||--o{ CARD_BATCH : packaged_as
     CARD_BATCH ||--o{ CARD_CODE : contains
@@ -167,6 +168,28 @@ Session 独立出账号表，便于版本化和轮换：
 - `UNIQUE(account_id, friend_id)`
 
 MVP 不支持复杂 RRULE。
+
+## 7.1 MessageTemplate
+
+用户可复用的消息内容资源：
+
+- `public_id`
+- `user_id`
+- `name`
+- `kind`: `text | sticker`
+- `body`
+- `created_at`
+- `updated_at`
+- `deleted_at`
+
+模板只属于创建者。任务套用模板时复制 `kind/body` 形成任务快照，不把模板更新
+传播到已存在任务，避免调度中的消息内容发生隐式变化。
+
+关键约束：
+
+- 活跃模板在同一用户下名称唯一；
+- `name` 长度 1–80，`body` 长度 1–500；
+- `kind` 只允许 `text | sticker`。
 
 ## 8. SendIntent
 

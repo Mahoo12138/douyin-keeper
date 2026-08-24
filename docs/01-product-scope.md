@@ -80,8 +80,9 @@
 
 当前已完成站内通知切片、SMS Binding 的异步状态机与安全验证码通道，以及 Sticker
 任务的契约、任务配置和 browser worker 路由；用户端也已增加按账号浏览的独立会话
-列表。真实抖音页面 selector、贴纸发送和 `conversations.list` 的独立 Sidecar 同步
-仍依赖真实平台环境联调；微信服务通知仍待后续接入。
+列表和用户消息模板池。模板套用到任务时保存为任务自己的内容快照。真实抖音页面
+selector、贴纸发送和 `conversations.list` 的独立 Sidecar 同步仍依赖真实平台环境
+联调；微信服务通知仍待后续接入。
 
 ## 5. V1.2
 

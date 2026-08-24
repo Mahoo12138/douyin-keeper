@@ -1,24 +1,28 @@
 import { Button, Input, Label, Switch } from '@douyin-keeper/ui-web'
 import { X } from 'lucide-react'
 
-import type { Account, Friend, TaskDraft } from './task-types'
+import type { Account, Friend, MessageTemplate, TaskDraft } from './task-types'
 
 export function TaskEditorDrawer({
   draft,
   accounts,
   friends,
+  templates,
   saving,
   onChange,
   onAccountChange,
+  onTemplateApply,
   onClose,
   onSave,
 }: {
   draft: TaskDraft
   accounts: Account[]
   friends: Friend[]
+  templates: MessageTemplate[]
   saving: boolean
   onChange: (patch: Partial<TaskDraft>) => void
   onAccountChange: (accountId: string) => void
+  onTemplateApply: (templateId: string) => void
   onClose: () => void
   onSave: () => void
 }) {
@@ -59,6 +63,14 @@ export function TaskEditorDrawer({
               <option value="text">文字消息</option>
               <option value="sticker">贴纸消息</option>
             </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="task-template">从模板套用</Label>
+            <select id="task-template" defaultValue="" onChange={(event) => onTemplateApply(event.target.value)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
+              <option value="">选择一个模板，将内容复制到任务</option>
+              {templates.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.kind === 'sticker' ? '贴纸' : '文字'}</option>)}
+            </select>
+            <p className="text-xs text-muted-foreground">套用后仍可继续编辑，任务保存的是当前内容快照。</p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="task-message">{draft.messageKind === 'sticker' ? '贴纸 ID' : '消息内容'}</Label>

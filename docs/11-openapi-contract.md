@@ -376,6 +376,27 @@ MVP 允许：
 409 FRIEND_IDENTITY_UNRESOLVED
 ```
 
+## 7.1 Message Templates
+
+### `GET /message-templates`
+
+可选按 `kind=text|sticker` 筛选，返回当前用户自己的模板。
+
+### `POST /message-templates`
+
+```json
+{
+  "name": "晚安问候",
+  "kind": "text",
+  "body": "今天也记得续火花"
+}
+```
+
+### `PATCH /message-templates/{template_id}` / `DELETE /message-templates/{template_id}`
+
+模板更新和删除都必须经过当前用户归属校验。任务编辑器套用模板时复制当前
+`kind/body`，模板资源不作为任务的隐式运行时依赖。
+
 ## 8. Spark Tasks
 
 建议 UI 中“好友火花开关”和 SparkTask 保持一一对应，但 API 仍保留显式 Task 资源。

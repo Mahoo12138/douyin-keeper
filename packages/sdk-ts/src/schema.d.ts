@@ -516,6 +516,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/message-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMessageTemplates"];
+        put?: never;
+        post: operations["createMessageTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/message-templates/{templateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteMessageTemplate"];
+        options?: never;
+        head?: never;
+        patch: operations["updateMessageTemplate"];
+        trace?: never;
+    };
     "/friends/{friendId}": {
         parameters: {
             query?: never;
@@ -1256,6 +1288,18 @@ export interface components {
             last_message_at?: string | null;
             /** Format: date-time */
             last_synced_at?: string | null;
+        };
+        MessageTemplate: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            kind: "text" | "sticker";
+            body: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
         };
         SparkTask: {
             /** Format: uuid */
@@ -2297,6 +2341,113 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    listMessageTemplates: {
+        parameters: {
+            query?: {
+                kind?: "text" | "sticker";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current user's reusable message templates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["MessageTemplate"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+        };
+    };
+    createMessageTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    /** @enum {string} */
+                    kind: "text" | "sticker";
+                    body: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created message template */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTemplate"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteMessageTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Message template deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateMessageTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    /** @enum {string} */
+                    kind?: "text" | "sticker";
+                    body?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated message template */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTemplate"];
+                };
+            };
+            409: components["responses"]["Conflict"];
         };
     };
     updateFriend: {
