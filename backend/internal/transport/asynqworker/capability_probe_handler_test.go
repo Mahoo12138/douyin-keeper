@@ -55,6 +55,23 @@ type probeSidecar struct {
 	response *sidecar.Response
 }
 
+type probeHealthObserver struct {
+	successes int
+	failures  []string
+}
+
+func (h *probeHealthObserver) Allow(context.Context, string) (bool, error) { return true, nil }
+
+func (h *probeHealthObserver) ObserveSuccess(context.Context, string, string, time.Time) error {
+	h.successes++
+	return nil
+}
+
+func (h *probeHealthObserver) ObserveFailure(_ context.Context, _ string, _ string, code string, _ time.Time) error {
+	h.failures = append(h.failures, code)
+	return nil
+}
+
 func (s *probeSidecar) Call(_ context.Context, request sidecar.Request) (*sidecar.Response, error) {
 	s.request = request
 	return s.response, nil
@@ -63,6 +80,7 @@ func (s *probeSidecar) Call(_ context.Context, request sidecar.Request) (*sideca
 func TestCapabilityProbePersistsHealthSnapshot(t *testing.T) {
 	checkedAt := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
 	repo := &probeSnapshotRepo{}
+	health := &probeHealthObserver{}
 	client := &probeSidecar{response: &sidecar.Response{
 		ProtocolVersion: sidecar.ProtocolVersion,
 		OK:              true,
@@ -79,7 +97,8 @@ func TestCapabilityProbePersistsHealthSnapshot(t *testing.T) {
 		Payload:  json.RawMessage(`{"account_id":42}`),
 	}}
 	handler := capabilityProbeHandler(loader, CapabilityProbeDeps{
-		Snapshots: repo, Sidecar: client, Tx: probeTx{}, Now: func() time.Time { return checkedAt },
+		Snapshots: repo, Sidecar: client, Tx: probeTx{}, Health: health,
+		Adapter: capability.AdapterBrowserConsumer, Now: func() time.Time { return checkedAt },
 	})
 	if err := handler(context.Background(), asynq.NewTask("capability.probe", []byte(`{"outbox_id":"probe-outbox"}`))); err != nil {
 		t.Fatalf("probe failed: %v", err)
@@ -89,6 +108,9 @@ func TestCapabilityProbePersistsHealthSnapshot(t *testing.T) {
 	}
 	if len(repo.snapshots) != len(capability.KnownNames) {
 		t.Fatalf("persisted %d snapshots, want %d", len(repo.snapshots), len(capability.KnownNames))
+	}
+	if health.successes != 1 || len(health.failures) != 0 {
+		t.Fatalf("health success observation mismatch: successes=%d failures=%v", health.successes, health.failures)
 	}
 	send, err := repo.GetByAccountAndName(context.Background(), 42, capability.NameMessageTextExisting)
 	if err != nil || send == nil || send.Status != capability.StatusAvailable {
@@ -102,6 +124,7 @@ func TestCapabilityProbePersistsHealthSnapshot(t *testing.T) {
 
 func TestCapabilityProbeFailsClosedWhenSidecarUnavailable(t *testing.T) {
 	repo := &probeSnapshotRepo{}
+	health := &probeHealthObserver{}
 	client := &probeSidecar{response: &sidecar.Response{
 		ProtocolVersion: sidecar.ProtocolVersion,
 		OK:              false,
@@ -109,12 +132,16 @@ func TestCapabilityProbeFailsClosedWhenSidecarUnavailable(t *testing.T) {
 	}}
 	handler := capabilityProbeHandler(probeLoader{message: &postgres.PendingMessage{
 		Payload: json.RawMessage(`{"account_id":42}`),
-	}}, CapabilityProbeDeps{Snapshots: repo, Sidecar: client, Tx: probeTx{}})
+	}}, CapabilityProbeDeps{Snapshots: repo, Sidecar: client, Tx: probeTx{}, Health: health,
+		Adapter: capability.AdapterBrowserConsumer})
 	if err := handler(context.Background(), asynq.NewTask("capability.probe", []byte(`{"outbox_id":"probe-outbox"}`))); err != nil {
 		t.Fatalf("probe failed: %v", err)
 	}
 	if len(repo.snapshots) != len(capability.KnownNames) {
 		t.Fatalf("persisted %d snapshots, want %d", len(repo.snapshots), len(capability.KnownNames))
+	}
+	if len(health.failures) != 1 || health.failures[0] != sidecar.ErrAdapterUnavailable {
+		t.Fatalf("health failure observation mismatch: %v", health.failures)
 	}
 	for _, snapshot := range repo.snapshots {
 		if snapshot.Status != capability.StatusUnavailable || snapshot.ErrorCode == nil || *snapshot.ErrorCode != sidecar.ErrAdapterUnavailable {

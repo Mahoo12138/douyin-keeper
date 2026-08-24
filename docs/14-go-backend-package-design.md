@@ -253,7 +253,10 @@ internal/transport/httpapi/entitlement_handler.go
 `worker-light` 调用 Sidecar `health.check` 并 upsert `capability_snapshots`。
 发送 Worker 在调用 Sidecar 前必须确认 `message.send.text.existing` 为
 `available`；缺失、未探测或不可用均 fail closed。全局
-`adapter_health` / circuit breaker 仍作为后续独立模块实现。
+`adapter_health` 由同一探测事务更新：连续 3 次健康/兼容性失败进入
+`open` 10 分钟，发送 Worker 在 open 期间不调用 Sidecar；成功探测或确认发送
+后清零失败计数。Scheduler 每 10 分钟扫描过期 snapshot，通过 outbox 投递新的
+`capability.probe`。`disabled` 状态只允许管理策略显式恢复。
 
 ### `risk`
 

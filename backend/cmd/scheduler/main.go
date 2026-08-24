@@ -69,6 +69,7 @@ func main() {
 	defer lock.Release(ctx)
 
 	outboxRepo := postgres.NewOutboxRepo(pool)
+	capabilityRepo := postgres.NewCapabilityRepo(pool)
 	producer := asynqqueue.NewClient(asynq.RedisClientOpt{Addr: cfg.RedisAddr})
 	defer producer.Close()
 	tx := postgres.NewTxManager(pool)
@@ -81,6 +82,8 @@ func main() {
 		outboxRepo, tx, cfg.ScheduleBatchSize)
 	sendReaper := scheduler.NewSendLeaseReaper(sendRepo, entitlementSvc, tx, cfg.ScheduleBatchSize)
 	retryRunner := scheduler.NewRetryRunner(sendRepo, entitlementSvc, outboxRepo, tx, cfg.ScheduleBatchSize)
+	capabilityProbe := scheduler.NewCapabilityProbeRunner(capabilityRepo, outboxRepo, tx,
+		scheduler.DefaultCapabilityProbeInterval, cfg.ScheduleBatchSize)
 
 	publisher := scheduler.NewPublisher(outboxRepo, producer, cfg.OutboxBatchSize,
 		cfg.OutboxPollInterval, log)
@@ -142,6 +145,12 @@ func main() {
 				} else if stats.Requeued > 0 || stats.Exhausted > 0 {
 					log.Info("send retry scan completed", "scanned", stats.Scanned,
 						"requeued", stats.Requeued, "exhausted", stats.Exhausted)
+				}
+				if stats, err := capabilityProbe.RunOnce(ctx); err != nil {
+					log.Error("capability probe scan failed", "err", err)
+				} else if stats.Enqueued > 0 {
+					log.Info("capability probe scan completed", "scanned", stats.Scanned,
+						"enqueued", stats.Enqueued)
 				}
 			}
 		}

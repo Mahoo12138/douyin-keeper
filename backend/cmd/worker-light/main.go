@@ -12,6 +12,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/config"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
@@ -42,6 +43,7 @@ func main() {
 
 	capabilityRepo := postgres.NewCapabilityRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
+	healthService := capability.NewHealthService(capabilityRepo, capability.DefaultHealthPolicy())
 	sidecarScript := cfg.PlaywrightSidecarScript
 	if _, statErr := os.Stat(sidecarScript); os.IsNotExist(statErr) {
 		candidate := filepath.Join("..", sidecarScript)
@@ -59,6 +61,7 @@ func main() {
 		},
 		Probe: asynqworker.CapabilityProbeDeps{
 			Snapshots: capabilityRepo, Sidecar: sidecarClient, Tx: workerTx,
+			Health: healthService, Adapter: capability.AdapterBrowserConsumer,
 		},
 	}, log)
 	log.Info("worker-light starting")

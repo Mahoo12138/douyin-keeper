@@ -17,6 +17,7 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/config"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
@@ -65,6 +66,7 @@ func main() {
 	taskRepo := postgres.NewTaskRepo(pool)
 	sendRepo := postgres.NewSendRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
+	healthService := capability.NewHealthService(postgres.NewCapabilityRepo(pool), capability.DefaultHealthPolicy())
 	entitlementRepo := postgres.NewEntitlementRepo(pool)
 	entitlementSvc := entitlement.NewService(entitlementRepo, entitlementRepo, entitlementRepo, entitlementRepo,
 		postgres.NewUserLockRepo(pool), workerTx, nil)
@@ -87,6 +89,7 @@ func main() {
 		Jobs: jobRepo, Accounts: accountRepo, Sessions: sessionSvc, Sidecar: sidecarClient,
 		Redis: rdb, Friends: friendRepo, Targets: friendRepo, Tasks: taskRepo, Sends: sendRepo,
 		Capabilities: postgres.NewCapabilityRepo(pool),
+		Health:       healthService,
 		Entitlement:  entitlementSvc, Quota: entitlementSvc, Tx: workerTx,
 		WorkerID: workerID, LockTTL: 2 * time.Minute,
 	}, log)

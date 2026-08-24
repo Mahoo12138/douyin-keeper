@@ -102,6 +102,19 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 			if snapshot == nil || snapshot.Status != capability.StatusAvailable {
 				return failWithQuota(capabilitySendError(snapshot))
 			}
+			adapter := capability.AdapterBrowserConsumer
+			if snapshot.Adapter != nil && *snapshot.Adapter != "" {
+				adapter = *snapshot.Adapter
+			}
+			if deps.Health != nil {
+				allowed, healthErr := deps.Health.Allow(ctx, adapter)
+				if healthErr != nil {
+					return failWithQuota(apperr.CodeInternal)
+				}
+				if !allowed {
+					return failWithQuota(apperr.CodeAdapterUnavailable)
+				}
+			}
 		}
 		decision, err := deps.Entitlement.Authorize(ctx, entitlement.AuthorizationRequest{
 			UserID: acct.UserID, Action: entitlement.ActionSendExecute,
@@ -158,6 +171,9 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		}
 		if code := sendSidecarErrorCode(response); code != "" {
 			mapped := mapSendSidecarError(code)
+			if deps.Health != nil && capability.IsCircuitFailureCode(code) {
+				_ = deps.Health.ObserveFailure(ctx, capability.AdapterBrowserConsumer, "", code, now())
+			}
 			if shouldRetrySend(response) {
 				nextAttemptAt := now().Add(sendRetryDelay(claimed.Attempt))
 				return finishSendRetry(ctx, deps, claimed, mapped, nextAttemptAt, now)
@@ -174,7 +190,13 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		}
 		var result sendTextResult
 		if err := decodeResult(response, &result); err != nil || !result.Confirmed || result.PlatformMessageID == "" {
+			if deps.Health != nil {
+				_ = deps.Health.ObserveFailure(ctx, capability.AdapterBrowserConsumer, "", sidecar.ErrAdapterIncompatible, now())
+			}
 			return failWithQuota(apperr.CodeAdapterIncompatible)
+		}
+		if deps.Health != nil {
+			_ = deps.Health.ObserveSuccess(ctx, capability.AdapterBrowserConsumer, "", now())
 		}
 		messageID := result.PlatformMessageID
 		if err := finishSendWithQuota(ctx, deps, claimed, send.JobSucceeded, "", false, &messageID, send.IntentSucceeded,

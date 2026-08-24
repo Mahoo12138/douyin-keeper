@@ -272,8 +272,10 @@ Adapter 选择只产生“计划路由”。真正 Worker 开始前仍做 capabi
 `message.send.text.existing` snapshot：只有状态为 `available` 才允许进入
 Sidecar；snapshot 缺失、`degraded` 或 `unavailable` 时直接以
 `ADAPTER_UNAVAILABLE`（或快照中的兼容性错误）结束，并释放已预占的日配额。
-账号绑定成功后会通过 `capability.probe` 投递首次 `health.check`；周期性刷新和
-全局 adapter circuit breaker 留待后续模块。
+账号绑定成功后会通过 `capability.probe` 投递首次 `health.check`；Scheduler
+随后每 10 分钟为过期 snapshot 投递刷新任务。全局 `adapter_health` 在连续 3 次
+健康/兼容性失败后进入 `open` 10 分钟，open 期间发送 Worker 直接 fail closed，
+成功探测或确认发送后恢复 healthy。
 
 ## 7. Worker Claim
 

@@ -40,9 +40,10 @@ func TestCapabilityRepoUpsertAndLookup(t *testing.T) {
 	}
 
 	errorCode := "ADAPTER_UNAVAILABLE"
+	freshAt := checkedAt.Add(time.Minute)
 	if err := repo.Upsert(ctx, capability.Capability{
 		AccountID: acct.ID, Name: capability.NameMessageTextExisting,
-		Status: capability.StatusUnavailable, ErrorCode: &errorCode, CheckedAt: checkedAt.Add(time.Minute),
+		Status: capability.StatusUnavailable, ErrorCode: &errorCode, CheckedAt: freshAt,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -53,5 +54,44 @@ func TestCapabilityRepoUpsertAndLookup(t *testing.T) {
 	list, err := repo.ListByAccount(ctx, acct.ID)
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list: got=%+v err=%v", list, err)
+	}
+	stale, err := repo.ListStaleProbeTargets(ctx, freshAt.Add(-time.Second), 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range stale {
+		if target.AccountID == acct.ID {
+			t.Fatalf("fresh capability snapshot was returned as stale: %+v", target)
+		}
+	}
+	stale, err = repo.ListStaleProbeTargets(ctx, freshAt.Add(time.Second), 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, target := range stale {
+		if target.AccountID == acct.ID && target.PublicID == acct.PublicID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("account was not returned after snapshot became stale: %+v", stale)
+	}
+
+	for i := 0; i < 3; i++ {
+		if err := repo.RecordAdapterFailure(ctx, capability.AdapterBrowserConsumer, "0.1.0", "ADAPTER_INCOMPATIBLE", 3, checkedAt.Add(10*time.Minute), checkedAt.Add(time.Duration(i)*time.Second)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	health, err := repo.GetAdapterHealth(ctx, capability.AdapterBrowserConsumer)
+	if err != nil || health == nil || health.Status != capability.AdapterStatusOpen || health.FailureCount != 3 || health.CircuitOpenUntil == nil {
+		t.Fatalf("adapter circuit was not opened: health=%+v err=%v", health, err)
+	}
+	if err := repo.RecordAdapterSuccess(ctx, capability.AdapterBrowserConsumer, "0.1.0", checkedAt.Add(20*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	health, err = repo.GetAdapterHealth(ctx, capability.AdapterBrowserConsumer)
+	if err != nil || health == nil || health.Status != capability.AdapterStatusHealthy || health.FailureCount != 0 || health.CircuitOpenUntil != nil {
+		t.Fatalf("adapter circuit did not recover: health=%+v err=%v", health, err)
 	}
 }

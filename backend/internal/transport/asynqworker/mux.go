@@ -68,6 +68,7 @@ type SessionCheckDeps struct {
 	Capabilities interface {
 		GetByAccountAndName(context.Context, int64, string) (*capability.Capability, error)
 	}
+	Health       capability.HealthObserver
 	Entitlement send.Gate
 	Quota       interface {
 		ReleaseDaily(context.Context, int64, string) error
@@ -99,6 +100,8 @@ type CapabilityProbeDeps struct {
 	Snapshots capability.Repository
 	Sidecar   sidecar.Client
 	Tx        job.TxManager
+	Health    capability.HealthObserver
+	Adapter   string
 	Now       func() time.Time
 }
 
