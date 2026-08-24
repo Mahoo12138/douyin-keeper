@@ -15,3 +15,39 @@ page {
   font-weight: 600;
   font-size: 34rpx;
 }
+
+.mini-page { padding: 16rpx 0 40rpx; }
+.mini-hero { padding-top: 32rpx; padding-bottom: 32rpx; }
+.mini-hero-title { display: block; margin: 10rpx 0; }
+.eyebrow { display: block; color: #3767d6; font-size: 24rpx; font-weight: 600; }
+.muted { display: block; color: #737373; font-size: 24rpx; line-height: 1.6; }
+.section-title { display: flex; justify-content: space-between; align-items: center; margin: 28rpx 24rpx 12rpx; font-weight: 600; }
+.metric-grid { display: flex; gap: 12rpx; margin: 0 24rpx 16rpx; }
+.metric { flex: 1; background: #fff; border-radius: 16rpx; padding: 22rpx 16rpx; box-shadow: 0 4rpx 14rpx rgba(31, 31, 31, .04); }
+.metric-value { display: block; font-size: 42rpx; font-weight: 700; }
+.metric-label { display: block; margin-top: 6rpx; color: #737373; font-size: 22rpx; }
+.metric-success .metric-value { color: #15966b; }
+.metric-warning .metric-value { color: #c27a16; }
+.metric-danger .metric-value { color: #d14343; }
+.metric-neutral .metric-value { color: #1f1f1f; }
+.card-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18rpx; }
+.card-title { display: block; font-size: 30rpx; font-weight: 600; }
+.status-dot { border-radius: 999rpx; padding: 6rpx 14rpx; font-size: 22rpx; }
+.status-dot-success { color: #087653; background: #e5f7ef; }
+.status-dot-warning { color: #9a5f0e; background: #fff3d9; }
+.account-name, .task-message { display: block; margin-bottom: 8rpx; font-size: 30rpx; font-weight: 600; }
+.mini-button { display: block; width: 100%; margin-top: 24rpx; border-radius: 12rpx; font-size: 28rpx; }
+.primary-button { color: #fff; background: #1f5bd8; }
+.secondary-button { color: #1f5bd8; background: #edf3ff; }
+.link-button { color: #1f5bd8; background: transparent; }
+.auth-card { padding-top: 28rpx; padding-bottom: 28rpx; }
+.auth-card .muted { margin-top: 10rpx; }
+.code-input { box-sizing: border-box; display: block; height: 76rpx; margin-top: 24rpx; padding: 0 20rpx; border: 1rpx solid #d9d9d9; border-radius: 12rpx; background: #fff; font-size: 28rpx; }
+.error-card { color: #b52d2d; background: #fff1f1; }
+.empty-card { text-align: center; }
+.loading-card { min-height: 300rpx; }
+.loading-line, .loading-block { background: #e9e9e9; border-radius: 10rpx; }
+.loading-line { width: 55%; height: 28rpx; margin-bottom: 18rpx; }
+.loading-line-wide { width: 78%; height: 40rpx; }
+.loading-block { height: 120rpx; margin-top: 28rpx; }
+.metric-loading { flex: 1; height: 120rpx; margin: 0; }

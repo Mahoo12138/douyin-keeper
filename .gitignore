@@ -21,6 +21,7 @@ backend/bin/
 # WeChat mini
 apps/mini/miniprogram_npm/
 apps/mini/.tem/
+apps/mini/.swc/
 
 # Editor / OS
 .idea/
