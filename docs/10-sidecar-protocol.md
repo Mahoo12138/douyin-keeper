@@ -24,7 +24,9 @@ Go Worker <--stdout-- Sidecar
 
 Request 必须符合 v1 schema：`protocol_version=1`、`input` 为对象，`deadline_ms` 为
 1000–300000 的整数；Go Client 对未填写的 deadline 使用 30000ms 默认值。Sidecar
-拒绝未知字段，避免业务层悄悄依赖未冻结的协议扩展。
+拒绝未知字段，避免业务层悄悄依赖未冻结的协议扩展。Go Client 的 deadline 覆盖排队、
+写入和等待响应的完整调用生命周期；如果串行 Sidecar 仍在处理上一请求，已过期请求不会
+再启动进程或写入协议流。
 
 后续需要高并发时可迁移 Unix Domain Socket，但消息 Envelope 保持不变。
 

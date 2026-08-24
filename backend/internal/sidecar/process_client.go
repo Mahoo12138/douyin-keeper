@@ -122,6 +122,9 @@ func (c *ProcessClient) Call(ctx context.Context, req Request) (*Response, error
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if err := callCtx.Err(); err != nil {
+		return nil, err
+	}
 	if err := c.startLocked(); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrProcessStart, err)
 	}

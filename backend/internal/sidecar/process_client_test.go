@@ -49,6 +49,26 @@ func TestProcessClientContextCancellationStopsProcess(t *testing.T) {
 	}
 }
 
+func TestProcessClientDoesNotStartAfterDeadlineWhileWaitingForSerializedCall(t *testing.T) {
+	client := NewProcessClient("/definitely/missing/douyin-sidecar")
+	client.mu.Lock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		_, err := client.Call(ctx, Request{RequestID: "r1", Op: OpsHealthCheck})
+		result <- err
+	}()
+
+	time.Sleep(40 * time.Millisecond)
+	client.mu.Unlock()
+
+	if err := <-result; !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected deadline while waiting for serialized call, got %v", err)
+	}
+}
+
 func TestProcessClientMarksStartFailureAsSafeRetryBoundary(t *testing.T) {
 	client := NewProcessClient("/definitely/missing/douyin-sidecar")
 	_, err := client.Call(context.Background(), Request{RequestID: "r1", Op: OpsHealthCheck})
