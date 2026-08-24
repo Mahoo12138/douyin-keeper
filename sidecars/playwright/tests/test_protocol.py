@@ -112,6 +112,55 @@ def test_platform_conversation_archive_rejects_missing_session_before_adapter_ca
         assert exc.code == protocol.ERR_INVALID_REQUEST
 
 
+def test_platform_conversation_list_validates_and_fails_closed_until_selector_exists():
+    import sidecar
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
+        json.dump({"cookies": []}, state)
+        state.flush()
+        req = make_req("conversations.list")
+        req["input"] = {
+            "session": {"kind": "playwright_storage_state_file", "path": state.name},
+            "cursor": None,
+            "limit": 100,
+        }
+        out = sidecar.handle(req)
+    assert out["ok"] is False
+    assert out["error"]["code"] == protocol.ERR_ADAPTER_UNAVAILABLE
+    assert out["error"]["detail"] == {
+        "operation": "conversations.list",
+        "reason": "selector_not_configured",
+    }
+
+
+def test_platform_conversation_list_rejects_invalid_pagination_before_adapter_call():
+    import conversation_list
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
+        json.dump({"cookies": []}, state)
+        state.flush()
+        for input_data in (
+            {"session": {"kind": "playwright_storage_state_file", "path": state.name}, "limit": 0},
+            {"session": {"kind": "playwright_storage_state_file", "path": state.name}, "cursor": ""},
+            {"session": {"kind": "playwright_storage_state_file", "path": state.name}, "extra": True},
+        ):
+            try:
+                conversation_list.list_conversations(input_data)
+                assert False, "expected ProtocolError"
+            except protocol.ProtocolError as exc:
+                assert exc.code == protocol.ERR_INVALID_REQUEST
+
+
+def test_platform_conversation_list_rejects_missing_session_before_adapter_call():
+    import conversation_list
+
+    try:
+        conversation_list.list_conversations({"cursor": None, "limit": 100})
+        assert False, "expected ProtocolError"
+    except protocol.ProtocolError as exc:
+        assert exc.code == protocol.ERR_INVALID_REQUEST
+
+
 def test_sidecar_failures_keep_browser_adapter_identity():
     import sidecar
 

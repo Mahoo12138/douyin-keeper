@@ -85,7 +85,8 @@
 站内通知链路；微信小程序身份交换、Link Code 一次性绑定和后续登录已接入，微信
 服务通知已完成订阅偏好、事务性 outbox、light worker 投递状态和小程序授权入口；
 真实投递仍需要配置微信模板 ID 并在真实小程序环境验证订阅额度。真实抖音页面 selector、贴纸发送和
-`conversations.list` 的独立 Sidecar 同步仍依赖真实平台环境联调。
+`conversations.list` 的独立 Sidecar 同步仍依赖真实平台环境联调；会话列表 Sidecar 的分页输入
+与未配置时的 fail-closed 响应契约已冻结。
 
 ## 5. V1.2
 

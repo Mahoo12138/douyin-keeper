@@ -424,6 +424,11 @@ Result：
 
 `peer_display_name` 只能辅助展示/诊断，禁止作为消息目标唯一条件。
 
+`conversations.list` 的输入校验已由 Sidecar v1 实现；真实分页 selector 尚未部署时，必须
+返回 `ADAPTER_UNAVAILABLE`，并在 `error.detail` 中标明
+`{"operation":"conversations.list","reason":"selector_not_configured"}`，不得返回空的
+成功列表伪装同步完成。
+
 ## 10. Send Text
 
 Request：
