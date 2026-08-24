@@ -114,13 +114,8 @@ func (s *Server) Router() http.Handler {
 		})
 	})
 
-	// ---- Embedded SPAs (docs/16 §2.4). Order: API above, then admin, then web.
-	if admin, err := webassets.Admin(); err == nil {
-		r.Route("/admin", func(adminR chi.Router) {
-			adminR.Handle("/*", spaHandler(admin, "/index.html", "/admin"))
-			adminR.Handle("/", spaHandler(admin, "/index.html", "/admin"))
-		})
-	}
+	// ---- Embedded unified SPA. API routes above always win; /admin is a
+	// nested TanStack route in the same bundle and is covered by this fallback.
 	if web, err := webassets.Web(); err == nil {
 		r.Handle("/*", spaHandler(web, "/index.html", ""))
 	}

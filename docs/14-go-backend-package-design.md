@@ -56,14 +56,13 @@ douyin-keeper/
 
 ## 1.1 Frontend Embed Boundary
 
-`backend/internal/webassets` 是 Backend 的发布适配层，而不是前端源码目录。前端源码仍位于 `apps/web` 与 `apps/admin`。Release Docker build 负责把两者的 `dist` 复制到：
+`backend/internal/transport/webassets` 是 Backend 的发布适配层，而不是前端源码目录。前端源码统一位于 `apps/web`，普通用户路由与 `/admin/*` 管理路由在同一个 TanStack App 内分组。Release Docker build 负责把它的 `dist` 复制到：
 
 ```text
-backend/internal/webassets/dist/web
-backend/internal/webassets/dist/admin
+backend/internal/transport/webassets/dist/web
 ```
 
-然后 `cmd/api` 通过 `internal/webassets` 提供静态文件和 SPA fallback。Domain package 不得依赖 Web assets。
+然后 `cmd/api` 通过 `internal/transport/webassets` 提供静态文件和 SPA fallback。Domain package 不得依赖 Web assets。
 
 开发模式允许 Vite 独立运行；`go:embed` 是生产交付契约。
 

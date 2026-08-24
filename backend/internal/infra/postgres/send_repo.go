@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
@@ -102,16 +103,26 @@ func (r *SendRepo) GetIntentByID(ctx context.Context, intentID int64) (*send.Sen
 	return in, nil
 }
 
-func (r *SendRepo) ListIntentsByUser(ctx context.Context, userID int64) ([]*send.SendIntent, error) {
+func (r *SendRepo) ListIntentsByUser(ctx context.Context, userID int64, filter send.IntentListFilter) ([]*send.SendIntent, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
-		SELECT `+intentCols+`, a.public_id AS account_public_id, f.public_id AS friend_public_id
+		SELECT `+intentCols+`, t.public_id AS task_public_id,
+			a.public_id AS account_public_id, a.nickname,
+			f.public_id AS friend_public_id, f.display_name,
+			j.public_id, j.selected_adapter, j.attempt, j.status, j.error_code
 		FROM send_intents si
 		JOIN douyin_accounts a ON a.id = si.account_id
 		JOIN friends f ON f.id = si.friend_id
+		LEFT JOIN spark_tasks t ON t.id = si.task_id
+		LEFT JOIN send_jobs j ON j.id = si.last_job_id
 		WHERE a.user_id = $1
+		  AND ($2::uuid IS NULL OR a.public_id = $2)
+		  AND ($3::uuid IS NULL OR f.public_id = $3)
+		  AND ($4::text = '' OR si.status = $4)
+		  AND ($5::timestamptz IS NULL OR si.scheduled_at >= $5)
+		  AND ($6::timestamptz IS NULL OR si.scheduled_at < $6)
 		ORDER BY si.id DESC
 		LIMIT 100
-	`, userID)
+	`, userID, filter.AccountID, filter.FriendID, filter.Status, filter.From, filter.To)
 	if err != nil {
 		return nil, err
 	}
@@ -119,14 +130,38 @@ func (r *SendRepo) ListIntentsByUser(ctx context.Context, userID int64) ([]*send
 	var out []*send.SendIntent
 	for rows.Next() {
 		var in send.SendIntent
+		var taskID pgtype.UUID
+		var jobID pgtype.UUID
+		var adapter pgtype.Text
+		var attempt pgtype.Int4
+		var jobStatus pgtype.Text
+		var jobError pgtype.Text
 		if err := rows.Scan(&in.ID, &in.PublicID, &in.IntentType, &in.RequestID, &in.TaskID, &in.AccountID,
 			&in.FriendID, &in.LocalDate, &in.ScheduledAt, &in.Status, &in.ErrorCode, &in.NextAttemptAt,
-			&in.LastJobID, &in.CreatedAt, &in.UpdatedAt, &in.AccountPublicID, &in.FriendPublicID); err != nil {
+			&in.LastJobID, &in.CreatedAt, &in.UpdatedAt, &taskID, &in.AccountPublicID, &in.AccountNickname,
+			&in.FriendPublicID, &in.FriendDisplayName, &jobID, &adapter, &attempt, &jobStatus, &jobError); err != nil {
 			return nil, err
+		}
+		if taskID.Valid {
+			id := uuid.UUID(taskID.Bytes)
+			in.TaskPublicID = &id
+		}
+		if jobID.Valid {
+			in.LatestJob = &send.SendJob{
+				PublicID: uuid.UUID(jobID.Bytes), SelectedAdapter: nullableText(adapter),
+				Attempt: int(attempt.Int32), Status: send.JobStatus(jobStatus.String), ErrorCode: nullableText(jobError),
+			}
 		}
 		out = append(out, &in)
 	}
 	return out, rows.Err()
+}
+
+func nullableText(value pgtype.Text) *string {
+	if !value.Valid {
+		return nil
+	}
+	return &value.String
 }
 
 // ---- jobs ----

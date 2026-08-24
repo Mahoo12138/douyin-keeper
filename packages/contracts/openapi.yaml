@@ -301,6 +301,79 @@ paths:
                     type: string
                     enum:
                     - queued
+  /send-intents:
+    get:
+      operationId: listSendIntents
+      parameters:
+      - name: account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: friend_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - pending
+          - queued
+          - running
+          - retry_wait
+          - succeeded
+          - failed
+          - skipped
+          - cancelled
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: Send history
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - next_cursor
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SendIntent'
+                  next_cursor:
+                    type:
+                    - string
+                    - 'null'
+  /send-jobs/{jobId}:
+    get:
+      operationId: getSendJob
+      parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Send job diagnostics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendJob'
   /jobs/{jobId}:
     get:
       operationId: getJob
@@ -706,6 +779,11 @@ components:
         friend_id:
           type: string
           format: uuid
+        task_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
         enabled:
           type: boolean
         timezone:
@@ -782,6 +860,163 @@ components:
         job_id:
           type: string
           format: uuid
+    HistoryAccount:
+      type: object
+      required:
+      - id
+      - nickname
+      properties:
+        id:
+          type: string
+          format: uuid
+        nickname:
+          type: string
+    HistoryFriend:
+      type: object
+      required:
+      - id
+      - display_name
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+    HistoryJob:
+      type: object
+      required:
+      - id
+      - attempt
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        adapter:
+          type:
+          - string
+          - 'null'
+        attempt:
+          type: integer
+        status:
+          type: string
+          enum:
+          - queued
+          - running
+          - succeeded
+          - failed
+          - cancelled
+        error_code:
+          type:
+          - string
+          - 'null'
+    SendIntent:
+      type: object
+      required:
+      - id
+      - intent_type
+      - account_id
+      - friend_id
+      - status
+      - scheduled_at
+      - created_at
+      - account
+      - friend
+      - latest_job
+      properties:
+        id:
+          type: string
+          format: uuid
+        intent_type:
+          type: string
+          enum:
+          - scheduled
+          - manual
+        account_id:
+          type: string
+          format: uuid
+        friend_id:
+          type: string
+          format: uuid
+        local_date:
+          type:
+          - string
+          - 'null'
+        status:
+          type: string
+          enum:
+          - pending
+          - queued
+          - running
+          - retry_wait
+          - succeeded
+          - failed
+          - skipped
+          - cancelled
+        error_code:
+          type:
+          - string
+          - 'null'
+        scheduled_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        account:
+          $ref: '#/components/schemas/HistoryAccount'
+        friend:
+          $ref: '#/components/schemas/HistoryFriend'
+        latest_job:
+          oneOf:
+          - $ref: '#/components/schemas/HistoryJob'
+          - type: 'null'
+    SendJob:
+      type: object
+      required:
+      - id
+      - status
+      - attempt
+      - retryable
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - queued
+          - running
+          - succeeded
+          - failed
+          - cancelled
+        attempt:
+          type: integer
+        selected_adapter:
+          type:
+          - string
+          - 'null'
+        error_code:
+          type:
+          - string
+          - 'null'
+        retryable:
+          type: boolean
+        platform_message_id:
+          type:
+          - string
+          - 'null'
+          description: Present for diagnostics but intentionally hidden in the web UI.
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
     Job:
       type: object
       required:

@@ -113,14 +113,14 @@ business row + Job/Intent + queue_outbox
 
 ## 2.3 Embedded Web Delivery
 
-生产 Release 中 PC C 端与 PC Admin 不作为独立静态站点部署。`apps/web` 与 `apps/admin` 在 Docker multi-stage build 中先构建，再复制到 `backend/internal/webassets/dist/`，由 Go `go:embed` 编译进 Backend 二进制。
+生产 Release 中 PC C 端与 PC Admin 由单一 `apps/web` TanStack App 构建，再复制到 `backend/internal/transport/webassets/dist/web/`，由 Go `go:embed` 编译进 Backend 二进制。Admin 使用同一 bundle 下的 `/admin/*` 嵌套路由。
 
 运行时路由固定为：
 
 ```text
 /api/v1/*  -> Go API/SSE
-/admin/*   -> Admin SPA
-/*         -> PC C 端 SPA
+/admin/*   -> Unified SPA 的 Admin 路由
+/*         -> Unified SPA 的用户路由
 ```
 
 API 路由优先于 SPA fallback。微信小程序独立发布，不进入 Backend 静态资源。详细见 `16-deployment-packaging.md`。

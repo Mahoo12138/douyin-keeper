@@ -11,11 +11,11 @@ The repository now includes the M0 foundation, the core M1–M3 account/friend/s
 
 ```text
 backend/              # single Go module, multi-cmd (api, migrate, scheduler, worker-*)
-apps/web, apps/admin  # TanStack Router + Vite SPA, shadcn/ui + Tailwind v4 (reference: reference/tinyship-main)
+apps/web              # unified TanStack Router + Vite SPA; user and /admin route groups share UI/theme
 apps/mini             # WeChat mini program (Taro + React) skeleton
 packages/contracts    # OpenAPI 3.1 + sidecar JSON Schema (single source of truth)
 packages/sdk-ts       # generated TypeScript API client
-packages/ui-web       # shared shadcn/ui primitives for web + admin
+packages/ui-web       # shared shadcn/ui primitives, reference themes, color schemes, and theme provider
 sidecars/playwright   # Python NDJSON sidecar (Douyin automation runtime, skeleton at M0)
 db/migrations         # see note below
 deploy/               # compose + Dockerfiles (production + dev)
@@ -74,7 +74,6 @@ go test ./...
 ```bash
 pnpm install
 pnpm --filter ./apps/web dev    # http://localhost:5173 (proxies /api -> localhost:8080)
-pnpm --filter ./apps/admin dev  # http://localhost:5174
 pnpm build:spa                  # dists consumed by go:embed (docs/16)
 ```
 

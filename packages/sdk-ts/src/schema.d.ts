@@ -180,6 +180,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/send-intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSendIntents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/send-jobs/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSendJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/{jobId}": {
         parameters: {
             query?: never;
@@ -498,6 +530,62 @@ export interface components {
         JobRef: {
             /** Format: uuid */
             job_id: string;
+        };
+        HistoryAccount: {
+            /** Format: uuid */
+            id: string;
+            nickname: string;
+        };
+        HistoryFriend: {
+            /** Format: uuid */
+            id: string;
+            display_name: string;
+        };
+        HistoryJob: {
+            /** Format: uuid */
+            id: string;
+            adapter?: string | null;
+            attempt: number;
+            /** @enum {string} */
+            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            error_code?: string | null;
+        };
+        SendIntent: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            intent_type: "scheduled" | "manual";
+            /** Format: uuid */
+            account_id: string;
+            /** Format: uuid */
+            friend_id: string;
+            local_date?: string | null;
+            /** @enum {string} */
+            status: "pending" | "queued" | "running" | "retry_wait" | "succeeded" | "failed" | "skipped" | "cancelled";
+            error_code?: string | null;
+            /** Format: date-time */
+            scheduled_at: string;
+            /** Format: date-time */
+            created_at: string;
+            account: components["schemas"]["HistoryAccount"];
+            friend: components["schemas"]["HistoryFriend"];
+            latest_job: components["schemas"]["HistoryJob"] | null;
+        };
+        SendJob: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            attempt: number;
+            selected_adapter?: string | null;
+            error_code?: string | null;
+            retryable: boolean;
+            /** @description Present for diagnostics but intentionally hidden in the web UI. */
+            platform_message_id?: string | null;
+            /** Format: date-time */
+            started_at?: string | null;
+            /** Format: date-time */
+            finished_at?: string | null;
         };
         Job: {
             /** Format: uuid */
@@ -954,6 +1042,57 @@ export interface operations {
                         /** @enum {string} */
                         status: "queued";
                     };
+                };
+            };
+        };
+    };
+    listSendIntents: {
+        parameters: {
+            query?: {
+                account_id?: string;
+                friend_id?: string;
+                status?: "pending" | "queued" | "running" | "retry_wait" | "succeeded" | "failed" | "skipped" | "cancelled";
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Send history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["SendIntent"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+        };
+    };
+    getSendJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Send job diagnostics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendJob"];
                 };
             };
         };

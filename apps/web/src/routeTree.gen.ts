@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as authRouteRouteImport } from './routes/(auth)/route'
 import { Route as rootRouteRouteImport } from './routes/(root)/route'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as authSigninRouteImport } from './routes/(auth)/signin'
 import { Route as authSignupRouteImport } from './routes/(auth)/signup'
 import { Route as rootAccountsRouteImport } from './routes/(root)/accounts'
@@ -20,6 +21,13 @@ import { Route as rootEntitlementRouteImport } from './routes/(root)/entitlement
 import { Route as rootFriendsRouteImport } from './routes/(root)/friends'
 import { Route as rootHistoryRouteImport } from './routes/(root)/history'
 import { Route as rootTasksRouteImport } from './routes/(root)/tasks'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminAccountsRouteImport } from './routes/admin/accounts'
+import { Route as AdminAdaptersRouteImport } from './routes/admin/adapters'
+import { Route as AdminAuditRouteImport } from './routes/admin/audit'
+import { Route as AdminEntitlementRouteImport } from './routes/admin/entitlement'
+import { Route as AdminUsersRouteImport } from './routes/admin/users'
+import { Route as AdminWorkersRouteImport } from './routes/admin/workers'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -32,6 +40,11 @@ const authRouteRoute = authRouteRouteImport.update({
 } as any)
 const rootRouteRoute = rootRouteRouteImport.update({
   id: '/(root)',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const authSigninRoute = authSigninRouteImport.update({
@@ -74,9 +87,45 @@ const rootTasksRoute = rootTasksRouteImport.update({
   path: '/tasks',
   getParentRoute: () => rootRouteRoute,
 } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAccountsRoute = AdminAccountsRouteImport.update({
+  id: '/accounts',
+  path: '/accounts',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAdaptersRoute = AdminAdaptersRouteImport.update({
+  id: '/adapters',
+  path: '/adapters',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAuditRoute = AdminAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminEntitlementRoute = AdminEntitlementRouteImport.update({
+  id: '/entitlement',
+  path: '/entitlement',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminWorkersRoute = AdminWorkersRouteImport.update({
+  id: '/workers',
+  path: '/workers',
+  getParentRoute: () => AdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/signin': typeof authSigninRoute
   '/signup': typeof authSignupRoute
   '/accounts': typeof rootAccountsRoute
@@ -85,6 +134,13 @@ export interface FileRoutesByFullPath {
   '/friends': typeof rootFriendsRoute
   '/history': typeof rootHistoryRoute
   '/tasks': typeof rootTasksRoute
+  '/admin/accounts': typeof AdminAccountsRoute
+  '/admin/adapters': typeof AdminAdaptersRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/entitlement': typeof AdminEntitlementRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/workers': typeof AdminWorkersRoute
+  '/admin/': typeof AdminIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -96,12 +152,20 @@ export interface FileRoutesByTo {
   '/friends': typeof rootFriendsRoute
   '/history': typeof rootHistoryRoute
   '/tasks': typeof rootTasksRoute
+  '/admin/accounts': typeof AdminAccountsRoute
+  '/admin/adapters': typeof AdminAdaptersRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/entitlement': typeof AdminEntitlementRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/workers': typeof AdminWorkersRoute
+  '/admin': typeof AdminIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/(auth)': typeof authRouteRouteWithChildren
   '/(root)': typeof rootRouteRouteWithChildren
+  '/admin': typeof AdminRouteWithChildren
   '/(auth)/signin': typeof authSigninRoute
   '/(auth)/signup': typeof authSignupRoute
   '/(root)/accounts': typeof rootAccountsRoute
@@ -110,11 +174,19 @@ export interface FileRoutesById {
   '/(root)/friends': typeof rootFriendsRoute
   '/(root)/history': typeof rootHistoryRoute
   '/(root)/tasks': typeof rootTasksRoute
+  '/admin/accounts': typeof AdminAccountsRoute
+  '/admin/adapters': typeof AdminAdaptersRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/entitlement': typeof AdminEntitlementRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/workers': typeof AdminWorkersRoute
+  '/admin/': typeof AdminIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/signin'
     | '/signup'
     | '/accounts'
@@ -123,6 +195,13 @@ export interface FileRouteTypes {
     | '/friends'
     | '/history'
     | '/tasks'
+    | '/admin/accounts'
+    | '/admin/adapters'
+    | '/admin/audit'
+    | '/admin/entitlement'
+    | '/admin/users'
+    | '/admin/workers'
+    | '/admin/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -134,11 +213,19 @@ export interface FileRouteTypes {
     | '/friends'
     | '/history'
     | '/tasks'
+    | '/admin/accounts'
+    | '/admin/adapters'
+    | '/admin/audit'
+    | '/admin/entitlement'
+    | '/admin/users'
+    | '/admin/workers'
+    | '/admin'
   id:
     | '__root__'
     | '/'
     | '/(auth)'
     | '/(root)'
+    | '/admin'
     | '/(auth)/signin'
     | '/(auth)/signup'
     | '/(root)/accounts'
@@ -147,12 +234,20 @@ export interface FileRouteTypes {
     | '/(root)/friends'
     | '/(root)/history'
     | '/(root)/tasks'
+    | '/admin/accounts'
+    | '/admin/adapters'
+    | '/admin/audit'
+    | '/admin/entitlement'
+    | '/admin/users'
+    | '/admin/workers'
+    | '/admin/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   authRouteRoute: typeof authRouteRouteWithChildren
   rootRouteRoute: typeof rootRouteRouteWithChildren
+  AdminRoute: typeof AdminRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -176,6 +271,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: ''
       preLoaderRoute: typeof rootRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/(auth)/signin': {
@@ -234,6 +336,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof rootTasksRouteImport
       parentRoute: typeof rootRouteRoute
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/accounts': {
+      id: '/admin/accounts'
+      path: '/accounts'
+      fullPath: '/admin/accounts'
+      preLoaderRoute: typeof AdminAccountsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/adapters': {
+      id: '/admin/adapters'
+      path: '/adapters'
+      fullPath: '/admin/adapters'
+      preLoaderRoute: typeof AdminAdaptersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/audit': {
+      id: '/admin/audit'
+      path: '/audit'
+      fullPath: '/admin/audit'
+      preLoaderRoute: typeof AdminAuditRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/entitlement': {
+      id: '/admin/entitlement'
+      path: '/entitlement'
+      fullPath: '/admin/entitlement'
+      preLoaderRoute: typeof AdminEntitlementRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/workers': {
+      id: '/admin/workers'
+      path: '/workers'
+      fullPath: '/admin/workers'
+      preLoaderRoute: typeof AdminWorkersRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
 
@@ -273,10 +424,33 @@ const rootRouteRouteWithChildren = rootRouteRoute._addFileChildren(
   rootRouteRouteChildren,
 )
 
+interface AdminRouteChildren {
+  AdminAccountsRoute: typeof AdminAccountsRoute
+  AdminAdaptersRoute: typeof AdminAdaptersRoute
+  AdminAuditRoute: typeof AdminAuditRoute
+  AdminEntitlementRoute: typeof AdminEntitlementRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminWorkersRoute: typeof AdminWorkersRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAccountsRoute: AdminAccountsRoute,
+  AdminAdaptersRoute: AdminAdaptersRoute,
+  AdminAuditRoute: AdminAuditRoute,
+  AdminEntitlementRoute: AdminEntitlementRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminWorkersRoute: AdminWorkersRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   authRouteRoute: authRouteRouteWithChildren,
   rootRouteRoute: rootRouteRouteWithChildren,
+  AdminRoute: AdminRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

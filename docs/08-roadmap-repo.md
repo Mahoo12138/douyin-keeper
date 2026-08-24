@@ -227,7 +227,7 @@ docs/architecture/                    <- 本设计文档集
 
 ## 8. Release 与部署约束
 
-PC C 端和 Admin 在开发时仍使用 Vite Dev Server/HMR；生产 Release 时必须先构建前端，再复制到 `backend/internal/webassets/dist/{web,admin}`，由 `go:embed` 编进 Backend。部署时不再额外启动 Web/Admin 容器。
+PC C 端和 Admin 在开发时统一使用 `apps/web` 的 Vite Dev Server/HMR；生产 Release 时必须先构建统一 SPA，再复制到 `backend/internal/transport/webassets/dist/web`，由 `go:embed` 编进 Backend。部署时不再额外启动 Web/Admin 容器。
 
 生产 Compose 统一包含 PostgreSQL、Redis、一次性 `migrate`、Backend、Scheduler 和各 Worker Pool。Scheduler/Worker 复用一个 Worker 镜像，通过不同入口命令启动。
 

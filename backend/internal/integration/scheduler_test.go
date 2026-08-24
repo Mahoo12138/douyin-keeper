@@ -97,7 +97,7 @@ func TestSchedulerCreatesDailyIntentAndOutboxOnce(t *testing.T) {
 		t.Fatalf("first tick stats=%+v err=%v", stats, err)
 	}
 
-	intents, err := sends.ListIntentsByUser(ctx, userID)
+	intents, err := sends.ListIntentsByUser(ctx, userID, send.IntentListFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestSchedulerCreatesDailyIntentAndOutboxOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("duplicate tick stats=%+v err=%v", stats, err)
 	}
-	intents, err = sends.ListIntentsByUser(ctx, userID)
+	intents, err = sends.ListIntentsByUser(ctx, userID, send.IntentListFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}

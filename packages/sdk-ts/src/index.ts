@@ -168,6 +168,32 @@ export async function runTaskNow(accessToken: string, taskId: string, idempotenc
   return data
 }
 
+export type SendIntentListOptions = {
+  account_id?: string
+  friend_id?: string
+  status?: components['schemas']['SendIntent']['status']
+  from?: string
+  to?: string
+}
+
+export async function listSendIntents(accessToken: string, options?: SendIntentListOptions) {
+  const { data, error } = await api.GET('/send-intents', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { query: options },
+  })
+  if (error) throwApiError(error, 'send history failed')
+  return data
+}
+
+export async function getSendJob(accessToken: string, jobId: string) {
+  const { data, error } = await api.GET('/send-jobs/{jobId}', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { jobId } },
+  })
+  if (error) throwApiError(error, 'send job lookup failed')
+  return data
+}
+
 export async function getJob(accessToken: string, jobId: string) {
   const { data, error } = await api.GET('/jobs/{jobId}', {
     headers: { Authorization: `Bearer ${accessToken}` },

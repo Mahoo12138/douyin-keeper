@@ -9,10 +9,8 @@
   },
   "scripts": {
     "dev:web": "pnpm --filter @douyin-keeper/web dev",
-    "dev:admin": "pnpm --filter @douyin-keeper/admin dev",
     "build:web": "pnpm --filter @douyin-keeper/web build",
-    "build:admin": "pnpm --filter @douyin-keeper/admin build",
-    "build:spa": "pnpm build:web && pnpm build:admin && node scripts/stage-webassets.mjs",
+    "build:spa": "pnpm build:web && node scripts/stage-webassets.mjs",
     "typecheck": "pnpm -r typecheck",
     "contracts:check": "node packages/contracts/validate.mjs"
   }

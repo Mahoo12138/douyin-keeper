@@ -42,8 +42,7 @@ worker-light
 
 嵌入：
 
-- `apps/web`：PC C 端；
-- `apps/admin`：PC 管理后台。
+- `apps/web`：统一 PC App（普通用户路由与 `/admin/*` 管理路由）。
 
 不嵌入：
 
@@ -53,13 +52,10 @@ worker-light
 
 ```text
 pnpm build:web
-pnpm build:admin
       ↓
 apps/web/dist
-apps/admin/dist
       ↓ Docker build stage copy
-backend/internal/webassets/dist/web
-backend/internal/webassets/dist/admin
+backend/internal/transport/webassets/dist/web
       ↓
 go build
       ↓
@@ -73,11 +69,10 @@ keeper-backend
 建议：
 
 ```text
-backend/internal/webassets/
+backend/internal/transport/webassets/
 ├─ embed.go
 └─ dist/
-   ├─ web/
-   └─ admin/
+   └─ web/
 ```
 
 `embed.go`：
@@ -87,11 +82,11 @@ package webassets
 
 import "embed"
 
-//go:embed dist/web/* dist/admin/*
+//go:embed dist/web/*
 var FS embed.FS
 ```
 
-实际实现需要支持嵌套静态目录；可使用 `//go:embed dist/web dist/admin` 或匹配完整目录树，并通过 `fs.Sub` 分别得到两个文件系统。
+实际实现需要支持嵌套静态目录；可使用 `//go:embed dist/web` 并通过 `fs.Sub` 得到统一 SPA 文件系统。
 
 ### 2.4 HTTP 路由
 
@@ -100,17 +95,17 @@ var FS embed.FS
 ```text
 /api/v1/*        -> Go API
 /jobs/*/events   -> Go SSE（实际仍建议位于 /api/v1）
-/admin            -> Admin SPA index.html
-/admin/*          -> Admin SPA / static assets
-/*                -> C 端 SPA / static assets
+/admin            -> Unified SPA 的 Admin index fallback
+/admin/*          -> Unified SPA 的 Admin route/static assets
+/*                -> Unified SPA 的用户 route/static assets
 ```
 
-推荐最终统一为：
+当前实现统一为：
 
 ```text
 /api/v1/*        API
-/admin/*         Admin SPA
-/*               Web SPA
+/admin/*         Unified SPA Admin routes
+/*               Unified SPA user routes
 ```
 
 路由匹配顺序必须是：

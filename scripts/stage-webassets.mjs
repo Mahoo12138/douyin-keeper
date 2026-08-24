@@ -8,6 +8,5 @@ const target = resolve(root, 'backend/internal/transport/webassets/dist')
 await rm(target, { recursive: true, force: true })
 await mkdir(target, { recursive: true })
 await cp(resolve(root, 'apps/web/dist'), resolve(target, 'web'), { recursive: true })
-await cp(resolve(root, 'apps/admin/dist'), resolve(target, 'admin'), { recursive: true })
 
-console.log(`staged SPA assets in ${target}`)
+console.log(`staged unified SPA assets in ${target}/web`)

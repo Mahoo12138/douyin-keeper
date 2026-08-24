@@ -114,8 +114,8 @@ func (s *Service) RunNow(ctx context.Context, userID int64, taskPublicID uuid.UU
 }
 
 // ListIntents returns the user's send history (newest first).
-func (s *Service) ListIntents(ctx context.Context, userID int64) ([]*SendIntent, error) {
-	return s.repo.ListIntentsByUser(ctx, userID)
+func (s *Service) ListIntents(ctx context.Context, userID int64, filter IntentListFilter) ([]*SendIntent, error) {
+	return s.repo.ListIntentsByUser(ctx, userID, filter)
 }
 
 // GetJob resolves one send job with user scope.

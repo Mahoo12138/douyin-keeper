@@ -1,6 +1,6 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Sparkles, LogOut } from 'lucide-react'
-import { Button } from '@douyin-keeper/ui-web'
+import { Button, ThemeToggle } from '@douyin-keeper/ui-web'
 
 import { setToken } from '@/auth/session'
 
@@ -37,6 +37,7 @@ export function GlobalHeader() {
           ))}
           </div>
         </nav>
+        <ThemeToggle />
         <Button
           variant="ghost"
           size="sm"

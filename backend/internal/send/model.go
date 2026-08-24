@@ -52,6 +52,7 @@ type SendIntent struct {
 	IntentType    IntentType
 	RequestID     *uuid.UUID
 	TaskID        *int64
+	TaskPublicID  *uuid.UUID
 	AccountID     int64
 	FriendID      int64
 	LocalDate     *string
@@ -64,8 +65,19 @@ type SendIntent struct {
 	UpdatedAt     time.Time
 
 	// Joined for API responses (repo fills them).
-	AccountPublicID uuid.UUID
-	FriendPublicID  uuid.UUID
+	AccountPublicID   uuid.UUID
+	AccountNickname   string
+	FriendPublicID    uuid.UUID
+	FriendDisplayName string
+	LatestJob         *SendJob
+}
+
+type IntentListFilter struct {
+	AccountID *uuid.UUID
+	FriendID  *uuid.UUID
+	Status    string
+	From      *time.Time
+	To        *time.Time
 }
 
 type SendJob struct {
@@ -110,7 +122,7 @@ type Repository interface {
 	GetIntentByID(ctx context.Context, intentID int64) (*SendIntent, error)
 	GetIntentByPublicID(ctx context.Context, publicID uuid.UUID) (*SendIntent, error)
 	GetIntentOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*SendIntent, error)
-	ListIntentsByUser(ctx context.Context, userID int64) ([]*SendIntent, error)
+	ListIntentsByUser(ctx context.Context, userID int64, filter IntentListFilter) ([]*SendIntent, error)
 	CreateJob(ctx context.Context, j *SendJob) error
 	GetJobByPublicID(ctx context.Context, publicID uuid.UUID) (*SendJob, error)
 	GetJobOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*SendJob, error)
