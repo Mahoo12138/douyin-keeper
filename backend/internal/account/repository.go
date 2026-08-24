@@ -58,8 +58,9 @@ type SessionCheckTarget struct {
 }
 
 // SessionCheckRepository is the scheduler slice for proactive session checks.
-// The repository excludes accounts with a recent or active check job so a
-// slow browser worker cannot cause a new job on every scheduler tick.
+// Implementations return locked account rows; the scheduler keeps that
+// transaction open while creating the job and outbox row so overlapping ticks
+// cannot create duplicate periodic jobs.
 type SessionCheckRepository interface {
 	ListStaleSessionCheckTargets(ctx context.Context, before time.Time, limit int) ([]SessionCheckTarget, error)
 }

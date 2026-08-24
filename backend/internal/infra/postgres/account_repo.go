@@ -217,10 +217,11 @@ func (r *AccountRepo) SetSessionStatus(ctx context.Context, accountID int64, sta
 	return err
 }
 
-// ListStaleSessionCheckTargets returns bound accounts whose login state has
-// not been checked during the requested interval. Recent and active generic
-// session-check jobs are excluded so manual checks and slow workers do not
-// create a duplicate periodic job.
+// ListStaleSessionCheckTargets returns and locks bound accounts whose login
+// state has not been checked during the requested interval. The caller must
+// keep the transaction open while creating the generic job and outbox row;
+// SKIP LOCKED prevents overlapping scheduler instances from creating duplicate
+// periodic jobs for the same account.
 func (r *AccountRepo) ListStaleSessionCheckTargets(ctx context.Context, before time.Time, limit int) ([]account.SessionCheckTarget, error) {
 	if limit <= 0 {
 		limit = 100
@@ -238,7 +239,8 @@ func (r *AccountRepo) ListStaleSessionCheckTargets(ctx context.Context, before t
 			  AND (j.status IN ('queued', 'running', 'waiting_user') OR j.created_at > $1)
 		  )
 		ORDER BY a.id
-		LIMIT $2`, before, limit)
+		LIMIT $2
+		FOR UPDATE OF a SKIP LOCKED`, before, limit)
 	if err != nil {
 		return nil, err
 	}

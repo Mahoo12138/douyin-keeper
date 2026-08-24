@@ -58,15 +58,15 @@ func (r *SessionHealthCheckRunner) RunOnce(ctx context.Context) (SessionHealthCh
 	if r.now != nil {
 		now = r.now()
 	}
-	targets, err := r.accounts.ListStaleSessionCheckTargets(ctx, now.Add(-r.interval), r.limit)
-	if err != nil {
-		return SessionHealthCheckStats{}, err
-	}
-	stats := SessionHealthCheckStats{Scanned: len(targets)}
 	bucket := strconv.FormatInt(now.UTC().Truncate(r.interval).Unix(), 10)
-	for _, target := range targets {
-		target := target
-		err := r.tx.WithinTx(ctx, func(tctx context.Context) error {
+	stats := SessionHealthCheckStats{}
+	err := r.tx.WithinTx(ctx, func(tctx context.Context) error {
+		targets, err := r.accounts.ListStaleSessionCheckTargets(tctx, now.Add(-r.interval), r.limit)
+		if err != nil {
+			return err
+		}
+		stats.Scanned = len(targets)
+		for _, target := range targets {
 			userID := target.UserID
 			accountID := target.AccountID
 			j := &job.Job{
@@ -81,16 +81,21 @@ func (r *SessionHealthCheckRunner) RunOnce(ctx context.Context) (SessionHealthCh
 			if err != nil {
 				return fmt.Errorf("marshal session check payload: %w", err)
 			}
-			return r.outbox.Add(tctx, outbox.Message{
+			if err := r.outbox.Add(tctx, outbox.Message{
 				Kind: outbox.KindSessionCheckBrowser, AggregateType: "job",
 				AggregateID: j.PublicID.String(), Payload: payload, AvailableAt: now,
 				DedupeKey: "job.platform.periodic.session_check:" + target.PublicID.String() + ":" + bucket,
-			})
-		})
-		if err != nil {
-			return stats, err
+			}); err != nil {
+				return err
+			}
+			stats.Enqueued++
 		}
-		stats.Enqueued++
+		return nil
+	})
+	if err != nil {
+		// The batch is one transaction, so no periodic job was committed.
+		stats.Enqueued = 0
+		return stats, err
 	}
 	return stats, nil
 }

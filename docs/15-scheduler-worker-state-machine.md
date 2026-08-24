@@ -730,6 +730,10 @@ Scheduler 周期任务：
 - `account.bind.qr` / `account.bind.sms` 超时回收时，若账号仍为 `binding`，恢复为
   `unbound`，避免账号配额永久被占用。
 
+周期性 session-check 的账户选择、generic Job 创建和 Outbox 写入必须在同一事务内完成；
+账户查询使用 `FOR UPDATE SKIP LOCKED`。这样 Scheduler 短暂重叠时，Outbox dedupe 之外
+还有数据库行锁保护，不会留下没有对应投递消息的孤儿 Job。
+
 ### Binding Cleanup
 
 - 超时 binding Account；
