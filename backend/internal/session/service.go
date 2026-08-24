@@ -81,6 +81,15 @@ func aad(userPublicID, accountPublicID uuid.UUID, keyVersion int) []byte {
 }
 
 func (s *Service) Store(ctx context.Context, accountID int64, userPublicID, accountPublicID uuid.UUID, plaintext []byte) error {
+	return s.tx.WithinTx(ctx, func(tctx context.Context) error {
+		return s.StoreInTx(tctx, accountID, userPublicID, accountPublicID, plaintext)
+	})
+}
+
+// StoreInTx replaces the active encrypted session using the transaction
+// carried by ctx. Callers that also finalize a Job and mutate account state can
+// use this method to keep the session envelope in the same atomic boundary.
+func (s *Service) StoreInTx(ctx context.Context, accountID int64, userPublicID, accountPublicID uuid.UUID, plaintext []byte) error {
 	if s.cipher == nil || len(plaintext) == 0 {
 		return apperr.New(apperr.CodeInternal, apperr.KindInternal, "session storage is not configured")
 	}
@@ -88,13 +97,11 @@ func (s *Service) Store(ctx context.Context, accountID int64, userPublicID, acco
 	if err != nil {
 		return apperr.Wrap(apperr.CodeInternal, apperr.KindInternal, "session encryption failed", err)
 	}
-	return s.tx.WithinTx(ctx, func(tctx context.Context) error {
-		_, err := s.repo.ReplaceActive(tctx, ReplaceRequest{
-			AccountID: accountID, KeyVersion: KeyVersion, CipherAlgorithm: CipherAlgorithm,
-			Ciphertext: sealed, AADVersion: AADVersion, CreatedAt: s.now(),
-		})
-		return err
+	_, err = s.repo.ReplaceActive(ctx, ReplaceRequest{
+		AccountID: accountID, KeyVersion: KeyVersion, CipherAlgorithm: CipherAlgorithm,
+		Ciphertext: sealed, AADVersion: AADVersion, CreatedAt: s.now(),
 	})
+	return err
 }
 
 func (s *Service) open(ctx context.Context, accountID int64, userPublicID, accountPublicID uuid.UUID) ([]byte, *Stored, error) {

@@ -33,6 +33,12 @@ type fakeTx struct{}
 
 func (fakeTx) WithinTx(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) }
 
+type rejectingTx struct{}
+
+func (rejectingTx) WithinTx(context.Context, func(context.Context) error) error {
+	return context.Canceled
+}
+
 func testCipher(t *testing.T) *cryptox.Cipher {
 	t.Helper()
 	c, err := cryptox.NewCipherFromHexKey("0000000000000000000000000000000000000000000000000000000000000000")
@@ -77,6 +83,17 @@ func TestStoreAndWithTempFileCleansUp(t *testing.T) {
 	}
 	if !repo.validated {
 		t.Fatal("expected validation timestamp update")
+	}
+}
+
+func TestStoreInTxUsesCallerTransaction(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := NewService(repo, rejectingTx{}, testCipher(t), t.TempDir())
+	if err := svc.StoreInTx(context.Background(), 7, uuid.New(), uuid.New(), []byte(`{"cookies":[]}`)); err != nil {
+		t.Fatalf("StoreInTx() unexpectedly opened a nested transaction: %v", err)
+	}
+	if repo.stored == nil {
+		t.Fatal("StoreInTx() did not persist the session envelope")
 	}
 }
 

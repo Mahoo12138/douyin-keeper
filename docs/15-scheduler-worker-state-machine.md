@@ -398,7 +398,10 @@ lease_expires_at
 避免 lease Reaper 先以 `OUTCOME_UNKNOWN` 关闭任务后，迟到的旧 Worker 再覆盖终态。
 QR/SMS、Friends Sync 和 Session Check 的 Generic Job 同样在 Claim 后启动 20 秒
 heartbeat；Generic Job 的终态写入只接受 `running/waiting_user`，因此 Reaper 关闭后的
-迟到 Worker 不能覆盖 `OUTCOME_UNKNOWN`。
+迟到 Worker 不能覆盖 `OUTCOME_UNKNOWN`。对于绑定成功这类会同时改变账号状态并创建后续
+Outbox 的完成路径，Worker 必须在同一数据库事务内先条件终结 Generic Job，再提交加密
+Session、账号身份和 Outbox；任一步失败都回滚，不能让旧 Worker 在 Job 已被 Reaper 终结后
+留下 `bound` 账号或孤儿消息。
 
 Scheduler/Reaper 查找：
 

@@ -27,8 +27,7 @@ type QRBindDeps struct {
 	Jobs     job.Repository
 	Accounts account.Repository
 	Sessions interface {
-		Store(context.Context, int64, uuid.UUID, uuid.UUID, []byte) error
-		WithTempFile(context.Context, int64, uuid.UUID, uuid.UUID, func(string) error) error
+		StoreInTx(context.Context, int64, uuid.UUID, uuid.UUID, []byte) error
 	}
 	Sidecar sidecar.Client
 	Health  capability.HealthObserver
@@ -287,23 +286,16 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 	if err != nil {
 		return finishBindFailure(ctx, deps, claimed, apperr.CodeAdapterIncompatible)
 	}
-	_ = os.Remove(exportPath)
-	if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
-		return err
-	}
-	if err := deps.Sessions.Store(ctx, acct.ID, acct.UserPublicID, acct.PublicID, plaintext); err != nil {
-		return finishBindFailure(ctx, deps, claimed, apperr.CodeInternal)
-	}
 	if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
 		return err
 	}
 	var validationCancelled bool
-	validationErr := deps.Sessions.WithTempFile(ctx, acct.ID, acct.UserPublicID, acct.PublicID, func(path string) error {
+	validationErr := func() error {
 		cancelled, callErr := callIfNotCancelled(ctx, deps.Jobs, claimed, deps.Now, func() error {
 			response, err := deps.Sidecar.Call(ctx, sidecar.Request{
 				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
 				Op: sidecar.OpsSessionValidate, DeadlineMS: 60_000,
-				Input: map[string]any{"session": map[string]any{"kind": "playwright_storage_state_file", "path": path}},
+				Input: map[string]any{"session": map[string]any{"kind": "playwright_storage_state_file", "path": exportPath}},
 			})
 			if err != nil {
 				return err
@@ -324,7 +316,7 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 			return errCancellationConsumed
 		}
 		return callErr
-	})
+	}()
 	if validationCancelled {
 		if errors.Is(validationErr, errCancellationConsumed) {
 			return nil
@@ -357,7 +349,24 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 	if deps.Tx == nil || deps.Outbox == nil {
 		return finishBindFailure(ctx, deps, claimed, apperr.CodeInternal)
 	}
-	if err := deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
+	if err := commitBindSuccess(ctx, deps, claimed, acct, identity, plaintext); err != nil {
+		return finishBindFailure(ctx, deps, claimed, apperr.CodeInternal)
+	}
+	return nil
+}
+
+func commitBindSuccess(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *account.Account, identity bindIdentity, plaintext []byte) error {
+	return deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
+		// Finalize the generic Job while holding the row lock, before committing
+		// account identity/session changes or their outbox messages. If the lease
+		// reaper won the race, this conditional update fails and the transaction
+		// rolls back all platform-side state derived from the stale worker.
+		if err := deps.Jobs.Finish(tctx, claimed.ID, job.StatusSucceeded, nil, deps.Now()); err != nil {
+			return err
+		}
+		if err := deps.Sessions.StoreInTx(tctx, acct.ID, acct.UserPublicID, acct.PublicID, plaintext); err != nil {
+			return err
+		}
 		if err := deps.Accounts.SetIdentity(tctx, acct.ID, identity.PlatformUserID, identity.Nickname, identity.AvatarURL); err != nil {
 			return err
 		}
@@ -367,12 +376,11 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 		if err := deps.Accounts.SetBindingStatus(tctx, acct.ID, account.BindingBound); err != nil {
 			return err
 		}
-		return enqueueInitialFriendsSync(tctx, deps, acct)
-	}); err != nil {
-		return finishBindFailure(ctx, deps, claimed, apperr.CodeInternal)
-	}
-	_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "success", Payload: json.RawMessage(`{"binding_status":"bound"}`), CreatedAt: deps.Now()})
-	return deps.Jobs.Finish(ctx, claimed.ID, job.StatusSucceeded, nil, deps.Now())
+		if err := enqueueInitialFriendsSync(tctx, deps, acct); err != nil {
+			return err
+		}
+		return deps.Jobs.AppendEvent(tctx, claimed.ID, job.JobEvent{EventType: "success", Payload: json.RawMessage(`{"binding_status":"bound"}`), CreatedAt: deps.Now()})
+	})
 }
 
 type qrValidationError struct{}
