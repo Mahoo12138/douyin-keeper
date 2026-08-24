@@ -27,3 +27,10 @@ func TestFailureEvidenceAcceptsExplicitFalseWriteFlag(t *testing.T) {
 		t.Fatal("contradictory unknown outcome must remain fail-closed")
 	}
 }
+
+func TestFailureEvidenceRejectsContradictoryAcceptedWrite(t *testing.T) {
+	accepted := true
+	if (FailureEvidence{Outcome: OutcomeNotSent, PlatformWriteAccepted: &accepted}).ConfirmsNotSent() {
+		t.Fatal("accepted write must override a contradictory not-sent outcome")
+	}
+}

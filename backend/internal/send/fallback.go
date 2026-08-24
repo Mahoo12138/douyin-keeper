@@ -21,6 +21,14 @@ func (e FailureEvidence) ConfirmsNotSent() bool {
 	if e.Outcome == OutcomeConfirmed || e.Outcome == OutcomeUnknown {
 		return false
 	}
+	if e.PlatformWriteAccepted != nil {
+		if *e.PlatformWriteAccepted {
+			return false
+		}
+		if e.Outcome == OutcomeNotSent {
+			return true
+		}
+	}
 	return e.Outcome == OutcomeNotSent || (e.Outcome == "" && e.PlatformWriteAccepted != nil && !*e.PlatformWriteAccepted)
 }
 
