@@ -20,8 +20,44 @@ type UserSummary struct {
 	EntitlementExpiresAt *time.Time
 }
 
+type AccountCapability struct {
+	Name      string
+	Status    string
+	Adapter   *string
+	ErrorCode *string
+	CheckedAt time.Time
+}
+
+type RecentError struct {
+	Category      string
+	Code          string
+	Severity      string
+	SourceAdapter *string
+	CreatedAt     time.Time
+}
+
+type AccountSummary struct {
+	PublicID           uuid.UUID
+	OwnerPublicID      uuid.UUID
+	OwnerDisplayName   string
+	PlatformUserID     *string
+	Nickname           string
+	BindingStatus      string
+	SessionStatus      string
+	RiskStatus         string
+	PausedAt           *time.Time
+	CooldownUntil      *time.Time
+	LastSessionCheckAt *time.Time
+	LastFriendSyncAt   *time.Time
+	Capabilities       []AccountCapability
+	TodaySendSucceeded int
+	TodaySendFailed    int
+	LatestError        *RecentError
+}
+
 type Repository interface {
 	ListUserSummaries(ctx context.Context, limit int) ([]UserSummary, error)
+	ListAccountSummaries(ctx context.Context, limit int) ([]AccountSummary, error)
 }
 
 type Service struct {
@@ -33,11 +69,19 @@ func NewService(repo Repository) *Service {
 }
 
 func (s *Service) ListUsers(ctx context.Context, limit int) ([]UserSummary, error) {
+	return s.repo.ListUserSummaries(ctx, normalizeLimit(limit))
+}
+
+func (s *Service) ListAccounts(ctx context.Context, limit int) ([]AccountSummary, error) {
+	return s.repo.ListAccountSummaries(ctx, normalizeLimit(limit))
+}
+
+func normalizeLimit(limit int) int {
 	if limit <= 0 {
-		limit = 50
+		return 50
 	}
 	if limit > 100 {
-		limit = 100
+		return 100
 	}
-	return s.repo.ListUserSummaries(ctx, limit)
+	return limit
 }

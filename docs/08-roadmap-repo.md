@@ -167,7 +167,7 @@ Sidecar Contract 另外维护 JSON Schema，版本化：
 - 风险；
 - Audit。
 
-当前已完成 M5 的用户管理只读切片：统一 Web Admin 页面通过管理员角色保护的 `/admin/users` API 展示用户资源与权益摘要；账号、Worker/队列、Adapter、风险和审计页面继续按本路线实现。
+当前已完成 M5 的用户与账号只读切片：统一 Web Admin 页面通过管理员角色保护的 `/admin/users`、`/admin/accounts` API 展示用户资源、账号状态、Capability、发送与风险摘要；账号暂停/恢复及 Worker/队列、Adapter、风险和审计页面继续按本路线实现。
 
 ### M6 — V1.1
 

@@ -36,6 +36,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAdminAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts": {
         parameters: {
             query?: never;
@@ -481,6 +497,51 @@ export interface components {
             /** Format: date-time */
             entitlement_expires_at?: string | null;
         };
+        AdminAccountCapability: {
+            name: string;
+            /** @enum {string} */
+            status: "available" | "degraded" | "unavailable" | "unknown";
+            adapter?: string | null;
+            error_code?: string | null;
+            /** Format: date-time */
+            checked_at: string;
+        };
+        AdminRecentError: {
+            category: string;
+            code: string;
+            /** @enum {string} */
+            severity: "info" | "warning" | "critical";
+            source_adapter?: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AdminAccount: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            owner_id: string;
+            owner_display_name: string;
+            platform_user_id?: string | null;
+            nickname: string;
+            /** @enum {string} */
+            binding_status: "unbound" | "binding" | "bound" | "released";
+            /** @enum {string} */
+            session_status: "unknown" | "valid" | "expired" | "challenge_required";
+            /** @enum {string} */
+            risk_status: "normal" | "cooling_down" | "paused";
+            /** Format: date-time */
+            paused_at?: string | null;
+            /** Format: date-time */
+            cooldown_until?: string | null;
+            /** Format: date-time */
+            last_session_check_at?: string | null;
+            /** Format: date-time */
+            last_friend_sync_at?: string | null;
+            capabilities: components["schemas"]["AdminAccountCapability"][];
+            today_send_succeeded: number;
+            today_send_failed: number;
+            latest_error?: components["schemas"]["AdminRecentError"] | null;
+        };
         Account: {
             /** Format: uuid */
             id: string;
@@ -799,6 +860,31 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["AdminUser"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+        };
+    };
+    listAdminAccounts: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrator account summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminAccount"][];
                         next_cursor: string | null;
                     };
                 };

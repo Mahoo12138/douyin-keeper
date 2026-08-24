@@ -22,14 +22,10 @@ type adminUserView struct {
 }
 
 func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
-	limit := 50
-	if raw := r.URL.Query().Get("limit"); raw != "" {
-		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed < 1 || parsed > 100 {
-			writeError(w, r, apperr.Validation(apperr.CodeConflict, "limit must be between 1 and 100"))
-			return
-		}
-		limit = parsed
+	limit, err := adminListLimit(r)
+	if err != nil {
+		writeError(w, r, err)
+		return
 	}
 	items, err := s.admin.ListUsers(r.Context(), limit)
 	if err != nil {
@@ -41,6 +37,17 @@ func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
 		views = append(views, adminUserViewFrom(item))
 	}
 	writeOK(w, map[string]any{"items": views, "next_cursor": nil})
+}
+
+func adminListLimit(r *http.Request) (int, error) {
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 100 {
+			return 0, apperr.Validation(apperr.CodeConflict, "limit must be between 1 and 100")
+		}
+		return parsed, nil
+	}
+	return 50, nil
 }
 
 func adminUserViewFrom(item admin.UserSummary) adminUserView {
