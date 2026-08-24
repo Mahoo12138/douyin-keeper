@@ -451,6 +451,10 @@ MVP 允许：
 }
 ```
 
+`allow_first_message=true` 是高风险可选能力，要求当前有效权益的 `features` 包含
+`creator_first_message`；不满足时返回 `403 FEATURE_NOT_ENTITLED`。`PATCH` 开启该字段
+遵循相同规则，关闭已有配置不需要该 feature；发送执行侧仍会再次校验。
+
 ### `PATCH /tasks/{task_id}`
 
 PATCH 语义，只更新出现的字段。

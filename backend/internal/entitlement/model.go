@@ -171,6 +171,8 @@ const (
 	ActionSendExecute = "send.execute"
 )
 
+const FeatureCreatorFirstMessage = "creator_first_message"
+
 type AuthorizationRequest struct {
 	UserID          int64
 	Action          string

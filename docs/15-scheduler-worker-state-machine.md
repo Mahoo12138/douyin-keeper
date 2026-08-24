@@ -272,6 +272,9 @@ create Outbox(send.browser | send.protocol, job_id)
 commit
 ```
 
+Browser Worker 开始执行前还要检查任务快照的 `allow_first_message`：若为 true，则当前
+有效权益必须包含 `creator_first_message`；失败时不调用 Sidecar。
+
 Adapter 选择只产生“计划路由”。真正 Worker 开始前仍做 capability health check。
 
 当前 Browser Worker 的发送 preflight 会读取账号的

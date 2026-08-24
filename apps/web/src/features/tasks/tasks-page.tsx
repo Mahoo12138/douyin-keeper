@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { createTask, deleteTask, listAccounts, listFriends, listMessageTemplates, listTasks, runTaskNow, updateTask } from '@douyin-keeper/sdk-ts'
+import { createTask, deleteTask, listAccounts, listFriends, listMessageTemplates, listTasks, myEntitlement, runTaskNow, updateTask } from '@douyin-keeper/sdk-ts'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton } from '@douyin-keeper/ui-web'
 import { Filter, Plus, Search } from 'lucide-react'
 
@@ -24,6 +24,8 @@ export function TasksPage() {
   const accounts = accountsQ.data?.items ?? []
   const tasksQ = useQuery({ queryKey: ['tasks'], queryFn: () => listTasks(token as string), enabled: !!token })
   const templatesQ = useQuery({ queryKey: ['message-templates'], queryFn: () => listMessageTemplates(token as string), enabled: !!token })
+  const entitlementQ = useQuery({ queryKey: ['entitlement'], queryFn: () => myEntitlement(token as string), enabled: !!token })
+  const creatorFirstMessageAllowed = entitlementQ.data?.features?.creator_first_message === true
   const tasks = tasksQ.data?.items ?? []
   const friendQueries = useQueries({
     queries: accounts.map((account) => ({
@@ -161,7 +163,7 @@ export function TasksPage() {
           {tasksQ.isError ? <p className="py-10 text-center text-sm text-destructive">任务列表暂时不可用，请稍后重试。</p> : visibleTasks.length ? <TaskTable tasks={visibleTasks} accounts={accounts} friends={friends} busyTaskId={busyTaskId} onToggle={(task, enabled) => void toggleTask(task, enabled)} onEdit={openEdit} onRun={(task) => void runTask(task)} onDelete={(task) => void removeTask(task)} /> : <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center"><p className="font-medium">{tasks.length ? '没有符合条件的任务' : '还没有火花任务'}</p><p className="mt-1 text-sm text-muted-foreground">{tasks.length ? '尝试清除筛选条件。' : '为已确认好友创建第一个每日维护任务。'}</p>{!tasks.length && <Button className="mt-4" variant="outline" onClick={openCreate}>创建任务</Button>}</div>}
         </CardContent>
       </Card>
-      {editor && <TaskEditorDrawer draft={editor.draft} accounts={accounts} friends={editorFriends} templates={templates} saving={busyTaskId === (editor.draft.id ?? 'new')} onChange={(patch) => setEditor((current) => current ? { ...current, draft: { ...current.draft, ...patch } } : current)} onAccountChange={changeEditorAccount} onTemplateApply={applyTemplate} onClose={() => setEditor(null)} onSave={() => void saveTask()} />}
+      {editor && <TaskEditorDrawer draft={editor.draft} accounts={accounts} friends={editorFriends} templates={templates} creatorFirstMessageAllowed={creatorFirstMessageAllowed} creatorFirstMessageLoading={entitlementQ.isLoading} saving={busyTaskId === (editor.draft.id ?? 'new')} onChange={(patch) => setEditor((current) => current ? { ...current, draft: { ...current.draft, ...patch } } : current)} onAccountChange={changeEditorAccount} onTemplateApply={applyTemplate} onClose={() => setEditor(null)} onSave={() => void saveTask()} />}
     </div>
   )
 }

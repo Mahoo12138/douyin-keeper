@@ -282,6 +282,10 @@ internal/transport/httpapi/entitlement_handler.go
 尚未实现的 `protocol.im` 路由到 stub worker。Resolver 的健康/能力判断只是计划
 路由，Browser Worker 的 preflight 仍是最后一道门。
 
+Task Service 在开启 `allow_first_message` 时要求 Entitlement Gate 的
+`creator_first_message` feature；Browser Worker 执行前以任务快照再次校验，确保权益撤销
+后不会通过旧任务配置发送首聊。关闭该配置可用于恢复普通已存在会话发送。
+
 ### `risk`
 
 拥有：

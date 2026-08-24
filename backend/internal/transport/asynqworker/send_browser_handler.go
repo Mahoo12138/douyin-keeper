@@ -168,6 +168,7 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		}
 		decision, err := deps.Entitlement.Authorize(ctx, entitlement.AuthorizationRequest{
 			UserID: acct.UserID, Action: entitlement.ActionSendExecute,
+			RequiredFeature: requiredTaskFeature(tk.AllowFirstMessage),
 		})
 		if err != nil {
 			return failWithQuota(apperr.CodeInternal)
@@ -261,6 +262,13 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		}
 		return nil
 	}
+}
+
+func requiredTaskFeature(allowFirstMessage bool) string {
+	if allowFirstMessage {
+		return entitlement.FeatureCreatorFirstMessage
+	}
+	return ""
 }
 
 func capabilitySendError(snapshot *capability.Capability) string {

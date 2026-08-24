@@ -199,7 +199,9 @@ selector 联调。
 
 M7 的本地 Protocol 前置切片已完成 v1 envelope 加固：Go/Python 双侧校验 deadline、输入
 对象和未知字段，失败响应透传 `error.detail`，发送 outcome 未知时保持 fail-closed；真实
-Protocol SDK、Creator 首聊和平台 selector 仍不在本地猜测实现。
+Protocol SDK 和平台 selector 仍不在本地猜测实现。Creator 首聊已完成本地权益闸门：任务
+创建/编辑和 Browser Worker 最终执行都会校验 `creator_first_message`，Web 编辑器同步展示
+权益状态；真实平台首聊动作仍等待 Sidecar 契约与 selector 联调。
 
 ## 5. 编码前必须先冻结的契约
 

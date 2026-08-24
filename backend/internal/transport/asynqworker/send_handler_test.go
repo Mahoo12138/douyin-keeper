@@ -7,6 +7,7 @@ import (
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
 )
 
@@ -77,5 +78,14 @@ func TestMessageSendSpecRejectsUnsupportedOrEmptyPayload(t *testing.T) {
 		if _, err := messageSendSpec(tt.kind, tt.body); err == nil {
 			t.Errorf("messageSendSpec(%q, %q) should fail", tt.kind, tt.body)
 		}
+	}
+}
+
+func TestRequiredTaskFeatureOnlyGatesCreatorFirstMessage(t *testing.T) {
+	if got := requiredTaskFeature(false); got != "" {
+		t.Fatalf("requiredTaskFeature(false) = %q, want empty", got)
+	}
+	if got := requiredTaskFeature(true); got != entitlement.FeatureCreatorFirstMessage {
+		t.Fatalf("requiredTaskFeature(true) = %q, want %q", got, entitlement.FeatureCreatorFirstMessage)
 	}
 }

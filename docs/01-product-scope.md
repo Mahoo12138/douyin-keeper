@@ -100,6 +100,10 @@
 账号归属校验；该状态是产品侧索引状态，不代表已经调用抖音平台的归档接口。平台侧
 归档仍需待 Sidecar 增加稳定的操作契约和真实 selector 后接入。
 
+Creator 首聊已完成本地权益闸门：任务创建、编辑和发送执行均要求有效权益包含
+`creator_first_message`，Web 编辑器默认关闭并展示兑换提示；实际平台首聊动作仍等待
+Protocol/Browser Sidecar 的稳定操作契约与 selector 联调。
+
 ## 6. 产品边界
 
 一个 Spark Task 表达的是：

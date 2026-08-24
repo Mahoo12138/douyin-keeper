@@ -8,6 +8,8 @@ export function TaskEditorDrawer({
   accounts,
   friends,
   templates,
+  creatorFirstMessageAllowed,
+  creatorFirstMessageLoading,
   saving,
   onChange,
   onAccountChange,
@@ -19,6 +21,8 @@ export function TaskEditorDrawer({
   accounts: Account[]
   friends: Friend[]
   templates: MessageTemplate[]
+  creatorFirstMessageAllowed: boolean
+  creatorFirstMessageLoading: boolean
   saving: boolean
   onChange: (patch: Partial<TaskDraft>) => void
   onAccountChange: (accountId: string) => void
@@ -26,6 +30,8 @@ export function TaskEditorDrawer({
   onClose: () => void
   onSave: () => void
 }) {
+  const firstMessageToggleDisabled = creatorFirstMessageLoading || (!creatorFirstMessageAllowed && !draft.allowFirstMessage)
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="presentation">
       <button className="absolute inset-0 cursor-default bg-black/30" aria-label="关闭任务编辑" onClick={onClose} />
@@ -87,8 +93,8 @@ export function TaskEditorDrawer({
             <Switch id="task-enabled" checked={draft.enabled} onCheckedChange={(enabled) => onChange({ enabled })} aria-label="每日启用" />
           </div>
           <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900 dark:bg-amber-950/20">
-            <div className="pr-4"><Label htmlFor="task-first-message">允许首聊</Label><p className="mt-1 text-xs text-muted-foreground">高风险能力，默认关闭；只对具备能力的账号生效。</p></div>
-            <Switch id="task-first-message" checked={draft.allowFirstMessage} onCheckedChange={(enabled) => onChange({ allowFirstMessage: enabled })} aria-label="允许首聊" />
+            <div className="pr-4"><Label htmlFor="task-first-message">允许首聊</Label><p className="mt-1 text-xs text-muted-foreground">{creatorFirstMessageLoading ? '正在检查首聊权益…' : creatorFirstMessageAllowed ? '需要权益与账号能力同时允许；请谨慎开启。' : draft.allowFirstMessage ? '当前方案未授权首聊，可关闭已有配置。' : '当前方案未授权首聊，请先兑换支持首聊的权益。'}</p></div>
+            <Switch id="task-first-message" checked={draft.allowFirstMessage} disabled={firstMessageToggleDisabled} onCheckedChange={(enabled) => onChange({ allowFirstMessage: enabled })} aria-label="允许首聊" />
           </div>
         </div>
         <div className="flex justify-end gap-2 border-t p-6">

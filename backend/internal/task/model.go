@@ -182,6 +182,7 @@ func (s *Service) Create(ctx context.Context, userID int64, in CreateInput) (*Sp
 	}
 	dec, err := s.gate.Authorize(ctx, entitlement.AuthorizationRequest{
 		UserID: userID, Action: entitlement.ActionTaskCreate,
+		RequiredFeature: featureForTask(in.AllowFirstMessage),
 	})
 	if err != nil {
 		return nil, err
@@ -241,6 +242,11 @@ func (s *Service) Update(ctx context.Context, userID int64, publicID uuid.UUID, 
 	if err != nil {
 		return nil, err
 	}
+	if p.AllowFirstMessage != nil && *p.AllowFirstMessage {
+		if err := s.requireFeature(ctx, userID, entitlement.FeatureCreatorFirstMessage); err != nil {
+			return nil, err
+		}
+	}
 	applyPatch(existing, p)
 	if !existing.ValidWindow() {
 		return nil, apperr.Validation(apperr.CodeConflict, "window_start must be before window_end (HH:MM:SS)")
@@ -256,6 +262,26 @@ func (s *Service) Update(ctx context.Context, userID int64, publicID uuid.UUID, 
 		return nil, err
 	}
 	return existing, nil
+}
+
+func (s *Service) requireFeature(ctx context.Context, userID int64, feature string) error {
+	dec, err := s.gate.Authorize(ctx, entitlement.AuthorizationRequest{
+		UserID: userID, Action: entitlement.ActionTaskCreate, RequiredFeature: feature,
+	})
+	if err != nil {
+		return err
+	}
+	if !dec.Allowed {
+		return quotaGateErr(dec.ReasonCode)
+	}
+	return nil
+}
+
+func featureForTask(allowFirstMessage bool) string {
+	if allowFirstMessage {
+		return entitlement.FeatureCreatorFirstMessage
+	}
+	return ""
 }
 
 func (s *Service) Delete(ctx context.Context, userID int64, publicID uuid.UUID) error {

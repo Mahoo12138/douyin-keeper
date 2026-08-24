@@ -1,9 +1,15 @@
 package task
 
 import (
+	"context"
 	"testing"
 
+	"github.com/google/uuid"
+
+	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/friend"
 )
 
 func TestSparkTaskValidation(t *testing.T) {
@@ -85,6 +91,119 @@ func TestQuotaGateErrorMapping(t *testing.T) {
 	if app, ok := apperr.As(quotaGateErr("unknown")); !ok || app.Code != apperr.CodeTaskQuotaExceeded || app.Kind != apperr.KindQuota {
 		t.Errorf("unknown quota reason mapped incorrectly: %v", app)
 	}
+}
+
+func TestCreateFirstMessageRequiresEntitlementFeature(t *testing.T) {
+	accountID := uuid.New()
+	friendID := uuid.New()
+	input := CreateInput{
+		AccountPublicID: accountID, FriendPublicID: friendID,
+		Timezone: "Asia/Shanghai", WindowStart: "19:30:00", WindowEnd: "22:30:00",
+		MessageKind: "text", MessageBody: stringPtr("晚安"), Enabled: true, AllowFirstMessage: true,
+	}
+
+	deniedGate := &taskGateStub{decision: entitlement.AuthorizationDecision{ReasonCode: apperr.CodeFeatureNotEntitled}}
+	deniedRepo := &taskRepoStub{}
+	service := newTaskService(deniedRepo, deniedGate, accountID, friendID)
+	_, err := service.Create(context.Background(), 7, input)
+	if app, ok := apperr.As(err); !ok || app.Code != apperr.CodeFeatureNotEntitled {
+		t.Fatalf("Create() error = %v, want FEATURE_NOT_ENTITLED", err)
+	}
+	if len(deniedGate.requests) != 1 || deniedGate.requests[0].RequiredFeature != entitlement.FeatureCreatorFirstMessage {
+		t.Fatalf("unexpected authorization request: %+v", deniedGate.requests)
+	}
+	if deniedRepo.created != nil {
+		t.Fatal("feature-denied task must not be created")
+	}
+
+	allowedGate := &taskGateStub{decision: entitlement.AuthorizationDecision{
+		Allowed: true, Entitlement: &entitlement.EffectiveEntitlement{TaskQuota: 10},
+	}}
+	allowedRepo := &taskRepoStub{}
+	service = newTaskService(allowedRepo, allowedGate, accountID, friendID)
+	created, err := service.Create(context.Background(), 7, input)
+	if err != nil {
+		t.Fatalf("Create() returned error for entitled feature: %v", err)
+	}
+	if created == nil || !created.AllowFirstMessage || allowedRepo.created == nil {
+		t.Fatalf("created task did not preserve allow_first_message: %+v", created)
+	}
+}
+
+func TestUpdateFirstMessageRequiresEntitlementFeature(t *testing.T) {
+	taskID := uuid.New()
+	gate := &taskGateStub{decision: entitlement.AuthorizationDecision{ReasonCode: apperr.CodeFeatureNotEntitled}}
+	repo := &taskRepoStub{task: &SparkTask{
+		ID: 11, PublicID: taskID, UserID: 7, Timezone: "Asia/Shanghai",
+		WindowStart: "19:30:00", WindowEnd: "22:30:00", MessageKind: "text", MessageBody: stringPtr("晚安"),
+	}}
+	service := newTaskService(repo, gate, uuid.New(), uuid.New())
+	_, err := service.Update(context.Background(), 7, taskID, TaskPatch{AllowFirstMessage: boolPtr(true)})
+	if app, ok := apperr.As(err); !ok || app.Code != apperr.CodeFeatureNotEntitled {
+		t.Fatalf("Update() error = %v, want FEATURE_NOT_ENTITLED", err)
+	}
+	if repo.updated != nil || len(gate.requests) != 1 || gate.requests[0].RequiredFeature != entitlement.FeatureCreatorFirstMessage {
+		t.Fatalf("feature-denied update mutated state: updated=%+v requests=%+v", repo.updated, gate.requests)
+	}
+}
+
+type taskGateStub struct {
+	requests []entitlement.AuthorizationRequest
+	decision entitlement.AuthorizationDecision
+}
+
+func (g *taskGateStub) Authorize(_ context.Context, req entitlement.AuthorizationRequest) (entitlement.AuthorizationDecision, error) {
+	g.requests = append(g.requests, req)
+	return g.decision, nil
+}
+
+type taskRepoStub struct {
+	task    *SparkTask
+	created *SparkTask
+	updated *SparkTask
+}
+
+func (r *taskRepoStub) ListByUser(context.Context, int64) ([]*SparkTask, error) { return nil, nil }
+func (r *taskRepoStub) GetByID(context.Context, int64) (*SparkTask, error)      { return r.task, nil }
+func (r *taskRepoStub) GetOwned(context.Context, int64, uuid.UUID) (*SparkTask, error) {
+	return r.task, nil
+}
+func (r *taskRepoStub) Create(_ context.Context, task *SparkTask) error {
+	r.created = task
+	return nil
+}
+func (r *taskRepoStub) Update(_ context.Context, task *SparkTask) error {
+	r.updated = task
+	return nil
+}
+func (r *taskRepoStub) SoftDelete(context.Context, int64) error        { return nil }
+func (r *taskRepoStub) CountTasks(context.Context, int64) (int, error) { return 0, nil }
+
+type taskAccountLookupStub struct{ value *account.Account }
+
+func (s taskAccountLookupStub) GetOwned(context.Context, int64, uuid.UUID) (*account.Account, error) {
+	return s.value, nil
+}
+
+type taskFriendLookupStub struct{ value *friend.Friend }
+
+func (s taskFriendLookupStub) GetOwned(context.Context, int64, uuid.UUID) (*friend.Friend, error) {
+	return s.value, nil
+}
+
+type taskLockerStub struct{}
+
+func (taskLockerStub) LockUserForUpdate(context.Context, int64) error { return nil }
+
+type taskTxStub struct{}
+
+func (taskTxStub) WithinTx(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) }
+
+func newTaskService(repo Repository, gate Gate, accountID, friendID uuid.UUID) *Service {
+	return NewService(repo,
+		taskAccountLookupStub{value: &account.Account{ID: 42, PublicID: accountID, UserID: 7, BindingStatus: account.BindingBound}},
+		taskFriendLookupStub{value: &friend.Friend{ID: 43, PublicID: friendID, AccountID: 42, IdentityStatus: friend.IdentityResolved}},
+		gate, taskLockerStub{}, taskTxStub{})
 }
 
 func stringPtr(value string) *string { return &value }

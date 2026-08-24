@@ -19,6 +19,10 @@
 - `POST /api/entitlements/redeem`
 - `GET /api/entitlements/redemptions`
 
+任务请求中的 `allow_first_message=true` 需要当前有效权益包含
+`creator_first_message`，否则创建/编辑返回 `403 FEATURE_NOT_ENTITLED`；发送 Worker
+在执行前会再次校验该权益。关闭已有首聊配置不要求继续持有该 feature。
+
 ### Accounts
 
 - `GET /api/accounts`

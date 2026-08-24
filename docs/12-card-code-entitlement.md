@@ -357,6 +357,10 @@ FEATURE_NOT_ENTITLED
 
 不能只在前端隐藏按钮，API/Worker 都必须检查。
 
+`creator_first_message` 已作为首聊能力的独立 feature 落地：任务创建/编辑开启首聊时由
+Task Service 校验，发送 Worker 在最终执行前再次校验。权益被撤销或过期时，已有任务配置
+保留但不能继续以首聊模式发送；用户仍可关闭该配置。
+
 ### Account quota
 
 创建 Binding Job 之前检查：
