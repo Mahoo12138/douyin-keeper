@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -42,5 +43,76 @@ func TestRefreshInputSeparatesWebCookieAndMiniBodyTokens(t *testing.T) {
 	token, client, err = refreshInput(mini)
 	if err != nil || token != "mini-token" || client != auth.ClientMini {
 		t.Fatalf("mini refresh input = token %q client %q err %v", token, client, err)
+	}
+}
+
+func TestRefreshCookieSecureFollowsRequestScheme(t *testing.T) {
+	server := &Server{refreshTTL: time.Hour}
+
+	tests := []struct {
+		name          string
+		request       *http.Request
+		wantSecure    bool
+		wantMaxAge    int
+		setCookieFunc func(http.ResponseWriter, *http.Request)
+	}{
+		{
+			name:       "local HTTP",
+			request:    httptest.NewRequest(http.MethodPost, "http://app.example.test/api/v1/auth/login", nil),
+			wantSecure: false,
+			setCookieFunc: func(w http.ResponseWriter, r *http.Request) {
+				server.setRefreshCookie(w, r, auth.SessionResult{RefreshToken: "refresh"})
+			},
+		},
+		{
+			name:       "direct HTTPS",
+			request:    httptest.NewRequest(http.MethodPost, "https://app.example.test/api/v1/auth/login", nil),
+			wantSecure: true,
+			setCookieFunc: func(w http.ResponseWriter, r *http.Request) {
+				server.setRefreshCookie(w, r, auth.SessionResult{RefreshToken: "refresh"})
+			},
+		},
+		{
+			name: "forwarded HTTPS",
+			request: func() *http.Request {
+				r := httptest.NewRequest(http.MethodPost, "http://app.example.test/api/v1/auth/login", nil)
+				r.Header.Set("X-Forwarded-Proto", "https")
+				return r
+			}(),
+			wantSecure: true,
+			setCookieFunc: func(w http.ResponseWriter, r *http.Request) {
+				server.setRefreshCookie(w, r, auth.SessionResult{RefreshToken: "refresh"})
+			},
+		},
+		{
+			name:       "clear on HTTPS",
+			request:    httptest.NewRequest(http.MethodPost, "https://app.example.test/api/v1/auth/logout", nil),
+			wantSecure: true,
+			wantMaxAge: -1,
+			setCookieFunc: func(w http.ResponseWriter, r *http.Request) {
+				server.clearRefreshCookie(w, r)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			tt.setCookieFunc(recorder, tt.request)
+			cookies := recorder.Result().Cookies()
+			if len(cookies) != 1 {
+				t.Fatalf("Set-Cookie count = %d, want 1", len(cookies))
+			}
+			cookie := cookies[0]
+			if cookie.Secure != tt.wantSecure {
+				t.Fatalf("Secure = %v, want %v", cookie.Secure, tt.wantSecure)
+			}
+			if !cookie.HttpOnly || cookie.SameSite != http.SameSiteLaxMode || cookie.Path != "/" {
+				t.Fatalf("cookie security attributes = HttpOnly:%v SameSite:%v Path:%q", cookie.HttpOnly, cookie.SameSite, cookie.Path)
+			}
+			if tt.wantMaxAge != 0 && cookie.MaxAge != tt.wantMaxAge {
+				t.Fatalf("MaxAge = %d, want %d", cookie.MaxAge, tt.wantMaxAge)
+			}
+		})
 	}
 }

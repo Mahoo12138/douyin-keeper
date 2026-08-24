@@ -11,7 +11,9 @@ import (
 )
 
 // RefreshCookieName is the HttpOnly cookie carrying the web refresh token
-// (docs/13 §4). SameSite=Lax, Secure is added by the reverse proxy in prod.
+// (docs/13 §4). Secure follows the request's direct TLS or trusted proxy
+// protocol, so local HTTP development remains usable while HTTPS deployments
+// receive a Secure cookie.
 const RefreshCookieName = "dk_refresh"
 
 type registerReq struct {
@@ -48,7 +50,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	s.setRefreshCookie(w, res)
+	s.setRefreshCookie(w, r, res)
 	writeCreated(w, authResponse(res, false))
 }
 
@@ -63,7 +65,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	s.setRefreshCookie(w, res)
+	s.setRefreshCookie(w, r, res)
 	writeOK(w, authResponse(res, false))
 }
 
@@ -85,7 +87,7 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if client == auth.ClientWeb {
-		s.setRefreshCookie(w, res)
+		s.setRefreshCookie(w, r, res)
 	}
 	writeOK(w, authResponse(res, client == auth.ClientMini))
 }
@@ -117,7 +119,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	s.clearRefreshCookie(w)
+	s.clearRefreshCookie(w, r)
 	writeNoContent(w)
 }
 
@@ -131,7 +133,7 @@ func (s *Server) handleLogoutAll(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	s.clearRefreshCookie(w)
+	s.clearRefreshCookie(w, r)
 	writeNoContent(w)
 }
 
@@ -186,20 +188,20 @@ func (s *Server) handleWechatLogin(w http.ResponseWriter, r *http.Request) {
 	writeOK(w, authResponse(res, true))
 }
 
-func (s *Server) setRefreshCookie(w http.ResponseWriter, res auth.SessionResult) {
+func (s *Server) setRefreshCookie(w http.ResponseWriter, r *http.Request, res auth.SessionResult) {
 	if res.RefreshToken == "" {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: RefreshCookieName, Value: res.RefreshToken,
-		Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		Path: "/", HttpOnly: true, Secure: requestScheme(r) == "https", SameSite: http.SameSiteLaxMode,
 		Expires: time.Now().Add(s.refreshTTL),
 	})
 }
 
-func (s *Server) clearRefreshCookie(w http.ResponseWriter) {
+func (s *Server) clearRefreshCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: RefreshCookieName, Value: "", Path: "/", HttpOnly: true,
-		SameSite: http.SameSiteLaxMode, MaxAge: -1,
+		Secure: requestScheme(r) == "https", SameSite: http.SameSiteLaxMode, MaxAge: -1,
 	})
 }
