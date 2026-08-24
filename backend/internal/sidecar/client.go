@@ -109,8 +109,8 @@ type Client interface {
 	Call(ctx context.Context, req Request) (*Response, error)
 }
 
-// NopClient returns an adapter-unavailable error for every call. It keeps the
-// adapter resolver compiling until a real sidecar is wired (M1).
+// NopClient returns an adapter-unavailable error for every call. It is kept as
+// a generic fallback for deployments that have no adapter configured.
 type NopClient struct{}
 
 func (NopClient) Call(_ context.Context, req Request) (*Response, error) {
@@ -120,3 +120,45 @@ func (NopClient) Call(_ context.Context, req Request) (*Response, error) {
 		Meta:  Meta{Adapter: "nop", AdapterVersion: "0"},
 	}, nil
 }
+
+// UnavailableClient is an explicit fail-closed boundary for an adapter that
+// is registered in the worker control plane but has no runtime SDK configured.
+// Unlike NopClient it preserves the adapter identity in response metadata, so
+// health and send diagnostics never attribute a protocol failure to Browser.
+type UnavailableClient struct {
+	Adapter string
+	Version string
+	Message string
+}
+
+func NewUnavailableClient(adapter, message string) *UnavailableClient {
+	if adapter == "" {
+		adapter = "unavailable"
+	}
+	if message == "" {
+		message = "adapter runtime is not configured"
+	}
+	return &UnavailableClient{Adapter: adapter, Version: "unconfigured", Message: message}
+}
+
+func (c *UnavailableClient) Call(_ context.Context, req Request) (*Response, error) {
+	adapter, version, message := c.Adapter, c.Version, c.Message
+	if adapter == "" {
+		adapter = "unavailable"
+	}
+	if version == "" {
+		version = "unconfigured"
+	}
+	if message == "" {
+		message = "adapter runtime is not configured"
+	}
+	return &Response{
+		ProtocolVersion: ProtocolVersion,
+		RequestID:       req.RequestID,
+		OK:              false,
+		Error:           &Error{Code: ErrAdapterUnavailable, Retryable: false, Message: message},
+		Meta:            Meta{Adapter: adapter, AdapterVersion: version},
+	}, nil
+}
+
+var _ Client = (*UnavailableClient)(nil)

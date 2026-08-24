@@ -83,3 +83,17 @@ func TestProcessClientRejectsInconsistentResponseEnvelope(t *testing.T) {
 		t.Fatalf("expected inconsistent response error, got %v", err)
 	}
 }
+
+func TestUnavailableClientPreservesAdapterIdentity(t *testing.T) {
+	client := NewUnavailableClient("protocol.im", "protocol SDK is not configured")
+	response, err := client.Call(context.Background(), Request{RequestID: "r1", Op: OpsMessageSendFirst})
+	if err != nil || response == nil {
+		t.Fatalf("response=%v err=%v", response, err)
+	}
+	if response.OK || response.Error == nil || response.Error.Code != ErrAdapterUnavailable {
+		t.Fatalf("unexpected unavailable response: %+v", response)
+	}
+	if response.Meta.Adapter != "protocol.im" || response.Meta.AdapterVersion != "unconfigured" {
+		t.Fatalf("adapter metadata = %+v", response.Meta)
+	}
+}

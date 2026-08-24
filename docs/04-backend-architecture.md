@@ -247,12 +247,14 @@ sticker
   browser.consumer only
 
 first message
-  creator capability only
+  creator capability -> protocol.im control lane
 ```
 
-Resolver 只会把路由交给已注册的可执行 Adapter；当前部署注册的是
-`browser.consumer`，`protocol.im` 仍处于实验/未接线状态。Adapter fallback
-还必须收到明确的 `not_sent` 证据，结果未知时保持 fail-closed。
+Resolver 只会把普通已有会话路由交给已注册的可执行 Adapter；当前部署只有
+`browser.consumer` 可执行。首聊没有安全的 Browser fallback，因此保留
+`protocol.im` 控制面计划，由 `worker-light` 的 unavailable client 显式失败，不误调用
+Browser Sidecar。Adapter fallback 还必须收到明确的 `not_sent` 证据，结果未知时保持
+fail-closed。
 
 ## 7. 部署
 

@@ -62,7 +62,11 @@ func main() {
 	notificationRepo := postgres.NewNotificationRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
 	healthService := capability.NewHealthService(capabilityRepo, capability.DefaultHealthPolicy())
-	resolver := capability.NewResolver(capabilityRepo, healthService, capability.AdapterBrowserConsumer, capability.AdapterProtocolIM)
+	// Protocol remains a control-plane route for first-message jobs, but it is
+	// not an executable adapter until its real SDK is configured. The resolver
+	// therefore only registers the Browser runtime here; protocol jobs still
+	// land in the light worker and fail closed through protocolClient below.
+	resolver := capability.NewResolver(capabilityRepo, healthService, capability.AdapterBrowserConsumer)
 	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown).WithNotifier(notificationRepo)
 	entitlementRepo := postgres.NewEntitlementRepo(pool)
 	entitlementSvc := entitlement.NewService(entitlementRepo, entitlementRepo, entitlementRepo, entitlementRepo,
@@ -80,15 +84,17 @@ func main() {
 			sidecarScript = candidate
 		}
 	}
-	sidecarClient := sidecar.NewProcessClient(cfg.PlaywrightSidecarCommand, sidecarScript)
-	defer sidecarClient.Close()
+	browserSidecarClient := sidecar.NewProcessClient(cfg.PlaywrightSidecarCommand, sidecarScript)
+	defer browserSidecarClient.Close()
+	protocolClient := sidecar.NewUnavailableClient(capability.AdapterProtocolIM,
+		"protocol SDK is not configured in this worker image")
 	protocolWorkerID, _ := os.Hostname()
 	if protocolWorkerID == "" {
 		protocolWorkerID = "worker-light"
 	}
 	protocolWorkerID += ":" + time.Now().Format("20060102150405")
 	protocolDeps := &asynqworker.SessionCheckDeps{
-		Accounts: accountRepo, Sessions: sessionSvc, Sidecar: sidecarClient, Redis: rdb,
+		Accounts: accountRepo, Sessions: sessionSvc, Sidecar: protocolClient, Redis: rdb,
 		Targets: friendRepo, Tasks: taskRepo, Sends: sendRepo, Capabilities: capabilityRepo,
 		Health: healthService, Risk: riskService, Entitlement: entitlementSvc, Quota: entitlementSvc,
 		Tx: workerTx, WorkerID: protocolWorkerID, LockTTL: 2 * time.Minute,
@@ -106,7 +112,7 @@ func main() {
 			Friends: postgres.NewFriendRepo(pool),
 		},
 		Probe: asynqworker.CapabilityProbeDeps{
-			Snapshots: capabilityRepo, Sidecar: sidecarClient, Tx: workerTx,
+			Snapshots: capabilityRepo, Sidecar: browserSidecarClient, Tx: workerTx,
 			Health: healthService, Adapter: capability.AdapterBrowserConsumer,
 		},
 		Wechat: asynqworker.WechatNotificationDeps{

@@ -54,3 +54,16 @@ func TestResolverDoesNotRouteProtocolWhenWorkerIsNotRegistered(t *testing.T) {
 		t.Fatalf("unregistered protocol route=%+v err=%v", route, err)
 	}
 }
+
+func TestResolverKeepsFirstMessageOnProtocolLaneWhenRuntimeIsUnavailable(t *testing.T) {
+	resolver := NewResolver(resolverSnapshotRepo{}, resolverHealth{allowed: map[string]bool{}}, AdapterBrowserConsumer)
+	route, err := resolver.Resolve(context.Background(), 1, ResolveRequest{
+		MessageKind: "text", AllowFirstMessage: true,
+	})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if route.Adapter != AdapterProtocolIM || route.Available || route.Reason != "no_executable_adapter" {
+		t.Fatalf("first-message route = %+v, want protocol unavailable plan", route)
+	}
+}

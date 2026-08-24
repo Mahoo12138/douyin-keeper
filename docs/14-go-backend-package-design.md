@@ -277,10 +277,12 @@ internal/transport/httpapi/entitlement_handler.go
 `risk.Service`，由现有站内通知链路提醒账号所有者。
 
 发送 dispatch 已接入 Resolver：按消息类型、会话存在性和
-`allow_first_message` 生成候选路由，并把实际可执行 Adapter 写入
-`send_jobs.selected_adapter`；当前部署只注册 `browser.consumer`，因此不会把
-尚未实现的 `protocol.im` 路由到 stub worker。Resolver 的健康/能力判断只是计划
-路由，Browser Worker 的 preflight 仍是最后一道门。
+`allow_first_message` 生成候选路由，并把计划 Adapter 写入
+`send_jobs.selected_adapter`。当前部署只注册 `browser.consumer` 为可执行运行时；普通
+已有会话不会路由到未注册的 `protocol.im`。首聊没有安全的 Browser fallback，因此仍保留
+`protocol.im` 的 `send.protocol` 控制面计划，由 `worker-light` 的显式 unavailable client
+返回带 `protocol.im` 身份的 `ADAPTER_UNAVAILABLE`，不会误调用 Browser Sidecar，也不会
+由 stub handler ACK。Resolver 的健康/能力判断只是计划路由，Worker 的 preflight 仍是最后一道门。
 
 Task Service 在开启 `allow_first_message` 时要求 Entitlement Gate 的
 `creator_first_message` feature；Browser Worker 执行前以任务快照再次校验，确保权益撤销

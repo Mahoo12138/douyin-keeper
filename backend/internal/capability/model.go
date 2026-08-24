@@ -76,9 +76,9 @@ type routeCandidate struct {
 }
 
 // Resolver selects an adapter using account snapshots, global adapter health,
-// and an explicit executable-adapter allowlist. The allowlist prevents a
-// protocol snapshot from routing work to an adapter whose worker is still a
-// stub in the current deployment.
+// and an explicit executable-adapter allowlist. Normal existing-conversation
+// routes cannot select an unregistered adapter; the first-message protocol
+// plan is the deliberate exception because it has no safe browser fallback.
 type Resolver struct {
 	snapshots  Repository
 	health     HealthObserver
@@ -131,6 +131,13 @@ func (r *Resolver) Resolve(ctx context.Context, accountID int64, req ResolveRequ
 		return Route{Adapter: candidate.adapter, Capability: candidate.capability, Available: true}, nil
 	}
 	if !r.isExecutable(fallback.Adapter) {
+		// A first-message route has no safe browser fallback. Preserve the
+		// protocol plan so dispatch sends it to the protocol lane, where the
+		// unavailable adapter can fail closed without touching the browser.
+		if req.AllowFirstMessage && fallback.Adapter == AdapterProtocolIM {
+			fallback.Reason = "no_executable_adapter"
+			return fallback, nil
+		}
 		fallback.Adapter = ""
 		fallback.Reason = "no_executable_adapter"
 	}
