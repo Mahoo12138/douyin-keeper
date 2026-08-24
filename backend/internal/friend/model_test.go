@@ -12,11 +12,12 @@ import (
 
 type friendRepoStub struct {
 	item    *Friend
+	items   []*Friend
 	updated []bool
 }
 
 func (r *friendRepoStub) ListByAccountOwned(context.Context, int64, uuid.UUID) ([]*Friend, error) {
-	return nil, nil
+	return r.items, nil
 }
 
 func (r *friendRepoStub) GetOwned(context.Context, int64, uuid.UUID) (*Friend, error) {
@@ -96,5 +97,26 @@ func TestSetSparkEnabledRejectsUnresolvedFriend(t *testing.T) {
 	}
 	if len(repo.updated) != 0 {
 		t.Fatalf("unresolved friend should not be updated: %v", repo.updated)
+	}
+}
+
+func TestListPageFallbackTrimsAndResumesWithInternalCursor(t *testing.T) {
+	repo := &friendRepoStub{items: []*Friend{{ID: 9}, {ID: 8}, {ID: 7}}}
+	service := NewService(repo, &gateStub{})
+
+	first, err := service.ListPageForAccount(context.Background(), 42, uuid.New(), ListFilter{Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Items) != 2 || first.Items[0].ID != 9 || first.Items[1].ID != 8 || first.NextAfterID != 8 {
+		t.Fatalf("first page = %+v", first)
+	}
+
+	second, err := service.ListPageForAccount(context.Background(), 42, uuid.New(), ListFilter{Limit: 2, AfterID: first.NextAfterID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Items) != 1 || second.Items[0].ID != 7 || second.NextAfterID != 0 {
+		t.Fatalf("second page = %+v", second)
 	}
 }

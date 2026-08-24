@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Link } from '@tanstack/react-router'
 import { listAccounts, listFriends, listTasks, syncAccountFriends, updateFriend, updateTask } from '@douyin-keeper/sdk-ts'
@@ -33,9 +33,11 @@ export function FriendsPage() {
   })
   const accountId = selectedAccountId ?? accountsQ.data?.items[0]?.id
   const selectedAccount = accountsQ.data?.items.find((account) => account.id === accountId)
-  const friendsQ = useQuery({
+  const friendsQ = useInfiniteQuery({
     queryKey: ['friends', accountId],
-    queryFn: () => listFriends(token as string, accountId as string, { limit: 100 }),
+    queryFn: ({ pageParam }) => listFriends(token as string, accountId as string, { limit: 50, cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     enabled: !!token && !!accountId,
   })
   const tasksQ = useQuery({
@@ -44,7 +46,7 @@ export function FriendsPage() {
     enabled: !!token,
   })
 
-  const friends = friendsQ.data?.items ?? []
+  const friends = friendsQ.data?.pages.flatMap((page) => page.items) ?? []
   const tasks = tasksQ.data?.items ?? []
   const visibleFriends = useMemo(
     () => filterFriends(friends, tasks, { search, sparkFilter, taskFilter, accountId }),
@@ -207,6 +209,7 @@ export function FriendsPage() {
           {selectedFriends.length > 0 && <BulkActions selectedCount={selectedFriends.length} taskCount={selectedTasks.length} busy={bulkBusy} windowOpen={bulkWindowOpen} onEnable={() => void handleBulkSpark(true)} onDisable={() => void handleBulkSpark(false)} onOpenWindow={() => setBulkWindowOpen(true)} onClear={() => { setSelectedFriendIds([]); setBulkWindowOpen(false) }} />}
           {bulkWindowOpen && <BulkWindowPanel taskCount={selectedTasks.length} busy={bulkBusy} onClose={() => setBulkWindowOpen(false)} onSave={(start, end) => void handleBulkWindow(start, end)} />}
           {friendsQ.isLoading ? <Skeleton className="h-64 w-full" /> : friendsQ.isError ? <p className="py-10 text-center text-sm text-destructive">好友列表暂时不可用，请稍后重试。</p> : visibleFriends.length ? <FriendTable friends={visibleFriends} tasks={tasks} accountId={accountId} pendingFriendId={pendingFriendId} bulkBusy={bulkBusy} selectedFriendIds={selectedFriendIds} selectionEnabled onSelectFriend={selectFriend} onSelectAll={selectAllVisible} onToggle={(friend, enabled) => void handleToggle(friend, enabled)} /> : <EmptyFriends hasFilters={!!search || sparkFilter !== 'all' || taskFilter !== 'all'} onReset={() => { setSearch(''); setSparkFilter('all'); setTaskFilter('all') }} />}
+          {friendsQ.hasNextPage && <div className="flex justify-center border-t pt-4"><Button variant="outline" onClick={() => void friendsQ.fetchNextPage()} disabled={friendsQ.isFetchingNextPage}>{friendsQ.isFetchingNextPage ? '加载中…' : '加载更多好友'}</Button></div>}
         </CardContent>
       </Card>
       {tasksQ.isError && <p className="text-xs text-muted-foreground">任务状态暂时不可用，好友列表仍可正常管理火花开关。</p>}

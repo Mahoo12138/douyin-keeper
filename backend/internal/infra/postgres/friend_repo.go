@@ -59,6 +59,31 @@ func (r *FriendRepo) ListByAccountOwned(ctx context.Context, userID int64, accou
 	return out, rows.Err()
 }
 
+func (r *FriendRepo) ListByAccountOwnedPage(ctx context.Context, userID int64, accountPublicID uuid.UUID, filter friend.ListFilter) ([]*friend.Friend, error) {
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT `+friendCols+`
+		FROM friends f
+		JOIN douyin_accounts a ON a.id = f.account_id
+		WHERE a.public_id = $1 AND a.user_id = $2
+		  AND a.deleted_at IS NULL AND f.deleted_at IS NULL
+		  AND ($3::bigint = 0 OR f.id < $3)
+		ORDER BY f.id DESC
+		LIMIT $4`, accountPublicID, userID, filter.AfterID, filter.Limit+1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*friend.Friend, 0, filter.Limit+1)
+	for rows.Next() {
+		item, err := scanFriend(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func (r *FriendRepo) GetOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*friend.Friend, error) {
 	f, err := scanFriend(From(ctx, r.pool).QueryRow(ctx, `
 		SELECT `+friendCols+`
@@ -255,3 +280,4 @@ func hasConversation(item friend.SyncItem) bool {
 }
 
 var _ friend.Repository = (*FriendRepo)(nil)
+var _ friend.PageRepository = (*FriendRepo)(nil)
