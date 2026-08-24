@@ -14,6 +14,8 @@ type repositoryStub struct {
 	limit          int
 	userItems      []UserSummary
 	userFilter     UserListFilter
+	accountItems   []AccountSummary
+	accountFilter  AccountListFilter
 	adapter        AdapterHealthSummary
 	actorID        int64
 	adapterName    string
@@ -41,7 +43,12 @@ func (r *repositoryStub) ListUserSummariesPage(_ context.Context, filter UserLis
 
 func (r *repositoryStub) ListAccountSummaries(_ context.Context, limit int) ([]AccountSummary, error) {
 	r.limit = limit
-	return nil, nil
+	return r.accountItems, nil
+}
+
+func (r *repositoryStub) ListAccountSummariesPage(_ context.Context, filter AccountListFilter) ([]AccountSummary, error) {
+	r.accountFilter = filter
+	return r.accountItems, nil
 }
 
 func (r *repositoryStub) GetRuntimeSummary(context.Context) (RuntimeSummary, error) {
@@ -124,6 +131,25 @@ func TestServiceListsUserCursorPage(t *testing.T) {
 	}
 	if repo.userFilter.Limit != 2 || repo.userFilter.AfterID != 9 || repo.userFilter.AfterCreatedAt == nil {
 		t.Fatalf("filter = %+v", repo.userFilter)
+	}
+}
+
+func TestServiceListsAccountCursorPage(t *testing.T) {
+	base := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	repo := &repositoryStub{accountItems: []AccountSummary{
+		{ID: 3, CreatedAt: base.Add(2 * time.Minute)},
+		{ID: 2, CreatedAt: base.Add(time.Minute)},
+		{ID: 1, CreatedAt: base},
+	}}
+	page, err := NewService(repo).ListAccountsPage(context.Background(), AccountListFilter{Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].ID != 3 || page.Items[1].ID != 2 || page.NextAfterID != 2 || page.NextCreatedAt == nil {
+		t.Fatalf("page = %+v", page)
+	}
+	if repo.accountFilter.Limit != 2 || repo.accountFilter.AfterID != 0 || repo.accountFilter.AfterCreatedAt != nil {
+		t.Fatalf("filter = %+v", repo.accountFilter)
 	}
 }
 

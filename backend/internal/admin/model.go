@@ -79,7 +79,9 @@ type RecentError struct {
 }
 
 type AccountSummary struct {
+	ID                 int64
 	PublicID           uuid.UUID
+	CreatedAt          time.Time
 	OwnerPublicID      uuid.UUID
 	OwnerDisplayName   string
 	PlatformUserID     *string
@@ -95,6 +97,18 @@ type AccountSummary struct {
 	TodaySendSucceeded int
 	TodaySendFailed    int
 	LatestError        *RecentError
+}
+
+type AccountListFilter struct {
+	Limit          int
+	AfterCreatedAt *time.Time
+	AfterID        int64
+}
+
+type AccountListPage struct {
+	Items         []AccountSummary
+	NextCreatedAt *time.Time
+	NextAfterID   int64
 }
 
 type WorkerPoolSummary struct {
@@ -241,6 +255,10 @@ type UserPageRepository interface {
 	ListUserSummariesPage(ctx context.Context, filter UserListFilter) ([]UserSummary, error)
 }
 
+type AccountPageRepository interface {
+	ListAccountSummariesPage(ctx context.Context, filter AccountListFilter) ([]AccountSummary, error)
+}
+
 type Service struct {
 	repo Repository
 }
@@ -304,6 +322,55 @@ func trimUserListPage(items []UserSummary, limit int) UserListPage {
 
 func (s *Service) ListAccounts(ctx context.Context, limit int) ([]AccountSummary, error) {
 	return s.repo.ListAccountSummaries(ctx, normalizeLimit(limit))
+}
+
+func (s *Service) ListAccountsPage(ctx context.Context, filter AccountListFilter) (AccountListPage, error) {
+	filter.Limit = normalizeLimit(filter.Limit)
+	if filter.AfterID < 0 {
+		filter.AfterID = 0
+	}
+	if repo, ok := s.repo.(AccountPageRepository); ok {
+		items, err := repo.ListAccountSummariesPage(ctx, filter)
+		if err != nil {
+			return AccountListPage{}, err
+		}
+		return trimAccountListPage(items, filter.Limit), nil
+	}
+	items, err := s.repo.ListAccountSummaries(ctx, filter.Limit)
+	if err != nil {
+		return AccountListPage{}, err
+	}
+	if filter.AfterCreatedAt != nil && filter.AfterID > 0 {
+		start := len(items)
+		for index, item := range items {
+			if item.CreatedAt.Before(*filter.AfterCreatedAt) ||
+				(item.CreatedAt.Equal(*filter.AfterCreatedAt) && item.ID < filter.AfterID) {
+				start = index
+				break
+			}
+		}
+		if start < len(items) {
+			items = items[start:]
+		} else {
+			items = nil
+		}
+	}
+	return trimAccountListPage(items, filter.Limit), nil
+}
+
+func trimAccountListPage(items []AccountSummary, limit int) AccountListPage {
+	page := AccountListPage{Items: items}
+	if len(items) <= limit {
+		return page
+	}
+	page.Items = items[:limit]
+	last := page.Items[len(page.Items)-1]
+	if last.ID > 0 && !last.CreatedAt.IsZero() {
+		createdAt := last.CreatedAt
+		page.NextCreatedAt = &createdAt
+		page.NextAfterID = last.ID
+	}
+	return page
 }
 
 func (s *Service) Runtime(ctx context.Context) (RuntimeSummary, error) {

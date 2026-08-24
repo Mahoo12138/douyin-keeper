@@ -103,17 +103,24 @@ func (r *AdminRepo) listUserSummaries(ctx context.Context, filter admin.UserList
 }
 
 func (r *AdminRepo) ListAccountSummaries(ctx context.Context, limit int) ([]admin.AccountSummary, error) {
-	return r.listAccountSummaries(ctx, limit, nil)
+	return r.listAccountSummaries(ctx, admin.AccountListFilter{Limit: limit}, nil)
 }
 
-func (r *AdminRepo) listAccountSummaries(ctx context.Context, limit int, accountID *uuid.UUID) ([]admin.AccountSummary, error) {
+func (r *AdminRepo) ListAccountSummariesPage(ctx context.Context, filter admin.AccountListFilter) ([]admin.AccountSummary, error) {
+	filter.Limit++
+	return r.listAccountSummaries(ctx, filter, nil)
+}
+
+func (r *AdminRepo) listAccountSummaries(ctx context.Context, filter admin.AccountListFilter, accountID *uuid.UUID) ([]admin.AccountSummary, error) {
 	var accountFilter any
 	if accountID != nil {
 		accountFilter = *accountID
 	}
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT
+			a.id,
 			a.public_id,
+			a.created_at,
 			u.public_id,
 			u.display_name,
 			a.platform_user_id,
@@ -162,8 +169,9 @@ func (r *AdminRepo) listAccountSummaries(ctx context.Context, limit int, account
 		) e ON true
 		WHERE a.deleted_at IS NULL AND u.deleted_at IS NULL
 		  AND ($2::uuid IS NULL OR a.public_id=$2)
-		ORDER BY a.created_at DESC
-		LIMIT $1`, limit, accountFilter)
+		  AND ($3::timestamptz IS NULL OR (a.created_at,a.id) < ($3::timestamptz,$4::bigint))
+		ORDER BY a.created_at DESC, a.id DESC
+		LIMIT $1`, filter.Limit, accountFilter, filter.AfterCreatedAt, filter.AfterID)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +185,9 @@ func (r *AdminRepo) listAccountSummaries(ctx context.Context, limit int, account
 		var errorSourceAdapter *string
 		var errorCreatedAt *time.Time
 		if err := rows.Scan(
+			&item.ID,
 			&item.PublicID,
+			&item.CreatedAt,
 			&item.OwnerPublicID,
 			&item.OwnerDisplayName,
 			&item.PlatformUserID,
@@ -270,7 +280,7 @@ func (r *AdminRepo) SetAccountPaused(ctx context.Context, actorID int64, account
 		return admin.AccountSummary{}, err
 	}
 
-	items, err := r.listAccountSummaries(ctx, 1, &accountID)
+	items, err := r.listAccountSummaries(ctx, admin.AccountListFilter{Limit: 1}, &accountID)
 	if err != nil {
 		return admin.AccountSummary{}, err
 	}
@@ -736,3 +746,4 @@ func runtimePoolIndex(queues map[string]int) int {
 
 var _ admin.Repository = (*AdminRepo)(nil)
 var _ admin.UserPageRepository = (*AdminRepo)(nil)
+var _ admin.AccountPageRepository = (*AdminRepo)(nil)

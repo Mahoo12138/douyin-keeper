@@ -47,6 +47,7 @@ paths:
       operationId: listAdminAccounts
       parameters:
       - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Administrator account summaries

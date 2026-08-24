@@ -46,7 +46,7 @@ export async function listAdminUsers(accessToken: string, options?: { limit?: nu
   return data
 }
 
-export async function listAdminAccounts(accessToken: string, options?: { limit?: number }) {
+export async function listAdminAccounts(accessToken: string, options?: { limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/admin/accounts', {
     headers: { Authorization: `Bearer ${accessToken}` },
     params: { query: options },
