@@ -33,7 +33,7 @@ type Config struct {
 	// Entitlement card codes (docs/12)
 	CardCodePepperDK1 string
 
-	// WeChat mini program (stub until M4)
+	// WeChat mini program (optional; real exchange is enabled when both are set)
 	WechatAppID     string
 	WechatAppSecret string
 

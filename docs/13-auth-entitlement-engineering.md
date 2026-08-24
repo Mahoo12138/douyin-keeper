@@ -228,7 +228,7 @@ expires_at
 
 建议：
 
-- 8~10 位无歧义随机字符；
+- 8 位无歧义随机字符（展示为 `xxxx-xxxx`）；
 - 有效期 5 分钟；
 - 单次使用；
 - 数据库只保存 keyed hash；
@@ -253,7 +253,12 @@ link_code
 7. 创建 Mini AuthSession；
 8. 返回 Access/Refresh Token。
 
-整个“绑定 Identity + 消费 Link Code”必须在同一数据库事务完成。
+整个“绑定 Identity + 消费 Link Code”必须在同一数据库事务完成。创建 Link Code
+前锁定 User 行并统计未过期、未消费的记录，超过 3 个立即拒绝，避免并发创建突破上限。
+
+当前实现通过 `infra/wechat` 调用微信 `jscode2session`，只将 OpenID 作为
+`wechat_mini.provider_subject` 交给 Auth；微信 `session_key` 不进入领域模型、不落库。
+未配置完整 AppID/Secret 时保留明确的 `WECHAT_IDENTITY_NOT_LINKED` 失败语义。
 
 ### 5.2 后续登录
 
@@ -600,3 +605,7 @@ entitlement_grants
 8. Entitlement 过期后 Worker 不得执行平台动作；
 9. 同一 SendIntent 重试不重复扣 DailySendQuota；
 10. Admin revoke 后下一次 Gate 立即拒绝，不依赖长 TTL 缓存。
+
+当前已增加微信绑定集成覆盖：Link Code 单次消费、同一微信 Identity 不能绑定两个
+User，以及同一 User 最多 3 个有效 Link Code；`infra/wechat` 客户端测试覆盖请求参数、
+OpenID 提取、`session_key` 不外泄和微信服务暂时不可用的重试错误。

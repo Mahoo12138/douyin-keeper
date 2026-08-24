@@ -36,11 +36,20 @@ func TestAdminRiskRepoListsFilteredSafeSummaries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items, err := postgres.NewAdminRepo(pool, nil).ListRiskSummaries(ctx, admin.RiskFilter{Category: "PLATFORM", Code: "RATE_LIMITED", Limit: 10})
+	items, err := postgres.NewAdminRepo(pool, nil).ListRiskSummaries(ctx, admin.RiskFilter{Category: "PLATFORM", Code: "RATE_LIMITED", Limit: 100})
 	if err != nil || len(items) == 0 {
 		t.Fatalf("risk summaries = %+v, err = %v", items, err)
 	}
-	item := items[0]
+	var item admin.RiskSummary
+	for _, candidate := range items {
+		if candidate.AccountPublicID == acct.PublicID {
+			item = candidate
+			break
+		}
+	}
+	if item.AccountPublicID == uuid.Nil {
+		t.Fatalf("risk account was not returned: %+v", items)
+	}
 	if item.Code != event.Code || item.Nickname != acct.Nickname || item.OwnerDisplayName == "" || item.SourceAdapter == nil || item.Action == nil {
 		t.Fatalf("risk summary = %+v", item)
 	}

@@ -126,3 +126,36 @@ func (r *AuthSessionRepo) CreateLinkCode(ctx context.Context, lc *auth.LinkCode)
 		RETURNING id
 	`, lc.PublicID, lc.UserID, lc.CodeHash, lc.CodeFingerprint, lc.ExpiresAt, lc.CreatedAt).Scan(&lc.ID)
 }
+
+func (r *AuthSessionRepo) CountActiveLinkCodes(ctx context.Context, userID int64, now time.Time) (int, error) {
+	var count int
+	err := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT COUNT(*)::int FROM auth_link_codes
+		WHERE user_id=$1 AND consumed_at IS NULL AND expires_at > $2`, userID, now).Scan(&count)
+	return count, err
+}
+
+const linkCodeCols = `id, public_id, user_id, code_hash, code_fingerprint, expires_at, consumed_at, created_at`
+
+func scanLinkCode(row pgx.Row) (*auth.LinkCode, error) {
+	var lc auth.LinkCode
+	err := row.Scan(&lc.ID, &lc.PublicID, &lc.UserID, &lc.CodeHash, &lc.CodeFingerprint,
+		&lc.ExpiresAt, &lc.ConsumedAt, &lc.CreatedAt)
+	return &lc, err
+}
+
+func (r *AuthSessionRepo) GetLinkCodeByHashForUpdate(ctx context.Context, hash []byte) (*auth.LinkCode, error) {
+	lc, err := scanLinkCode(From(ctx, r.pool).QueryRow(ctx,
+		`SELECT `+linkCodeCols+` FROM auth_link_codes WHERE code_hash = $1 FOR UPDATE`, hash))
+	if err != nil {
+		return nil, mapNoRows(err, apperr.CodeLinkCodeInvalid, "link code is invalid")
+	}
+	return lc, nil
+}
+
+func (r *AuthSessionRepo) ConsumeLinkCode(ctx context.Context, id int64, at time.Time) error {
+	_, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE auth_link_codes SET consumed_at=$2
+		WHERE id=$1 AND consumed_at IS NULL`, id, at)
+	return err
+}

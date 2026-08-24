@@ -270,7 +270,7 @@ Tab：
 
 MVP 中抖音账号首次绑定仍推荐在 PC 完成。小程序对未绑定账号显示“请在 PC 完成首次绑定”。
 
-当前实现已接入 `wx.login()`、微信登录、PC 一次性绑定码和本地退出登录交互；后端尚未配置真实微信 AppID/Secret 时，接口明确返回 `WECHAT_NOT_LINKED`，小程序提示用户先在 PC 端完成绑定，不伪造登录成功。
+当前实现已接入 `wx.login()`、服务端 `jscode2session` 身份交换、微信登录、PC 一次性绑定码和本地退出登录交互；后端未配置完整的微信 AppID/Secret 时，接口明确返回 `WECHAT_IDENTITY_NOT_LINKED`，小程序提示用户先在 PC 端完成绑定，不伪造登录成功。服务端只保存 `wechat_mini` 的 provider subject，不持久化微信 `session_key`。
 
 ---
 

@@ -85,6 +85,20 @@ func (r *AuthUserRepo) GetLocalByUsername(ctx context.Context, username string) 
 	return u, &idn, nil
 }
 
+func (r *AuthUserRepo) GetWechatBySubject(ctx context.Context, subject string) (*auth.User, error) {
+	u, err := scanUser(From(ctx, r.pool).QueryRow(ctx, `
+		SELECT u.id, u.public_id, u.role, u.status, u.display_name, u.timezone,
+		       u.created_at, u.updated_at, u.deleted_at
+		FROM auth_identities ai
+		JOIN users u ON u.id = ai.user_id
+		WHERE ai.provider = 'wechat_mini' AND ai.provider_subject = $1
+		  AND u.deleted_at IS NULL`, subject))
+	if err != nil {
+		return nil, mapNoRows(err, apperr.CodeNotFound, "wechat identity not found")
+	}
+	return u, nil
+}
+
 func (r *AuthUserRepo) LockUserByID(ctx context.Context, id int64) (*auth.User, error) {
 	u, err := scanUser(From(ctx, r.pool).QueryRow(ctx,
 		`SELECT `+userCols+` FROM users WHERE id = $1 FOR UPDATE`, id))

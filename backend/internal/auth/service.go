@@ -17,7 +17,9 @@ type TxManager interface {
 }
 
 // Service orchestrates register/login/refresh/logout and the WeChat link-code
-// flow. WeChat code exchange is injected so cmd/api can pass a stub until M4.
+// flow. WeChat code exchange is injected so the domain stays independent from
+// the external HTTP client; cmd/api uses the real adapter when configured and
+// the explicit not-linked stub otherwise.
 type Service struct {
 	users         UserRepository
 	sessions      SessionRepository
@@ -32,8 +34,8 @@ type Service struct {
 }
 
 // WechatExchanger swaps a wx.login code for the normalized wechat subject.
-// M4 implements it with a real client; the API binary passes a stub that
-// returns WECHAT_IDENTITY_NOT_LINKED.
+// The infra adapter implements it with the real jscode2session client; tests
+// and unconfigured deployments may provide the explicit not-linked stub.
 type WechatExchanger interface {
 	ExchangeForSubject(ctx context.Context, wechatCode string) (string, error)
 }

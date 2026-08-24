@@ -142,7 +142,10 @@ Link Code 短 TTL、单次使用，服务端只保存 keyed hash。
 }
 ```
 
-后端服务端交换微信主体标识，把 `wechat_mini AuthIdentity` 绑定到 Link Code 对应的现有 User，并创建 Mini AuthSession。
+后端服务端调用微信 `jscode2session` 交换主体标识，把 OpenID 作为 `wechat_mini` 的
+`provider_subject` 绑定到 Link Code 对应的现有 User，并创建 Mini AuthSession。微信
+`session_key` 只在微信交换响应中短暂存在，不写入数据库、不返回给客户端；Link Code
+在同一事务中完成归属/有效期校验、Identity 创建和一次性消费。
 
 ### `POST /auth/wechat-mini/login`
 
@@ -725,4 +728,5 @@ GET  /jobs/{id}/events
 POST /jobs/{id}/cancel
 ```
 
-小程序微信登录与 Admin API 可以在 M4/M5 接入，但 Contract 现在先保留命名空间。
+小程序微信登录与 Admin API 已按上述命名空间接入；真实微信身份交换依赖运行时配置
+`WECHAT_APP_ID` 与 `WECHAT_APP_SECRET`。

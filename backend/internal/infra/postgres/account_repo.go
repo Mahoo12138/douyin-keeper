@@ -80,9 +80,14 @@ func (r *AccountRepo) GetByID(ctx context.Context, accountID int64) (*account.Ac
 
 func (r *AccountRepo) Create(ctx context.Context, a *account.Account) error {
 	return From(ctx, r.pool).QueryRow(ctx, `
-		INSERT INTO douyin_accounts (public_id, user_id, binding_status, session_status, risk_status, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
-		RETURNING id`, a.PublicID, a.UserID, a.BindingStatus, a.SessionStatus, a.RiskStatus, a.CreatedAt, a.UpdatedAt).Scan(&a.ID)
+		INSERT INTO douyin_accounts
+			(public_id, user_id, platform_user_id, nickname, avatar_url, binding_status,
+			 session_status, risk_status, paused_at, cooldown_until, last_session_check_at,
+			 last_friend_sync_at, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+		RETURNING id`, a.PublicID, a.UserID, a.PlatformUserID, a.Nickname, a.AvatarURL,
+		a.BindingStatus, a.SessionStatus, a.RiskStatus, a.PausedAt, a.CooldownUntil,
+		a.LastSessionCheckAt, a.LastFriendSyncAt, a.CreatedAt, a.UpdatedAt).Scan(&a.ID)
 }
 
 func (r *AccountRepo) SetBindingStatus(ctx context.Context, accountID int64, status account.BindingStatus) error {

@@ -16,6 +16,8 @@ type UserRepository interface {
 	GetUserByPublicID(ctx context.Context, publicID uuid.UUID) (*User, error)
 	// GetLocalByUsername joins users with the local identity row.
 	GetLocalByUsername(ctx context.Context, username string) (*User, *AuthIdentity, error)
+	// GetWechatBySubject resolves an already-linked mini-program identity.
+	GetWechatBySubject(ctx context.Context, subject string) (*User, error)
 	// LockUserForUpdate obtains a FOR UPDATE row lock inside a tx.
 	LockUserByID(ctx context.Context, id int64) (*User, error)
 	CreateIdentity(ctx context.Context, idn *AuthIdentity) error
@@ -37,4 +39,7 @@ type SessionRepository interface {
 	RevokeSessionTokens(ctx context.Context, sessionID int64) error
 
 	CreateLinkCode(ctx context.Context, lc *LinkCode) error
+	CountActiveLinkCodes(ctx context.Context, userID int64, now time.Time) (int, error)
+	GetLinkCodeByHashForUpdate(ctx context.Context, hash []byte) (*LinkCode, error)
+	ConsumeLinkCode(ctx context.Context, id int64, at time.Time) error
 }

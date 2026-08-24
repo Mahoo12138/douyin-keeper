@@ -23,6 +23,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/friend"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
+	wechatinfra "github.com/mahoo12138/douyin-keeper/backend/internal/infra/wechat"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/messagetemplate"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/notification"
@@ -91,9 +92,13 @@ func main() {
 	outboxRepo := postgres.NewOutboxRepo(pool)
 
 	// ---- services ----
+	var wechatExchanger auth.WechatExchanger = auth.WechatMiniStub{}
+	if cfg.WechatAppID != "" && cfg.WechatAppSecret != "" {
+		wechatExchanger = wechatinfra.NewClient(cfg.WechatAppID, cfg.WechatAppSecret, nil)
+	}
 	authSvc := auth.NewService(authUsers, authSessions, tx, auth.NewHasher(),
 		[]byte(cfg.AuthSigningKey), []byte(cfg.AuthRefreshPepper),
-		cfg.AuthAccessTTL, cfg.AuthRefreshTTL, nil)
+		cfg.AuthAccessTTL, cfg.AuthRefreshTTL, wechatExchanger)
 
 	entSvc := entitlement.NewService(entRepo, entRepo, entRepo, entRepo, userLock, tx,
 		[]byte(cfg.CardCodePepperDK1)).
