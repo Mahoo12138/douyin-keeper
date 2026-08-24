@@ -402,7 +402,7 @@ export async function listFriends(accessToken: string, accountId: string, option
   return data
 }
 
-export async function listConversations(accessToken: string, accountId: string, options?: { limit?: number; include_archived?: boolean }) {
+export async function listConversations(accessToken: string, accountId: string, options?: { limit?: number; cursor?: string; include_archived?: boolean }) {
   const { data, error } = await api.GET('/accounts/{accountId}/conversations', {
     headers: { Authorization: `Bearer ${accessToken}` },
     params: { path: { accountId }, query: options },

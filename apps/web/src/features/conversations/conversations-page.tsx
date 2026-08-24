@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { listAccounts, listConversations, setConversationArchived, type components } from '@douyin-keeper/sdk-ts'
 import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@douyin-keeper/ui-web'
@@ -27,9 +27,11 @@ export function ConversationsPage() {
   })
   const accountId = selectedAccountId ?? accountsQ.data?.items[0]?.id
   const selectedAccount = accountsQ.data?.items.find((account) => account.id === accountId)
-  const conversationsQ = useQuery({
+  const conversationsQ = useInfiniteQuery({
     queryKey: ['conversations', accountId],
-    queryFn: () => listConversations(token as string, accountId as string, { limit: 100, include_archived: true }),
+    queryFn: ({ pageParam }) => listConversations(token as string, accountId as string, { limit: 50, cursor: pageParam, include_archived: true }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     enabled: !!token && !!accountId,
   })
 
@@ -43,7 +45,7 @@ export function ConversationsPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : '更新会话归档状态失败'),
   })
 
-  const conversations = conversationsQ.data?.items ?? []
+  const conversations = conversationsQ.data?.pages.flatMap((page) => page.items) ?? []
   const visibleConversations = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('zh-CN')
     return conversations.filter((item) => {
@@ -102,6 +104,7 @@ export function ConversationsPage() {
           </div>
 
           {conversationsQ.isLoading ? <Skeleton className="h-64 w-full" /> : conversationsQ.isError ? <ErrorState onRetry={() => void conversationsQ.refetch()} /> : visibleConversations.length ? <ConversationContent items={visibleConversations} onArchive={(conversationId, archived) => archiveMutation.mutate({ conversationId, archived })} pendingConversationId={archiveMutation.isPending ? archiveMutation.variables?.conversationId : undefined} /> : <EmptyState hasFilters={!!search || channel !== 'all' || archiveFilter !== 'active'} onReset={() => { setSearch(''); setChannel('all'); setArchiveFilter('active') }} />}
+          {conversationsQ.hasNextPage ? <div className="flex justify-center"><Button variant="outline" onClick={() => void conversationsQ.fetchNextPage()} disabled={conversationsQ.isFetchingNextPage}>{conversationsQ.isFetchingNextPage ? '加载中…' : '加载更多会话'}</Button></div> : null}
           <p className="text-xs text-muted-foreground">会话昵称仅用于展示和诊断，不作为自动发送的唯一目标条件；本页归档不会修改抖音平台状态。</p>
         </CardContent>
       </Card>

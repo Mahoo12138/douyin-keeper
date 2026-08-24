@@ -144,7 +144,8 @@ Sidecar Contract 另外维护 JSON Schema，版本化：
 
 M2 当前实现还提供独立的会话列表 API 和 `/conversations` 页面：会话通过账号归属
 隔离查询，前端展示对端身份状态、通道、最近消息和最近同步时间，并复用统一 SPA
-组件库与主题。独立 `conversations.list` Sidecar 的真实分页抓取仍待平台 selector
+组件库与主题；会话索引列表已接入统一 cursor pagination，默认 50 条并由 Web “加载更多”读取后续页面。
+独立 `conversations.list` Sidecar 的真实分页抓取仍待平台 selector
 联调，不在本切片中猜测内部 DOM。好友页已支持已解析好友的批量火花开关和已有任务时间窗口
 批量编辑，时间窗口沿用任务 PATCH 契约，不隐式创建任务；好友列表已接入统一 cursor pagination，
 Web 端通过“加载更多”读取后续页面。

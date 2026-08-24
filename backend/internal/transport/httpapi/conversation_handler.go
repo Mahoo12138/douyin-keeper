@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -48,16 +49,25 @@ func (s *Server) handleListConversations(w http.ResponseWriter, r *http.Request)
 		writeError(w, r, err)
 		return
 	}
-	items, err := s.conversations.ListForAccount(r.Context(), p.UserID, accountID, conversation.ListFilter{Limit: limit, IncludeArchived: includeArchived})
+	afterID, err := conversationCursor(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	views := make([]ConversationView, 0, len(items))
-	for _, item := range items {
+	page, err := s.conversations.ListPageForAccount(r.Context(), p.UserID, accountID, conversation.ListFilter{Limit: limit, AfterID: afterID, IncludeArchived: includeArchived})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	views := make([]ConversationView, 0, len(page.Items))
+	for _, item := range page.Items {
 		views = append(views, conversationView(item))
 	}
-	writeOK(w, map[string]any{"items": views, "next_cursor": nil})
+	var nextCursor any
+	if page.NextAfterID > 0 {
+		nextCursor = encodeConversationCursor(page.NextAfterID)
+	}
+	writeOK(w, map[string]any{"items": views, "next_cursor": nextCursor})
 }
 
 func (s *Server) handlePatchConversation(w http.ResponseWriter, r *http.Request) {
@@ -88,13 +98,33 @@ func (s *Server) handlePatchConversation(w http.ResponseWriter, r *http.Request)
 func conversationLimit(r *http.Request) (int, error) {
 	value := r.URL.Query().Get("limit")
 	if value == "" {
-		return 100, nil
+		return 50, nil
 	}
 	limit, err := strconv.Atoi(value)
 	if err != nil || limit < 1 || limit > 100 {
 		return 0, apperr.Validation(apperr.CodeConflict, "invalid limit")
 	}
 	return limit, nil
+}
+
+func conversationCursor(r *http.Request) (int64, error) {
+	value := r.URL.Query().Get("cursor")
+	if value == "" {
+		return 0, nil
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return 0, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+	}
+	id, err := strconv.ParseInt(string(decoded), 10, 64)
+	if err != nil || id < 1 {
+		return 0, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+	}
+	return id, nil
+}
+
+func encodeConversationCursor(id int64) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(id, 10)))
 }
 
 func conversationIncludeArchived(r *http.Request) (bool, error) {

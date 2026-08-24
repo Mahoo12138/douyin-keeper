@@ -395,7 +395,8 @@ MVP 允许：
 
 ### `GET /accounts/{account_id}/conversations`
 
-默认只返回未归档会话；传入 `include_archived=true` 返回当前账号下的全部会话。响应
+默认只返回未归档会话；传入 `include_archived=true` 返回当前账号下的全部会话。列表使用统一
+游标分页：`limit` 默认 50、最大 100，后续请求把响应中的 `next_cursor` 作为 `cursor` 传回。响应
 包含 `archived` 与 `archived_at`，但不返回平台会话 ID。
 
 ### `PATCH /accounts/{account_id}/conversations/{conversation_id}`

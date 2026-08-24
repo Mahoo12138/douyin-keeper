@@ -2607,6 +2607,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
                 include_archived?: boolean;
             };
             header?: never;

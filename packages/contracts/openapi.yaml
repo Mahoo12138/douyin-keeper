@@ -768,6 +768,7 @@ paths:
       parameters:
       - $ref: '#/components/parameters/AccountId'
       - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
       - name: include_archived
         in: query
         required: false

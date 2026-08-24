@@ -48,6 +48,37 @@ func (r *ConversationRepo) ListByAccountOwned(ctx context.Context, userID int64,
 	return items, rows.Err()
 }
 
+func (r *ConversationRepo) ListByAccountOwnedPage(ctx context.Context, userID int64, accountPublicID uuid.UUID, filter conversation.ListFilter) ([]*conversation.Conversation, error) {
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT c.id, c.public_id, a.public_id, f.public_id,
+			f.display_name, f.nickname, f.avatar_url, f.identity_status,
+			c.channel, c.last_message_at, c.last_synced_at, c.archived_at
+		FROM conversations c
+		JOIN douyin_accounts a ON a.id = c.account_id
+		JOIN friends f ON f.id = c.friend_id AND f.account_id = c.account_id
+		WHERE a.public_id = $1 AND a.user_id = $2
+		  AND a.deleted_at IS NULL AND f.deleted_at IS NULL
+		  AND ($3 OR c.archived_at IS NULL)
+		  AND ($4::bigint = 0 OR c.id < $4)
+		ORDER BY c.id DESC
+		LIMIT $5`, accountPublicID, userID, filter.IncludeArchived, filter.AfterID, filter.Limit+1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]*conversation.Conversation, 0, filter.Limit+1)
+	for rows.Next() {
+		item := new(conversation.Conversation)
+		if err := rows.Scan(&item.InternalID, &item.ID, &item.AccountID, &item.FriendID,
+			&item.FriendDisplayName, &item.FriendNickname, &item.FriendAvatarURL,
+			&item.PlatformIdentityStatus, &item.Channel, &item.LastMessageAt, &item.LastSyncedAt, &item.ArchivedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func (r *ConversationRepo) SetArchived(ctx context.Context, userID int64, accountPublicID, conversationPublicID uuid.UUID, archived bool, at time.Time) (*conversation.Conversation, error) {
 	var id int64
 	err := From(ctx, r.pool).QueryRow(ctx, `
@@ -93,3 +124,4 @@ func (r *ConversationRepo) getByOwnedID(ctx context.Context, userID int64, accou
 }
 
 var _ conversation.Repository = (*ConversationRepo)(nil)
+var _ conversation.PageRepository = (*ConversationRepo)(nil)
