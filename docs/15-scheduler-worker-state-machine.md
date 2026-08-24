@@ -469,6 +469,9 @@ attempt 2 browser queued
 
 `ADAPTER_INCOMPATIBLE` 同时更新全局 AdapterHealth/Circuit Breaker，避免每个账号重复撞失败。
 
+Sidecar failure 的 `error.detail` 必须携带明确的发送结果证据；`outcome=unknown`、缺失
+证据以及 NDJSON 读写中断都保持 fail-closed，不得因为错误码相似而自动回落或重发。
+
 如果结果未知，不允许 fallback 重发。
 
 当前 worker registry 只启用 `browser.consumer`；`protocol.im` 尚未有可执行

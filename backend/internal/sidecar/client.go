@@ -10,6 +10,12 @@ import (
 // ProtocolVersion is the v1 envelope version (sidecar-protocol-v1.schema.json).
 const ProtocolVersion = 1
 
+const (
+	MinDeadlineMS     = 1_000
+	MaxDeadlineMS     = 300_000
+	DefaultDeadlineMS = 30_000
+)
+
 // Ops are the v1 operations (docs/10 §4).
 const (
 	OpsHealthCheck        = "health.check"
@@ -61,27 +67,41 @@ type Response struct {
 
 // Stable error codes (docs/10 §11).
 const (
-	ErrInvalidRequest         = "INVALID_REQUEST"
-	ErrUnsupportedProtocol    = "UNSUPPORTED_PROTOCOL_VERSION"
-	ErrUnsupportedOperation   = "UNSUPPORTED_OPERATION"
-	ErrDeadlineExceeded       = "DEADLINE_EXCEEDED"
-	ErrSessionExpired         = "SESSION_EXPIRED"
-	ErrQRExpired              = "QR_EXPIRED"
-	ErrSMSCodeInvalid         = "SMS_CODE_INVALID"
-	ErrSMSCodeExpired         = "SMS_CODE_EXPIRED"
-	ErrLoginHandleNotFound    = "LOGIN_HANDLE_NOT_FOUND"
-	ErrChallengeRequired      = "CHALLENGE_REQUIRED"
-	ErrPlatformRateLimited    = "PLATFORM_RATE_LIMITED"
-	ErrBrowserSelectorChanged = "BROWSER_SELECTOR_CHANGED"
-	ErrFriendNotFound         = "FRIEND_NOT_FOUND"
-	ErrFriendAmbiguous        = "FRIEND_AMBIGUOUS"
-	ErrConversationNotFound   = "CONVERSATION_NOT_FOUND"
-	ErrTargetIdentityMismatch = "TARGET_IDENTITY_MISMATCH"
-	ErrAdapterUnavailable     = "ADAPTER_UNAVAILABLE"
-	ErrAdapterIncompatible    = "ADAPTER_INCOMPATIBLE"
-	ErrNetworkTimeout         = "NETWORK_TIMEOUT"
-	ErrInternal               = "SIDECAR_INTERNAL_ERROR"
+	ErrInvalidRequest          = "INVALID_REQUEST"
+	ErrUnsupportedProtocol     = "UNSUPPORTED_PROTOCOL_VERSION"
+	ErrUnsupportedOperation    = "UNSUPPORTED_OPERATION"
+	ErrDeadlineExceeded        = "DEADLINE_EXCEEDED"
+	ErrSessionExpired          = "SESSION_EXPIRED"
+	ErrQRExpired               = "QR_EXPIRED"
+	ErrSMSCodeInvalid          = "SMS_CODE_INVALID"
+	ErrSMSCodeExpired          = "SMS_CODE_EXPIRED"
+	ErrLoginHandleNotFound     = "LOGIN_HANDLE_NOT_FOUND"
+	ErrChallengeRequired       = "CHALLENGE_REQUIRED"
+	ErrPlatformRateLimited     = "PLATFORM_RATE_LIMITED"
+	ErrBrowserSelectorChanged  = "BROWSER_SELECTOR_CHANGED"
+	ErrFriendNotFound          = "FRIEND_NOT_FOUND"
+	ErrFriendAmbiguous         = "FRIEND_AMBIGUOUS"
+	ErrConversationNotFound    = "CONVERSATION_NOT_FOUND"
+	ErrTargetIdentityMismatch  = "TARGET_IDENTITY_MISMATCH"
+	ErrBrowserNavigationFailed = "BROWSER_NAVIGATION_FAILED"
+	ErrBrowserContextFailed    = "BROWSER_CONTEXT_FAILED"
+	ErrAdapterUnavailable      = "ADAPTER_UNAVAILABLE"
+	ErrAdapterIncompatible     = "ADAPTER_INCOMPATIBLE"
+	ErrNetworkTimeout          = "NETWORK_TIMEOUT"
+	ErrNetworkError            = "NETWORK_ERROR"
+	ErrInternal                = "SIDECAR_INTERNAL_ERROR"
 )
+
+func IsKnownOperation(op string) bool {
+	switch op {
+	case OpsHealthCheck, OpsLoginQRStart, OpsLoginQRPoll, OpsLoginSMSStart,
+		OpsLoginSMSVerify, OpsSessionValidate, OpsFriendsList, OpsConversationsList,
+		OpsMessageSendText, OpsMessageSendSticker, OpsMessageSendFirst:
+		return true
+	default:
+		return false
+	}
+}
 
 // Client is the Go-side abstraction over one sidecar transport. The M1
 // implementation spawns the sidecar process and speaks NDJSON.

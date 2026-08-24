@@ -97,8 +97,20 @@ func (c *ProcessClient) Call(ctx context.Context, req Request) (*Response, error
 	if req.RequestID == "" {
 		return nil, errors.New("sidecar: request_id is required")
 	}
-	if req.Op == "" {
-		return nil, errors.New("sidecar: op is required")
+	if !IsKnownOperation(req.Op) {
+		return nil, fmt.Errorf("sidecar: unsupported operation %q", req.Op)
+	}
+	if req.DeadlineMS == 0 {
+		req.DeadlineMS = DefaultDeadlineMS
+	}
+	if req.DeadlineMS < MinDeadlineMS || req.DeadlineMS > MaxDeadlineMS {
+		return nil, fmt.Errorf("sidecar: deadline_ms must be between %d and %d", MinDeadlineMS, MaxDeadlineMS)
+	}
+	if req.Input == nil {
+		req.Input = map[string]any{}
+	}
+	if !isJSONObject(req.Input) {
+		return nil, errors.New("sidecar: input must be a JSON object")
 	}
 	callCtx := ctx
 	var cancel context.CancelFunc
@@ -146,6 +158,10 @@ func (c *ProcessClient) Call(ctx context.Context, req Request) (*Response, error
 			c.stopLocked()
 			return nil, got.err
 		}
+		if got.response == nil {
+			c.stopLocked()
+			return nil, errors.New("sidecar: empty response")
+		}
 		if got.response.ProtocolVersion != ProtocolVersion {
 			c.stopLocked()
 			return nil, fmt.Errorf("sidecar: unsupported response protocol version %d", got.response.ProtocolVersion)
@@ -154,8 +170,32 @@ func (c *ProcessClient) Call(ctx context.Context, req Request) (*Response, error
 			c.stopLocked()
 			return nil, fmt.Errorf("sidecar: response request_id %q does not match %q", got.response.RequestID, req.RequestID)
 		}
+		if got.response.OK && got.response.Error != nil {
+			c.stopLocked()
+			return nil, errors.New("sidecar: successful response contains error")
+		}
+		if !got.response.OK && (got.response.Error == nil || got.response.Error.Code == "") {
+			c.stopLocked()
+			return nil, errors.New("sidecar: failed response is missing error code")
+		}
+		if got.response.OK && !isJSONObject(got.response.Result) {
+			c.stopLocked()
+			return nil, errors.New("sidecar: successful response result must be a JSON object")
+		}
 		return got.response, nil
 	}
+}
+
+func isJSONObject(value any) bool {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return false
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(data, &object); err != nil {
+		return false
+	}
+	return object != nil
 }
 
 // Close terminates the child process and is safe to call more than once.

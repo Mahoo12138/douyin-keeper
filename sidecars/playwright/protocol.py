@@ -29,6 +29,7 @@ OPS = {
 ERR_INVALID_REQUEST = "INVALID_REQUEST"
 ERR_UNSUPPORTED_VERSION = "UNSUPPORTED_PROTOCOL_VERSION"
 ERR_UNSUPPORTED_OPERATION = "UNSUPPORTED_OPERATION"
+ERR_DEADLINE_EXCEEDED = "DEADLINE_EXCEEDED"
 ERR_SESSION_EXPIRED = "SESSION_EXPIRED"
 ERR_ADAPTER_UNAVAILABLE = "ADAPTER_UNAVAILABLE"
 ERR_QR_EXPIRED = "QR_EXPIRED"
@@ -41,6 +42,13 @@ ERR_BROWSER_SELECTOR_CHANGED = "BROWSER_SELECTOR_CHANGED"
 ERR_TARGET_IDENTITY_MISMATCH = "TARGET_IDENTITY_MISMATCH"
 ERR_CONVERSATION_NOT_FOUND = "CONVERSATION_NOT_FOUND"
 ERR_ADAPTER_INCOMPATIBLE = "ADAPTER_INCOMPATIBLE"
+ERR_BROWSER_NAVIGATION_FAILED = "BROWSER_NAVIGATION_FAILED"
+ERR_BROWSER_CONTEXT_FAILED = "BROWSER_CONTEXT_FAILED"
+ERR_NETWORK_TIMEOUT = "NETWORK_TIMEOUT"
+ERR_NETWORK_ERROR = "NETWORK_ERROR"
+
+MIN_DEADLINE_MS = 1000
+MAX_DEADLINE_MS = 300000
 
 
 class ProtocolError(Exception):
@@ -59,16 +67,24 @@ def parse_request(line):
         raise ProtocolError(ERR_INVALID_REQUEST, f"invalid JSON: {exc}") from exc
     if not isinstance(req, dict):
         raise ProtocolError(ERR_INVALID_REQUEST, "request must be an object")
-    if req.get("protocol_version") != PROTOCOL_VERSION:
+    if type(req.get("protocol_version")) is not int or req.get("protocol_version") != PROTOCOL_VERSION:
         raise ProtocolError(
             ERR_UNSUPPORTED_VERSION,
             f"unsupported protocol_version: {req.get('protocol_version')}",
         )
-    if not req.get("request_id"):
+    if not isinstance(req.get("request_id"), str) or not req.get("request_id"):
         raise ProtocolError(ERR_INVALID_REQUEST, "missing request_id")
     op = req.get("op")
     if op not in OPS:
         raise ProtocolError(ERR_UNSUPPORTED_OPERATION, f"unsupported op: {op}")
+    deadline_ms = req.get("deadline_ms")
+    if type(deadline_ms) is not int or not MIN_DEADLINE_MS <= deadline_ms <= MAX_DEADLINE_MS:
+        raise ProtocolError(ERR_INVALID_REQUEST, "deadline_ms must be between 1000 and 300000")
+    if not isinstance(req.get("input"), dict):
+        raise ProtocolError(ERR_INVALID_REQUEST, "input must be an object")
+    allowed = {"protocol_version", "request_id", "op", "deadline_ms", "input"}
+    if set(req) - allowed:
+        raise ProtocolError(ERR_INVALID_REQUEST, "request contains unknown fields")
     return req
 
 
@@ -83,11 +99,14 @@ def success(req, result, adapter, adapter_version="0.1.0", duration_ms=0):
 
 
 def failure(req, err, adapter="nop", adapter_version="0.1.0", duration_ms=0):
+    error = {"code": err.code, "retryable": err.retryable, "message": str(err)}
+    if isinstance(err.detail, dict):
+        error["detail"] = err.detail
     return {
         "protocol_version": PROTOCOL_VERSION,
         "request_id": req["request_id"],
         "ok": False,
-        "error": {"code": err.code, "retryable": err.retryable, "message": str(err)},
+        "error": error,
         "meta": {"adapter": adapter, "adapter_version": adapter_version, "duration_ms": duration_ms},
     }
 

@@ -197,6 +197,10 @@ M2 当前实现还提供独立的会话列表 API 和 `/conversations` 页面：
 查询、统一 Web 会话筛选与响应式操作按钮；平台侧归档仍等待 Sidecar 操作契约和真实
 selector 联调。
 
+M7 的本地 Protocol 前置切片已完成 v1 envelope 加固：Go/Python 双侧校验 deadline、输入
+对象和未知字段，失败响应透传 `error.detail`，发送 outcome 未知时保持 fail-closed；真实
+Protocol SDK、Creator 首聊和平台 selector 仍不在本地猜测实现。
+
 ## 5. 编码前必须先冻结的契约
 
 开始正式实现前，先确定并尽量不频繁改动：

@@ -22,6 +22,10 @@ Go Worker <--stdout-- Sidecar
 - Sidecar 不连接 PostgreSQL / Redis；
 - 不允许响应 Cookie、storage state、验证码、Authorization header 等 Secret。
 
+Request 必须符合 v1 schema：`protocol_version=1`、`input` 为对象，`deadline_ms` 为
+1000–300000 的整数；Go Client 对未填写的 deadline 使用 30000ms 默认值。Sidecar
+拒绝未知字段，避免业务层悄悄依赖未冻结的协议扩展。
+
 后续需要高并发时可迁移 Unix Domain Socket，但消息 Envelope 保持不变。
 
 ## 2. Envelope
@@ -76,6 +80,8 @@ Go Worker <--stdout-- Sidecar
 ```
 
 `message/detail` 只用于内部诊断，API 对外只暴露稳定 `code` 和经过整理的用户文案。
+`error.detail` 必须保持为对象并透传 Adapter 提供的结果证据；尤其是发送失败时的
+`outcome=not_sent|unknown`，Go 才能决定是否允许 fallback 或重试，不能由 Worker 猜测。
 
 ## 3. Secret 传递
 

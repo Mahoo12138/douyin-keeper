@@ -37,6 +37,24 @@ def test_parse_rejects_unknown_op():
         assert exc.code == protocol.ERR_UNSUPPORTED_OPERATION
 
 
+def test_parse_rejects_invalid_deadline_and_input():
+    bad_deadline = make_req()
+    bad_deadline["deadline_ms"] = 999
+    try:
+        protocol.parse_request(json.dumps(bad_deadline))
+        assert False, "expected ProtocolError"
+    except protocol.ProtocolError as exc:
+        assert exc.code == protocol.ERR_INVALID_REQUEST
+
+    bad_input = make_req()
+    bad_input["input"] = []
+    try:
+        protocol.parse_request(json.dumps(bad_input))
+        assert False, "expected ProtocolError"
+    except protocol.ProtocolError as exc:
+        assert exc.code == protocol.ERR_INVALID_REQUEST
+
+
 def test_health_success_envelope():
     req = make_req()
     out = protocol.success(req, protocol.health_result(), "browser.consumer")
@@ -52,6 +70,16 @@ def test_unsupported_op_is_structured_failure():
     out = protocol.unsupported(req)
     assert out["ok"] is False
     assert out["error"]["code"] == protocol.ERR_UNSUPPORTED_OPERATION
+
+
+def test_failure_preserves_structured_detail():
+    req = make_req("message.send_text")
+    out = protocol.failure(req, protocol.ProtocolError(
+        protocol.ERR_ADAPTER_INCOMPATIBLE,
+        "send outcome is unknown",
+        detail={"outcome": "unknown"},
+    ))
+    assert out["error"]["detail"] == {"outcome": "unknown"}
 
 
 def test_validate_session_accepts_sessionid_cookie():

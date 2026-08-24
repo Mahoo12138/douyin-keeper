@@ -75,6 +75,10 @@ MVP 可不启用。
 
 Protocol 失败只导致 capability degraded，不应直接把账号标成 expired。
 
+Go Sidecar Client 在发送前规范化并校验 v1 request envelope，在收到响应后校验
+`request_id`、`protocol_version` 及 success/failure 互斥关系；Adapter 的结构化
+`error.detail` 原样保留给 fallback policy，避免把未知平台结果误判为未发送。
+
 
 ## 2.1 Entitlement Service
 

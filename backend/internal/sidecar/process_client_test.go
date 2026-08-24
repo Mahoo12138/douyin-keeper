@@ -56,3 +56,30 @@ func TestProcessClientMarksStartFailureAsSafeRetryBoundary(t *testing.T) {
 		t.Fatalf("expected ErrProcessStart, got %v", err)
 	}
 }
+
+func TestProcessClientNormalizesAndValidatesRequestEnvelope(t *testing.T) {
+	script := `while IFS= read -r line; do printf '%s\n' '{"protocol_version":1,"request_id":"r1","ok":true,"result":{},"meta":{"adapter":"test","adapter_version":"1","duration_ms":0}}'; done`
+	client := NewProcessClient("sh", "-c", script)
+	defer client.Close()
+	if _, err := client.Call(context.Background(), Request{RequestID: "r1", Op: OpsHealthCheck}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Call(context.Background(), Request{RequestID: "r2", Op: "not-an-op"}); err == nil {
+		t.Fatal("unknown operation should be rejected")
+	}
+	if _, err := client.Call(context.Background(), Request{RequestID: "r3", Op: OpsHealthCheck, DeadlineMS: MinDeadlineMS - 1}); err == nil {
+		t.Fatal("deadline below contract minimum should be rejected")
+	}
+	if _, err := client.Call(context.Background(), Request{RequestID: "r4", Op: OpsHealthCheck, Input: []string{"not", "an", "object"}}); err == nil {
+		t.Fatal("non-object input should be rejected")
+	}
+}
+
+func TestProcessClientRejectsInconsistentResponseEnvelope(t *testing.T) {
+	script := `while IFS= read -r line; do printf '%s\n' '{"protocol_version":1,"request_id":"r1","ok":true,"error":{"code":"BAD"},"result":{},"meta":{"adapter":"test","adapter_version":"1","duration_ms":0}}'; done`
+	client := NewProcessClient("sh", "-c", script)
+	defer client.Close()
+	if _, err := client.Call(context.Background(), Request{RequestID: "r1", Op: OpsHealthCheck}); err == nil || !strings.Contains(err.Error(), "contains error") {
+		t.Fatalf("expected inconsistent response error, got %v", err)
+	}
+}

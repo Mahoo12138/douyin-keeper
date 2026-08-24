@@ -150,6 +150,10 @@ Protocol 作为可选、实验性 Adapter。
 - 只运行已验证版本；
 - Sidecar 无 DB/Redis/主 Session Key 权限。
 
+在真实 Protocol SDK 接入前，当前本地切片先冻结并加固 NDJSON envelope：请求 deadline
+范围、输入对象和未知字段由 Sidecar 拒绝，失败响应保留 Adapter 的 outcome 证据。真实
+平台发送仍需完成 SDK/selector 联调后才能启用。
+
 更理想的长期方向是把必要协议抽象成稳定的内部 SDK，而不是长期依赖前端 webpack chunk 结构。
 
 ## 8. Capability

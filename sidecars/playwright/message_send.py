@@ -15,8 +15,8 @@ CHALLENGE_TEXTS = ("安全验证", "滑动验证", "人机验证", "身份验证
 RATE_LIMIT_TEXTS = ("操作频繁", "请求过于频繁", "访问受限")
 
 
-def _error(code, message, retryable=False):
-    return protocol.ProtocolError(code, message, retryable=retryable)
+def _error(code, message, retryable=False, detail=None):
+    return protocol.ProtocolError(code, message, retryable=retryable, detail=detail)
 
 
 def _session_path(input_data):
@@ -175,8 +175,8 @@ def send_text(input_data):
         page.keyboard.press("Enter")
         page.wait_for_timeout(1_000)
         if text in _editor_text(editor):
-            raise _error(protocol.ERR_ADAPTER_INCOMPATIBLE, "message send was not confirmed")
+            raise _error(protocol.ERR_ADAPTER_INCOMPATIBLE, "message send was not confirmed", detail={"outcome": "unknown"})
         message_id = _last_message_id(page, text)
         if not message_id:
-            raise _error(protocol.ERR_ADAPTER_INCOMPATIBLE, "platform message id was not observed")
+            raise _error(protocol.ERR_ADAPTER_INCOMPATIBLE, "platform message id was not observed", detail={"outcome": "unknown"})
         return {"confirmed": True, "platform_message_id": message_id}
