@@ -1,17 +1,19 @@
 import { Link } from '@tanstack/react-router'
 import { Avatar, AvatarFallback, AvatarImage, Button } from '@douyin-keeper/ui-web'
-import { ArrowRight, RefreshCw, Smartphone, UsersRound } from 'lucide-react'
+import { ArrowRight, Pause, Play, RefreshCw, Smartphone, Trash2, UsersRound } from 'lucide-react'
 
 import type { Account } from './account-types'
 import { bindingLabel, formatDate, riskLabel, sessionLabel, StatusBadge } from './account-status'
 
-export function AccountList({ accounts, selectedAccountId, busyAction, onSelect, onSession, onFriends }: {
+export function AccountList({ accounts, selectedAccountId, busyAction, onSelect, onSession, onFriends, onPause, onRelease }: {
   accounts: Account[]
   selectedAccountId: string | null
   busyAction: string | null
   onSelect: (accountId: string) => void
   onSession: (account: Account) => void
   onFriends: (account: Account) => void
+  onPause: (account: Account) => void
+  onRelease: (account: Account) => void
 }) {
   return (
     <div className="space-y-3">
@@ -24,19 +26,23 @@ export function AccountList({ accounts, selectedAccountId, busyAction, onSelect,
           onSelect={() => onSelect(account.id)}
           onSession={() => onSession(account)}
           onFriends={() => onFriends(account)}
+          onPause={() => onPause(account)}
+          onRelease={() => onRelease(account)}
         />
       ))}
     </div>
   )
 }
 
-function AccountRow({ account, selected, busyAction, onSelect, onSession, onFriends }: {
+function AccountRow({ account, selected, busyAction, onSelect, onSession, onFriends, onPause, onRelease }: {
   account: Account
   selected: boolean
   busyAction: string | null
   onSelect: () => void
   onSession: () => void
   onFriends: () => void
+  onPause: () => void
+  onRelease: () => void
 }) {
   return (
     <div className={`rounded-xl border p-4 transition-colors ${selected ? 'border-primary/40 bg-primary/[0.03]' : 'border-border'}`}>
@@ -64,6 +70,14 @@ function AccountRow({ account, selected, busyAction, onSelect, onSession, onFrie
           <Button variant="outline" size="sm" onClick={onFriends} disabled={busyAction !== null}>
             <UsersRound />
             同步好友
+          </Button>
+          <Button variant="outline" size="sm" onClick={onPause} disabled={busyAction !== null}>
+            {account.paused_at ? <Play /> : <Pause />}
+            {account.paused_at ? '恢复任务' : '暂停任务'}
+          </Button>
+          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={onRelease} disabled={busyAction !== null}>
+            <Trash2 />
+            解除绑定
           </Button>
         </div>
       </div>

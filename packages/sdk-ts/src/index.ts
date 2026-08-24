@@ -318,6 +318,30 @@ export async function syncAccountFriends(accessToken: string, accountId: string)
   return data
 }
 
+export async function pauseAccount(accessToken: string, accountId: string) {
+  const { error } = await api.POST('/accounts/{accountId}/pause', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { accountId } },
+  })
+  if (error) throwApiError(error, 'account pause failed')
+}
+
+export async function resumeAccount(accessToken: string, accountId: string) {
+  const { error } = await api.POST('/accounts/{accountId}/resume', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { accountId } },
+  })
+  if (error) throwApiError(error, 'account resume failed')
+}
+
+export async function deleteAccount(accessToken: string, accountId: string) {
+  const { error } = await api.DELETE('/accounts/{accountId}', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { accountId } },
+  })
+  if (error) throwApiError(error, 'account release failed')
+}
+
 export async function accountCapabilities(accessToken: string, accountId: string) {
   const { data, error } = await api.GET('/accounts/{accountId}/capabilities', {
     headers: { Authorization: `Bearer ${accessToken}` },

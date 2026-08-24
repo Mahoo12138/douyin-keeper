@@ -605,6 +605,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/JobRef'
+  /accounts/{accountId}/pause:
+    post:
+      operationId: pauseAccount
+      parameters:
+      - $ref: '#/components/parameters/AccountId'
+      responses:
+        '204':
+          description: Account tasks paused
+  /accounts/{accountId}/resume:
+    post:
+      operationId: resumeAccount
+      parameters:
+      - $ref: '#/components/parameters/AccountId'
+      responses:
+        '204':
+          description: Account tasks resumed
+  /accounts/{accountId}:
+    delete:
+      operationId: deleteAccount
+      parameters:
+      - $ref: '#/components/parameters/AccountId'
+      responses:
+        '204':
+          description: Account released and future work cancelled
   /accounts/{accountId}/friends-sync:
     post:
       operationId: syncAccountFriends

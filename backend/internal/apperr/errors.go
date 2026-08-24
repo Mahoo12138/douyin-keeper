@@ -38,6 +38,7 @@ const (
 	CodeLinkCodeExpired = "LINK_CODE_EXPIRED"
 
 	CodeAccountBusy               = "ACCOUNT_BUSY"
+	CodeAccountReleased           = "ACCOUNT_RELEASED"
 	CodeAccountPaused             = "ACCOUNT_PAUSED"
 	CodeAccountCooldownActive     = "ACCOUNT_COOLDOWN_ACTIVE"
 	CodeJobNotCancelable          = "JOB_NOT_CANCELABLE"

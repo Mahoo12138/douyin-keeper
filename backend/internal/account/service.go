@@ -184,10 +184,7 @@ func (s *Service) Release(ctx context.Context, userID int64, publicID uuid.UUID)
 		return err
 	}
 	return s.tx.WithinTx(ctx, func(tctx context.Context) error {
-		if err := s.repo.SoftDelete(tctx, acct.ID); err != nil {
-			return err
-		}
-		return s.repo.SetBindingStatus(tctx, acct.ID, BindingReleased)
+		return s.repo.SoftDelete(tctx, acct.ID)
 	})
 }
 

@@ -6,8 +6,11 @@ import {
   cancelJob,
   checkAccountSession,
   createAccountBinding,
+  deleteAccount,
   getJob,
   listAccounts,
+  pauseAccount,
+  resumeAccount,
   streamJobEvents,
   submitSMSVerification,
   syncAccountFriends,
@@ -141,20 +144,44 @@ export function AccountsPage() {
     toast.info('已取消绑定')
   }
 
-  async function runAccountAction(account: Account, action: 'session' | 'friends') {
+  async function runAccountAction(account: Account, action: 'session' | 'friends' | 'pause' | 'resume') {
     if (!token) return
     const key = `${account.id}:${action}`
     setBusyAction(key)
     try {
-      const job = action === 'session' ? await checkAccountSession(token, account.id) : await syncAccountFriends(token, account.id)
-      toast.success(action === 'session' ? '会话检查已开始' : '好友同步已开始')
-      await waitForJob(token, job.job_id)
+      if (action === 'pause') {
+        await pauseAccount(token, account.id)
+        toast.success('账号任务已暂停')
+      } else if (action === 'resume') {
+        await resumeAccount(token, account.id)
+        toast.success('账号任务已恢复')
+      } else {
+        const job = action === 'session' ? await checkAccountSession(token, account.id) : await syncAccountFriends(token, account.id)
+        toast.success(action === 'session' ? '会话检查已开始' : '好友同步已开始')
+        await waitForJob(token, job.job_id)
+      }
       await queryClient.invalidateQueries({ queryKey: ['accounts'] })
       if (selectedAccountId === account.id) {
         await queryClient.invalidateQueries({ queryKey: ['account-capabilities', account.id] })
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '任务执行失败')
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
+  async function releaseAccount(account: Account) {
+    if (!token || !window.confirm(`确认解除“${account.nickname || '未命名账号'}”的绑定吗？未执行任务会被取消，会话也会被撤销。`)) return
+    const key = `${account.id}:release`
+    setBusyAction(key)
+    try {
+      await deleteAccount(token, account.id)
+      setSelectedAccountId(null)
+      await queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      toast.success('账号已解除绑定')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '解除绑定失败')
     } finally {
       setBusyAction(null)
     }
@@ -208,6 +235,8 @@ export function AccountsPage() {
               onSelect={(accountId) => setSelectedAccountId((current) => current === accountId ? null : accountId)}
               onSession={(account) => void runAccountAction(account, 'session')}
               onFriends={(account) => void runAccountAction(account, 'friends')}
+              onPause={(account) => void runAccountAction(account, account.paused_at ? 'resume' : 'pause')}
+              onRelease={(account) => void releaseAccount(account)}
             />
           )}
         </CardContent>

@@ -204,8 +204,42 @@ func (r *AccountRepo) SetLastFriendSyncAt(ctx context.Context, accountID int64, 
 }
 
 func (r *AccountRepo) SoftDelete(ctx context.Context, accountID int64) error {
-	_, err := From(ctx, r.pool).Exec(ctx, `
-		UPDATE douyin_accounts SET deleted_at=now(), updated_at=now() WHERE id=$1`, accountID)
+	db := From(ctx, r.pool)
+	const releasedCode = apperr.CodeAccountReleased
+	if _, err := db.Exec(ctx, `
+		UPDATE spark_tasks
+		SET enabled=false, updated_at=now()
+		WHERE account_id=$1 AND deleted_at IS NULL`, accountID); err != nil {
+		return err
+	}
+	if _, err := db.Exec(ctx, `
+		UPDATE send_intents
+		SET status='cancelled', error_code=$2, next_attempt_at=NULL, updated_at=now()
+		WHERE account_id=$1 AND status IN ('pending','queued','retry_wait')`, accountID, releasedCode); err != nil {
+		return err
+	}
+	if _, err := db.Exec(ctx, `
+		UPDATE send_jobs
+		SET status='cancelled', error_code=$2, finished_at=now(), heartbeat_at=NULL, lease_expires_at=NULL
+		WHERE account_id=$1 AND status='queued'`, accountID, releasedCode); err != nil {
+		return err
+	}
+	if _, err := db.Exec(ctx, `
+		UPDATE jobs
+		SET cancel_requested_at=COALESCE(cancel_requested_at, now())
+		WHERE account_id=$1 AND cancelable AND status IN ('queued','running','waiting_user')`, accountID); err != nil {
+		return err
+	}
+	if _, err := db.Exec(ctx, `
+		UPDATE account_sessions
+		SET revoked_at=COALESCE(revoked_at, now())
+		WHERE account_id=$1 AND revoked_at IS NULL`, accountID); err != nil {
+		return err
+	}
+	_, err := db.Exec(ctx, `
+		UPDATE douyin_accounts
+		SET deleted_at=now(), binding_status='released', paused_at=COALESCE(paused_at, now()), updated_at=now()
+		WHERE id=$1 AND deleted_at IS NULL`, accountID)
 	return err
 }
 

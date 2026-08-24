@@ -129,6 +129,9 @@ Sidecar Contract 另外维护 JSON Schema，版本化：
 - Account Lock；
 - PC 账号管理页面。
 
+当前账号管理页面已补齐暂停/恢复任务和解除绑定闭环：解除绑定在同一事务中软删除账号、停用任务、
+取消后续未执行 Intent、请求取消关联 Job，并撤销账号 Session。
+
 ### M2 — 好友
 
 - Friends Sync；
