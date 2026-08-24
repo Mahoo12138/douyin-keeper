@@ -163,6 +163,7 @@ type IntentView struct {
 	CreatedAt   time.Time          `json:"created_at"`
 	Account     HistoryAccountView `json:"account"`
 	Friend      HistoryFriendView  `json:"friend"`
+	Task        *HistoryTaskView   `json:"task"`
 	LatestJob   *HistoryJobView    `json:"latest_job"`
 }
 
@@ -174,6 +175,12 @@ type HistoryAccountView struct {
 type HistoryFriendView struct {
 	ID          uuid.UUID `json:"id"`
 	DisplayName string    `json:"display_name"`
+}
+
+type HistoryTaskView struct {
+	ID          uuid.UUID `json:"id"`
+	MessageKind string    `json:"message_kind"`
+	Body        *string   `json:"body"`
 }
 
 type HistoryJobView struct {
@@ -196,8 +203,16 @@ func intentView(i *send.SendIntent) IntentView {
 		ErrorCode: i.ErrorCode, ScheduledAt: i.ScheduledAt, CreatedAt: i.CreatedAt,
 		Account:   HistoryAccountView{ID: i.AccountPublicID, Nickname: i.AccountNickname},
 		Friend:    HistoryFriendView{ID: i.FriendPublicID, DisplayName: i.FriendDisplayName},
+		Task:      historyTaskView(i),
 		LatestJob: latest,
 	}
+}
+
+func historyTaskView(i *send.SendIntent) *HistoryTaskView {
+	if i.TaskPublicID == nil || i.TaskMessageKind == nil {
+		return nil
+	}
+	return &HistoryTaskView{ID: *i.TaskPublicID, MessageKind: *i.TaskMessageKind, Body: i.TaskMessageBody}
 }
 
 type SendJobView struct {

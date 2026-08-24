@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/mahoo12138/douyin-keeper/backend/internal/send"
 )
 
 func TestParseIntentFilter(t *testing.T) {
@@ -31,6 +33,16 @@ func TestParseIntentFilter(t *testing.T) {
 	}
 	if filter.To == nil || !filter.To.Equal(time.Date(2026, time.August, 2, 0, 0, 0, 0, time.UTC)) {
 		t.Fatalf("to filter = %v", filter.To)
+	}
+}
+
+func TestIntentViewIncludesTaskSummary(t *testing.T) {
+	taskID := uuid.New()
+	body := "晚间火花问候"
+	kind := "text"
+	view := intentView(&send.SendIntent{PublicID: uuid.New(), TaskPublicID: &taskID, TaskMessageKind: &kind, TaskMessageBody: &body})
+	if view.Task == nil || view.Task.ID != taskID || view.Task.MessageKind != kind || view.Task.Body == nil || *view.Task.Body != body {
+		t.Fatalf("task summary = %+v, want id=%s kind=%s body=%q", view.Task, taskID, kind, body)
 	}
 }
 

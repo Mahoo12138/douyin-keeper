@@ -74,6 +74,7 @@ export function HistoryPage() {
       item.account.nickname,
       item.friend.display_name,
       item.task_id ?? '',
+      item.task?.body ?? '',
       item.error_code ?? '',
       item.latest_job?.adapter ?? '',
     ].some((value) => value.toLocaleLowerCase('zh-CN').includes(query)))
@@ -190,6 +191,8 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
 }
 
 function taskLabel(item: HistoryItem) {
+  if (item.task?.body) return item.task.body
+  if (item.task?.message_kind === 'sticker') return '贴纸消息'
   return item.task_id ? `任务 ${item.task_id.slice(0, 8)}` : '临时发送'
 }
 

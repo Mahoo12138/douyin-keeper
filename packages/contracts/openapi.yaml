@@ -882,6 +882,24 @@ components:
           format: uuid
         display_name:
           type: string
+    HistoryTask:
+      type: object
+      required:
+      - id
+      - message_kind
+      properties:
+        id:
+          type: string
+          format: uuid
+        message_kind:
+          type: string
+          enum:
+          - text
+          - sticker
+        body:
+          type:
+          - string
+          - 'null'
     HistoryJob:
       type: object
       required:
@@ -922,6 +940,7 @@ components:
       - created_at
       - account
       - friend
+      - task
       - latest_job
       properties:
         id:
@@ -943,6 +962,10 @@ components:
           - string
           - 'null'
           format: uuid
+        task:
+          oneOf:
+          - $ref: '#/components/schemas/HistoryTask'
+          - type: 'null'
         local_date:
           type:
           - string

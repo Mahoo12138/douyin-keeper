@@ -105,7 +105,7 @@ func (r *SendRepo) GetIntentByID(ctx context.Context, intentID int64) (*send.Sen
 
 func (r *SendRepo) ListIntentsByUser(ctx context.Context, userID int64, filter send.IntentListFilter) ([]*send.SendIntent, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
-		SELECT `+intentCols+`, t.public_id AS task_public_id,
+		SELECT `+intentCols+`, t.public_id AS task_public_id, t.message_kind, t.message_body,
 			a.public_id AS account_public_id, a.nickname,
 			f.public_id AS friend_public_id, f.display_name,
 			j.public_id, j.selected_adapter, j.attempt, j.status, j.error_code
@@ -131,6 +131,8 @@ func (r *SendRepo) ListIntentsByUser(ctx context.Context, userID int64, filter s
 	for rows.Next() {
 		var in send.SendIntent
 		var taskID pgtype.UUID
+		var taskKind pgtype.Text
+		var taskBody pgtype.Text
 		var jobID pgtype.UUID
 		var adapter pgtype.Text
 		var attempt pgtype.Int4
@@ -138,13 +140,19 @@ func (r *SendRepo) ListIntentsByUser(ctx context.Context, userID int64, filter s
 		var jobError pgtype.Text
 		if err := rows.Scan(&in.ID, &in.PublicID, &in.IntentType, &in.RequestID, &in.TaskID, &in.AccountID,
 			&in.FriendID, &in.LocalDate, &in.ScheduledAt, &in.Status, &in.ErrorCode, &in.NextAttemptAt,
-			&in.LastJobID, &in.CreatedAt, &in.UpdatedAt, &taskID, &in.AccountPublicID, &in.AccountNickname,
+			&in.LastJobID, &in.CreatedAt, &in.UpdatedAt, &taskID, &taskKind, &taskBody, &in.AccountPublicID, &in.AccountNickname,
 			&in.FriendPublicID, &in.FriendDisplayName, &jobID, &adapter, &attempt, &jobStatus, &jobError); err != nil {
 			return nil, err
 		}
 		if taskID.Valid {
 			id := uuid.UUID(taskID.Bytes)
 			in.TaskPublicID = &id
+		}
+		if taskKind.Valid {
+			in.TaskMessageKind = &taskKind.String
+		}
+		if taskBody.Valid {
+			in.TaskMessageBody = &taskBody.String
 		}
 		if jobID.Valid {
 			in.LatestJob = &send.SendJob{

@@ -166,7 +166,7 @@ Tab：
 
 `scheduled → started → adapter_selected → sent/failed`
 
-当前实现使用 `GET /send-intents` 列表与 `GET /send-jobs/:id` 诊断信息；时间线由已持久化的 scheduled、started、adapter 和 finished 字段还原，平台消息 ID 不在用户界面展示。
+当前实现使用 `GET /send-intents` 列表与 `GET /send-jobs/:id` 诊断信息；列表优先展示任务摘要，已删除任务回退到任务 ID。时间线由已持久化的 scheduled、started、adapter 和 finished 字段还原，平台消息 ID 不在用户界面展示。
 
 ### 1.9 通知 `/notifications`
 

@@ -541,6 +541,13 @@ export interface components {
             id: string;
             display_name: string;
         };
+        HistoryTask: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            message_kind: "text" | "sticker";
+            body?: string | null;
+        };
         HistoryJob: {
             /** Format: uuid */
             id: string;
@@ -561,6 +568,7 @@ export interface components {
             friend_id: string;
             /** Format: uuid */
             task_id?: string | null;
+            task: components["schemas"]["HistoryTask"] | null;
             local_date?: string | null;
             /** @enum {string} */
             status: "pending" | "queued" | "running" | "retry_wait" | "succeeded" | "failed" | "skipped" | "cancelled";

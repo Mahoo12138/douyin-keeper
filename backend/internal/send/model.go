@@ -69,6 +69,8 @@ type SendIntent struct {
 	AccountNickname   string
 	FriendPublicID    uuid.UUID
 	FriendDisplayName string
+	TaskMessageKind   *string
+	TaskMessageBody   *string
 	LatestJob         *SendJob
 }
 

@@ -431,6 +431,7 @@ Item：
   "account": {"id":"...","nickname":"Miles"},
   "friend": {"id":"...","display_name":"Jasmine"},
   "task_id": "...",
+  "task": {"id":"...","message_kind":"text","body":"晚间火花问候"},
   "scheduled_at": "...",
   "status": "succeeded",
   "latest_job": {
