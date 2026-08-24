@@ -545,6 +545,10 @@ error_code = ENTITLEMENT_EXPIRED
 
 已有账号、Session、好友、任务不物理删除，续期后可恢复。
 
+解绑账号取消 `pending/queued/retry_wait` 的 SendIntent 时，必须在同一事务按
+`local_date` 释放对应 Daily Send reservation；已进入平台执行的 Attempt 不以解绑操作
+覆盖其未知/成功结果。
+
 ## 13. Auth 与 Entitlement 的事务边界
 
 必须同事务：

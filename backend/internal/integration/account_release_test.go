@@ -45,11 +45,17 @@ func TestAccountReleaseStopsFutureWorkAndRevokesSession(t *testing.T) {
 	}
 	intentID := uuid.New()
 	requestID := uuid.New()
+	localDate := "2026-08-25"
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO entitlement_daily_usage (user_id, local_date, reserved_send_count)
+		VALUES ($1,$2,1)`, ownerID, localDate); err != nil {
+		t.Fatal(err)
+	}
 	var intentRowID int64
 	if err := pool.QueryRow(ctx, `
-		INSERT INTO send_intents (public_id, intent_type, request_id, account_id, friend_id, scheduled_at, status)
-		VALUES ($1,'manual',$2,$3,$4,$5,'queued')
-		RETURNING id`, intentID, requestID, acct.ID, friendRowID, now).Scan(&intentRowID); err != nil {
+		INSERT INTO send_intents (public_id, intent_type, request_id, account_id, friend_id, local_date, scheduled_at, status)
+		VALUES ($1,'manual',$2,$3,$4,$5,$6,'queued')
+		RETURNING id`, intentID, requestID, acct.ID, friendRowID, localDate, now).Scan(&intentRowID); err != nil {
 		t.Fatal(err)
 	}
 	var sendJobID int64
@@ -107,6 +113,13 @@ func TestAccountReleaseStopsFutureWorkAndRevokesSession(t *testing.T) {
 	}
 	if sendJobStatus != "cancelled" || sendJobCode != "ACCOUNT_RELEASED" {
 		t.Fatalf("queued send job = %q/%q", sendJobStatus, sendJobCode)
+	}
+	var reserved, failed int
+	if err := queryRow(t, `SELECT reserved_send_count, failed_send_count FROM entitlement_daily_usage WHERE user_id=$1 AND local_date=$2`, ownerID, localDate).Scan(&reserved, &failed); err != nil {
+		t.Fatal(err)
+	}
+	if reserved != 0 || failed != 0 {
+		t.Fatalf("released send quota = reserved %d/failed %d, want 0/0", reserved, failed)
 	}
 	var cancelRequestedAt *time.Time
 	if err := queryRow(t, `SELECT cancel_requested_at FROM jobs WHERE account_id=$1`, acct.ID).Scan(&cancelRequestedAt); err != nil {

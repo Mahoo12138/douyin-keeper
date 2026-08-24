@@ -270,9 +270,22 @@ func (r *AccountRepo) SoftDelete(ctx context.Context, accountID int64) error {
 		return err
 	}
 	if _, err := db.Exec(ctx, `
-		UPDATE send_intents
-		SET status='cancelled', error_code=$2, next_attempt_at=NULL, updated_at=now()
-		WHERE account_id=$1 AND status IN ('pending','queued','retry_wait')`, accountID, releasedCode); err != nil {
+		WITH marked AS (
+			UPDATE send_intents
+			SET status='cancelled', error_code=$2, next_attempt_at=NULL, updated_at=now()
+			WHERE account_id=$1 AND status IN ('pending','queued','retry_wait')
+			RETURNING local_date
+		), released AS (
+			SELECT local_date, COUNT(*)::int AS amount
+			FROM marked
+			WHERE local_date IS NOT NULL
+			GROUP BY local_date
+		)
+		UPDATE entitlement_daily_usage AS usage
+		SET reserved_send_count=GREATEST(0, usage.reserved_send_count-released.amount), updated_at=now()
+		FROM released
+		WHERE usage.user_id=(SELECT user_id FROM douyin_accounts WHERE id=$1)
+		  AND usage.local_date=released.local_date`, accountID, releasedCode); err != nil {
 		return err
 	}
 	if _, err := db.Exec(ctx, `
