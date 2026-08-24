@@ -171,6 +171,9 @@ Scheduler Tick、Retry Scan、Lease Reaper 独立为 `scheduler` 进程，不占
 - 好友同步；
 - 会话归档。
 
+当前会话归档是用户侧索引状态更新，不调用 Sidecar；平台侧归档接入后必须沿用同一账号
+锁，并通过 Job/Outbox 执行，不能在 API 请求中直接调用平台。
+
 只读数据库报表不需要锁。
 
 锁必须包含：

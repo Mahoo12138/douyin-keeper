@@ -704,6 +704,11 @@ paths:
       parameters:
       - $ref: '#/components/parameters/AccountId'
       - $ref: '#/components/parameters/Limit'
+      - name: include_archived
+        in: query
+        required: false
+        schema:
+          type: boolean
       responses:
         '200':
           description: Conversations
@@ -723,6 +728,35 @@ paths:
                     type:
                     - string
                     - 'null'
+  /accounts/{accountId}/conversations/{conversationId}:
+    patch:
+      operationId: setConversationArchived
+      parameters:
+      - $ref: '#/components/parameters/AccountId'
+      - name: conversationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - archived
+              properties:
+                archived:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated conversation archive state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
   /message-templates:
     get:
       operationId: listMessageTemplates
@@ -2495,6 +2529,8 @@ components:
       - friend_nickname
       - platform_identity_status
       - channel
+      - archived
+      - archived_at
       properties:
         id:
           type: string
@@ -2529,6 +2565,13 @@ components:
           - 'null'
           format: date-time
         last_synced_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        archived:
+          type: boolean
+        archived_at:
           type:
           - string
           - 'null'

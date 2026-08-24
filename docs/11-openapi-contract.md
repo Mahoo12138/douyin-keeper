@@ -390,7 +390,25 @@ MVP 允许：
 409 FRIEND_IDENTITY_UNRESOLVED
 ```
 
-## 7.1 Message Templates
+## 7.1 Conversations
+
+### `GET /accounts/{account_id}/conversations`
+
+默认只返回未归档会话；传入 `include_archived=true` 返回当前账号下的全部会话。响应
+包含 `archived` 与 `archived_at`，但不返回平台会话 ID。
+
+### `PATCH /accounts/{account_id}/conversations/{conversation_id}`
+
+请求体：
+
+```json
+{"archived": true}
+```
+
+该操作只更新产品侧会话索引的归档状态，支持通过 `{"archived":false}` 恢复；不会
+伪造抖音平台侧归档结果。若未来接入平台归档，必须通过 Job/Outbox 和账号锁完成。
+
+## 7.2 Message Templates
 
 ### `GET /message-templates`
 

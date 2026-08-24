@@ -134,6 +134,7 @@ func (s *Server) Router() http.Handler {
 
 			private.Get("/accounts/{accountId}/friends", s.handleListFriends)
 			private.Get("/accounts/{accountId}/conversations", s.handleListConversations)
+			private.Patch("/accounts/{accountId}/conversations/{conversationId}", s.handlePatchConversation)
 			private.Get("/message-templates", s.handleListMessageTemplates)
 			private.Post("/message-templates", s.handleCreateMessageTemplate)
 			private.Patch("/message-templates/{templateId}", s.handlePatchMessageTemplate)

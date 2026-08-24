@@ -1,20 +1,24 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { listAccounts, listConversations, type components } from '@douyin-keeper/sdk-ts'
+import { listAccounts, listConversations, setConversationArchived, type components } from '@douyin-keeper/sdk-ts'
 import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@douyin-keeper/ui-web'
-import { Filter, MessageCircle, Search, Smartphone } from 'lucide-react'
+import { Archive, ArchiveRestore, Filter, MessageCircle, Search, Smartphone } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { getToken } from '@/auth/session'
 
 type Conversation = components['schemas']['Conversation']
 type Channel = Conversation['channel'] | 'all'
+type ArchiveFilter = 'active' | 'archived' | 'all'
 
 export function ConversationsPage() {
   const token = getToken()
   const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>()
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState<Channel>('all')
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('active')
+  const queryClient = useQueryClient()
 
   const accountsQ = useQuery({
     queryKey: ['accounts'],
@@ -25,8 +29,18 @@ export function ConversationsPage() {
   const selectedAccount = accountsQ.data?.items.find((account) => account.id === accountId)
   const conversationsQ = useQuery({
     queryKey: ['conversations', accountId],
-    queryFn: () => listConversations(token as string, accountId as string, { limit: 100 }),
+    queryFn: () => listConversations(token as string, accountId as string, { limit: 100, include_archived: true }),
     enabled: !!token && !!accountId,
+  })
+
+  const archiveMutation = useMutation({
+    mutationFn: ({ conversationId, archived }: { conversationId: string; archived: boolean }) =>
+      setConversationArchived(token as string, accountId as string, conversationId, archived),
+    onSuccess: (updated) => {
+      void queryClient.invalidateQueries({ queryKey: ['conversations', accountId] })
+      toast.success(updated.archived ? '会话已归档' : '会话已恢复')
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : '更新会话归档状态失败'),
   })
 
   const conversations = conversationsQ.data?.items ?? []
@@ -34,12 +48,14 @@ export function ConversationsPage() {
     const query = search.trim().toLocaleLowerCase('zh-CN')
     return conversations.filter((item) => {
       const matchesChannel = channel === 'all' || item.channel === channel
+      const matchesArchive = archiveFilter === 'all' || (archiveFilter === 'archived' ? item.archived : !item.archived)
       const matchesSearch = !query || [item.friend_display_name, item.friend_nickname].some((value) => value.toLocaleLowerCase('zh-CN').includes(query))
-      return matchesChannel && matchesSearch
+      return matchesChannel && matchesArchive && matchesSearch
     })
-  }, [channel, conversations, search])
+  }, [archiveFilter, channel, conversations, search])
   const consumerCount = conversations.filter((item) => item.channel === 'consumer').length
   const creatorCount = conversations.filter((item) => item.channel === 'creator').length
+  const archivedCount = conversations.filter((item) => item.archived).length
 
   if (accountsQ.isLoading) return <ConversationsLoading />
 
@@ -60,13 +76,14 @@ export function ConversationsPage() {
       <div>
         <p className="text-sm font-medium text-primary">M2 · 会话索引</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">会话列表</h1>
-        <p className="mt-1 text-sm text-muted-foreground">只展示已同步的真实会话，发送目标仍由平台身份和会话 ID 驱动。</p>
+        <p className="mt-1 text-sm text-muted-foreground">只展示已同步的真实会话，发送目标仍由平台身份和会话 ID 驱动；归档只影响本产品的会话索引。</p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-4">
         <SummaryCard label="当前账号" value={selectedAccount?.nickname || '未命名账号'} />
         <SummaryCard label="消费端会话" value={consumerCount} />
         <SummaryCard label="创作者会话" value={creatorCount} />
+        <SummaryCard label="已归档" value={archivedCount} />
       </div>
 
       <Card>
@@ -77,30 +94,36 @@ export function ConversationsPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_minmax(160px,220px)_minmax(180px,1fr)]">
+          <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_minmax(160px,220px)_minmax(180px,1fr)_minmax(160px,200px)]">
             <div className="space-y-1.5"><Label htmlFor="conversation-search">搜索对端</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="conversation-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="昵称或显示名" className="pl-9" /></div></div>
             <ConversationSelect label="账号" value={accountId ?? ''} onChange={setSelectedAccountId} options={accountsQ.data.items.map((account) => ({ value: account.id, label: account.nickname || '未命名账号' }))} />
             <ConversationSelect label="通道" value={channel} onChange={(value) => setChannel(value as Channel)} options={[{ value: 'all', label: '全部通道' }, { value: 'consumer', label: '消费端' }, { value: 'creator', label: '创作者' }]} />
+            <ConversationSelect label="归档" value={archiveFilter} onChange={(value) => setArchiveFilter(value as ArchiveFilter)} options={[{ value: 'active', label: '未归档' }, { value: 'archived', label: '已归档' }, { value: 'all', label: '全部会话' }]} />
           </div>
 
-          {conversationsQ.isLoading ? <Skeleton className="h-64 w-full" /> : conversationsQ.isError ? <ErrorState onRetry={() => void conversationsQ.refetch()} /> : visibleConversations.length ? <ConversationContent items={visibleConversations} /> : <EmptyState hasFilters={!!search || channel !== 'all'} onReset={() => { setSearch(''); setChannel('all') }} />}
-          <p className="text-xs text-muted-foreground">会话昵称仅用于展示和诊断，不作为自动发送的唯一目标条件。</p>
+          {conversationsQ.isLoading ? <Skeleton className="h-64 w-full" /> : conversationsQ.isError ? <ErrorState onRetry={() => void conversationsQ.refetch()} /> : visibleConversations.length ? <ConversationContent items={visibleConversations} onArchive={(conversationId, archived) => archiveMutation.mutate({ conversationId, archived })} pendingConversationId={archiveMutation.isPending ? archiveMutation.variables?.conversationId : undefined} /> : <EmptyState hasFilters={!!search || channel !== 'all' || archiveFilter !== 'active'} onReset={() => { setSearch(''); setChannel('all'); setArchiveFilter('active') }} />}
+          <p className="text-xs text-muted-foreground">会话昵称仅用于展示和诊断，不作为自动发送的唯一目标条件；本页归档不会修改抖音平台状态。</p>
         </CardContent>
       </Card>
     </div>
   )
 }
 
-function ConversationContent({ items }: { items: Conversation[] }) {
-  return <><div className="hidden md:block"><ConversationTable items={items} /></div><div className="space-y-3 md:hidden">{items.map((item) => <ConversationCard key={item.id} item={item} />)}</div></>
+function ConversationContent({ items, onArchive, pendingConversationId }: { items: Conversation[]; onArchive: (conversationId: string, archived: boolean) => void; pendingConversationId?: string }) {
+  return <><div className="hidden md:block"><ConversationTable items={items} onArchive={onArchive} pendingConversationId={pendingConversationId} /></div><div className="space-y-3 md:hidden">{items.map((item) => <ConversationCard key={item.id} item={item} onArchive={onArchive} pending={pendingConversationId === item.id} />)}</div></>
 }
 
-function ConversationTable({ items }: { items: Conversation[] }) {
-  return <Table className="min-w-[760px]"><TableHeader><TableRow><TableHead className="pl-5">对端</TableHead><TableHead>通道</TableHead><TableHead>身份</TableHead><TableHead>最近消息</TableHead><TableHead className="pr-5 text-right">最近同步</TableHead></TableRow></TableHeader><TableBody>{items.map((item) => <TableRow key={item.id}><TableCell className="pl-5"><ConversationPeer item={item} /></TableCell><TableCell><ChannelBadge channel={item.channel} /></TableCell><TableCell><IdentityBadge status={item.platform_identity_status} /></TableCell><TableCell className="whitespace-nowrap text-sm text-muted-foreground">{formatDate(item.last_message_at)}</TableCell><TableCell className="pr-5 text-right whitespace-nowrap text-sm text-muted-foreground">{formatDate(item.last_synced_at)}</TableCell></TableRow>)}</TableBody></Table>
+function ConversationTable({ items, onArchive, pendingConversationId }: { items: Conversation[]; onArchive: (conversationId: string, archived: boolean) => void; pendingConversationId?: string }) {
+  return <Table className="min-w-[900px]"><TableHeader><TableRow><TableHead className="pl-5">对端</TableHead><TableHead>通道</TableHead><TableHead>身份</TableHead><TableHead>最近消息</TableHead><TableHead>最近同步</TableHead><TableHead className="pr-5 text-right">操作</TableHead></TableRow></TableHeader><TableBody>{items.map((item) => <TableRow key={item.id}><TableCell className="pl-5"><ConversationPeer item={item} /></TableCell><TableCell><ChannelBadge channel={item.channel} /></TableCell><TableCell><IdentityBadge status={item.platform_identity_status} /></TableCell><TableCell className="whitespace-nowrap text-sm text-muted-foreground">{formatDate(item.last_message_at)}</TableCell><TableCell className="whitespace-nowrap text-sm text-muted-foreground">{formatDate(item.last_synced_at)}</TableCell><TableCell className="pr-5 text-right"><ArchiveButton item={item} onArchive={onArchive} pending={pendingConversationId === item.id} /></TableCell></TableRow>)}</TableBody></Table>
 }
 
-function ConversationCard({ item }: { item: Conversation }) {
-  return <div className="rounded-xl border bg-card p-4"><div className="flex items-start justify-between gap-3"><ConversationPeer item={item} /><ChannelBadge channel={item.channel} /></div><div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><div className="text-xs text-muted-foreground">身份</div><div className="mt-1"><IdentityBadge status={item.platform_identity_status} /></div></div><div><div className="text-xs text-muted-foreground">最近消息</div><div className="mt-1 text-muted-foreground">{formatDate(item.last_message_at)}</div></div></div><div className="mt-3 text-xs text-muted-foreground">最近同步 {formatDate(item.last_synced_at)}</div></div>
+function ConversationCard({ item, onArchive, pending }: { item: Conversation; onArchive: (conversationId: string, archived: boolean) => void; pending: boolean }) {
+  return <div className="rounded-xl border bg-card p-4"><div className="flex items-start justify-between gap-3"><ConversationPeer item={item} /><ChannelBadge channel={item.channel} /></div><div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><div className="text-xs text-muted-foreground">身份</div><div className="mt-1"><IdentityBadge status={item.platform_identity_status} /></div></div><div><div className="text-xs text-muted-foreground">最近消息</div><div className="mt-1 text-muted-foreground">{formatDate(item.last_message_at)}</div></div></div><div className="mt-3 text-xs text-muted-foreground">最近同步 {formatDate(item.last_synced_at)}</div><div className="mt-4 flex justify-end"><ArchiveButton item={item} onArchive={onArchive} pending={pending} /></div></div>
+}
+
+function ArchiveButton({ item, onArchive, pending }: { item: Conversation; onArchive: (conversationId: string, archived: boolean) => void; pending: boolean }) {
+  const nextArchived = !item.archived
+  return <Button variant="ghost" size="sm" disabled={pending} onClick={() => onArchive(item.id, nextArchived)} aria-label={nextArchived ? '归档会话' : '恢复会话'}>{nextArchived ? <Archive className="mr-1.5 size-4" /> : <ArchiveRestore className="mr-1.5 size-4" />}{pending ? '处理中…' : nextArchived ? '归档' : '恢复'}</Button>
 }
 
 function ConversationPeer({ item }: { item: Conversation }) {
@@ -119,6 +142,6 @@ function EmptyState({ hasFilters, onReset }: { hasFilters: boolean; onReset: () 
 
 function ErrorState({ onRetry }: { onRetry: () => void }) { return <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-10 text-center"><p className="font-medium">会话列表暂时不可用</p><p className="mt-1 text-sm text-muted-foreground">请稍后重试，或先确认账号已经完成好友同步。</p><Button className="mt-4" variant="outline" onClick={onRetry}>重新加载</Button></div> }
 
-function ConversationsLoading() { return <div className="space-y-6"><Skeleton className="h-20 w-full" /><div className="grid gap-3 sm:grid-cols-3"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div><Skeleton className="h-[420px] w-full" /></div> }
+function ConversationsLoading() { return <div className="space-y-6"><Skeleton className="h-20 w-full" /><div className="grid gap-3 sm:grid-cols-4"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div><Skeleton className="h-[420px] w-full" /></div> }
 
 function formatDate(value: string | null | undefined) { return value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '暂无' }

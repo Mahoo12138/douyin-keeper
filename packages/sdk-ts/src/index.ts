@@ -349,12 +349,22 @@ export async function listFriends(accessToken: string, accountId: string, option
   return data
 }
 
-export async function listConversations(accessToken: string, accountId: string, options?: { limit?: number }) {
+export async function listConversations(accessToken: string, accountId: string, options?: { limit?: number; include_archived?: boolean }) {
   const { data, error } = await api.GET('/accounts/{accountId}/conversations', {
     headers: { Authorization: `Bearer ${accessToken}` },
     params: { path: { accountId }, query: options },
   })
   if (error) throwApiError(error, 'conversations failed')
+  return data
+}
+
+export async function setConversationArchived(accessToken: string, accountId: string, conversationId: string, archived: boolean) {
+  const { data, error } = await api.PATCH('/accounts/{accountId}/conversations/{conversationId}', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { accountId, conversationId } },
+    body: { archived },
+  })
+  if (error) throwApiError(error, 'conversation archive update failed')
   return data
 }
 

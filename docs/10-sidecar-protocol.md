@@ -125,6 +125,9 @@ message.send_sticker   # V1.1
 message.send_first     # V1.2
 ```
 
+当前会话归档不属于 Sidecar v1 操作，只更新产品侧 `conversations.archived_at` 索引字段。
+平台侧归档若后续加入，必须新增版本化操作契约，不得复用本地归档 API 假装完成。
+
 Go 不向 Sidecar 传 DOM selector / XPath / webpack module id。
 
 ## 5. Health

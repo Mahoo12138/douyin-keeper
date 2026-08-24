@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -22,6 +23,12 @@ type ConversationView struct {
 	Channel                string     `json:"channel"`
 	LastMessageAt          *time.Time `json:"last_message_at"`
 	LastSyncedAt           *time.Time `json:"last_synced_at"`
+	Archived               bool       `json:"archived"`
+	ArchivedAt             *time.Time `json:"archived_at"`
+}
+
+type patchConversationReq struct {
+	Archived *bool `json:"archived"`
 }
 
 func (s *Server) handleListConversations(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +43,12 @@ func (s *Server) handleListConversations(w http.ResponseWriter, r *http.Request)
 		writeError(w, r, err)
 		return
 	}
-	items, err := s.conversations.ListForAccount(r.Context(), p.UserID, accountID, conversation.ListFilter{Limit: limit})
+	includeArchived, err := conversationIncludeArchived(r)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	items, err := s.conversations.ListForAccount(r.Context(), p.UserID, accountID, conversation.ListFilter{Limit: limit, IncludeArchived: includeArchived})
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -46,6 +58,31 @@ func (s *Server) handleListConversations(w http.ResponseWriter, r *http.Request)
 		views = append(views, conversationView(item))
 	}
 	writeOK(w, map[string]any{"items": views, "next_cursor": nil})
+}
+
+func (s *Server) handlePatchConversation(w http.ResponseWriter, r *http.Request) {
+	p := auth.MustPrincipal(r.Context())
+	accountID, err := uuid.Parse(pathParam(r, "accountId"))
+	if err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid account id"))
+		return
+	}
+	conversationID, err := uuid.Parse(pathParam(r, "conversationId"))
+	if err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid conversation id"))
+		return
+	}
+	var req patchConversationReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Archived == nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "archived is required"))
+		return
+	}
+	item, err := s.conversations.SetArchived(r.Context(), p.UserID, accountID, conversationID, *req.Archived)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeOK(w, conversationView(item))
 }
 
 func conversationLimit(r *http.Request) (int, error) {
@@ -60,11 +97,24 @@ func conversationLimit(r *http.Request) (int, error) {
 	return limit, nil
 }
 
+func conversationIncludeArchived(r *http.Request) (bool, error) {
+	value := r.URL.Query().Get("include_archived")
+	if value == "" {
+		return false, nil
+	}
+	includeArchived, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, apperr.Validation(apperr.CodeConflict, "invalid include_archived")
+	}
+	return includeArchived, nil
+}
+
 func conversationView(item *conversation.Conversation) ConversationView {
 	return ConversationView{
 		ID: item.ID, FriendID: item.FriendID, FriendDisplayName: item.FriendDisplayName,
 		FriendNickname: item.FriendNickname, FriendAvatarURL: item.FriendAvatarURL,
 		PlatformIdentityStatus: item.PlatformIdentityStatus, Channel: item.Channel,
 		LastMessageAt: item.LastMessageAt, LastSyncedAt: item.LastSyncedAt,
+		Archived: item.ArchivedAt != nil, ArchivedAt: item.ArchivedAt,
 	}
 }

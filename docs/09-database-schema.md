@@ -334,6 +334,7 @@ CREATE TABLE conversations (
                             CHECK (channel IN ('consumer','creator')),
   last_message_at           TIMESTAMPTZ,
   last_synced_at            TIMESTAMPTZ,
+  archived_at               TIMESTAMPTZ,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(account_id, platform_conversation_id),
@@ -692,7 +693,8 @@ Admin 使用独立 Repository / Policy，不通过隐藏的 `is_admin` 参数复
 原则：migration 只前进，不修改已发布 migration；修复通过新 migration 完成。
 
 当前仓库实际迁移已包含：`000001_init.sql`、`000002_notifications.sql`、
-`000003_message_templates.sql`、`000004_wechat_notifications.sql`；后续结构变更继续追加新文件。
+`000003_message_templates.sql`、`000004_wechat_notifications.sql`、
+`000005_conversation_archive.sql`；后续结构变更继续追加新文件。
 
 ## 13. MVP 冻结项
 

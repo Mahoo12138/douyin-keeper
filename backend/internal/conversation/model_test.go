@@ -3,17 +3,29 @@ package conversation
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 type repositoryStub struct {
-	filter ListFilter
+	filter   ListFilter
+	archived bool
 }
 
 func (r *repositoryStub) ListByAccountOwned(_ context.Context, _ int64, _ uuid.UUID, filter ListFilter) ([]*Conversation, error) {
 	r.filter = filter
 	return []*Conversation{{ID: uuid.New(), Channel: "consumer"}}, nil
+}
+
+func (r *repositoryStub) SetArchived(_ context.Context, _ int64, _, _ uuid.UUID, archived bool, at time.Time) (*Conversation, error) {
+	r.archived = archived
+	return &Conversation{ArchivedAt: func() *time.Time {
+		if archived {
+			return &at
+		}
+		return nil
+	}()}, nil
 }
 
 func TestServiceClampsListLimit(t *testing.T) {
@@ -30,5 +42,17 @@ func TestServiceClampsListLimit(t *testing.T) {
 	}
 	if repo.filter.Limit != 100 {
 		t.Fatalf("default limit = %d, want 100", repo.filter.Limit)
+	}
+}
+
+func TestServiceSetsConversationArchiveState(t *testing.T) {
+	repo := &repositoryStub{}
+	svc := NewService(repo)
+	item, err := svc.SetArchived(context.Background(), 7, uuid.New(), uuid.New(), true)
+	if err != nil || item == nil || item.ArchivedAt == nil || !repo.archived {
+		t.Fatalf("SetArchived() = %+v, err=%v", item, err)
+	}
+	if _, err := svc.SetArchived(context.Background(), 0, uuid.New(), uuid.New(), true); err == nil {
+		t.Fatal("invalid user should be rejected")
 	}
 }

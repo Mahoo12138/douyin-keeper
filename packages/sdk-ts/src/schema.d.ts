@@ -532,6 +532,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/{accountId}/conversations/{conversationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["setConversationArchived"];
+        trace?: never;
+    };
     "/message-templates": {
         parameters: {
             query?: never;
@@ -1309,6 +1325,9 @@ export interface components {
             last_message_at?: string | null;
             /** Format: date-time */
             last_synced_at?: string | null;
+            archived: boolean;
+            /** Format: date-time */
+            archived_at: string | null;
         };
         MessageTemplate: {
             /** Format: uuid */
@@ -2387,6 +2406,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: components["parameters"]["Limit"];
+                include_archived?: boolean;
             };
             header?: never;
             path: {
@@ -2406,6 +2426,35 @@ export interface operations {
                         items: components["schemas"]["Conversation"][];
                         next_cursor: string | null;
                     };
+                };
+            };
+        };
+    };
+    setConversationArchived: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+                conversationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    archived: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated conversation archive state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conversation"];
                 };
             };
         };
