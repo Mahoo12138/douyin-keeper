@@ -112,6 +112,12 @@ func TestAdminEntitlementSummariesAndDisableAudit(t *testing.T) {
 	if err := ent.DisablePlanByAdmin(ctx, actorID, plan.PublicID); err != nil {
 		t.Fatal(err)
 	}
+	decision, err = ent.Authorize(ctx, entitlement.AuthorizationRequest{
+		UserID: userID, Action: entitlement.ActionSendExecute,
+	})
+	if err != nil || !decision.Allowed || decision.Entitlement == nil || decision.Entitlement.PlanCode != plan.Code {
+		t.Fatalf("disabling a plan must not revoke an existing grant: decision=%+v err=%v", decision, err)
+	}
 	updated, err := ent.GetBatchSummary(ctx, batch.PublicID)
 	if err != nil || updated.Status != entitlement.StatusDisabled || updated.RevokedCount != 1 || updated.RedeemedCount != 1 {
 		t.Fatalf("disabled batch = %+v, err = %v", updated, err)
