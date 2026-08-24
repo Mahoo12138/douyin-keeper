@@ -2,15 +2,16 @@ import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Link } from '@tanstack/react-router'
-import { listAccounts, listFriends, listTasks, syncAccountFriends, updateFriend } from '@douyin-keeper/sdk-ts'
+import { listAccounts, listFriends, listTasks, syncAccountFriends, updateFriend, updateTask } from '@douyin-keeper/sdk-ts'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton } from '@douyin-keeper/ui-web'
-import { Filter, RefreshCw, Search, Sparkles } from 'lucide-react'
+import { Filter, RefreshCw, Search, Settings2, Sparkles, X } from 'lucide-react'
 
 import { getToken } from '@/auth/session'
 import { waitForJobEvents } from '@/lib/job-progress'
 import { filterFriends } from './friend-filters'
 import type { Friend, SparkFilter, TaskFilter } from './friend-types'
 import { FriendTable } from './friend-table'
+import { isValidBulkWindow, normalizeTimeInput, selectAllResolvedFriends, tasksForSelectedFriends, toggleSelectedFriend } from './friend-bulk-utils'
 
 export function FriendsPage() {
   const token = getToken()
@@ -21,6 +22,9 @@ export function FriendsPage() {
   const [taskFilter, setTaskFilter] = useState<TaskFilter>('all')
   const [pendingFriendId, setPendingFriendId] = useState<string | null>(null)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([])
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkWindowOpen, setBulkWindowOpen] = useState(false)
 
   const accountsQ = useQuery({
     queryKey: ['accounts'],
@@ -48,6 +52,26 @@ export function FriendsPage() {
   )
   const accountTasks = tasks.filter((task) => task.account_id === accountId)
   const sparkEnabledCount = friends.filter((friend) => friend.spark_enabled).length
+  const selectedFriends = friends.filter((friend) => selectedFriendIds.includes(friend.id) && friend.platform_identity_status === 'resolved')
+  const selectedTasks = tasksForSelectedFriends(tasks, accountId, selectedFriends.map((friend) => friend.id))
+
+  function selectAccount(nextAccountId: string) {
+    setSelectedAccountId(nextAccountId)
+    setSelectedFriendIds([])
+    setBulkWindowOpen(false)
+  }
+
+  function selectFriend(friendId: string, checked: boolean) {
+    setSelectedFriendIds((current) => toggleSelectedFriend(current, friendId, checked))
+  }
+
+  function selectAllVisible(checked: boolean) {
+    const visibleIds = selectAllResolvedFriends(visibleFriends)
+    setSelectedFriendIds((current) => {
+      if (checked) return [...new Set([...current, ...visibleIds])]
+      return current.filter((id) => !visibleIds.includes(id))
+    })
+  }
 
   async function handleToggle(friend: Friend, enabled: boolean) {
     if (!token) return
@@ -79,6 +103,46 @@ export function FriendsPage() {
     } finally {
       setIsSyncing(false)
     }
+  }
+
+  async function handleBulkSpark(enabled: boolean) {
+    if (!token || !selectedFriends.length) return
+    setBulkBusy(true)
+    const selected = [...selectedFriends]
+    const results = await Promise.allSettled(selected.map((friend) => updateFriend(token, friend.id, enabled)))
+    const failed = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+    await queryClient.invalidateQueries({ queryKey: ['friends', accountId] })
+    setBulkBusy(false)
+    if (failed.length) {
+      setSelectedFriendIds(selected.filter((_, index) => results[index].status === 'rejected').map((friend) => friend.id))
+      toast.error(`${selected.length - failed.length} 位好友已更新，${failed.length} 位失败，请检查后重试`)
+      return
+    }
+    setSelectedFriendIds([])
+    toast.success(`${selected.length} 位好友已${enabled ? '开启' : '关闭'}火花维护`)
+  }
+
+  async function handleBulkWindow(start: string, end: string) {
+    if (!token || !selectedTasks.length) return
+    if (!isValidBulkWindow(start, end)) {
+      toast.error('时间窗口无效，结束时间必须晚于开始时间且不能跨午夜')
+      return
+    }
+    setBulkBusy(true)
+    const normalizedStart = normalizeTimeInput(start)
+    const normalizedEnd = normalizeTimeInput(end)
+    const results = await Promise.allSettled(selectedTasks.map((task) => updateTask(token, task.id, { window_start: normalizedStart, window_end: normalizedEnd })))
+    const failed = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+    await queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    setBulkBusy(false)
+    if (failed.length) {
+      setSelectedFriendIds(selectedTasks.filter((_, index) => results[index].status === 'rejected').map((task) => task.friend_id))
+      toast.error(`${selectedTasks.length - failed.length} 个任务已更新，${failed.length} 个失败，请检查后重试`)
+      return
+    }
+    setSelectedFriendIds([])
+    setBulkWindowOpen(false)
+    toast.success(`${selectedTasks.length} 个任务的时间窗口已更新`)
   }
 
   if (accountsQ.isLoading) {
@@ -135,12 +199,14 @@ export function FriendsPage() {
               <Label htmlFor="friend-search">搜索好友</Label>
               <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="friend-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="昵称、备注或抖音号" className="pl-9" /></div>
             </div>
-            <FilterSelect label="账号" value={accountId ?? ''} onChange={(value) => setSelectedAccountId(value)} options={accountsQ.data.items.map((account) => ({ value: account.id, label: account.nickname || '未命名账号' }))} />
+            <FilterSelect label="账号" value={accountId ?? ''} onChange={selectAccount} options={accountsQ.data.items.map((account) => ({ value: account.id, label: account.nickname || '未命名账号' }))} />
             <FilterSelect label="火花状态" value={sparkFilter} onChange={(value) => setSparkFilter(value as SparkFilter)} options={[{ value: 'all', label: '全部' }, { value: 'enabled', label: '已开启' }, { value: 'disabled', label: '未开启' }]} />
             <FilterSelect label="任务状态" value={taskFilter} onChange={(value) => setTaskFilter(value as TaskFilter)} options={[{ value: 'all', label: '全部' }, { value: 'enabled', label: '任务已启用' }, { value: 'disabled', label: '任务已停用' }, { value: 'none', label: '未配置任务' }]} />
           </div>
 
-          {friendsQ.isLoading ? <Skeleton className="h-64 w-full" /> : friendsQ.isError ? <p className="py-10 text-center text-sm text-destructive">好友列表暂时不可用，请稍后重试。</p> : visibleFriends.length ? <FriendTable friends={visibleFriends} tasks={tasks} accountId={accountId} pendingFriendId={pendingFriendId} onToggle={(friend, enabled) => void handleToggle(friend, enabled)} /> : <EmptyFriends hasFilters={!!search || sparkFilter !== 'all' || taskFilter !== 'all'} onReset={() => { setSearch(''); setSparkFilter('all'); setTaskFilter('all') }} />}
+          {selectedFriends.length > 0 && <BulkActions selectedCount={selectedFriends.length} taskCount={selectedTasks.length} busy={bulkBusy} windowOpen={bulkWindowOpen} onEnable={() => void handleBulkSpark(true)} onDisable={() => void handleBulkSpark(false)} onOpenWindow={() => setBulkWindowOpen(true)} onClear={() => { setSelectedFriendIds([]); setBulkWindowOpen(false) }} />}
+          {bulkWindowOpen && <BulkWindowPanel taskCount={selectedTasks.length} busy={bulkBusy} onClose={() => setBulkWindowOpen(false)} onSave={(start, end) => void handleBulkWindow(start, end)} />}
+          {friendsQ.isLoading ? <Skeleton className="h-64 w-full" /> : friendsQ.isError ? <p className="py-10 text-center text-sm text-destructive">好友列表暂时不可用，请稍后重试。</p> : visibleFriends.length ? <FriendTable friends={visibleFriends} tasks={tasks} accountId={accountId} pendingFriendId={pendingFriendId} bulkBusy={bulkBusy} selectedFriendIds={selectedFriendIds} selectionEnabled onSelectFriend={selectFriend} onSelectAll={selectAllVisible} onToggle={(friend, enabled) => void handleToggle(friend, enabled)} /> : <EmptyFriends hasFilters={!!search || sparkFilter !== 'all' || taskFilter !== 'all'} onReset={() => { setSearch(''); setSparkFilter('all'); setTaskFilter('all') }} />}
         </CardContent>
       </Card>
       {tasksQ.isError && <p className="text-xs text-muted-foreground">任务状态暂时不可用，好友列表仍可正常管理火花开关。</p>}
@@ -163,4 +229,14 @@ function FilterSelect({ label, value, onChange, options }: { label: string; valu
 
 function EmptyFriends({ hasFilters, onReset }: { hasFilters: boolean; onReset: () => void }) {
   return <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center"><Sparkles className="size-8 text-muted-foreground" /><p className="mt-3 font-medium">{hasFilters ? '没有符合条件的好友' : '还没有好友数据'}</p>{hasFilters ? <Button className="mt-4" variant="outline" onClick={onReset}>清除筛选</Button> : <p className="mt-1 text-sm text-muted-foreground">点击“同步好友”获取最新列表。</p>}</div>
+}
+
+function BulkActions({ selectedCount, taskCount, busy, windowOpen, onEnable, onDisable, onOpenWindow, onClear }: { selectedCount: number; taskCount: number; busy: boolean; windowOpen: boolean; onEnable: () => void; onDisable: () => void; onOpenWindow: () => void; onClear: () => void }) {
+  return <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/[0.03] p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium">已选择 {selectedCount} 位好友</p><p className="mt-1 text-xs text-muted-foreground">{taskCount ? `${taskCount} 个已有任务可调整时间窗口` : '所选好友暂无已配置任务'}</p></div><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={busy} onClick={onEnable}>开启维护</Button><Button size="sm" variant="outline" disabled={busy} onClick={onDisable}>关闭维护</Button><Button size="sm" variant="outline" disabled={busy || !taskCount} onClick={onOpenWindow}><Settings2 />{windowOpen ? '正在设置' : '设置时间窗口'}</Button><Button size="sm" variant="ghost" disabled={busy} onClick={onClear}>清除选择</Button></div></div>
+}
+
+function BulkWindowPanel({ taskCount, busy, onClose, onSave }: { taskCount: number; busy: boolean; onClose: () => void; onSave: (start: string, end: string) => void }) {
+  const [start, setStart] = useState('19:30')
+  const [end, setEnd] = useState('22:30')
+  return <Card className="border-primary/30"><CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0"><div><CardTitle className="text-base">批量设置时间窗口</CardTitle><CardDescription>将更新 {taskCount} 个已有任务；没有任务的好友不会自动创建任务。</CardDescription></div><Button variant="ghost" size="icon" onClick={onClose} aria-label="关闭批量时间窗口设置"><X /></Button></CardHeader><CardContent><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="bulk-window-start">开始时间</Label><Input id="bulk-window-start" type="time" value={start} onChange={(event) => setStart(event.target.value)} /></div><div className="space-y-1.5"><Label htmlFor="bulk-window-end">结束时间</Label><Input id="bulk-window-end" type="time" value={end} onChange={(event) => setEnd(event.target.value)} /></div></div><p className="mt-3 text-xs text-muted-foreground">时间窗口不支持跨午夜，时区沿用每个任务现有配置。</p><div className="mt-4 flex justify-end gap-2"><Button variant="outline" onClick={onClose} disabled={busy}>取消</Button><Button onClick={() => onSave(start, end)} disabled={busy}>{busy ? '保存中…' : '应用到已选任务'}</Button></div></CardContent></Card>
 }

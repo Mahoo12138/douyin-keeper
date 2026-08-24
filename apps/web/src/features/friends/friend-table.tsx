@@ -5,17 +5,27 @@ import type { Friend, SparkTask } from './friend-types'
 import { formatFriendDate, FriendStatusBadge, TaskStatusBadge } from './friend-status'
 import { taskForFriend } from './friend-filters'
 
-export function FriendTable({ friends, tasks, accountId, pendingFriendId, onToggle }: {
+export function FriendTable({ friends, tasks, accountId, pendingFriendId, bulkBusy = false, selectedFriendIds = [], onSelectFriend = () => {}, onSelectAll = () => {}, selectionEnabled = false, onToggle }: {
   friends: Friend[]
   tasks: SparkTask[]
   accountId: string | undefined
   pendingFriendId: string | null
+  bulkBusy?: boolean
   onToggle: (friend: Friend, enabled: boolean) => void
+  selectedFriendIds?: string[]
+  onSelectFriend?: (friendId: string, checked: boolean) => void
+  onSelectAll?: (checked: boolean) => void
+  selectionEnabled?: boolean
 }) {
+  const selected = new Set(selectedFriendIds)
+  const resolvedFriends = friends.filter((friend) => friend.platform_identity_status === 'resolved')
+  const allResolvedSelected = resolvedFriends.length > 0 && resolvedFriends.every((friend) => selected.has(friend.id))
+
   return (
-    <Table className="min-w-[760px]">
+    <Table className="min-w-[820px]">
       <TableHeader>
         <TableRow>
+          {selectionEnabled && <TableHead className="w-12 pl-5"><input type="checkbox" checked={allResolvedSelected} disabled={bulkBusy || !resolvedFriends.length} onChange={(event) => onSelectAll(event.target.checked)} aria-label="选择全部可维护好友" /></TableHead>}
           <TableHead className="pl-5">好友</TableHead>
           <TableHead>身份</TableHead>
           <TableHead>火花</TableHead>
@@ -29,6 +39,7 @@ export function FriendTable({ friends, tasks, accountId, pendingFriendId, onTogg
           const task = taskForFriend(tasks, accountId, friend.id)
           return (
             <TableRow key={friend.id}>
+              {selectionEnabled && <TableCell className="pl-5"><input type="checkbox" checked={selected.has(friend.id)} disabled={bulkBusy || friend.platform_identity_status !== 'resolved'} onChange={(event) => onSelectFriend(friend.id, event.target.checked)} aria-label={`选择${friend.nickname || friend.display_name}`} /></TableCell>}
               <TableCell className="pl-5">
                 <div className="flex min-w-[210px] items-center gap-3">
                   <Avatar className="size-9">
@@ -56,7 +67,7 @@ export function FriendTable({ friends, tasks, accountId, pendingFriendId, onTogg
               <TableCell className="pr-5 text-right">
                 <Switch
                   checked={friend.spark_enabled}
-                  disabled={pendingFriendId === friend.id || friend.platform_identity_status !== 'resolved'}
+                  disabled={bulkBusy || pendingFriendId === friend.id || friend.platform_identity_status !== 'resolved'}
                   onCheckedChange={(enabled) => onToggle(friend, enabled)}
                   aria-label={`${friend.nickname || friend.display_name}火花维护`}
                 />

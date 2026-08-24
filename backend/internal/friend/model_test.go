@@ -40,7 +40,7 @@ func (g *gateStub) Authorize(context.Context, entitlement.AuthorizationRequest) 
 
 func TestSetSparkEnabledRequiresEntitlementOnlyWhenEnabling(t *testing.T) {
 	friendID := uuid.New()
-	repo := &friendRepoStub{item: &Friend{ID: 7, PublicID: friendID, SparkEnabled: false}}
+	repo := &friendRepoStub{item: &Friend{ID: 7, PublicID: friendID, SparkEnabled: false, IdentityStatus: IdentityResolved}}
 	gate := &gateStub{decision: entitlement.AuthorizationDecision{
 		Allowed:    false,
 		ReasonCode: apperr.CodeEntitlementExpired,
@@ -70,7 +70,7 @@ func TestSetSparkEnabledRequiresEntitlementOnlyWhenEnabling(t *testing.T) {
 
 func TestSetSparkEnabledUpdatesResolvedFriendAfterAuthorization(t *testing.T) {
 	friendID := uuid.New()
-	repo := &friendRepoStub{item: &Friend{ID: 8, PublicID: friendID}}
+	repo := &friendRepoStub{item: &Friend{ID: 8, PublicID: friendID, IdentityStatus: IdentityResolved}}
 	gate := &gateStub{decision: entitlement.AuthorizationDecision{Allowed: true}}
 	service := NewService(repo, gate)
 
@@ -80,5 +80,21 @@ func TestSetSparkEnabledUpdatesResolvedFriendAfterAuthorization(t *testing.T) {
 	}
 	if !got.SparkEnabled || gate.calls != 1 || len(repo.updated) != 1 || !repo.updated[0] {
 		t.Fatalf("expected authorized enable update: friend=%+v gate=%d updates=%v", got, gate.calls, repo.updated)
+	}
+}
+
+func TestSetSparkEnabledRejectsUnresolvedFriend(t *testing.T) {
+	friendID := uuid.New()
+	repo := &friendRepoStub{item: &Friend{ID: 9, PublicID: friendID, IdentityStatus: IdentityPending}}
+	gate := &gateStub{decision: entitlement.AuthorizationDecision{Allowed: true}}
+	service := NewService(repo, gate)
+
+	if _, err := service.SetSparkEnabled(context.Background(), 42, friendID, true); err == nil {
+		t.Fatal("unresolved friend should not be enabled")
+	} else if app, ok := apperr.As(err); !ok || app.Code != apperr.CodeFriendIdentityUnsolid {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(repo.updated) != 0 {
+		t.Fatalf("unresolved friend should not be updated: %v", repo.updated)
 	}
 }

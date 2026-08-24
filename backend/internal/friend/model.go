@@ -133,6 +133,9 @@ func (s *Service) SetSparkEnabled(ctx context.Context, userID int64, publicID uu
 	if err != nil {
 		return nil, err
 	}
+	if enabled && !f.Resolved() {
+		return nil, apperr.Conflict(apperr.CodeFriendIdentityUnsolid, "friend identity is not resolved")
+	}
 	if err := s.repo.UpdateSparkEnabled(ctx, f.ID, enabled); err != nil {
 		return nil, err
 	}
