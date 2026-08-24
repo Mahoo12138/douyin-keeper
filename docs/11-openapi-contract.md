@@ -251,7 +251,8 @@ ENTITLEMENT_PLAN_CONFLICT
 ### `GET /entitlements/redemptions`
 
 只返回用户自己的授权历史，不返回完整卡密；每项返回 `id/plan_code/source_type/starts_at/`
-`expires_at/revoked_at`，由前端根据时间和撤销字段展示授权状态。
+`expires_at/revoked_at`，由前端根据时间和撤销字段展示授权状态。列表默认返回 50 条、最多
+100 条，按 `created_at DESC, id DESC` 使用 `cursor` 继续读取后续授权记录。
 
 卡密兑换天然单次，用户重复提交自己已成功兑换的同一张卡时，可返回原 Grant 作为幂等成功。详见 `12-card-code-entitlement.md`。
 

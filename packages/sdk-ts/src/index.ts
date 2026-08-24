@@ -276,9 +276,10 @@ export async function myEntitlement(accessToken: string) {
   return data
 }
 
-export async function listMyEntitlementGrants(accessToken: string) {
+export async function listMyEntitlementGrants(accessToken: string, options?: { limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/entitlements/redemptions', {
     headers: { Authorization: `Bearer ${accessToken}` },
+    params: { query: options },
   })
   if (error) throwApiError(error, 'entitlement history lookup failed')
   return data

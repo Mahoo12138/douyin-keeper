@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from '@douyin-keeper/ui-web'
 import { listMyEntitlementGrants, myEntitlement, redeemCardCode, type components } from '@douyin-keeper/sdk-ts'
@@ -24,9 +24,11 @@ function EntitlementPage() {
     queryFn: () => myEntitlement(token as string),
     enabled: !!token,
   })
-  const grantsQ = useQuery({
+  const grantsQ = useInfiniteQuery({
     queryKey: ['entitlement-grants'],
-    queryFn: () => listMyEntitlementGrants(token as string),
+    queryFn: ({ pageParam }) => listMyEntitlementGrants(token as string, { limit: 50, cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     enabled: !!token,
   })
 
@@ -47,6 +49,7 @@ function EntitlementPage() {
   }
 
   const e = entQ.data
+  const grants = grantsQ.data?.pages.flatMap((page) => page.items) ?? []
   return (
     <div className="space-y-6">
       <div>
@@ -110,7 +113,24 @@ function EntitlementPage() {
           <CardDescription>仅展示当前账号自己的授权时间段，不显示完整卡密。</CardDescription>
         </CardHeader>
         <CardContent>
-          {grantsQ.isPending ? <p className="text-sm text-muted-foreground">正在加载授权记录…</p> : grantsQ.isError ? <p className="text-sm text-destructive">授权记录暂时不可用，请稍后重试。</p> : grantsQ.data?.items.length ? <div className="space-y-3">{grantsQ.data.items.map((grant) => <GrantHistoryRow key={grant.id} grant={grant} />)}</div> : <p className="text-sm text-muted-foreground">暂无授权记录。</p>}
+          {grantsQ.isPending ? (
+            <p className="text-sm text-muted-foreground">正在加载授权记录…</p>
+          ) : grantsQ.isError ? (
+            <p className="text-sm text-destructive">授权记录暂时不可用，请稍后重试。</p>
+          ) : grants.length ? (
+            <>
+              <div className="space-y-3">{grants.map((grant) => <GrantHistoryRow key={grant.id} grant={grant} />)}</div>
+              {grantsQ.hasNextPage && (
+                <div className="mt-4 flex justify-center">
+                  <Button variant="outline" onClick={() => void grantsQ.fetchNextPage()} disabled={grantsQ.isFetchingNextPage}>
+                    {grantsQ.isFetchingNextPage ? '加载中…' : '加载更多授权记录'}
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">暂无授权记录。</p>
+          )}
         </CardContent>
       </Card>
     </div>

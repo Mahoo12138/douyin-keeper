@@ -124,3 +124,33 @@ func TestAdminPlanListCursorPageIsStable(t *testing.T) {
 		t.Fatalf("second page = %+v", second)
 	}
 }
+
+func TestUserEntitlementListCursorPageIsStable(t *testing.T) {
+	ctx := context.Background()
+	service := newEntSvc()
+	adminID := newUser(t)
+	userID := newUser(t)
+	for i := 0; i < 3; i++ {
+		code, _ := seedCard(t, service, adminID)
+		if _, _, err := service.Redeem(ctx, userID, code); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	first, err := service.ListUserGrantSummariesPage(ctx, userID, entitlement.RedemptionListFilter{Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Items) != 2 || first.NextAfterID == 0 || first.NextCreatedAt == nil {
+		t.Fatalf("first page = %+v", first)
+	}
+	second, err := service.ListUserGrantSummariesPage(ctx, userID, entitlement.RedemptionListFilter{
+		Limit: 2, AfterCreatedAt: first.NextCreatedAt, AfterID: first.NextAfterID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Items) != 1 || second.Items[0].GrantID >= first.Items[1].GrantID {
+		t.Fatalf("second page = %+v", second)
+	}
+}

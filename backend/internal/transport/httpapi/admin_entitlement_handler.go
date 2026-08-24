@@ -141,7 +141,7 @@ func encodeAdminPlanCursor(id int64) string {
 }
 
 func adminPlanFilter(r *http.Request) (entitlement.PlanListFilter, error) {
-	limit, err := adminListLimit(r)
+	limit, err := listLimit(r)
 	if err != nil {
 		return entitlement.PlanListFilter{}, err
 	}
@@ -226,13 +226,13 @@ func (s *Server) handleAdminListCardBatches(w http.ResponseWriter, r *http.Reque
 }
 
 func adminBatchFilter(r *http.Request) (entitlement.BatchListFilter, error) {
-	limit, err := adminListLimit(r)
+	limit, err := listLimit(r)
 	if err != nil {
 		return entitlement.BatchListFilter{}, err
 	}
 	filter := entitlement.BatchListFilter{Limit: limit}
 	if value := r.URL.Query().Get("cursor"); value != "" {
-		createdAt, id, err := decodeAdminEntitlementCursor(value)
+		createdAt, id, err := decodeRedemptionCursor(value)
 		if err != nil {
 			return filter, err
 		}
@@ -348,19 +348,19 @@ func (s *Server) handleAdminListRedemptions(w http.ResponseWriter, r *http.Reque
 	}
 	var nextCursor any
 	if page.NextCreatedAt != nil && page.NextAfterID > 0 {
-		nextCursor = encodeAdminRedemptionCursor(*page.NextCreatedAt, page.NextAfterID)
+		nextCursor = encodeRedemptionCursor(*page.NextCreatedAt, page.NextAfterID)
 	}
 	writeOK(w, map[string]any{"items": views, "next_cursor": nextCursor})
 }
 
 func adminRedemptionFilter(r *http.Request) (entitlement.RedemptionListFilter, error) {
-	limit, err := adminListLimit(r)
+	limit, err := listLimit(r)
 	if err != nil {
 		return entitlement.RedemptionListFilter{}, err
 	}
 	filter := entitlement.RedemptionListFilter{Limit: limit}
 	if value := r.URL.Query().Get("cursor"); value != "" {
-		createdAt, id, err := decodeAdminEntitlementCursor(value)
+		createdAt, id, err := decodeRedemptionCursor(value)
 		if err != nil {
 			return filter, err
 		}
@@ -370,7 +370,7 @@ func adminRedemptionFilter(r *http.Request) (entitlement.RedemptionListFilter, e
 	return filter, nil
 }
 
-func encodeAdminRedemptionCursor(createdAt time.Time, id int64) string {
+func encodeRedemptionCursor(createdAt time.Time, id int64) string {
 	payload, _ := json.Marshal(struct {
 		CreatedAt string `json:"created_at"`
 		ID        int64  `json:"id"`
@@ -378,7 +378,7 @@ func encodeAdminRedemptionCursor(createdAt time.Time, id int64) string {
 	return base64.RawURLEncoding.EncodeToString(payload)
 }
 
-func decodeAdminEntitlementCursor(value string) (time.Time, int64, error) {
+func decodeRedemptionCursor(value string) (time.Time, int64, error) {
 	decoded, err := base64.RawURLEncoding.DecodeString(value)
 	if err != nil {
 		return time.Time{}, 0, apperr.Validation(apperr.CodeConflict, "invalid cursor")
@@ -424,7 +424,7 @@ func (s *Server) handleAdminListUserEntitlements(w http.ResponseWriter, r *http.
 	}
 	var nextCursor any
 	if page.NextCreatedAt != nil && page.NextAfterID > 0 {
-		nextCursor = encodeAdminRedemptionCursor(*page.NextCreatedAt, page.NextAfterID)
+		nextCursor = encodeRedemptionCursor(*page.NextCreatedAt, page.NextAfterID)
 	}
 	writeOK(w, map[string]any{
 		"user":  adminEntitlementUserView{ID: user.PublicID.String(), DisplayName: user.DisplayName, Status: string(user.Status)},
@@ -531,7 +531,7 @@ func (s *Server) handleAdminListCardCodes(w http.ResponseWriter, r *http.Request
 }
 
 func adminCardCodeFilter(r *http.Request) (entitlement.CardCodeListFilter, error) {
-	limit, err := adminListLimit(r)
+	limit, err := listLimit(r)
 	if err != nil {
 		return entitlement.CardCodeListFilter{}, err
 	}

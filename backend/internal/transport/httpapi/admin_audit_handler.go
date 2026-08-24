@@ -50,7 +50,7 @@ func adminAuditFilter(r *http.Request) (admin.AuditFilter, error) {
 	if len(action) > 100 || len(resourceType) > 100 || len(actor) > 100 {
 		return admin.AuditFilter{}, apperr.Validation(apperr.CodeConflict, "audit filter is too long")
 	}
-	limit, err := adminListLimit(r)
+	limit, err := listLimit(r)
 	if err != nil {
 		return admin.AuditFilter{}, err
 	}

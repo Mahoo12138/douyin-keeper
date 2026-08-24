@@ -68,7 +68,7 @@ func (s *Server) handleAdminListAccounts(w http.ResponseWriter, r *http.Request)
 }
 
 func adminAccountFilter(r *http.Request) (admin.AccountListFilter, error) {
-	limit, err := adminListLimit(r)
+	limit, err := listLimit(r)
 	if err != nil {
 		return admin.AccountListFilter{}, err
 	}

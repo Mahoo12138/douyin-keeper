@@ -6,6 +6,7 @@ import (
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 )
 
 type redeemReq struct {
@@ -53,14 +54,40 @@ func (s *Server) handleRedeem(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListRedemptions(w http.ResponseWriter, r *http.Request) {
 	p := auth.MustPrincipal(r.Context())
-	summaries, err := s.entitlements.ListUserGrantSummaries(r.Context(), p.UserID, 100)
+	filter, err := userRedemptionFilter(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	items := make([]GrantView, 0, len(summaries))
-	for _, summary := range summaries {
+	page, err := s.entitlements.ListUserGrantSummariesPage(r.Context(), p.UserID, filter)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	items := make([]GrantView, 0, len(page.Items))
+	for _, summary := range page.Items {
 		items = append(items, grantViewFromSummary(summary))
 	}
-	writeOK(w, map[string]any{"items": items})
+	var nextCursor any
+	if page.NextCreatedAt != nil && page.NextAfterID > 0 {
+		nextCursor = encodeRedemptionCursor(*page.NextCreatedAt, page.NextAfterID)
+	}
+	writeOK(w, map[string]any{"items": items, "next_cursor": nextCursor})
+}
+
+func userRedemptionFilter(r *http.Request) (entitlement.RedemptionListFilter, error) {
+	limit, err := listLimit(r)
+	if err != nil {
+		return entitlement.RedemptionListFilter{}, err
+	}
+	filter := entitlement.RedemptionListFilter{Limit: limit}
+	if value := r.URL.Query().Get("cursor"); value != "" {
+		createdAt, id, err := decodeRedemptionCursor(value)
+		if err != nil {
+			return filter, err
+		}
+		filter.AfterCreatedAt = &createdAt
+		filter.AfterID = id
+	}
+	return filter, nil
 }

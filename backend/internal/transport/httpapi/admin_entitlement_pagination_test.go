@@ -18,7 +18,7 @@ func TestAdminBatchFilterDecodesCursor(t *testing.T) {
 }
 
 func TestAdminRedemptionFilterRejectsInvalidCursor(t *testing.T) {
-	for _, query := range []string{"cursor=!?", "cursor=" + encodeAdminRedemptionCursor(time.Now(), 0), "limit=101"} {
+	for _, query := range []string{"cursor=!?", "cursor=" + encodeRedemptionCursor(time.Now(), 0), "limit=101"} {
 		if _, err := adminRedemptionFilter(httptest.NewRequest("GET", "/?"+query, nil)); err == nil {
 			t.Fatalf("query %q should be rejected", query)
 		}

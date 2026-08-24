@@ -72,7 +72,7 @@ func adminRiskFilter(r *http.Request) (admin.RiskFilter, error) {
 	if len(code) > 100 {
 		return admin.RiskFilter{}, apperr.Validation(apperr.CodeConflict, "risk code filter is too long")
 	}
-	limit, err := adminListLimit(r)
+	limit, err := listLimit(r)
 	if err != nil {
 		return admin.RiskFilter{}, err
 	}

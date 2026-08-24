@@ -46,7 +46,7 @@ func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func adminUserFilter(r *http.Request) (admin.UserListFilter, error) {
-	limit, err := adminListLimit(r)
+	limit, err := listLimit(r)
 	if err != nil {
 		return admin.UserListFilter{}, err
 	}
@@ -81,7 +81,7 @@ func encodeAdminUserCursor(createdAt time.Time, id int64) string {
 	return base64.RawURLEncoding.EncodeToString(payload)
 }
 
-func adminListLimit(r *http.Request) (int, error) {
+func listLimit(r *http.Request) (int, error) {
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil || parsed < 1 || parsed > 100 {

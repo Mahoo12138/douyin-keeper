@@ -3338,7 +3338,10 @@ export interface operations {
     };
     listMyEntitlementGrants: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3353,6 +3356,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["EntitlementGrant"][];
+                        next_cursor: string | null;
                     };
                 };
             };
