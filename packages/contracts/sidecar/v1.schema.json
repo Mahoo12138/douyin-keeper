@@ -29,6 +29,44 @@
         },
         "deadline_ms": {"type": "integer", "minimum": 1000, "maximum": 300000},
         "input": {"type": "object"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"op": {"const": "message.send_first"}}},
+          "then": {"properties": {"input": {"$ref": "#/$defs/messageSendFirstInput"}}}
+        }
+      ]
+    },
+    "messageSendFirstInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session", "target", "message"],
+      "properties": {
+        "session": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "path"],
+          "properties": {
+            "kind": {"const": "playwright_storage_state_file"},
+            "path": {"type": "string", "minLength": 1}
+          }
+        },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["platform_user_id"],
+          "properties": {
+            "platform_user_id": {"type": "string", "minLength": 1, "maxLength": 256}
+          }
+        },
+        "message": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text"],
+          "properties": {
+            "text": {"type": "string", "minLength": 1, "maxLength": 2000}
+          }
+        }
       }
     },
     "error": {

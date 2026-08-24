@@ -31,11 +31,26 @@ check('openapi.yaml parses + has /api/v1 security', () => {
 
 check('sidecar schema is valid JSON Schema draft-2020-12', () => {
   const schema = JSON.parse(readFileSync(join(here, 'sidecar', 'v1.schema.json'), 'utf8'))
-  new Ajv2020({ strict: false }).compile(schema)
+  const validate = new Ajv2020({ strict: false }).compile(schema)
   const ops = schema.$defs.request.properties.op.enum
   if (!ops.includes('health.check') || !ops.includes('message.send_text')) {
     throw new Error('missing frozen sidecar ops')
   }
+  const validFirstMessage = {
+    protocol_version: 1,
+    request_id: 'contract-test',
+    op: 'message.send_first',
+    deadline_ms: 30000,
+    input: {
+      session: {kind: 'playwright_storage_state_file', path: '/run/session.json'},
+      target: {platform_user_id: 'user-1'},
+      message: {text: 'hello'},
+    },
+  }
+  if (!validate(validFirstMessage)) throw new Error('valid message.send_first input rejected')
+  const invalidFirstMessage = structuredClone(validFirstMessage)
+  invalidFirstMessage.input.target.platform_conversation_id = 'conversation-1'
+  if (validate(invalidFirstMessage)) throw new Error('message.send_first accepted conversation target')
 })
 
 check('every sidecar schema file parses', () => {

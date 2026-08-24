@@ -537,6 +537,8 @@ Sidecar 必须通过平台明确的 Creator 首聊结果确认发送；不能因
 target 只允许 `platform_user_id`，message 只允许非空 `text`；真实 Creator/Protocol adapter
 尚未部署时，协议 lane 使用带 `protocol.im` 身份的 unavailable client fail-closed。Playwright
 Browser Sidecar 不接收该协议任务，仍返回 `UNSUPPORTED_OPERATION`，避免把首聊误当作已有会话发送。
+同一输入边界已同步到 `packages/contracts/sidecar/v1.schema.json`，契约检查会验证合法请求和
+带会话 ID 的非法请求，避免 JSON Schema 与 Go 运行时校验分叉。
 
 ## 11. 错误码
 
