@@ -72,6 +72,14 @@ def test_unsupported_op_is_structured_failure():
     assert out["error"]["code"] == protocol.ERR_UNSUPPORTED_OPERATION
 
 
+def test_first_message_operation_fails_closed_until_adapter_is_available():
+    import sidecar
+
+    out = sidecar.handle(make_req("message.send_first"))
+    assert out["ok"] is False
+    assert out["error"]["code"] == protocol.ERR_UNSUPPORTED_OPERATION
+
+
 def test_failure_preserves_structured_detail():
     req = make_req("message.send_text")
     out = protocol.failure(req, protocol.ProtocolError(

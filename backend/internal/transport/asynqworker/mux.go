@@ -138,6 +138,7 @@ type LightMuxDeps struct {
 	Dispatch SendDispatchDeps
 	Probe    CapabilityProbeDeps
 	Wechat   WechatNotificationDeps
+	Protocol *SessionCheckDeps
 }
 
 func NewLightMux(loader PayloadLoader, deps LightMuxDeps, log *slog.Logger) *asynq.ServeMux {
@@ -178,6 +179,10 @@ func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindD
 		}
 		if kind == asynqqueue.KindSendBrowser && sessionDeps != nil && sessionDeps.Sends != nil {
 			mux.HandleFunc(kind, sendBrowserHandler(loader, *sessionDeps))
+			continue
+		}
+		if kind == asynqqueue.KindSendProtocol && lightDeps != nil && lightDeps.Protocol != nil && lightDeps.Protocol.Sends != nil {
+			mux.HandleFunc(kind, sendProtocolHandler(loader, *lightDeps.Protocol))
 			continue
 		}
 		mux.HandleFunc(kind, func(ctx context.Context, t *asynq.Task) error {

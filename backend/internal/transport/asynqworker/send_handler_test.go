@@ -89,3 +89,16 @@ func TestRequiredTaskFeatureOnlyGatesCreatorFirstMessage(t *testing.T) {
 		t.Fatalf("requiredTaskFeature(true) = %q, want %q", got, entitlement.FeatureCreatorFirstMessage)
 	}
 }
+
+func TestMessageSendSpecSelectsProtocolFirstMessageOperation(t *testing.T) {
+	plan, err := messageSendSpecForAdapter("text", "  你好  ", capability.AdapterProtocolIM, true)
+	if err != nil {
+		t.Fatalf("messageSendSpecForAdapter() error = %v", err)
+	}
+	if plan.Capability != capability.NameMessageTextFirst || plan.Operation != sidecar.OpsMessageSendFirst || plan.Message["text"] != "你好" {
+		t.Fatalf("unexpected protocol first-message plan: %+v", plan)
+	}
+	if _, err := messageSendSpecForAdapter("text", "hello", capability.AdapterBrowserConsumer, true); err == nil {
+		t.Fatal("browser adapter must not execute first-message tasks")
+	}
+}

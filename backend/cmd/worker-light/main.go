@@ -9,15 +9,21 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/hibiken/asynq"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/config"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/cryptox"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 	wechatinfra "github.com/mahoo12138/douyin-keeper/backend/internal/infra/wechat"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/risk"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/session"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/transport/asynqworker"
 )
@@ -27,7 +33,7 @@ func main() {
 	slog.SetDefault(log)
 
 	cfg := config.Load()
-	if err := cfg.Require("database", "redis"); err != nil {
+	if err := cfg.Require("database", "redis", "crypto"); err != nil {
 		log.Error("invalid config", "err", err)
 		os.Exit(1)
 	}
@@ -41,12 +47,32 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+	rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		log.Error("redis ping", "err", err)
+		os.Exit(1)
+	}
+	defer rdb.Close()
 
 	capabilityRepo := postgres.NewCapabilityRepo(pool)
+	accountRepo := postgres.NewAccountRepo(pool)
+	friendRepo := postgres.NewFriendRepo(pool)
+	taskRepo := postgres.NewTaskRepo(pool)
+	sendRepo := postgres.NewSendRepo(pool)
 	notificationRepo := postgres.NewNotificationRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
 	healthService := capability.NewHealthService(capabilityRepo, capability.DefaultHealthPolicy())
-	resolver := capability.NewResolver(capabilityRepo, healthService, capability.AdapterBrowserConsumer)
+	resolver := capability.NewResolver(capabilityRepo, healthService, capability.AdapterBrowserConsumer, capability.AdapterProtocolIM)
+	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown).WithNotifier(notificationRepo)
+	entitlementRepo := postgres.NewEntitlementRepo(pool)
+	entitlementSvc := entitlement.NewService(entitlementRepo, entitlementRepo, entitlementRepo, entitlementRepo,
+		postgres.NewUserLockRepo(pool), workerTx, nil)
+	cipher, err := cryptox.NewCipherFromHexKey(cfg.SessionMasterKey)
+	if err != nil {
+		log.Error("invalid session master key", "err", err)
+		os.Exit(1)
+	}
+	sessionSvc := session.NewService(postgres.NewSessionRepo(pool), workerTx, cipher, cfg.SessionTempDir)
 	sidecarScript := cfg.PlaywrightSidecarScript
 	if _, statErr := os.Stat(sidecarScript); os.IsNotExist(statErr) {
 		candidate := filepath.Join("..", sidecarScript)
@@ -56,6 +82,17 @@ func main() {
 	}
 	sidecarClient := sidecar.NewProcessClient(cfg.PlaywrightSidecarCommand, sidecarScript)
 	defer sidecarClient.Close()
+	protocolWorkerID, _ := os.Hostname()
+	if protocolWorkerID == "" {
+		protocolWorkerID = "worker-light"
+	}
+	protocolWorkerID += ":" + time.Now().Format("20060102150405")
+	protocolDeps := &asynqworker.SessionCheckDeps{
+		Accounts: accountRepo, Sessions: sessionSvc, Sidecar: sidecarClient, Redis: rdb,
+		Targets: friendRepo, Tasks: taskRepo, Sends: sendRepo, Capabilities: capabilityRepo,
+		Health: healthService, Risk: riskService, Entitlement: entitlementSvc, Quota: entitlementSvc,
+		Tx: workerTx, WorkerID: protocolWorkerID, LockTTL: 2 * time.Minute,
+	}
 	var wechatSender *wechatinfra.Client
 	if cfg.WechatAppID != "" && cfg.WechatAppSecret != "" {
 		wechatSender = wechatinfra.NewClient(cfg.WechatAppID, cfg.WechatAppSecret, nil)
@@ -77,6 +114,7 @@ func main() {
 			TemplateID: cfg.WechatNotificationTemplateID, Page: cfg.WechatNotificationPage,
 			TitleField: cfg.WechatNotificationTitleField, BodyField: cfg.WechatNotificationBodyField,
 		},
+		Protocol: protocolDeps,
 	}, log)
 	log.Info("worker-light starting")
 	if err := asynqqueue.RunServer(srv, mux, ctx); err != nil {

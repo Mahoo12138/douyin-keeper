@@ -34,12 +34,22 @@ type messageSendPlan struct {
 // messageSendSpec keeps task payload semantics at the worker boundary. A
 // sticker body is a stable platform sticker_id, never a display name or URL.
 func messageSendSpec(kind, body string) (messageSendPlan, error) {
+	return messageSendSpecForAdapter(kind, body, capability.AdapterBrowserConsumer, false)
+}
+
+func messageSendSpecForAdapter(kind, body, adapter string, allowFirstMessage bool) (messageSendPlan, error) {
 	body = strings.TrimSpace(body)
 	if body == "" {
 		return messageSendPlan{}, fmt.Errorf("message body is empty")
 	}
 	switch kind {
 	case "text":
+		if allowFirstMessage {
+			if adapter != capability.AdapterProtocolIM {
+				return messageSendPlan{}, fmt.Errorf("first-message tasks require the protocol adapter")
+			}
+			return messageSendPlan{Capability: capability.NameMessageTextFirst, Operation: sidecar.OpsMessageSendFirst, Message: map[string]string{"text": body}}, nil
+		}
 		return messageSendPlan{Capability: capability.NameMessageTextExisting, Operation: sidecar.OpsMessageSendText, Message: map[string]string{"text": body}}, nil
 	case "sticker":
 		return messageSendPlan{Capability: capability.NameMessageSticker, Operation: sidecar.OpsMessageSendSticker, Message: map[string]string{"sticker_id": body}}, nil
@@ -55,27 +65,40 @@ func valueOrEmpty(value *string) string {
 	return *value
 }
 
+type sendAdapterConfig struct {
+	adapter string
+	name    string
+}
+
 func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(context.Context, *asynq.Task) error {
+	return sendAdapterHandler(loader, deps, sendAdapterConfig{adapter: capability.AdapterBrowserConsumer, name: "send browser"})
+}
+
+func sendProtocolHandler(loader PayloadLoader, deps SessionCheckDeps) func(context.Context, *asynq.Task) error {
+	return sendAdapterHandler(loader, deps, sendAdapterConfig{adapter: capability.AdapterProtocolIM, name: "send protocol"})
+}
+
+func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConfig sendAdapterConfig) func(context.Context, *asynq.Task) error {
 	return func(ctx context.Context, t *asynq.Task) error {
 		var envelope struct {
 			OutboxID string `json:"outbox_id"`
 		}
 		if err := json.Unmarshal(t.Payload(), &envelope); err != nil || envelope.OutboxID == "" {
-			return fmt.Errorf("send browser: invalid outbox payload")
+			return fmt.Errorf("%s: invalid outbox payload", adapterConfig.name)
 		}
 		message, err := loader.FetchByPublicID(ctx, envelope.OutboxID)
 		if err != nil {
-			return fmt.Errorf("send browser: load outbox: %w", err)
+			return fmt.Errorf("%s: load outbox: %w", adapterConfig.name, err)
 		}
 		var ref struct {
 			JobID string `json:"job_id"`
 		}
 		if err := json.Unmarshal(message.Payload, &ref); err != nil {
-			return fmt.Errorf("send browser: invalid job payload: %w", err)
+			return fmt.Errorf("%s: invalid job payload: %w", adapterConfig.name, err)
 		}
 		jobPublicID, err := uuid.Parse(ref.JobID)
 		if err != nil {
-			return fmt.Errorf("send browser: invalid job id: %w", err)
+			return fmt.Errorf("%s: invalid job id: %w", adapterConfig.name, err)
 		}
 		now := deps.Now
 		if now == nil {
@@ -85,7 +108,7 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 			deps.LockTTL = 2 * time.Minute
 		}
 		if deps.Sends == nil || deps.Tasks == nil || deps.Targets == nil || deps.Tx == nil {
-			return fmt.Errorf("send browser: dependencies are not configured")
+			return fmt.Errorf("%s: dependencies are not configured", adapterConfig.name)
 		}
 		claimed, err := deps.Sends.ClaimJob(ctx, jobPublicID, deps.WorkerID, deps.LockTTL)
 		if err != nil || claimed == nil {
@@ -140,7 +163,7 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		if err != nil || tk.AccountID != claimed.AccountID || tk.FriendID != claimed.FriendID {
 			return failWithQuota(apperr.CodeAdapterIncompatible)
 		}
-		spec, err := messageSendSpec(tk.MessageKind, valueOrEmpty(tk.MessageBody))
+		spec, err := messageSendSpecForAdapter(tk.MessageKind, valueOrEmpty(tk.MessageBody), adapterConfig.adapter, tk.AllowFirstMessage)
 		if err != nil {
 			return failWithQuota(apperr.CodeAdapterIncompatible)
 		}
@@ -152,12 +175,11 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 			if snapshot == nil || snapshot.Status != capability.StatusAvailable {
 				return failWithQuota(capabilitySendError(snapshot))
 			}
-			adapter := capability.AdapterBrowserConsumer
-			if snapshot.Adapter != nil && *snapshot.Adapter != "" {
-				adapter = *snapshot.Adapter
+			if snapshot.Adapter != nil && *snapshot.Adapter != "" && *snapshot.Adapter != adapterConfig.adapter {
+				return failWithQuota(apperr.CodeAdapterIncompatible)
 			}
 			if deps.Health != nil {
-				allowed, healthErr := deps.Health.Allow(ctx, adapter)
+				allowed, healthErr := deps.Health.Allow(ctx, adapterConfig.adapter)
 				if healthErr != nil {
 					return failWithQuota(apperr.CodeInternal)
 				}
@@ -189,6 +211,10 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 			}
 			return failWithQuota(code)
 		}
+		targetInput := map[string]string{"platform_user_id": target.PlatformUserID}
+		if spec.Operation != sidecar.OpsMessageSendFirst && target.PlatformConversationID != "" {
+			targetInput["platform_conversation_id"] = target.PlatformConversationID
+		}
 		var response *sidecar.Response
 		err = deps.Sessions.WithTempFile(ctx, acct.ID, acct.UserPublicID, acct.PublicID, func(path string) error {
 			response, err = deps.Sidecar.Call(ctx, sidecar.Request{
@@ -196,7 +222,7 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 				Op: spec.Operation, DeadlineMS: 30_000,
 				Input: map[string]any{
 					"session": map[string]any{"kind": "playwright_storage_state_file", "path": path},
-					"target":  map[string]string{"platform_user_id": target.PlatformUserID, "platform_conversation_id": target.PlatformConversationID},
+					"target":  targetInput,
 					"message": spec.Message,
 				},
 			})
@@ -204,28 +230,28 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		})
 		if err != nil {
 			if errors.Is(err, sidecar.ErrProcessStart) {
-				observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+				observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, adapterConfig.adapter, claimed.PublicID.String())
 				nextAttemptAt := now().Add(sendRetryDelay(claimed.Attempt))
 				return finishSendRetry(ctx, deps, claimed, apperr.CodeAdapterUnavailable, nextAttemptAt, now)
 			}
 			if app, ok := apperr.As(err); ok && app.Code == apperr.CodeSessionExpired {
 				if deps.Risk != nil {
-					observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeSessionExpired, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+					observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeSessionExpired, adapterConfig.adapter, claimed.PublicID.String())
 				} else {
 					_ = deps.Accounts.SetSessionStatus(ctx, acct.ID, account.SessionExpired, now())
 				}
 				return failWithQuota(apperr.CodeSessionExpired)
 			}
-			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, adapterConfig.adapter, claimed.PublicID.String())
 			return failWithQuota(apperr.CodeAdapterUnavailable)
 		}
 		if code := sendSidecarErrorCode(response); code != "" {
 			mapped := mapSendSidecarError(code)
 			if deps.Health != nil && capability.IsCircuitFailureCode(code) {
-				_ = deps.Health.ObserveFailure(ctx, capability.AdapterBrowserConsumer, "", code, now())
+				_ = deps.Health.ObserveFailure(ctx, adapterConfig.adapter, "", code, now())
 			}
 			if deps.Risk != nil {
-				observeWorkerRisk(ctx, deps.Risk, acct.ID, code, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+				observeWorkerRisk(ctx, deps.Risk, acct.ID, code, adapterConfig.adapter, claimed.PublicID.String())
 			}
 			if shouldRetrySend(response) {
 				nextAttemptAt := now().Add(sendRetryDelay(claimed.Attempt))
@@ -246,14 +272,14 @@ func sendBrowserHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		}
 		var result sendMessageResult
 		if err := decodeResult(response, &result); err != nil || !result.Confirmed || result.PlatformMessageID == "" {
-			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, capability.AdapterBrowserConsumer, claimed.PublicID.String())
+			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterIncompatible, adapterConfig.adapter, claimed.PublicID.String())
 			if deps.Health != nil {
-				_ = deps.Health.ObserveFailure(ctx, capability.AdapterBrowserConsumer, "", sidecar.ErrAdapterIncompatible, now())
+				_ = deps.Health.ObserveFailure(ctx, adapterConfig.adapter, "", sidecar.ErrAdapterIncompatible, now())
 			}
 			return failWithQuota(apperr.CodeAdapterIncompatible)
 		}
 		if deps.Health != nil {
-			_ = deps.Health.ObserveSuccess(ctx, capability.AdapterBrowserConsumer, "", now())
+			_ = deps.Health.ObserveSuccess(ctx, adapterConfig.adapter, "", now())
 		}
 		messageID := result.PlatformMessageID
 		if err := finishSendWithQuota(ctx, deps, claimed, send.JobSucceeded, "", false, &messageID, send.IntentSucceeded,

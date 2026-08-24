@@ -470,6 +470,32 @@ Success：
 返回 `confirmed=true` 和 `platform_message_id`；贴纸能力不可用时返回稳定错误码，
 Go worker 会 fail-closed。
 
+## 10.2 Send First Message（V1.2）
+
+`message.send_first` 只允许使用稳定的 `platform_user_id`，因为此时可能还没有会话 ID：
+
+```json
+{
+  "protocol_version": 1,
+  "request_id": "...",
+  "op": "message.send_first",
+  "deadline_ms": 30000,
+  "input": {
+    "session": {...},
+    "target": {
+      "platform_user_id": "987654321"
+    },
+    "message": {
+      "text": "今天也记得续火花"
+    }
+  }
+}
+```
+
+Sidecar 必须通过平台明确的 Creator 首聊结果确认发送；不能因为页面打开或输入框写入
+成功就返回 `confirmed=true`。未实现或未通过能力探测时返回
+`UNSUPPORTED_OPERATION`/`ADAPTER_UNAVAILABLE`，Go worker 不得降级为已有会话发送。
+
 ## 11. 错误码
 
 Sidecar 至少支持：

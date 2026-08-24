@@ -477,9 +477,9 @@ Sidecar failure 的 `error.detail` 必须携带明确的发送结果证据；`ou
 
 如果结果未知，不允许 fallback 重发。
 
-当前 worker registry 只启用 `browser.consumer`；`protocol.im` 尚未有可执行
-worker，因此 Resolver 即使看到协议快照也不会投递 `send.protocol`。协议适配器
-接线后，只有 `error.detail.outcome=not_sent`（或明确的
+当前 worker registry 已由 `worker-light` 接收 `send.protocol` 并执行统一 preflight；
+但 `protocol.im` 仍要求有效的协议能力快照和真实 SDK，缺失时直接失败，不会由 stub
+handler ACK。协议适配器返回失败后，只有 `error.detail.outcome=not_sent`（或明确的
 `platform_write_accepted=false`）才可创建 attempt 2 browser。
 
 ## 13. Generic Job 状态机
