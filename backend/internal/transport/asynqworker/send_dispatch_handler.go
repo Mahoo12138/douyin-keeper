@@ -59,7 +59,12 @@ func sendDispatchHandler(loader PayloadLoader, deps SendDispatchDeps) func(conte
 				return intentErr
 			}
 			if intent.Status.Terminal() {
-				return nil
+				now := deps.Now
+				if now == nil {
+					now = time.Now
+				}
+				_, err := deps.Sends.CancelQueuedJob(ctx, j.ID, intent.ErrorCode, now())
+				return err
 			}
 		}
 		route := capability.Route{Adapter: capability.AdapterBrowserConsumer, Capability: capability.NameMessageTextExisting,

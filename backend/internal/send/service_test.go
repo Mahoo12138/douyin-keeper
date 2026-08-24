@@ -41,6 +41,9 @@ func (r *pageRepoStub) GetJobOwned(context.Context, int64, uuid.UUID) (*SendJob,
 func (r *pageRepoStub) ClaimJob(context.Context, uuid.UUID, string, time.Duration) (*SendJob, error) {
 	return nil, nil
 }
+func (r *pageRepoStub) CancelQueuedJob(context.Context, int64, *string, time.Time) (bool, error) {
+	return false, nil
+}
 func (r *pageRepoStub) HeartbeatJob(context.Context, int64, string, time.Duration) error { return nil }
 func (r *pageRepoStub) FindExpiredJobs(context.Context, time.Time, int) ([]ExpiredSendJob, error) {
 	return nil, nil

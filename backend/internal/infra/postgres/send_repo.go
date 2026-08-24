@@ -254,6 +254,17 @@ func (r *SendRepo) ClaimJob(ctx context.Context, publicID uuid.UUID, workerID st
 	return j, err
 }
 
+func (r *SendRepo) CancelQueuedJob(ctx context.Context, jobID int64, errorCode *string, at time.Time) (bool, error) {
+	tag, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE send_jobs SET status='cancelled', error_code=$2, retryable=false,
+			finished_at=$3, heartbeat_at=NULL, lease_expires_at=NULL
+		WHERE id=$1 AND status='queued'`, jobID, errorCode, at)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
 func (r *SendRepo) HeartbeatJob(ctx context.Context, jobID int64, workerID string, lease time.Duration) error {
 	if lease <= 0 {
 		lease = 2 * time.Minute

@@ -262,7 +262,7 @@ finished_at
 
 ```text
 load Intent FOR UPDATE
-if terminal -> ack
+if terminal -> cancel queued SendJob and ack
 if not due -> create delayed outbox and ack
 
 recheck entitlement
