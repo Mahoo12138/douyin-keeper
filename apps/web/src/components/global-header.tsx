@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Menu, ShieldCheck, Sparkles, LogOut, X } from 'lucide-react'
+import { HelpCircle, Menu, ShieldCheck, Sparkles, LogOut, X } from 'lucide-react'
 import { useState } from 'react'
 import { Avatar, AvatarFallback, Badge, Button, ThemeToggle } from '@douyin-keeper/ui-web'
 import { listNotifications, me, myEntitlement } from '@douyin-keeper/sdk-ts'
@@ -96,6 +96,7 @@ export function GlobalHeader() {
                 <p className="text-xs text-muted-foreground">{identityQ.data?.role === 'admin' ? '管理员' : '普通用户'}</p>
                 <Link to="/entitlement" className="mt-2 block text-xs text-primary hover:underline">{entitlementLabel}</Link>
               </div>
+              <Link to="/help" className="flex min-h-10 items-center gap-2 rounded-md px-3 text-sm hover:bg-accent"><HelpCircle className="size-4" />帮助与安全边界</Link>
               {identityQ.data?.role === 'admin' && <>
                 <div className="my-1 h-px bg-border" />
                 <Link to="/admin" className="flex min-h-10 items-center gap-2 rounded-md px-3 text-sm hover:bg-accent">
@@ -127,6 +128,7 @@ export function GlobalHeader() {
       {mobileNavOpen && <div className="border-t bg-background md:hidden">
         <nav className="mx-auto grid max-w-6xl gap-1 px-4 py-3 sm:px-6" aria-label="主导航">
           <Link to="/entitlement" onClick={closeMobileNav} className="px-3 pb-2 text-xs text-primary hover:underline">{displayName} · {entitlementLabel}</Link>
+          <Link to="/help" onClick={closeMobileNav} className="flex min-h-10 items-center gap-2 rounded-md px-3 py-1.5 text-sm hover:bg-accent"><HelpCircle className="size-4" />帮助与安全边界</Link>
           {nav.map((n) => <Link key={n.to} to={n.to} onClick={closeMobileNav} className={`${navLinkClass} min-h-10 flex items-center`} activeProps={{ className: `${navLinkClass} min-h-10 flex items-center bg-accent text-accent-foreground font-medium` }}><NavLabel label={n.label} unreadLabel={n.to === '/notifications' ? unreadLabel : undefined} /></Link>)}
           {identityQ.data?.role === 'admin' && <Link to="/admin" onClick={closeMobileNav} className="flex min-h-10 items-center gap-2 rounded-md px-3 py-1.5 text-sm text-primary hover:bg-accent"><ShieldCheck className="size-4" />管理控制台</Link>}
           <button type="button" className="flex min-h-10 items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm text-destructive hover:bg-destructive/10" onClick={() => { closeMobileNav(); void signOut() }}><LogOut className="size-4" />退出登录</button>
