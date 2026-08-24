@@ -25,3 +25,19 @@ type Repository interface {
 	// CountQuotaOccupied counts binding+bound accounts (docs/13 §10.1).
 	CountQuotaOccupied(ctx context.Context, userID int64) (int, error)
 }
+
+// SessionCheckTarget is a bound account that needs a periodic login-state
+// validation. Scheduler reads this projection so it does not depend on the
+// user-facing account list query.
+type SessionCheckTarget struct {
+	AccountID int64
+	PublicID  uuid.UUID
+	UserID    int64
+}
+
+// SessionCheckRepository is the scheduler slice for proactive session checks.
+// The repository excludes accounts with a recent or active check job so a
+// slow browser worker cannot cause a new job on every scheduler tick.
+type SessionCheckRepository interface {
+	ListStaleSessionCheckTargets(ctx context.Context, before time.Time, limit int) ([]SessionCheckTarget, error)
+}

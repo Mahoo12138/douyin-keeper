@@ -267,6 +267,12 @@ internal/transport/httpapi/entitlement_handler.go
 后清零失败计数。Scheduler 每 10 分钟扫描过期 snapshot，通过 outbox 投递新的
 `capability.probe`。`disabled` 状态只允许管理策略显式恢复。
 
+`account` 同时提供 Scheduler 使用的 `SessionCheckRepository` 投影：每 30 分钟扫描
+绑定且 Session 为 `unknown/valid`、`last_session_check_at` 已过期的账号，并排除已有
+活动或周期内新建 session-check Job 的账号。Scheduler 在同一事务内写入通用 Job 与
+`account.session_check.browser` outbox；Worker 的失效/安全验证结果继续交给
+`risk.Service`，由现有站内通知链路提醒账号所有者。
+
 发送 dispatch 已接入 Resolver：按消息类型、会话存在性和
 `allow_first_message` 生成候选路由，并把实际可执行 Adapter 写入
 `send_jobs.selected_adapter`；当前部署只注册 `browser.consumer`，因此不会把

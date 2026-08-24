@@ -69,6 +69,7 @@ func main() {
 	defer lock.Release(ctx)
 
 	outboxRepo := postgres.NewOutboxRepo(pool)
+	jobRepo := postgres.NewJobRepo(pool)
 	capabilityRepo := postgres.NewCapabilityRepo(pool)
 	accountRepo := postgres.NewAccountRepo(pool)
 	producer := asynqqueue.NewClient(asynq.RedisClientOpt{Addr: cfg.RedisAddr})
@@ -85,6 +86,8 @@ func main() {
 	retryRunner := scheduler.NewRetryRunner(sendRepo, entitlementSvc, outboxRepo, tx, cfg.ScheduleBatchSize)
 	capabilityProbe := scheduler.NewCapabilityProbeRunner(capabilityRepo, outboxRepo, tx,
 		scheduler.DefaultCapabilityProbeInterval, cfg.ScheduleBatchSize)
+	sessionHealthCheck := scheduler.NewSessionHealthCheckRunner(accountRepo, jobRepo, outboxRepo, tx,
+		scheduler.DefaultSessionHealthCheckInterval, cfg.ScheduleBatchSize)
 	riskCooldown := scheduler.NewRiskCooldownReaper(accountRepo, cfg.ScheduleBatchSize)
 
 	publisher := scheduler.NewPublisher(outboxRepo, producer, cfg.OutboxBatchSize,
@@ -152,6 +155,12 @@ func main() {
 					log.Error("capability probe scan failed", "err", err)
 				} else if stats.Enqueued > 0 {
 					log.Info("capability probe scan completed", "scanned", stats.Scanned,
+						"enqueued", stats.Enqueued)
+				}
+				if stats, err := sessionHealthCheck.RunOnce(ctx); err != nil {
+					log.Error("session health check scan failed", "err", err)
+				} else if stats.Enqueued > 0 {
+					log.Info("session health check scan completed", "scanned", stats.Scanned,
 						"enqueued", stats.Enqueued)
 				}
 				if n, err := riskCooldown.RunOnce(ctx); err != nil {

@@ -117,6 +117,17 @@ Worker 在真正发送前再次检查，避免“排队时有效、执行时已�
 
 不直接做 PostgreSQL + Redis 双写，也不再使用“每分钟都 enqueue，然后发送时再 dedupe”的方式。
 
+## 3.1 登录态主动健康检查
+
+Scheduler 每 60 秒执行一次有界扫描，但同一账号的检查周期为 30 分钟。只扫描已绑定且
+Session 状态为 `unknown/valid`、最近一次检查早于周期阈值的账号；已有排队、执行中、
+等待用户或周期内新建的 `account.session_check.browser` Job 会被排除。扫描只在事务中
+创建通用 Job 和 `queue_outbox(account.session_check.browser)`，不直接调用 Sidecar。
+
+Browser Worker 成功后更新 `last_session_check_at` 和 `session_status=valid`；若返回
+`SESSION_EXPIRED` 或 `CHALLENGE_REQUIRED`，沿用 Risk Service 更新 Session 状态并生成
+账号所有者的站内通知，后续周期扫描不会重复探测已经确认需要人工处理的账号。
+
 ## 4. Run Now
 
 手动执行不应该绕过 Intent 体系。

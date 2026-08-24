@@ -155,6 +155,43 @@ func (r *AccountRepo) SetSessionStatus(ctx context.Context, accountID int64, sta
 	return err
 }
 
+// ListStaleSessionCheckTargets returns bound accounts whose login state has
+// not been checked during the requested interval. Recent and active generic
+// session-check jobs are excluded so manual checks and slow workers do not
+// create a duplicate periodic job.
+func (r *AccountRepo) ListStaleSessionCheckTargets(ctx context.Context, before time.Time, limit int) ([]account.SessionCheckTarget, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT a.id, a.public_id, a.user_id
+		FROM douyin_accounts a
+		WHERE a.binding_status = 'bound' AND a.deleted_at IS NULL
+		  AND a.session_status IN ('unknown', 'valid')
+		  AND (a.last_session_check_at IS NULL OR a.last_session_check_at <= $1)
+		  AND NOT EXISTS (
+			SELECT 1 FROM jobs j
+			WHERE j.account_id = a.id
+			  AND j.type = 'account.session_check.browser'
+			  AND (j.status IN ('queued', 'running', 'waiting_user') OR j.created_at > $1)
+		  )
+		ORDER BY a.id
+		LIMIT $2`, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []account.SessionCheckTarget
+	for rows.Next() {
+		var target account.SessionCheckTarget
+		if err := rows.Scan(&target.AccountID, &target.PublicID, &target.UserID); err != nil {
+			return nil, err
+		}
+		out = append(out, target)
+	}
+	return out, rows.Err()
+}
+
 func (r *AccountRepo) SetLastFriendSyncAt(ctx context.Context, accountID int64, at time.Time) error {
 	_, err := From(ctx, r.pool).Exec(ctx, `
 		UPDATE douyin_accounts SET last_friend_sync_at=$2, updated_at=now() WHERE id=$1`, accountID, at)

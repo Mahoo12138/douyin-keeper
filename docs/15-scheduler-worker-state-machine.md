@@ -684,6 +684,17 @@ Scheduler 周期任务：
 - cooldown_until passed -> normal；
 - 不自动改变 session_status。
 
+### Session Health Check
+
+- 每 60 秒以有界批次扫描账号，但以 30 分钟为 Session 检查周期；
+- 仅选择 `binding_status=bound` 且 `session_status IN (unknown, valid)`、
+  `last_session_check_at` 已过期的账号；
+- 排除已有 queued/running/waiting_user 检查 Job 或周期内刚创建的检查 Job；
+- 在同一事务中创建 `jobs(account.session_check.browser)` 与对应 outbox，Worker
+  完成后更新 Session 检查时间；
+- `SESSION_EXPIRED` / `CHALLENGE_REQUIRED` 仍由 Risk Service 记录事件、更新状态并
+  通过站内通知提醒账号所有者，Scheduler 不重复探测已进入人工处理状态的账号。
+
 当前 Scheduler 每 60 秒以有界批次执行上述清理，并将变更持久化到
 `douyin_accounts`；Worker 记录风险事件与账号动作使用同一事务，避免只改状态而丢失审计事件。
 
