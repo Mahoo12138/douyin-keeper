@@ -7,7 +7,7 @@ import { clearAdminRole } from '@/lib/admin-guard'
 
 type AdminNavItem = { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean }
 
-const nav: AdminNavItem[] = [
+export const adminNav: AdminNavItem[] = [
   { to: '/admin', label: '运营概览', icon: LayoutDashboard, exact: true },
   { to: '/admin/users', label: '用户管理', icon: UsersRound },
   { to: '/admin/accounts', label: '抖音账号', icon: Smartphone },
@@ -36,7 +36,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   }
 
   function renderNav() {
-    return nav.map((item) => <Link key={item.to} to={item.to} onClick={closeMobileNav} className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${active(item.to, item.exact === true) ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}`}><item.icon className="size-4" />{item.label}</Link>)
+    return adminNav.map((item) => <Link key={item.to} to={item.to} onClick={closeMobileNav} className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${active(item.to, item.exact === true) ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground' : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}`}><item.icon className="size-4" />{item.label}</Link>)
   }
 
   return (
