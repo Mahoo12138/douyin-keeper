@@ -613,3 +613,7 @@ IP 限制，两个维度任一达到上限都会拒绝请求，避免只轮换 I
 当前已增加微信绑定集成覆盖：Link Code 单次消费、同一微信 Identity 不能绑定两个
 User，以及同一 User 最多 3 个有效 Link Code；`infra/wechat` 客户端测试覆盖请求参数、
 OpenID 提取、`session_key` 不外泄和微信服务暂时不可用的重试错误。
+
+当前已增加真实 PostgreSQL 并发配额覆盖：两个并发 Binding 只能占用一个
+`AccountQuota`，两个并发 Task Create 只能占用一个 `TaskQuota`；测试验证服务事务内的
+User 行锁、配额拒绝码和最终资源数量。
