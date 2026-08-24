@@ -427,9 +427,10 @@ Item：
 ```json
 {
   "id": "...",
-  "type": "scheduled",
+  "intent_type": "scheduled",
   "account": {"id":"...","nickname":"Miles"},
   "friend": {"id":"...","display_name":"Jasmine"},
+  "task_id": "...",
   "scheduled_at": "...",
   "status": "succeeded",
   "latest_job": {

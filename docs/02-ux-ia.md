@@ -17,7 +17,7 @@
 右上角：当前用户、权益状态/到期时间、帮助、退出。
 
 当前 PC C 端 MVP 采用 `reference/tinyship-main/apps/tanstack-app` 的应用壳：
-顶部 sticky 全局导航、窄内容容器和统一 Card 分区；Admin 仍可在后续阶段使用独立侧栏布局。
+顶部 sticky 全局导航、窄内容容器和统一 Card 分区；管理端在同一应用内使用 `/admin/*` 侧栏布局。
 导航项在窄屏下保持单行横向滚动，避免压缩为不可读的多行菜单。
 
 ### 1.2 概览页 `/dashboard`
@@ -147,7 +147,7 @@ Tab：
 - 保存。
 
 当前 M3 页面已实现账号/好友任务列表、关键词与状态筛选、创建/编辑抽屉、每日启停和立即执行。
-最近执行、今日状态等运行统计由 `/history` 模块提供；任务 API 当前只返回配置本身，不在任务页虚构执行结果。
+`/history` 已实现账号、好友、状态、日期和关键词筛选，以及发送记录详情抽屉；任务 API 当前只返回配置本身，不在任务页虚构执行结果。
 
 ### 1.8 发送记录 `/history`
 
@@ -165,6 +165,8 @@ Tab：
 详情抽屉展示完整执行时间线：
 
 `scheduled → started → adapter_selected → sent/failed`
+
+当前实现使用 `GET /send-intents` 列表与 `GET /send-jobs/:id` 诊断信息；时间线由已持久化的 scheduled、started、adapter 和 finished 字段还原，平台消息 ID 不在用户界面展示。
 
 ### 1.9 通知 `/notifications`
 

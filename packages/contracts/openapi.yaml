@@ -938,6 +938,11 @@ components:
         friend_id:
           type: string
           format: uuid
+        task_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
         local_date:
           type:
           - string

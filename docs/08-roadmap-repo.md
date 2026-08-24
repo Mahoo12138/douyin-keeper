@@ -20,7 +20,7 @@ Admin 与 C 端可以共享：
 - 表格/表单基础组件
 - Auth 逻辑
 
-但保持两个独立应用和构建产物。
+当前实现统一为一个 `apps/web` 应用：普通用户使用顶层路由，Admin 使用 `/admin/*` 嵌套路由，共享登录态、组件库、主题和构建产物。
 
 ### 微信小程序
 
@@ -49,8 +49,7 @@ Admin 与 C 端可以共享：
 ```text
 douyin-keeper/
 ├─ apps/
-│  ├─ web/                  # PC C 端
-│  ├─ admin/                # PC 管理后台
+│  ├─ web/                  # PC C 端 + /admin/* 管理后台
 │  └─ mini/                 # 微信小程序
 │
 ├─ backend/                  # 单 Go Module
@@ -63,7 +62,7 @@ douyin-keeper/
 │  │  ├─ worker-browser/
 │  │  └─ worker-light/
 │  └─ internal/             # auth/entitlement/account/send/... + infra/transport
-│     └─ webassets/          # Release 时嵌入 Web/Admin dist
+│     └─ transport/webassets/ # Release 时嵌入统一 SPA dist
 │
 ├─ sidecars/
 │  ├─ playwright/           # Python
@@ -72,7 +71,7 @@ douyin-keeper/
 ├─ packages/
 │  ├─ contracts/            # OpenAPI/schema/generated types
 │  ├─ sdk-ts/               # Web/Mini API Client
-│  ├─ ui-web/               # Web/Admin 共享组件
+│  ├─ ui-web/               # 统一 PC App 共享组件
 │  └─ eslint-config/
 │
 ├─ db/

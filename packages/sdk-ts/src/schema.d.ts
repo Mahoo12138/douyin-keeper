@@ -559,6 +559,8 @@ export interface components {
             account_id: string;
             /** Format: uuid */
             friend_id: string;
+            /** Format: uuid */
+            task_id?: string | null;
             local_date?: string | null;
             /** @enum {string} */
             status: "pending" | "queued" | "running" | "retry_wait" | "succeeded" | "failed" | "skipped" | "cancelled";
