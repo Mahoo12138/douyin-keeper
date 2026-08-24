@@ -52,6 +52,24 @@ export async function listAdminAccounts(accessToken: string, options?: { limit?:
   return data
 }
 
+export async function pauseAdminAccount(accessToken: string, accountId: string) {
+  const { data, error } = await api.POST('/admin/accounts/{accountId}/pause', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { accountId } },
+  })
+  if (error) throwApiError(error, 'admin account pause failed')
+  return data
+}
+
+export async function resumeAdminAccount(accessToken: string, accountId: string) {
+  const { data, error } = await api.POST('/admin/accounts/{accountId}/resume', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { accountId } },
+  })
+  if (error) throwApiError(error, 'admin account resume failed')
+  return data
+}
+
 export async function getAdminRuntime(accessToken: string) {
   const { data, error } = await api.GET('/admin/workers', {
     headers: { Authorization: `Bearer ${accessToken}` },

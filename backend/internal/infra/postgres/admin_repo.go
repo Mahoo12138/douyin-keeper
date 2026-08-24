@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/admin"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 )
 
 type AdminRepo struct {
@@ -89,6 +91,14 @@ func (r *AdminRepo) ListUserSummaries(ctx context.Context, limit int) ([]admin.U
 }
 
 func (r *AdminRepo) ListAccountSummaries(ctx context.Context, limit int) ([]admin.AccountSummary, error) {
+	return r.listAccountSummaries(ctx, limit, nil)
+}
+
+func (r *AdminRepo) listAccountSummaries(ctx context.Context, limit int, accountID *uuid.UUID) ([]admin.AccountSummary, error) {
+	var accountFilter any
+	if accountID != nil {
+		accountFilter = *accountID
+	}
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT
 			a.public_id,
@@ -139,8 +149,9 @@ func (r *AdminRepo) ListAccountSummaries(ctx context.Context, limit int) ([]admi
 			LIMIT 1
 		) e ON true
 		WHERE a.deleted_at IS NULL AND u.deleted_at IS NULL
+		  AND ($2::uuid IS NULL OR a.public_id=$2)
 		ORDER BY a.created_at DESC
-		LIMIT $1`, limit)
+		LIMIT $1`, limit, accountFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +161,7 @@ func (r *AdminRepo) ListAccountSummaries(ctx context.Context, limit int) ([]admi
 	for rows.Next() {
 		var item admin.AccountSummary
 		var rawCapabilities []byte
-		var errorCategory, errorCode, errorSeverity string
+		var errorCategory, errorCode, errorSeverity *string
 		var errorSourceAdapter *string
 		var errorCreatedAt *time.Time
 		if err := rows.Scan(
@@ -180,9 +191,9 @@ func (r *AdminRepo) ListAccountSummaries(ctx context.Context, limit int) ([]admi
 		if err := json.Unmarshal(rawCapabilities, &item.Capabilities); err != nil {
 			return nil, err
 		}
-		if errorCreatedAt != nil {
+		if errorCreatedAt != nil && errorCategory != nil && errorCode != nil && errorSeverity != nil {
 			item.LatestError = &admin.RecentError{
-				Category: errorCategory, Code: errorCode, Severity: errorSeverity,
+				Category: *errorCategory, Code: *errorCode, Severity: *errorSeverity,
 				SourceAdapter: errorSourceAdapter, CreatedAt: *errorCreatedAt,
 			}
 		}
@@ -192,6 +203,69 @@ func (r *AdminRepo) ListAccountSummaries(ctx context.Context, limit int) ([]admi
 		return nil, err
 	}
 	return items, nil
+}
+
+func (r *AdminRepo) SetAccountPaused(ctx context.Context, actorID int64, accountID uuid.UUID, paused bool) (admin.AccountSummary, error) {
+	if actorID <= 0 || accountID == uuid.Nil {
+		return admin.AccountSummary{}, admin.ErrInvalidAccount
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return admin.AccountSummary{}, err
+	}
+	defer tx.Rollback(ctx) // safe after commit
+
+	var internalID int64
+	var riskStatus string
+	var cooldownUntil *time.Time
+	if err := tx.QueryRow(ctx, `
+		SELECT id, risk_status, cooldown_until
+		FROM douyin_accounts
+		WHERE public_id=$1 AND deleted_at IS NULL
+		FOR UPDATE`, accountID).Scan(&internalID, &riskStatus, &cooldownUntil); err != nil {
+		return admin.AccountSummary{}, mapNoRows(err, apperr.CodeNotFound, "account not found")
+	}
+	if !paused && riskStatus == "cooling_down" && cooldownUntil != nil && time.Now().Before(*cooldownUntil) {
+		return admin.AccountSummary{}, apperr.Conflict(apperr.CodeAccountCooldownActive, "account cooldown is still active")
+	}
+
+	if paused {
+		_, err = tx.Exec(ctx, `
+			UPDATE douyin_accounts
+			SET paused_at=COALESCE(paused_at, now()), updated_at=now()
+			WHERE id=$1`, internalID)
+	} else {
+		_, err = tx.Exec(ctx, `
+			UPDATE douyin_accounts
+			SET paused_at=NULL, updated_at=now()
+			WHERE id=$1`, internalID)
+	}
+	if err != nil {
+		return admin.AccountSummary{}, err
+	}
+
+	detail, _ := json.Marshal(map[string]any{"paused": paused})
+	action := "account.resume"
+	if paused {
+		action = "account.pause"
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, detail_json)
+		VALUES ($1,$2,'douyin_account',$3,$4)`, actorID, action, accountID.String(), detail); err != nil {
+		return admin.AccountSummary{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return admin.AccountSummary{}, err
+	}
+
+	items, err := r.listAccountSummaries(ctx, 1, &accountID)
+	if err != nil {
+		return admin.AccountSummary{}, err
+	}
+	if len(items) == 1 {
+		return items[0], nil
+	}
+	return admin.AccountSummary{}, apperr.NotFound(apperr.CodeNotFound, "account not found")
 }
 
 func (r *AdminRepo) ListRiskSummaries(ctx context.Context, filter admin.RiskFilter) ([]admin.RiskSummary, error) {

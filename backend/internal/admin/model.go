@@ -1,4 +1,4 @@
-// Package admin owns read-only operational queries exposed to administrators.
+// Package admin owns operational queries and controlled actions exposed to administrators.
 package admin
 
 import (
@@ -10,6 +10,7 @@ import (
 )
 
 var ErrUnknownAdapter = errors.New("admin: unknown adapter")
+var ErrInvalidAccount = errors.New("admin: invalid account")
 
 var KnownAdapters = []string{
 	"browser.consumer",
@@ -170,6 +171,7 @@ type Repository interface {
 	GetRuntimeSummary(ctx context.Context) (RuntimeSummary, error)
 	ListAdapterHealth(ctx context.Context) ([]AdapterHealthSummary, error)
 	SetAdapterEnabled(ctx context.Context, actorID int64, adapter string, enabled bool) (AdapterHealthSummary, error)
+	SetAccountPaused(ctx context.Context, actorID int64, accountID uuid.UUID, paused bool) (AccountSummary, error)
 	ListRiskSummaries(ctx context.Context, filter RiskFilter) ([]RiskSummary, error)
 	ListAuditSummaries(ctx context.Context, filter AuditFilter) ([]AuditSummary, error)
 }
@@ -203,6 +205,13 @@ func (s *Service) SetAdapterEnabled(ctx context.Context, actorID int64, adapter 
 		return AdapterHealthSummary{}, ErrUnknownAdapter
 	}
 	return s.repo.SetAdapterEnabled(ctx, actorID, adapter, enabled)
+}
+
+func (s *Service) SetAccountPaused(ctx context.Context, actorID int64, accountID uuid.UUID, paused bool) (AccountSummary, error) {
+	if actorID <= 0 || accountID == uuid.Nil {
+		return AccountSummary{}, ErrInvalidAccount
+	}
+	return s.repo.SetAccountPaused(ctx, actorID, accountID, paused)
 }
 
 func (s *Service) ListRisks(ctx context.Context, filter RiskFilter) ([]RiskSummary, error) {

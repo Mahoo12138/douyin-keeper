@@ -65,6 +65,40 @@ paths:
                     type:
                     - string
                     - 'null'
+  /admin/accounts/{accountId}/pause:
+    post:
+      operationId: pauseAdminAccount
+      parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Paused administrator account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccount'
+  /admin/accounts/{accountId}/resume:
+    post:
+      operationId: resumeAdminAccount
+      parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Resumed administrator account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccount'
   /admin/workers:
     get:
       operationId: getAdminRuntime

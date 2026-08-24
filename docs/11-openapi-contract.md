@@ -506,6 +506,8 @@ GET  /admin/users
 GET  /admin/users/{id}
 PATCH /admin/users/{id}
 GET  /admin/accounts
+POST /admin/accounts/{id}/pause
+POST /admin/accounts/{id}/resume
 GET  /admin/jobs
 GET  /admin/risks
 GET  /admin/workers
