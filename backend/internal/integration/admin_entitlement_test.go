@@ -3,6 +3,9 @@ package integration
 import (
 	"context"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
@@ -29,7 +32,6 @@ func TestAdminEntitlementSummariesAndDisableAudit(t *testing.T) {
 	if err != nil || len(codes) != 2 {
 		t.Fatalf("created codes = %d, err = %v", len(codes), err)
 	}
-
 	summary, err := ent.GetBatchSummary(ctx, plan.PublicID)
 	if err == nil {
 		t.Fatalf("plan id must not resolve as batch: %+v", summary)
@@ -48,6 +50,10 @@ func TestAdminEntitlementSummariesAndDisableAudit(t *testing.T) {
 	}
 	if !found || batch.UnusedCount != 2 || batch.RedeemedCount != 0 || batch.PlanCode != plan.Code {
 		t.Fatalf("batch summary = %+v", batch)
+	}
+	codeSummaries, err := ent.ListCardCodeSummaries(ctx, batch.PublicID, 100)
+	if err != nil || len(codeSummaries) != 2 {
+		t.Fatalf("code summaries = %+v, err = %v", codeSummaries, err)
 	}
 
 	if _, _, err := ent.Redeem(ctx, userID, codes[0]); err != nil {
@@ -68,6 +74,31 @@ func TestAdminEntitlementSummariesAndDisableAudit(t *testing.T) {
 		t.Fatalf("redemption summary exposed plaintext or missing source: %+v", redemption)
 	}
 
+	adminGrantUserID := newUser(t)
+	adminGrant, err := ent.GrantByAdmin(ctx, actorID, adminGrantUserID, plan.ID, 7*24*time.Hour)
+	if err != nil || adminGrant.PublicID == uuid.Nil {
+		t.Fatalf("admin grant = %+v, err = %v", adminGrant, err)
+	}
+	userGrants, err := ent.ListUserGrantSummaries(ctx, adminGrantUserID, 100)
+	if err != nil || len(userGrants) != 1 || userGrants[0].SourceType != entitlement.SourceAdmin {
+		t.Fatalf("user grants = %+v, err = %v", userGrants, err)
+	}
+	if err := ent.RevokeGrantByAdmin(ctx, actorID, adminGrant.PublicID, "integration revoke"); err != nil {
+		t.Fatal(err)
+	}
+	userGrants, err = ent.ListUserGrantSummaries(ctx, adminGrantUserID, 100)
+	if err != nil || len(userGrants) != 1 || userGrants[0].RevokedAt == nil || userGrants[0].RevokeReason == nil {
+		t.Fatalf("revoked user grant = %+v, err = %v", userGrants, err)
+	}
+
+	if err := ent.RevokeUnusedCodeByAdmin(ctx, actorID, batch.PublicID, codeSummaries[1].ID, "integration code revoke"); err != nil {
+		t.Fatal(err)
+	}
+	codeSummaries, err = ent.ListCardCodeSummaries(ctx, batch.PublicID, 100)
+	if err != nil || codeSummaries[1].Status != "revoked" {
+		t.Fatalf("revoked code summaries = %+v, err = %v", codeSummaries, err)
+	}
+
 	if err := ent.DisableBatchByAdmin(ctx, actorID, batch.PublicID); err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +106,7 @@ func TestAdminEntitlementSummariesAndDisableAudit(t *testing.T) {
 		t.Fatal(err)
 	}
 	updated, err := ent.GetBatchSummary(ctx, batch.PublicID)
-	if err != nil || updated.Status != entitlement.StatusDisabled {
+	if err != nil || updated.Status != entitlement.StatusDisabled || updated.RevokedCount != 1 || updated.RedeemedCount != 1 {
 		t.Fatalf("disabled batch = %+v, err = %v", updated, err)
 	}
 	var auditCount int
@@ -96,5 +127,23 @@ func TestAdminEntitlementSummariesAndDisableAudit(t *testing.T) {
 	}
 	if auditCount < 2 {
 		t.Fatalf("batch audit count = %d", auditCount)
+	}
+	if err := pool.QueryRow(ctx, `
+		SELECT COUNT(*)::int FROM audit_logs
+		WHERE actor_user_id=$1 AND action='entitlement.grant.revoke'
+		  AND resource_type='entitlement_grant' AND resource_id=$2`, actorID, adminGrant.PublicID.String()).Scan(&auditCount); err != nil {
+		t.Fatal(err)
+	}
+	if auditCount < 1 {
+		t.Fatalf("grant revoke audit count = %d", auditCount)
+	}
+	if err := pool.QueryRow(ctx, `
+		SELECT COUNT(*)::int FROM audit_logs
+		WHERE actor_user_id=$1 AND action='entitlement.card_code.revoke'
+		  AND resource_type='card_code' AND resource_id=$2`, actorID, codeSummaries[1].CodeFingerprint).Scan(&auditCount); err != nil {
+		t.Fatal(err)
+	}
+	if auditCount < 1 {
+		t.Fatalf("card code revoke audit count = %d", auditCount)
 	}
 }

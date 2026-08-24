@@ -85,6 +85,15 @@ func (r *EntitlementRepo) GetPlanByPublicID(ctx context.Context, publicID uuid.U
 	return p, nil
 }
 
+func (r *EntitlementRepo) GetPlanByID(ctx context.Context, id int64) (*entitlement.Plan, error) {
+	p, err := scanPlan(From(ctx, r.pool).QueryRow(ctx,
+		`SELECT `+planCols+` FROM entitlement_plans WHERE id = $1`, id))
+	if err != nil {
+		return nil, mapNoRows(err, apperr.CodeNotFound, "plan not found")
+	}
+	return p, nil
+}
+
 func (r *EntitlementRepo) ListPlans(ctx context.Context) ([]*entitlement.Plan, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `SELECT `+planCols+` FROM entitlement_plans ORDER BY id`)
 	if err != nil {
@@ -203,6 +212,66 @@ func (r *EntitlementRepo) DisableBatch(ctx context.Context, actorID int64, publi
 	return tx.Commit(ctx)
 }
 
+func (r *EntitlementRepo) ListCodeSummaries(ctx context.Context, batchPublicID uuid.UUID, limit int) ([]entitlement.CardCodeSummary, error) {
+	var exists bool
+	if err := From(ctx, r.pool).QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM card_batches WHERE public_id=$1)`, batchPublicID).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, apperr.NotFound(apperr.CodeNotFound, "card batch not found")
+	}
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT cc.id, cc.code_fingerprint, cc.status, cc.redeemed_at, cc.revoked_at, cc.created_at
+		FROM card_codes cc
+		JOIN card_batches b ON b.id=cc.batch_id
+		WHERE b.public_id=$1
+		ORDER BY cc.id
+		LIMIT $2`, batchPublicID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]entitlement.CardCodeSummary, 0)
+	for rows.Next() {
+		var item entitlement.CardCodeSummary
+		if err := rows.Scan(&item.ID, &item.CodeFingerprint, &item.Status, &item.RedeemedAt, &item.RevokedAt, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (r *EntitlementRepo) RevokeUnusedCode(ctx context.Context, actorID int64, batchPublicID uuid.UUID, codeID int64, reason string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var status, fingerprint string
+	if err := tx.QueryRow(ctx, `
+		SELECT cc.status, cc.code_fingerprint
+		FROM card_codes cc
+		JOIN card_batches b ON b.id=cc.batch_id
+		WHERE b.public_id=$1 AND cc.id=$2
+		FOR UPDATE OF cc`, batchPublicID, codeID).Scan(&status, &fingerprint); err != nil {
+		return mapNoRows(err, apperr.CodeNotFound, "card code not found")
+	}
+	if status != "unused" {
+		return apperr.Conflict(apperr.CodeConflict, "only unused card codes can be revoked")
+	}
+	if _, err := tx.Exec(ctx, `UPDATE card_codes SET status='revoked', revoked_at=now() WHERE id=$1`, codeID); err != nil {
+		return err
+	}
+	detail, _ := json.Marshal(map[string]any{"reason": reason, "status": "revoked"})
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, detail_json)
+		VALUES ($1,'entitlement.card_code.revoke','card_code',$2,$3)`, actorID, fingerprint, detail); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (r *EntitlementRepo) InsertCodes(ctx context.Context, batchID int64, codes []*entitlement.CardCode) error {
 	db := From(ctx, r.pool)
 	for _, c := range codes {
@@ -257,12 +326,12 @@ func (r *EntitlementRepo) MarkCodeRedeemed(ctx context.Context, codeID, userID i
 
 // ---- grants ----
 
-const grantCols = `g.id, g.public_id, g.user_id, g.entitlement_plan_id, g.source_type, g.source_card_id, g.starts_at, g.expires_at, g.revoked_at, g.revoke_reason`
+const grantCols = `g.id, g.public_id, g.user_id, g.entitlement_plan_id, g.source_type, g.source_card_id, g.starts_at, g.expires_at, g.revoked_at, g.revoke_reason, g.created_at`
 
 func scanGrant(row pgx.Row) (*entitlement.Grant, error) {
 	var g entitlement.Grant
 	err := row.Scan(&g.ID, &g.PublicID, &g.UserID, &g.EntitlementPlanID, &g.SourceType, &g.SourceCardID,
-		&g.StartsAt, &g.ExpiresAt, &g.RevokedAt, &g.RevokeReason)
+		&g.StartsAt, &g.ExpiresAt, &g.RevokedAt, &g.RevokeReason, &g.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -321,17 +390,67 @@ func (r *EntitlementRepo) RevokeGrant(ctx context.Context, grantID, byUserID int
 	return err
 }
 
+func (r *EntitlementRepo) GetGrantByPublicID(ctx context.Context, publicID uuid.UUID) (*entitlement.Grant, error) {
+	g, err := scanGrant(From(ctx, r.pool).QueryRow(ctx,
+		`SELECT `+grantCols+` FROM entitlement_grants g WHERE g.public_id=$1`, publicID))
+	if err != nil {
+		return nil, mapNoRows(err, apperr.CodeNotFound, "entitlement grant not found")
+	}
+	return g, nil
+}
+
+func (r *EntitlementRepo) RevokeGrantByPublicID(ctx context.Context, actorID int64, publicID uuid.UUID, reason string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var grantID int64
+	var revokedAt *time.Time
+	if err := tx.QueryRow(ctx, `
+		SELECT id, revoked_at FROM entitlement_grants WHERE public_id=$1 FOR UPDATE`, publicID).Scan(&grantID, &revokedAt); err != nil {
+		return mapNoRows(err, apperr.CodeNotFound, "entitlement grant not found")
+	}
+	if revokedAt != nil {
+		return apperr.Conflict(apperr.CodeConflict, "entitlement grant already revoked")
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE entitlement_grants SET revoked_at=now(), revoked_by=$2, revoke_reason=$3 WHERE id=$1`, grantID, actorID, reason); err != nil {
+		return err
+	}
+	detail, _ := json.Marshal(map[string]any{"reason": reason, "status": "revoked"})
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, detail_json)
+		VALUES ($1,'entitlement.grant.revoke','entitlement_grant',$2,$3)`, actorID, publicID.String(), detail); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (r *EntitlementRepo) ListRedemptionSummaries(ctx context.Context, limit int) ([]entitlement.RedemptionSummary, error) {
+	return r.listGrantSummaries(ctx, limit, nil)
+}
+
+func (r *EntitlementRepo) ListUserGrantSummaries(ctx context.Context, userID int64, limit int) ([]entitlement.RedemptionSummary, error) {
+	return r.listGrantSummaries(ctx, limit, &userID)
+}
+
+func (r *EntitlementRepo) listGrantSummaries(ctx context.Context, limit int, userID *int64) ([]entitlement.RedemptionSummary, error) {
+	var userFilter any
+	if userID != nil {
+		userFilter = *userID
+	}
 	rows, err := From(ctx, r.pool).Query(ctx, `
-		SELECT g.public_id, u.public_id, u.display_name, p.code, p.name, g.source_type,
-			g.starts_at, g.expires_at, c.redeemed_at, g.revoked_at,
+		SELECT g.public_id, u.public_id, u.display_name, p.public_id, p.code, p.name, g.source_type,
+			g.starts_at, g.expires_at, c.redeemed_at, g.revoked_at, g.revoke_reason,
 			c.code_fingerprint, g.created_at
 		FROM entitlement_grants g
 		JOIN users u ON u.id=g.user_id
 		JOIN entitlement_plans p ON p.id=g.entitlement_plan_id
 		LEFT JOIN card_codes c ON c.id=g.source_card_id
+		WHERE ($2::bigint IS NULL OR g.user_id=$2)
 		ORDER BY g.created_at DESC, g.id DESC
-		LIMIT $1`, limit)
+		LIMIT $1`, limit, userFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -340,8 +459,8 @@ func (r *EntitlementRepo) ListRedemptionSummaries(ctx context.Context, limit int
 	for rows.Next() {
 		var item entitlement.RedemptionSummary
 		if err := rows.Scan(
-			&item.GrantPublicID, &item.UserPublicID, &item.UserDisplayName, &item.PlanCode, &item.PlanName,
-			&item.SourceType, &item.StartsAt, &item.ExpiresAt, &item.RedeemedAt, &item.RevokedAt,
+			&item.GrantPublicID, &item.UserPublicID, &item.UserDisplayName, &item.PlanPublicID, &item.PlanCode, &item.PlanName,
+			&item.SourceType, &item.StartsAt, &item.ExpiresAt, &item.RedeemedAt, &item.RevokedAt, &item.RevokeReason,
 			&item.CodeFingerprint, &item.CreatedAt,
 		); err != nil {
 			return nil, err

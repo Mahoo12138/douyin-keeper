@@ -71,6 +71,7 @@ type RedemptionSummary struct {
 	GrantPublicID   uuid.UUID
 	UserPublicID    uuid.UUID
 	UserDisplayName string
+	PlanPublicID    uuid.UUID
 	PlanCode        string
 	PlanName        string
 	SourceType      GrantSourceType
@@ -78,7 +79,17 @@ type RedemptionSummary struct {
 	ExpiresAt       time.Time
 	RedeemedAt      *time.Time
 	RevokedAt       *time.Time
+	RevokeReason    *string
 	CodeFingerprint *string
+	CreatedAt       time.Time
+}
+
+type CardCodeSummary struct {
+	ID              int64
+	CodeFingerprint string
+	Status          string
+	RedeemedAt      *time.Time
+	RevokedAt       *time.Time
 	CreatedAt       time.Time
 }
 
@@ -109,6 +120,7 @@ type Grant struct {
 	ExpiresAt         time.Time
 	RevokedAt         *time.Time
 	RevokeReason      *string
+	CreatedAt         time.Time
 
 	Plan *Plan // joined
 }

@@ -180,6 +180,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/users/{userId}/entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAdminUserEntitlements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{userId}/entitlement-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createAdminUserEntitlementGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/entitlement-grants/{grantId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["revokeAdminEntitlementGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/card-batches/{batchId}/codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAdminCardCodes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/card-batches/{batchId}/codes/{codeId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["revokeAdminCardCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/workers": {
         parameters: {
             query?: never;
@@ -825,10 +905,14 @@ export interface components {
             /** Format: uuid */
             user_id: string;
             user_display_name: string;
+            /** Format: uuid */
+            plan_id: string;
             plan_code: string;
             plan_name: string;
             /** @enum {string} */
             source_type: "card" | "admin";
+            /** @enum {string} */
+            status: "scheduled" | "active" | "expired" | "revoked";
             /** Format: date-time */
             starts_at: string;
             /** Format: date-time */
@@ -837,7 +921,41 @@ export interface components {
             redeemed_at?: string | null;
             /** Format: date-time */
             revoked_at?: string | null;
+            revoke_reason?: string | null;
             code_fingerprint?: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AdminUserEntitlementUser: {
+            /** Format: uuid */
+            id: string;
+            display_name: string;
+            /** @enum {string} */
+            status: "active" | "disabled";
+        };
+        AdminUserEntitlements: {
+            user: components["schemas"]["AdminUserEntitlementUser"];
+            items: components["schemas"]["AdminRedemption"][];
+            next_cursor: string | null;
+        };
+        AdminCreateEntitlementGrantRequest: {
+            /** Format: uuid */
+            plan_id: string;
+            duration_days: number;
+        };
+        AdminRevokeEntitlementRequest: {
+            reason: string;
+        };
+        AdminCardCode: {
+            /** Format: int64 */
+            id: number;
+            code_fingerprint: string;
+            /** @enum {string} */
+            status: "unused" | "redeemed" | "revoked";
+            /** Format: date-time */
+            redeemed_at?: string | null;
+            /** Format: date-time */
+            revoked_at?: string | null;
             /** Format: date-time */
             created_at: string;
         };
@@ -1499,6 +1617,132 @@ export interface operations {
                         next_cursor: string | null;
                     };
                 };
+            };
+        };
+    };
+    getAdminUserEntitlements: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User entitlement history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserEntitlements"];
+                };
+            };
+        };
+    };
+    createAdminUserEntitlementGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminCreateEntitlementGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Created administrator grant */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRedemption"];
+                };
+            };
+        };
+    };
+    revokeAdminEntitlementGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminRevokeEntitlementRequest"];
+            };
+        };
+        responses: {
+            /** @description Entitlement grant revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAdminCardCodes: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                batchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Card code summaries without plaintext codes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminCardCode"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+        };
+    };
+    revokeAdminCardCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: string;
+                codeId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminRevokeEntitlementRequest"];
+            };
+        };
+        responses: {
+            /** @description Unused card code revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

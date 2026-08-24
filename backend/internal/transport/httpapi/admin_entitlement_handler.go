@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,14 +75,41 @@ type adminRedemptionView struct {
 	ID              string  `json:"id"`
 	UserID          string  `json:"user_id"`
 	UserDisplayName string  `json:"user_display_name"`
+	PlanID          string  `json:"plan_id"`
 	PlanCode        string  `json:"plan_code"`
 	PlanName        string  `json:"plan_name"`
 	SourceType      string  `json:"source_type"`
+	Status          string  `json:"status"`
 	StartsAt        string  `json:"starts_at"`
 	ExpiresAt       string  `json:"expires_at"`
 	RedeemedAt      *string `json:"redeemed_at"`
 	RevokedAt       *string `json:"revoked_at"`
+	RevokeReason    *string `json:"revoke_reason"`
 	CodeFingerprint *string `json:"code_fingerprint"`
+	CreatedAt       string  `json:"created_at"`
+}
+
+type adminEntitlementUserView struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	Status      string `json:"status"`
+}
+
+type adminCreateGrantRequest struct {
+	PlanID       string `json:"plan_id"`
+	DurationDays int    `json:"duration_days"`
+}
+
+type adminRevokeEntitlementRequest struct {
+	Reason string `json:"reason"`
+}
+
+type adminCardCodeView struct {
+	ID              int64   `json:"id"`
+	CodeFingerprint string  `json:"code_fingerprint"`
+	Status          string  `json:"status"`
+	RedeemedAt      *string `json:"redeemed_at"`
+	RevokedAt       *string `json:"revoked_at"`
 	CreatedAt       string  `json:"created_at"`
 }
 
@@ -258,6 +286,160 @@ func (s *Server) handleAdminListRedemptions(w http.ResponseWriter, r *http.Reque
 	writeOK(w, map[string]any{"items": views, "next_cursor": nil})
 }
 
+func (s *Server) handleAdminListUserEntitlements(w http.ResponseWriter, r *http.Request) {
+	userID, err := uuid.Parse(pathParam(r, "userId"))
+	if err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid user id"))
+		return
+	}
+	limit, err := adminListLimit(r)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	user, err := s.auth.GetUserByPublicIDForAdmin(r.Context(), userID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	items, err := s.entitlements.ListUserGrantSummaries(r.Context(), user.ID, limit)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	views := make([]adminRedemptionView, 0, len(items))
+	for _, item := range items {
+		views = append(views, adminRedemptionViewFrom(item))
+	}
+	writeOK(w, map[string]any{
+		"user":  adminEntitlementUserView{ID: user.PublicID.String(), DisplayName: user.DisplayName, Status: string(user.Status)},
+		"items": views, "next_cursor": nil,
+	})
+}
+
+func (s *Server) handleAdminCreateUserGrant(w http.ResponseWriter, r *http.Request) {
+	userPublicID, err := uuid.Parse(pathParam(r, "userId"))
+	if err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid user id"))
+		return
+	}
+	var req adminCreateGrantRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid entitlement grant body"))
+		return
+	}
+	planPublicID, err := uuid.Parse(strings.TrimSpace(req.PlanID))
+	if err != nil || req.DurationDays <= 0 || req.DurationDays > 3660 {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid entitlement grant"))
+		return
+	}
+	user, err := s.auth.GetUserByPublicIDForAdmin(r.Context(), userPublicID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if !user.IsActive() {
+		writeError(w, r, apperr.Conflict(apperr.CodeConflict, "disabled users cannot receive grants"))
+		return
+	}
+	plan, err := s.entitlements.GetPlanByPublicID(r.Context(), planPublicID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if plan.Status != entitlement.StatusActive {
+		writeError(w, r, apperr.Conflict(apperr.CodeConflict, "entitlement plan is disabled"))
+		return
+	}
+	actor := auth.MustPrincipal(r.Context())
+	grant, err := s.entitlements.GrantByAdmin(r.Context(), actor.UserID, user.ID, plan.ID, time.Duration(req.DurationDays)*24*time.Hour)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeCreated(w, adminRedemptionViewFromGrant(grant, user.PublicID, user.DisplayName, plan))
+}
+
+func (s *Server) handleAdminRevokeGrant(w http.ResponseWriter, r *http.Request) {
+	grantID, err := uuid.Parse(pathParam(r, "grantId"))
+	if err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid entitlement grant id"))
+		return
+	}
+	var req adminRevokeEntitlementRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid revoke body"))
+		return
+	}
+	reason := strings.TrimSpace(req.Reason)
+	if reason == "" || len(reason) > 500 {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "revoke reason is required"))
+		return
+	}
+	actor := auth.MustPrincipal(r.Context())
+	if err := s.entitlements.RevokeGrantByAdmin(r.Context(), actor.UserID, grantID, reason); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeNoContent(w)
+}
+
+func (s *Server) handleAdminListCardCodes(w http.ResponseWriter, r *http.Request) {
+	batchID, err := uuid.Parse(pathParam(r, "batchId"))
+	if err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid card batch id"))
+		return
+	}
+	limit, err := adminListLimit(r)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	items, err := s.entitlements.ListCardCodeSummaries(r.Context(), batchID, limit)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	views := make([]adminCardCodeView, 0, len(items))
+	for _, item := range items {
+		views = append(views, adminCardCodeView{
+			ID: item.ID, CodeFingerprint: item.CodeFingerprint, Status: item.Status,
+			RedeemedAt: formatOptionalAdminTime(item.RedeemedAt), RevokedAt: formatOptionalAdminTime(item.RevokedAt),
+			CreatedAt: item.CreatedAt.Format(timeRFC3339),
+		})
+	}
+	writeOK(w, map[string]any{"items": views, "next_cursor": nil})
+}
+
+func (s *Server) handleAdminRevokeCardCode(w http.ResponseWriter, r *http.Request) {
+	batchID, err := uuid.Parse(pathParam(r, "batchId"))
+	if err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid card batch id"))
+		return
+	}
+	codeID, err := strconv.ParseInt(pathParam(r, "codeId"), 10, 64)
+	if err != nil || codeID <= 0 {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid card code id"))
+		return
+	}
+	var req adminRevokeEntitlementRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid revoke body"))
+		return
+	}
+	reason := strings.TrimSpace(req.Reason)
+	if reason == "" || len(reason) > 500 {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "revoke reason is required"))
+		return
+	}
+	actor := auth.MustPrincipal(r.Context())
+	if err := s.entitlements.RevokeUnusedCodeByAdmin(r.Context(), actor.UserID, batchID, codeID, reason); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeNoContent(w)
+}
+
 func adminEntitlementPlanViewFrom(item entitlement.Plan) adminEntitlementPlanView {
 	features := make(map[string]bool, len(item.Features))
 	for key, value := range item.Features {
@@ -288,11 +470,34 @@ func adminCardBatchViewFrom(item entitlement.CardBatchSummary) adminCardBatchVie
 func adminRedemptionViewFrom(item entitlement.RedemptionSummary) adminRedemptionView {
 	return adminRedemptionView{
 		ID: item.GrantPublicID.String(), UserID: item.UserPublicID.String(), UserDisplayName: item.UserDisplayName,
+		PlanID:   item.PlanPublicID.String(),
 		PlanCode: item.PlanCode, PlanName: item.PlanName, SourceType: string(item.SourceType),
+		Status:   grantStatus(item.StartsAt, item.ExpiresAt, item.RevokedAt, time.Now()),
 		StartsAt: item.StartsAt.Format(timeRFC3339), ExpiresAt: item.ExpiresAt.Format(timeRFC3339),
-		RedeemedAt: formatOptionalAdminTime(item.RedeemedAt), RevokedAt: formatOptionalAdminTime(item.RevokedAt),
+		RedeemedAt: formatOptionalAdminTime(item.RedeemedAt), RevokedAt: formatOptionalAdminTime(item.RevokedAt), RevokeReason: item.RevokeReason,
 		CodeFingerprint: item.CodeFingerprint, CreatedAt: item.CreatedAt.Format(timeRFC3339),
 	}
+}
+
+func adminRedemptionViewFromGrant(grant entitlement.Grant, userID uuid.UUID, displayName string, plan *entitlement.Plan) adminRedemptionView {
+	return adminRedemptionView{
+		ID: grant.PublicID.String(), UserID: userID.String(), UserDisplayName: displayName, PlanID: plan.PublicID.String(),
+		PlanCode: plan.Code, PlanName: plan.Name, SourceType: string(grant.SourceType), Status: grantStatus(grant.StartsAt, grant.ExpiresAt, grant.RevokedAt, time.Now()),
+		StartsAt: grant.StartsAt.Format(timeRFC3339), ExpiresAt: grant.ExpiresAt.Format(timeRFC3339), CreatedAt: grant.CreatedAt.Format(timeRFC3339),
+	}
+}
+
+func grantStatus(startsAt, expiresAt time.Time, revokedAt *time.Time, now time.Time) string {
+	if revokedAt != nil {
+		return "revoked"
+	}
+	if !now.Before(startsAt) && now.Before(expiresAt) {
+		return "active"
+	}
+	if now.Before(startsAt) {
+		return "scheduled"
+	}
+	return "expired"
 }
 
 func parseOptionalAdminTime(value *string) (*time.Time, error) {

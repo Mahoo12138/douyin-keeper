@@ -544,11 +544,13 @@ GET            /admin/redemptions
 GET            /admin/users/{id}/entitlements
 POST           /admin/users/{id}/entitlement-grants
 POST           /admin/entitlement-grants/{id}/revoke
+GET            /admin/card-batches/{id}/codes
+POST           /admin/card-batches/{id}/codes/{code_id}/revoke
 ```
 
 卡密批量生成可由 `POST /admin/card-batches` 同步返回少量卡密；大量生成建议返回 Job，并通过一次性短期 download token 下载导出文件。
 
-当前实现先覆盖方案与批次的创建/停用、批次统计和兑换记录查询；用户级 Entitlement 查询、人工 Grant/Revoke 以及未使用卡密撤销保留在后续 Admin 切片。列表与审计数据不返回完整卡密，只返回卡密指纹；同步生成接口限制为少量卡密并在响应中一次性返回明文。
+当前实现已覆盖方案与批次的创建/停用、批次统计、兑换记录查询、用户级 Entitlement 查询、人工 Grant/Revoke 和未使用卡密撤销。列表、详情与审计数据不返回完整卡密，只返回卡密指纹；同步生成接口限制为少量卡密并在响应中一次性返回明文，所有撤销操作要求填写原因并写入审计。
 
 ## 14. 安全与滥用控制
 

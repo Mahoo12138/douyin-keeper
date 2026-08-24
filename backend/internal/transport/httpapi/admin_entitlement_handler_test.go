@@ -21,13 +21,15 @@ func TestAdminEntitlementViewsExposeSummariesOnly(t *testing.T) {
 	}
 
 	fingerprint := "ABC123"
+	reason := "manual correction"
 	redemption := adminRedemptionViewFrom(entitlement.RedemptionSummary{
 		GrantPublicID: uuid.MustParse("88888888-8888-8888-8888-888888888888"),
 		UserPublicID:  uuid.MustParse("99999999-9999-9999-9999-999999999999"), UserDisplayName: "demo",
-		PlanCode: "standard", PlanName: "标准版", SourceType: entitlement.SourceCard,
-		StartsAt: now, ExpiresAt: now.Add(24 * time.Hour), CodeFingerprint: &fingerprint, CreatedAt: now,
+		PlanPublicID: uuid.MustParse("66666666-6666-6666-6666-666666666666"),
+		PlanCode:     "standard", PlanName: "标准版", SourceType: entitlement.SourceCard,
+		StartsAt: now.Add(-time.Hour), ExpiresAt: now.Add(24 * time.Hour), CodeFingerprint: &fingerprint, RevokeReason: &reason, CreatedAt: now,
 	})
-	if redemption.CodeFingerprint == nil || *redemption.CodeFingerprint != fingerprint || redemption.ID == "" {
+	if redemption.CodeFingerprint == nil || *redemption.CodeFingerprint != fingerprint || redemption.ID == "" || redemption.PlanID == "" || redemption.Status != "active" || redemption.RevokeReason == nil {
 		t.Fatalf("redemption view = %+v", redemption)
 	}
 }
@@ -40,5 +42,22 @@ func TestParseOptionalAdminTime(t *testing.T) {
 	parsed, err := parseOptionalAdminTime(&value)
 	if err != nil || parsed == nil || parsed.Format(time.RFC3339) != value {
 		t.Fatalf("parsed time = %v, %v", parsed, err)
+	}
+}
+
+func TestGrantStatus(t *testing.T) {
+	now := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	if got := grantStatus(now.Add(time.Hour), now.Add(2*time.Hour), nil, now); got != "scheduled" {
+		t.Fatalf("scheduled status = %q", got)
+	}
+	if got := grantStatus(now.Add(-time.Hour), now.Add(time.Hour), nil, now); got != "active" {
+		t.Fatalf("active status = %q", got)
+	}
+	if got := grantStatus(now.Add(-2*time.Hour), now.Add(-time.Hour), nil, now); got != "expired" {
+		t.Fatalf("expired status = %q", got)
+	}
+	revoked := now
+	if got := grantStatus(now.Add(-time.Hour), now.Add(time.Hour), &revoked, now); got != "revoked" {
+		t.Fatalf("revoked status = %q", got)
 	}
 }

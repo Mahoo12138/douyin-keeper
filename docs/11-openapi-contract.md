@@ -524,6 +524,11 @@ POST /admin/card-batches
 GET  /admin/card-batches/{id}
 POST /admin/card-batches/{id}/disable
 GET  /admin/redemptions
+GET  /admin/users/{id}/entitlements
+POST /admin/users/{id}/entitlement-grants
+POST /admin/entitlement-grants/{id}/revoke
+GET  /admin/card-batches/{id}/codes
+POST /admin/card-batches/{id}/codes/{code_id}/revoke
 ```
 
 所有会改变用户/账号/全局配置的 Admin 操作必须写 `audit_logs`。

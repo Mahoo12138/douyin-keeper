@@ -10,6 +10,7 @@ import (
 // PlanRepository persists entitlement plans.
 type PlanRepository interface {
 	CreatePlan(ctx context.Context, p *Plan) error
+	GetPlanByID(ctx context.Context, id int64) (*Plan, error)
 	GetPlanByPublicID(ctx context.Context, publicID uuid.UUID) (*Plan, error)
 	ListPlans(ctx context.Context) ([]*Plan, error)
 	DisablePlan(ctx context.Context, actorID int64, publicID uuid.UUID) error
@@ -22,6 +23,8 @@ type BatchRepository interface {
 	ListSummaries(ctx context.Context, limit int) ([]CardBatchSummary, error)
 	GetSummaryByPublicID(ctx context.Context, publicID uuid.UUID) (CardBatchSummary, error)
 	DisableBatch(ctx context.Context, actorID int64, publicID uuid.UUID) error
+	ListCodeSummaries(ctx context.Context, batchPublicID uuid.UUID, limit int) ([]CardCodeSummary, error)
+	RevokeUnusedCode(ctx context.Context, actorID int64, batchPublicID uuid.UUID, codeID int64, reason string) error
 	// GetCodeByHashForUpdate joins code + batch + plan, locked for update.
 	GetCodeByHashForUpdate(ctx context.Context, hash []byte) (*CardCode, error)
 	MarkCodeRedeemed(ctx context.Context, codeID, userID int64, at time.Time) error
@@ -34,6 +37,9 @@ type GrantRepository interface {
 	GetEffectiveGrant(ctx context.Context, userID int64, now time.Time) (*Grant, bool, error)
 	RevokeGrant(ctx context.Context, grantID int64, byUserID int64, reason string) error
 	ListRedemptionSummaries(ctx context.Context, limit int) ([]RedemptionSummary, error)
+	ListUserGrantSummaries(ctx context.Context, userID int64, limit int) ([]RedemptionSummary, error)
+	GetGrantByPublicID(ctx context.Context, publicID uuid.UUID) (*Grant, error)
+	RevokeGrantByPublicID(ctx context.Context, actorID int64, publicID uuid.UUID, reason string) error
 }
 
 // UsageRepository atomically reserves/updates daily send counters.

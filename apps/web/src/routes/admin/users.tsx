@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { Outlet, createFileRoute, useLocation } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { listAdminUsers } from '@douyin-keeper/sdk-ts'
 import { Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@douyin-keeper/ui-web'
@@ -9,6 +9,11 @@ import { AdminUserTable } from '@/features/admin/admin-user-table'
 export const Route = createFileRoute('/admin/users')({ component: AdminUsers })
 
 function AdminUsers() {
+  const location = useLocation()
+  return location.pathname === '/admin/users' ? <AdminUsersList /> : <Outlet />
+}
+
+function AdminUsersList() {
   const token = getToken()
   const usersQ = useQuery({
     queryKey: ['admin-users'],

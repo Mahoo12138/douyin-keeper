@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { Outlet, createFileRoute, useLocation } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createAdminCardBatch, createAdminEntitlementPlan, disableAdminCardBatch, disableAdminEntitlementPlan, listAdminCardBatches, listAdminEntitlementPlans, listAdminRedemptions } from '@douyin-keeper/sdk-ts'
 import { Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@douyin-keeper/ui-web'
@@ -10,6 +10,11 @@ import { AdminBatchTable, AdminPlanTable, AdminRedemptionTable, BatchCreateForm,
 export const Route = createFileRoute('/admin/entitlement')({ component: AdminEntitlement })
 
 function AdminEntitlement() {
+  const location = useLocation()
+  return location.pathname === '/admin/entitlement' ? <AdminEntitlementList /> : <Outlet />
+}
+
+function AdminEntitlementList() {
   const token = getToken()
   const queryClient = useQueryClient()
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([])

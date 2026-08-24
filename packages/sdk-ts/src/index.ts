@@ -139,6 +139,52 @@ export async function listAdminRedemptions(accessToken: string, options?: { limi
   return data
 }
 
+export async function getAdminUserEntitlements(accessToken: string, userId: string, options?: { limit?: number }) {
+  const { data, error } = await api.GET('/admin/users/{userId}/entitlements', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { userId }, query: options },
+  })
+  if (error) throwApiError(error, 'admin user entitlements lookup failed')
+  return data
+}
+
+export async function createAdminUserEntitlementGrant(accessToken: string, userId: string, body: components['schemas']['AdminCreateEntitlementGrantRequest']) {
+  const { data, error } = await api.POST('/admin/users/{userId}/entitlement-grants', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { userId } },
+    body,
+  })
+  if (error) throwApiError(error, 'admin entitlement grant creation failed')
+  return data
+}
+
+export async function revokeAdminEntitlementGrant(accessToken: string, grantId: string, body: components['schemas']['AdminRevokeEntitlementRequest']) {
+  const { error } = await api.POST('/admin/entitlement-grants/{grantId}/revoke', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { grantId } },
+    body,
+  })
+  if (error) throwApiError(error, 'admin entitlement grant revoke failed')
+}
+
+export async function listAdminCardCodes(accessToken: string, batchId: string, options?: { limit?: number }) {
+  const { data, error } = await api.GET('/admin/card-batches/{batchId}/codes', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { batchId }, query: options },
+  })
+  if (error) throwApiError(error, 'admin card codes lookup failed')
+  return data
+}
+
+export async function revokeAdminCardCode(accessToken: string, batchId: string, codeId: number, body: components['schemas']['AdminRevokeEntitlementRequest']) {
+  const { error } = await api.POST('/admin/card-batches/{batchId}/codes/{codeId}/revoke', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { batchId, codeId } },
+    body,
+  })
+  if (error) throwApiError(error, 'admin card code revoke failed')
+}
+
 export async function getAdminRuntime(accessToken: string) {
   const { data, error } = await api.GET('/admin/workers', {
     headers: { Authorization: `Bearer ${accessToken}` },

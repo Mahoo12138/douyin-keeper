@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -177,14 +178,23 @@ func (s *Service) Redeem(ctx context.Context, userID int64, rawCode string) (Gra
 
 // GrantByAdmin creates a grant without a card (admin console action).
 func (s *Service) GrantByAdmin(ctx context.Context, adminID, userID, planID int64, period time.Duration) (Grant, error) {
+	if adminID <= 0 || userID <= 0 || planID <= 0 || period <= 0 {
+		return Grant{}, apperr.Validation(apperr.CodeConflict, "invalid entitlement grant")
+	}
 	now := s.now()
 	var grant Grant
 	err := s.tx.WithinTx(ctx, func(tctx context.Context) error {
 		if err := s.userLock.LockUserForUpdate(tctx, userID); err != nil {
 			return err
 		}
+		plan, err := s.plans.GetPlanByID(tctx, planID)
+		if err != nil {
+			return err
+		}
+		if plan.Status != StatusActive {
+			return apperr.Conflict(apperr.CodeConflict, "entitlement plan disabled")
+		}
 		var last *Grant
-		var err error
 		if last, err = s.grants.GetLastNonRevokedGrant(tctx, userID); err != nil {
 			if apperr.KindOf(err) != apperr.KindNotFound {
 				return err
@@ -193,17 +203,24 @@ func (s *Service) GrantByAdmin(ctx context.Context, adminID, userID, planID int6
 		}
 		anchor := now
 		if last != nil && last.ExpiresAt.After(anchor) {
+			if last.EntitlementPlanID != planID {
+				return apperr.Conflict(apperr.CodeConflict, "entitlement plan conflict")
+			}
 			anchor = last.ExpiresAt
 		}
 		g := &Grant{
 			PublicID: uuid.New(), UserID: userID, EntitlementPlanID: planID,
-			SourceType: SourceAdmin, StartsAt: anchor, ExpiresAt: anchor.Add(period),
+			SourceType: SourceAdmin, StartsAt: anchor, ExpiresAt: anchor.Add(period), CreatedAt: now, Plan: plan,
 		}
 		if err := s.grants.CreateGrant(tctx, g); err != nil {
 			return err
 		}
 		if s.audit != nil {
-			_ = s.audit.Record(tctx, &adminID, "entitlement.grant_admin", "entitlement_grant", g.PublicID.String(), nil)
+			if err := s.audit.Record(tctx, &adminID, "entitlement.grant_admin", "entitlement_grant", g.PublicID.String(), map[string]any{
+				"plan_id": planID, "duration_seconds": int64(period / time.Second),
+			}); err != nil {
+				return err
+			}
 		}
 		grant = *g
 		return nil
@@ -213,7 +230,20 @@ func (s *Service) GrantByAdmin(ctx context.Context, adminID, userID, planID int6
 
 // RevokeGrant revokes a grant (admin).
 func (s *Service) RevokeGrant(ctx context.Context, adminID, grantID int64, reason string) error {
+	if strings.TrimSpace(reason) == "" || len(reason) > 500 {
+		return apperr.Validation(apperr.CodeConflict, "revoke reason is required")
+	}
 	return s.grants.RevokeGrant(ctx, grantID, adminID, reason)
+}
+
+func (s *Service) RevokeGrantByAdmin(ctx context.Context, adminID int64, publicID uuid.UUID, reason string) error {
+	if adminID <= 0 || publicID == uuid.Nil {
+		return apperr.Validation(apperr.CodeConflict, "invalid entitlement grant")
+	}
+	if strings.TrimSpace(reason) == "" || len(reason) > 500 {
+		return apperr.Validation(apperr.CodeConflict, "revoke reason is required")
+	}
+	return s.grants.RevokeGrantByPublicID(ctx, adminID, publicID, reason)
 }
 
 // Authorize runs the entitlement gate (docs/13 §9). Specific quota gates live
@@ -330,6 +360,42 @@ func (s *Service) ListRedemptionSummaries(ctx context.Context, limit int) ([]Red
 		limit = 100
 	}
 	return s.grants.ListRedemptionSummaries(ctx, limit)
+}
+
+func (s *Service) ListUserGrantSummaries(ctx context.Context, userID int64, limit int) ([]RedemptionSummary, error) {
+	if userID <= 0 {
+		return nil, apperr.Validation(apperr.CodeConflict, "invalid user")
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	return s.grants.ListUserGrantSummaries(ctx, userID, limit)
+}
+
+func (s *Service) ListCardCodeSummaries(ctx context.Context, batchPublicID uuid.UUID, limit int) ([]CardCodeSummary, error) {
+	if batchPublicID == uuid.Nil {
+		return nil, apperr.Validation(apperr.CodeConflict, "invalid card batch")
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	return s.batches.ListCodeSummaries(ctx, batchPublicID, limit)
+}
+
+func (s *Service) RevokeUnusedCodeByAdmin(ctx context.Context, actorID int64, batchPublicID uuid.UUID, codeID int64, reason string) error {
+	if actorID <= 0 || batchPublicID == uuid.Nil || codeID <= 0 {
+		return apperr.Validation(apperr.CodeConflict, "invalid card code")
+	}
+	if strings.TrimSpace(reason) == "" || len(reason) > 500 {
+		return apperr.Validation(apperr.CodeConflict, "revoke reason is required")
+	}
+	return s.batches.RevokeUnusedCode(ctx, actorID, batchPublicID, codeID, reason)
 }
 
 func (s *Service) CreatePlan(ctx context.Context, p *Plan) (*Plan, error) {

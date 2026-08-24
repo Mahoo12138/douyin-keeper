@@ -19,16 +19,16 @@ type TxManager interface {
 // Service orchestrates register/login/refresh/logout and the WeChat link-code
 // flow. WeChat code exchange is injected so cmd/api can pass a stub until M4.
 type Service struct {
-	users     UserRepository
-	sessions  SessionRepository
-	tx        TxManager
-	hasher    *Hasher
-	now       func() time.Time
-	signingKey []byte
+	users         UserRepository
+	sessions      SessionRepository
+	tx            TxManager
+	hasher        *Hasher
+	now           func() time.Time
+	signingKey    []byte
 	refreshPepper []byte
-	accessTTL time.Duration
-	refreshTTL time.Duration
-	wechat    WechatExchanger // nil until M4
+	accessTTL     time.Duration
+	refreshTTL    time.Duration
+	wechat        WechatExchanger // nil until M4
 }
 
 // WechatExchanger swaps a wx.login code for the normalized wechat subject.
@@ -216,6 +216,13 @@ func (s *Service) GetUserByPublicID(ctx context.Context, publicID uuid.UUID) (*U
 		return nil, apperr.New(apperr.CodeUserDisabled, apperr.KindForbidden, "account is disabled")
 	}
 	return u, nil
+}
+
+// GetUserByPublicIDForAdmin resolves a user for an administrator view without
+// applying the end-user active-status gate. Admin workflows need to inspect
+// disabled users while still never receiving credential or session data.
+func (s *Service) GetUserByPublicIDForAdmin(ctx context.Context, publicID uuid.UUID) (*User, error) {
+	return s.users.GetUserByPublicID(ctx, publicID)
 }
 
 // newSession creates an AuthSession + first refresh token in one tx.
