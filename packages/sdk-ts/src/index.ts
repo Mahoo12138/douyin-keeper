@@ -222,7 +222,7 @@ export async function updateAdminAdapter(accessToken: string, adapter: string, e
   return data
 }
 
-export async function listAdminRisks(accessToken: string, options?: { category?: components['schemas']['AdminRisk']['category']; severity?: components['schemas']['AdminRisk']['severity']; code?: string; limit?: number }) {
+export async function listAdminRisks(accessToken: string, options?: { category?: components['schemas']['AdminRisk']['category']; severity?: components['schemas']['AdminRisk']['severity']; code?: string; limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/admin/risks', {
     headers: { Authorization: `Bearer ${accessToken}` },
     params: { query: options },

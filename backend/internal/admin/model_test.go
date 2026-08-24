@@ -16,6 +16,8 @@ type repositoryStub struct {
 	userFilter     UserListFilter
 	accountItems   []AccountSummary
 	accountFilter  AccountListFilter
+	riskItems      []RiskSummary
+	riskPageFilter RiskFilter
 	adapter        AdapterHealthSummary
 	actorID        int64
 	adapterName    string
@@ -75,7 +77,15 @@ func (r *repositoryStub) SetAccountPaused(_ context.Context, actorID int64, acco
 
 func (r *repositoryStub) ListRiskSummaries(_ context.Context, filter RiskFilter) ([]RiskSummary, error) {
 	r.riskFilter = filter
+	if r.riskItems != nil {
+		return r.riskItems, nil
+	}
 	return []RiskSummary{{Code: "SESSION_EXPIRED"}}, nil
+}
+
+func (r *repositoryStub) ListRiskSummariesPage(_ context.Context, filter RiskFilter) ([]RiskSummary, error) {
+	r.riskPageFilter = filter
+	return r.riskItems, nil
 }
 
 func (r *repositoryStub) ListAuditSummaries(_ context.Context, filter AuditFilter) ([]AuditSummary, error) {
@@ -150,6 +160,25 @@ func TestServiceListsAccountCursorPage(t *testing.T) {
 	}
 	if repo.accountFilter.Limit != 2 || repo.accountFilter.AfterID != 0 || repo.accountFilter.AfterCreatedAt != nil {
 		t.Fatalf("filter = %+v", repo.accountFilter)
+	}
+}
+
+func TestServiceListsRiskCursorPage(t *testing.T) {
+	base := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	repo := &repositoryStub{riskItems: []RiskSummary{
+		{ID: 3, CreatedAt: base.Add(2 * time.Minute)},
+		{ID: 2, CreatedAt: base.Add(time.Minute)},
+		{ID: 1, CreatedAt: base},
+	}}
+	page, err := NewService(repo).ListRisksPage(context.Background(), RiskFilter{Category: "AUTH", Severity: "critical", Code: "expired", Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].ID != 3 || page.Items[1].ID != 2 || page.NextAfterID != 2 || page.NextCreatedAt == nil {
+		t.Fatalf("page = %+v", page)
+	}
+	if repo.riskPageFilter.Limit != 2 || repo.riskPageFilter.Category != "AUTH" || repo.riskPageFilter.Severity != "critical" || repo.riskPageFilter.Code != "expired" {
+		t.Fatalf("filter = %+v", repo.riskPageFilter)
 	}
 }
 

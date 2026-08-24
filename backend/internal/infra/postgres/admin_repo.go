@@ -291,8 +291,17 @@ func (r *AdminRepo) SetAccountPaused(ctx context.Context, actorID int64, account
 }
 
 func (r *AdminRepo) ListRiskSummaries(ctx context.Context, filter admin.RiskFilter) ([]admin.RiskSummary, error) {
+	return r.listRiskSummaries(ctx, filter)
+}
+
+func (r *AdminRepo) ListRiskSummariesPage(ctx context.Context, filter admin.RiskFilter) ([]admin.RiskSummary, error) {
+	filter.Limit++
+	return r.listRiskSummaries(ctx, filter)
+}
+
+func (r *AdminRepo) listRiskSummaries(ctx context.Context, filter admin.RiskFilter) ([]admin.RiskSummary, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
-		SELECT e.public_id, a.public_id, u.display_name, a.nickname,
+		SELECT e.id, e.public_id, a.public_id, u.display_name, a.nickname,
 			e.category, e.code, e.severity, e.source_adapter, e.action,
 			e.cooldown_until, e.created_at
 		FROM risk_events e
@@ -301,8 +310,9 @@ func (r *AdminRepo) ListRiskSummaries(ctx context.Context, filter admin.RiskFilt
 		WHERE ($1 = '' OR e.category = $1)
 		  AND ($2 = '' OR e.severity = $2)
 		  AND ($3 = '' OR e.code ILIKE '%' || $3 || '%')
+		  AND ($4::timestamptz IS NULL OR (e.created_at,e.id) < ($4::timestamptz,$5::bigint))
 		ORDER BY e.created_at DESC, e.id DESC
-		LIMIT $4`, filter.Category, filter.Severity, filter.Code, filter.Limit)
+		LIMIT $6`, filter.Category, filter.Severity, filter.Code, filter.AfterCreatedAt, filter.AfterID, filter.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -312,6 +322,7 @@ func (r *AdminRepo) ListRiskSummaries(ctx context.Context, filter admin.RiskFilt
 	for rows.Next() {
 		var item admin.RiskSummary
 		if err := rows.Scan(
+			&item.ID,
 			&item.PublicID, &item.AccountPublicID, &item.OwnerDisplayName, &item.Nickname,
 			&item.Category, &item.Code, &item.Severity, &item.SourceAdapter, &item.Action,
 			&item.CooldownUntil, &item.CreatedAt,
@@ -747,3 +758,4 @@ func runtimePoolIndex(queues map[string]int) int {
 var _ admin.Repository = (*AdminRepo)(nil)
 var _ admin.UserPageRepository = (*AdminRepo)(nil)
 var _ admin.AccountPageRepository = (*AdminRepo)(nil)
+var _ admin.RiskPageRepository = (*AdminRepo)(nil)

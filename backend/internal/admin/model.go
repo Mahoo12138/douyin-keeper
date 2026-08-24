@@ -194,13 +194,16 @@ type AdapterHealthSummary struct {
 }
 
 type RiskFilter struct {
-	Category string
-	Severity string
-	Code     string
-	Limit    int
+	Category       string
+	Severity       string
+	Code           string
+	Limit          int
+	AfterCreatedAt *time.Time
+	AfterID        int64
 }
 
 type RiskSummary struct {
+	ID               int64
 	PublicID         uuid.UUID
 	AccountPublicID  uuid.UUID
 	OwnerDisplayName string
@@ -212,6 +215,12 @@ type RiskSummary struct {
 	Action           *string
 	CooldownUntil    *time.Time
 	CreatedAt        time.Time
+}
+
+type RiskListPage struct {
+	Items         []RiskSummary
+	NextCreatedAt *time.Time
+	NextAfterID   int64
 }
 
 type AuditFilter struct {
@@ -257,6 +266,10 @@ type UserPageRepository interface {
 
 type AccountPageRepository interface {
 	ListAccountSummariesPage(ctx context.Context, filter AccountListFilter) ([]AccountSummary, error)
+}
+
+type RiskPageRepository interface {
+	ListRiskSummariesPage(ctx context.Context, filter RiskFilter) ([]RiskSummary, error)
 }
 
 type Service struct {
@@ -402,6 +415,55 @@ func (s *Service) SetAccountPaused(ctx context.Context, actorID int64, accountID
 func (s *Service) ListRisks(ctx context.Context, filter RiskFilter) ([]RiskSummary, error) {
 	filter.Limit = normalizeLimit(filter.Limit)
 	return s.repo.ListRiskSummaries(ctx, filter)
+}
+
+func (s *Service) ListRisksPage(ctx context.Context, filter RiskFilter) (RiskListPage, error) {
+	filter.Limit = normalizeLimit(filter.Limit)
+	if filter.AfterID < 0 {
+		filter.AfterID = 0
+	}
+	if repo, ok := s.repo.(RiskPageRepository); ok {
+		items, err := repo.ListRiskSummariesPage(ctx, filter)
+		if err != nil {
+			return RiskListPage{}, err
+		}
+		return trimRiskListPage(items, filter.Limit), nil
+	}
+	items, err := s.repo.ListRiskSummaries(ctx, filter)
+	if err != nil {
+		return RiskListPage{}, err
+	}
+	if filter.AfterCreatedAt != nil && filter.AfterID > 0 {
+		start := len(items)
+		for index, item := range items {
+			if item.CreatedAt.Before(*filter.AfterCreatedAt) ||
+				(item.CreatedAt.Equal(*filter.AfterCreatedAt) && item.ID < filter.AfterID) {
+				start = index
+				break
+			}
+		}
+		if start < len(items) {
+			items = items[start:]
+		} else {
+			items = nil
+		}
+	}
+	return trimRiskListPage(items, filter.Limit), nil
+}
+
+func trimRiskListPage(items []RiskSummary, limit int) RiskListPage {
+	page := RiskListPage{Items: items}
+	if len(items) <= limit {
+		return page
+	}
+	page.Items = items[:limit]
+	last := page.Items[len(page.Items)-1]
+	if last.ID > 0 && !last.CreatedAt.IsZero() {
+		createdAt := last.CreatedAt
+		page.NextCreatedAt = &createdAt
+		page.NextAfterID = last.ID
+	}
+	return page
 }
 
 func (s *Service) ListAuditLogs(ctx context.Context, filter AuditFilter) ([]AuditSummary, error) {

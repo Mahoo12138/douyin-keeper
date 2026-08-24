@@ -2190,6 +2190,7 @@ export interface operations {
                 severity?: "info" | "warning" | "critical";
                 code?: string;
                 limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
             path?: never;

@@ -447,6 +447,7 @@ paths:
           type: string
           maxLength: 100
       - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Administrator risk event summaries
