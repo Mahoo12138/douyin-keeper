@@ -220,7 +220,7 @@ Tab：
 5. 今日任务执行完成；
 6. 系统维护。
 
-当前 V1.1 站内通知已接入 `GET /api/v1/notifications`、`POST /api/v1/notifications/{id}/read` 和 `POST /api/v1/notifications/read-all`；通知偏好通过 `GET/PATCH /api/v1/notifications/preferences` 管理。权益剩余 7 天、3 天、1 天时由 Scheduler 为账号所有者生成幂等到期提醒；风险事件中的登录失效、安全验证、平台限流和 Adapter/浏览器能力异常也会生成通知，同一账号同一风险码在同一 `Asia/Shanghai` 自然日内去重，通知不展示 Session、Cookie 或风险详情 JSON。通知页保留加载、失败、空数据、未读数量、单条已读和全部已读状态；微信通知通过事务性 outbox 与 `worker-light` 异步投递，权益到期提醒只保留站内展示，失败状态可重试且不影响站内通知。
+当前 V1.1 站内通知已接入 `GET /api/v1/notifications`、`POST /api/v1/notifications/{id}/read` 和 `POST /api/v1/notifications/read-all`；通知列表遵循统一游标分页，默认加载 50 条、最多 100 条，前端通过“加载更多”继续读取；通知偏好通过 `GET/PATCH /api/v1/notifications/preferences` 管理。权益剩余 7 天、3 天、1 天时由 Scheduler 为账号所有者生成幂等到期提醒；风险事件中的登录失效、安全验证、平台限流和 Adapter/浏览器能力异常也会生成通知，同一账号同一风险码在同一 `Asia/Shanghai` 自然日内去重，通知不展示 Session、Cookie 或风险详情 JSON。通知页保留加载、失败、空数据、未读数量、单条已读和全部已读状态；微信通知通过事务性 outbox 与 `worker-light` 异步投递，权益到期提醒只保留站内展示，失败状态可重试且不影响站内通知。
 
 ### 1.10 权益与兑换 `/entitlement`
 

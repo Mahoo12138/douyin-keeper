@@ -52,8 +52,17 @@ type Notification struct {
 }
 
 type ListFilter struct {
-	UnreadOnly bool
-	Limit      int
+	UnreadOnly     bool
+	Limit          int
+	AfterCreatedAt *time.Time
+	AfterID        int64
+}
+
+type ListPage struct {
+	Items         []*Notification
+	UnreadCount   int
+	NextCreatedAt *time.Time
+	NextAfterID   int64
 }
 
 type Preferences struct {
@@ -87,6 +96,12 @@ type Repository interface {
 	Create(ctx context.Context, item *Notification) error
 	GetPreferences(ctx context.Context, userID int64) (*Preferences, error)
 	SetWechatEnabled(ctx context.Context, userID int64, enabled bool, at time.Time) (*Preferences, error)
+}
+
+// PageRepository is the API-facing cursor projection. The legacy List method
+// remains available for callers that need the original snapshot query.
+type PageRepository interface {
+	ListByUserPage(ctx context.Context, userID int64, filter ListFilter) ([]*Notification, int, error)
 }
 
 type DeliveryRepository interface {

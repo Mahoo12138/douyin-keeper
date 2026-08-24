@@ -34,9 +34,26 @@ func TestNotificationFilterParsesUnreadAndLimit(t *testing.T) {
 	if _, err := notificationFilter(invalid); err == nil {
 		t.Fatal("invalid limit should be rejected")
 	}
+	tooLarge := httptest.NewRequest("GET", "/api/v1/notifications?limit=101", nil)
+	if _, err := notificationFilter(tooLarge); err == nil {
+		t.Fatal("limit above 100 should be rejected")
+	}
 	invalidBool := httptest.NewRequest("GET", "/api/v1/notifications?unread_only=maybe", nil)
 	if _, err := notificationFilter(invalidBool); err == nil {
 		t.Fatal("invalid unread_only should be rejected")
+	}
+}
+
+func TestNotificationCursorRoundTripsTimestampAndID(t *testing.T) {
+	createdAt := time.Date(2026, 8, 24, 9, 0, 0, 123000000, time.UTC)
+	filter, err := notificationFilter(httptest.NewRequest("GET", "/?cursor="+encodeNotificationCursor(createdAt, 42), nil))
+	if err != nil || filter.AfterID != 42 || filter.AfterCreatedAt == nil || !filter.AfterCreatedAt.Equal(createdAt) {
+		t.Fatalf("filter = %+v, err=%v", filter, err)
+	}
+	for _, value := range []string{"!", "MA", encodeNotificationCursor(createdAt, 0)} {
+		if _, err := notificationFilter(httptest.NewRequest("GET", "/?cursor="+value, nil)); err == nil {
+			t.Fatalf("cursor %q should be rejected", value)
+		}
 	}
 }
 

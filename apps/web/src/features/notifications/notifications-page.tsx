@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bell, Check, CircleAlert, Info, ShieldAlert } from 'lucide-react'
 import { listNotifications, markAllNotificationsRead, markNotificationRead, type components } from '@douyin-keeper/sdk-ts'
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@douyin-keeper/ui-web'
@@ -10,9 +10,11 @@ type Notification = components['schemas']['Notification']
 export function NotificationsPage() {
   const token = getToken()
   const queryClient = useQueryClient()
-  const notificationsQ = useQuery({
+  const notificationsQ = useInfiniteQuery({
     queryKey: ['notifications'],
-    queryFn: () => listNotifications(token as string),
+    queryFn: ({ pageParam }) => listNotifications(token as string, { limit: 50, cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     enabled: !!token,
   })
   const markReadMutation = useMutation({
@@ -23,10 +25,10 @@ export function NotificationsPage() {
     mutationFn: () => markAllNotificationsRead(token as string),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   })
-  const items = notificationsQ.data?.items ?? []
-  const unreadCount = notificationsQ.data?.unread_count ?? 0
+  const items = notificationsQ.data?.pages.flatMap((page) => page.items) ?? []
+  const unreadCount = notificationsQ.data?.pages[0]?.unread_count ?? 0
 
-  return <div className="space-y-6"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-medium text-primary">消息中心</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">通知</h1><p className="mt-2 text-sm text-muted-foreground">及时处理登录失效、安全验证和任务风险。</p></div><div className="flex items-center gap-2"><Badge variant={unreadCount ? 'warning' : 'muted'}>{unreadCount ? `${unreadCount} 条未读` : '已全部读'}</Badge><Button variant="outline" onClick={() => markAllMutation.mutate()} disabled={!unreadCount || markAllMutation.isPending}>{markAllMutation.isPending ? '处理中…' : '全部标为已读'}</Button></div></div>{notificationsQ.isPending ? <NotificationLoading /> : notificationsQ.isError ? <Card><CardHeader><CardTitle>通知暂时不可用</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">请稍后重试，当前不会影响任务执行。</p><Button className="mt-4" variant="outline" onClick={() => void notificationsQ.refetch()}>重试</Button></CardContent></Card> : items.length ? <div className="space-y-3">{items.map((item) => <NotificationItem key={item.id} item={item} pending={markReadMutation.isPending && markReadMutation.variables === item.id} onMarkRead={(id) => markReadMutation.mutate(id)} />)}</div> : <Card><CardContent className="py-16 text-center"><Bell className="mx-auto size-8 text-muted-foreground/60" /><p className="mt-4 font-medium">暂无通知</p><p className="mt-1 text-sm text-muted-foreground">账号状态和任务风险发生变化时，会在这里提醒你。</p></CardContent></Card>}</div>
+  return <div className="space-y-6"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-medium text-primary">消息中心</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">通知</h1><p className="mt-2 text-sm text-muted-foreground">及时处理登录失效、安全验证和任务风险。</p></div><div className="flex items-center gap-2"><Badge variant={unreadCount ? 'warning' : 'muted'}>{unreadCount ? `${unreadCount} 条未读` : '已全部读'}</Badge><Button variant="outline" onClick={() => markAllMutation.mutate()} disabled={!unreadCount || markAllMutation.isPending}>{markAllMutation.isPending ? '处理中…' : '全部标为已读'}</Button></div></div>{notificationsQ.isPending ? <NotificationLoading /> : notificationsQ.isError ? <Card><CardHeader><CardTitle>通知暂时不可用</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">请稍后重试，当前不会影响任务执行。</p><Button className="mt-4" variant="outline" onClick={() => void notificationsQ.refetch()}>重试</Button></CardContent></Card> : items.length ? <div className="space-y-3">{items.map((item) => <NotificationItem key={item.id} item={item} pending={markReadMutation.isPending && markReadMutation.variables === item.id} onMarkRead={(id) => markReadMutation.mutate(id)} />)}</div> : <Card><CardContent className="py-16 text-center"><Bell className="mx-auto size-8 text-muted-foreground/60" /><p className="mt-4 font-medium">暂无通知</p><p className="mt-1 text-sm text-muted-foreground">账号状态和任务风险发生变化时，会在这里提醒你。</p></CardContent></Card>}{notificationsQ.hasNextPage ? <div className="flex justify-center"><Button variant="outline" onClick={() => void notificationsQ.fetchNextPage()} disabled={notificationsQ.isFetchingNextPage}>{notificationsQ.isFetchingNextPage ? '加载中…' : '加载更多通知'}</Button></div> : null}</div>
 }
 
 function NotificationItem({ item, pending, onMarkRead }: { item: Notification; pending: boolean; onMarkRead: (id: string) => void }) {

@@ -71,6 +71,50 @@ func (r *NotificationRepo) List(ctx context.Context, userID int64, filter notifi
 	return items, unreadCount, nil
 }
 
+func (r *NotificationRepo) ListByUserPage(ctx context.Context, userID int64, filter notification.ListFilter) ([]*notification.Notification, int, error) {
+	var unreadCount int
+	if err := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT COUNT(*)::int
+		FROM notifications
+		WHERE user_id=$1 AND read_at IS NULL
+		  AND (expires_at IS NULL OR expires_at > now())`, userID).Scan(&unreadCount); err != nil {
+		return nil, 0, err
+	}
+
+	query := `
+		SELECT id, public_id, user_id, type, priority, title, body,
+		       resource_type, resource_id, dedupe_key, read_at, created_at, expires_at
+		FROM notifications
+		WHERE user_id=$1 AND (expires_at IS NULL OR expires_at > now())`
+	args := []any{userID, filter.AfterCreatedAt, filter.AfterID}
+	if filter.UnreadOnly {
+		query += ` AND read_at IS NULL`
+	}
+	query += ` AND ($2::timestamptz IS NULL OR (created_at, id) < ($2::timestamptz, $3::bigint))`
+	query += ` ORDER BY created_at DESC, id DESC LIMIT $4`
+	args = append(args, filter.Limit+1)
+
+	rows, err := From(ctx, r.pool).Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	items := make([]*notification.Notification, 0, filter.Limit+1)
+	for rows.Next() {
+		item := new(notification.Notification)
+		if err := rows.Scan(&item.ID, &item.PublicID, &item.UserID, &item.Type, &item.Priority,
+			&item.Title, &item.Body, &item.ResourceType, &item.ResourceID, &item.DedupeKey,
+			&item.ReadAt, &item.CreatedAt, &item.ExpiresAt); err != nil {
+			return nil, 0, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return items, unreadCount, nil
+}
+
 func (r *NotificationRepo) MarkRead(ctx context.Context, userID int64, publicID uuid.UUID) (bool, error) {
 	tag, err := From(ctx, r.pool).Exec(ctx, `
 		UPDATE notifications
@@ -291,4 +335,5 @@ func riskCopy(code, nickname string) (string, string) {
 func stringPtr(value string) *string { return &value }
 
 var _ notification.Repository = (*NotificationRepo)(nil)
+var _ notification.PageRepository = (*NotificationRepo)(nil)
 var _ notification.DeliveryRepository = (*NotificationRepo)(nil)

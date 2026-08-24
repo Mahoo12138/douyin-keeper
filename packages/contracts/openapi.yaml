@@ -670,6 +670,7 @@ paths:
           type: boolean
           default: false
       - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Current user's in-app notifications

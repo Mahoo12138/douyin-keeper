@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -42,16 +43,20 @@ func (s *Server) handleListNotifications(w http.ResponseWriter, r *http.Request)
 		writeError(w, r, err)
 		return
 	}
-	items, unreadCount, err := s.notifications.List(r.Context(), principal.UserID, filter)
+	page, err := s.notifications.ListPage(r.Context(), principal.UserID, filter)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	views := make([]notificationView, 0, len(items))
-	for _, item := range items {
+	views := make([]notificationView, 0, len(page.Items))
+	for _, item := range page.Items {
 		views = append(views, notificationViewFrom(item))
 	}
-	writeOK(w, map[string]any{"items": views, "unread_count": unreadCount, "next_cursor": nil})
+	var nextCursor any
+	if page.NextCreatedAt != nil && page.NextAfterID > 0 {
+		nextCursor = encodeNotificationCursor(*page.NextCreatedAt, page.NextAfterID)
+	}
+	writeOK(w, map[string]any{"items": views, "unread_count": page.UnreadCount, "next_cursor": nextCursor})
 }
 
 func (s *Server) handleGetNotificationPreferences(w http.ResponseWriter, r *http.Request) {
@@ -114,12 +119,46 @@ func notificationFilter(r *http.Request) (notification.ListFilter, error) {
 	}
 	if value := r.URL.Query().Get("limit"); value != "" {
 		limit, err := strconv.Atoi(value)
-		if err != nil || limit < 1 {
+		if err != nil || limit < 1 || limit > 100 {
 			return filter, apperr.Validation(apperr.CodeConflict, "invalid limit")
 		}
 		filter.Limit = limit
 	}
+	if value := r.URL.Query().Get("cursor"); value != "" {
+		createdAt, id, err := decodeNotificationCursor(value)
+		if err != nil {
+			return filter, err
+		}
+		filter.AfterCreatedAt = &createdAt
+		filter.AfterID = id
+	}
 	return filter, nil
+}
+
+type notificationCursorPayload struct {
+	CreatedAt string `json:"created_at"`
+	ID        int64  `json:"id"`
+}
+
+func encodeNotificationCursor(createdAt time.Time, id int64) string {
+	payload, _ := json.Marshal(notificationCursorPayload{CreatedAt: createdAt.Format(time.RFC3339Nano), ID: id})
+	return base64.RawURLEncoding.EncodeToString(payload)
+}
+
+func decodeNotificationCursor(value string) (time.Time, int64, error) {
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return time.Time{}, 0, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+	}
+	var payload notificationCursorPayload
+	if err := json.Unmarshal(decoded, &payload); err != nil || payload.ID < 1 {
+		return time.Time{}, 0, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+	}
+	createdAt, err := time.Parse(time.RFC3339Nano, payload.CreatedAt)
+	if err != nil || createdAt.IsZero() {
+		return time.Time{}, 0, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+	}
+	return createdAt, payload.ID, nil
 }
 
 func notificationViewFrom(item *notification.Notification) notificationView {

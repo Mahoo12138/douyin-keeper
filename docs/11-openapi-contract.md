@@ -165,7 +165,7 @@ WECHAT_IDENTITY_NOT_LINKED
 
 ### `GET /notifications`
 
-返回当前用户未过期的站内通知，支持 `unread_only=true` 和 `limit`。响应包含当前未读总数；通知只返回面向用户的标题、正文、优先级和可选资源引用，不返回风险 `detail_json`、Session 或 Cookie。
+返回当前用户未过期的站内通知，支持 `unread_only=true` 和统一游标分页。`limit` 默认 50、最大 100，后续请求把响应中的 `next_cursor` 作为 `cursor` 传回。响应包含当前未读总数；通知只返回面向用户的标题、正文、优先级和可选资源引用，不返回风险 `detail_json`、Session 或 Cookie。
 
 ### `POST /notifications/{notification_id}/read`
 

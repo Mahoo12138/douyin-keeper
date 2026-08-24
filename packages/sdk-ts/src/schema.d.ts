@@ -2469,6 +2469,7 @@ export interface operations {
             query?: {
                 unread_only?: boolean;
                 limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
             };
             header?: never;
             path?: never;

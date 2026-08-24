@@ -351,7 +351,7 @@ export async function accountCapabilities(accessToken: string, accountId: string
   return data
 }
 
-export async function listNotifications(accessToken: string, options?: { unread_only?: boolean; limit?: number }) {
+export async function listNotifications(accessToken: string, options?: { unread_only?: boolean; limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/notifications', {
     headers: { Authorization: `Bearer ${accessToken}` },
     params: { query: options },

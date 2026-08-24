@@ -19,6 +19,12 @@ func (r *repositoryStub) List(_ context.Context, _ int64, filter ListFilter) ([]
 	return []*Notification{{Title: "test", Body: "body"}}, 2, nil
 }
 
+func (r *repositoryStub) ListByUserPage(_ context.Context, _ int64, filter ListFilter) ([]*Notification, int, error) {
+	r.filter = filter
+	base := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	return []*Notification{{ID: 3, CreatedAt: base.Add(2 * time.Minute)}, {ID: 2, CreatedAt: base.Add(time.Minute)}, {ID: 1, CreatedAt: base}}, 2, nil
+}
+
 func (r *repositoryStub) MarkRead(_ context.Context, _ int64, publicID uuid.UUID) (bool, error) {
 	r.markedID = publicID
 	return true, nil
@@ -79,5 +85,21 @@ func TestServiceManagesWechatPreferences(t *testing.T) {
 	preferences, err = svc.GetPreferences(context.Background(), 7)
 	if err != nil || preferences == nil || preferences.UserID != 7 {
 		t.Fatalf("GetPreferences() = %+v, err=%v", preferences, err)
+	}
+}
+
+func TestServiceListsNotificationCursorPage(t *testing.T) {
+	repo := &repositoryStub{}
+	svc := NewService(repo)
+	createdAt := time.Date(2026, 8, 24, 12, 1, 0, 0, time.UTC)
+	page, err := svc.ListPage(context.Background(), 7, ListFilter{Limit: 2, AfterCreatedAt: &createdAt, AfterID: 2, UnreadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].ID != 3 || page.Items[1].ID != 2 || page.NextAfterID != 2 || page.NextCreatedAt == nil || page.UnreadCount != 2 {
+		t.Fatalf("page = %+v", page)
+	}
+	if repo.filter.Limit != 2 || !repo.filter.UnreadOnly || repo.filter.AfterID != 2 || repo.filter.AfterCreatedAt == nil || !repo.filter.AfterCreatedAt.Equal(createdAt) {
+		t.Fatalf("filter = %+v", repo.filter)
 	}
 }
