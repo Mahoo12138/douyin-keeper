@@ -2947,6 +2947,8 @@ export interface operations {
                 status?: "pending" | "queued" | "running" | "retry_wait" | "succeeded" | "failed" | "skipped" | "cancelled";
                 from?: string;
                 to?: string;
+                limit?: number;
+                cursor?: string;
             };
             header?: never;
             path?: never;

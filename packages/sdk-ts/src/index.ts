@@ -536,6 +536,8 @@ export type SendIntentListOptions = {
   status?: components['schemas']['SendIntent']['status']
   from?: string
   to?: string
+  limit?: number
+  cursor?: string
 }
 
 export async function listSendIntents(accessToken: string, options?: SendIntentListOptions) {

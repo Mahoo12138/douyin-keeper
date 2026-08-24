@@ -104,6 +104,14 @@ func (r *SendRepo) GetIntentByID(ctx context.Context, intentID int64) (*send.Sen
 }
 
 func (r *SendRepo) ListIntentsByUser(ctx context.Context, userID int64, filter send.IntentListFilter) ([]*send.SendIntent, error) {
+	return r.listIntentsByUser(ctx, userID, filter, 100, 0)
+}
+
+func (r *SendRepo) ListIntentsByUserPage(ctx context.Context, userID int64, filter send.IntentListFilter) ([]*send.SendIntent, error) {
+	return r.listIntentsByUser(ctx, userID, filter, filter.Limit+1, filter.AfterID)
+}
+
+func (r *SendRepo) listIntentsByUser(ctx context.Context, userID int64, filter send.IntentListFilter, limit int, afterID int64) ([]*send.SendIntent, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT `+intentCols+`, t.public_id AS task_public_id, t.message_kind, t.message_body,
 			a.public_id AS account_public_id, a.nickname,
@@ -120,9 +128,10 @@ func (r *SendRepo) ListIntentsByUser(ctx context.Context, userID int64, filter s
 		  AND ($4::text = '' OR si.status = $4)
 		  AND ($5::timestamptz IS NULL OR si.scheduled_at >= $5)
 		  AND ($6::timestamptz IS NULL OR si.scheduled_at < $6)
+		  AND ($7::bigint = 0 OR si.id < $7)
 		ORDER BY si.id DESC
-		LIMIT 100
-	`, userID, filter.AccountID, filter.FriendID, filter.Status, filter.From, filter.To)
+		LIMIT $8
+	`, userID, filter.AccountID, filter.FriendID, filter.Status, filter.From, filter.To, afterID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -344,3 +353,4 @@ func (r *SendRepo) CountJobsForIntent(ctx context.Context, intentID int64) (int,
 }
 
 var _ send.Repository = (*SendRepo)(nil)
+var _ send.PageRepository = (*SendRepo)(nil)

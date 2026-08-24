@@ -36,6 +36,17 @@ func TestParseIntentFilter(t *testing.T) {
 	}
 }
 
+func TestParseIntentFilterDecodesCursorAndLimit(t *testing.T) {
+	r := httptest.NewRequest("GET", "/api/v1/send-intents?limit=20&cursor="+encodeIntentCursor(42), nil)
+	filter, err := parseIntentFilter(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filter.Limit != 20 || filter.AfterID != 42 {
+		t.Fatalf("pagination filter = %+v", filter)
+	}
+}
+
 func TestIntentViewIncludesTaskSummary(t *testing.T) {
 	taskID := uuid.New()
 	body := "晚间火花问候"
@@ -55,6 +66,8 @@ func TestParseIntentFilterRejectsInvalidInput(t *testing.T) {
 		{name: "invalid status", url: "/?status=unknown"},
 		{name: "invalid from", url: "/?from=not-a-time"},
 		{name: "reversed range", url: "/?from=2026-08-02T00:00:00Z&to=2026-08-01T00:00:00Z"},
+		{name: "invalid limit", url: "/?limit=101"},
+		{name: "invalid cursor", url: "/?cursor=!"},
 	}
 
 	for _, tt := range tests {

@@ -501,6 +501,8 @@ Query：
 ?account_id=...&friend_id=...&status=succeeded&from=...&to=...
 ```
 
+列表默认返回 50 条，最多 100 条；通过 `cursor` 按 `id DESC` 继续读取。分页请求会继续应用账号、好友、状态和时间范围筛选。
+
 Item：
 
 ```json

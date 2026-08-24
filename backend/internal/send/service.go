@@ -118,6 +118,61 @@ func (s *Service) ListIntents(ctx context.Context, userID int64, filter IntentLi
 	return s.repo.ListIntentsByUser(ctx, userID, filter)
 }
 
+func (s *Service) ListIntentsPage(ctx context.Context, userID int64, filter IntentListFilter) (IntentListPage, error) {
+	filter = normalizeIntentListFilter(filter)
+	if repo, ok := s.repo.(PageRepository); ok {
+		items, err := repo.ListIntentsByUserPage(ctx, userID, filter)
+		if err != nil {
+			return IntentListPage{}, err
+		}
+		return trimIntentListPage(items, filter.Limit), nil
+	}
+	items, err := s.repo.ListIntentsByUser(ctx, userID, filter)
+	if err != nil {
+		return IntentListPage{}, err
+	}
+	if filter.AfterID > 0 {
+		start := len(items)
+		for index, item := range items {
+			if item != nil && item.ID < filter.AfterID {
+				start = index
+				break
+			}
+		}
+		if start < len(items) {
+			items = items[start:]
+		} else {
+			items = nil
+		}
+	}
+	return trimIntentListPage(items, filter.Limit), nil
+}
+
+func normalizeIntentListFilter(filter IntentListFilter) IntentListFilter {
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.AfterID < 0 {
+		filter.AfterID = 0
+	}
+	return filter
+}
+
+func trimIntentListPage(items []*SendIntent, limit int) IntentListPage {
+	page := IntentListPage{Items: items}
+	if len(items) <= limit {
+		return page
+	}
+	page.Items = items[:limit]
+	if last := page.Items[len(page.Items)-1]; last != nil && last.ID > 0 {
+		page.NextAfterID = last.ID
+	}
+	return page
+}
+
 // GetJob resolves one send job with user scope.
 func (s *Service) GetJob(ctx context.Context, userID int64, publicID uuid.UUID) (*SendJob, error) {
 	return s.repo.GetJobOwned(ctx, userID, publicID)

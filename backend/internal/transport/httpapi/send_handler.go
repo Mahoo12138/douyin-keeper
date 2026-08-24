@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"encoding/base64"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,16 +20,20 @@ func (s *Server) handleListIntents(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	intents, err := s.sends.ListIntents(r.Context(), p.UserID, filter)
+	page, err := s.sends.ListIntentsPage(r.Context(), p.UserID, filter)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	items := make([]IntentView, 0, len(intents))
-	for _, in := range intents {
+	items := make([]IntentView, 0, len(page.Items))
+	for _, in := range page.Items {
 		items = append(items, intentView(in))
 	}
-	writeOK(w, map[string]any{"items": items, "next_cursor": nil})
+	var nextCursor any
+	if page.NextAfterID > 0 {
+		nextCursor = encodeIntentCursor(page.NextAfterID)
+	}
+	writeOK(w, map[string]any{"items": items, "next_cursor": nextCursor})
 }
 
 func parseIntentFilter(r *http.Request) (send.IntentListFilter, error) {
@@ -60,7 +66,29 @@ func parseIntentFilter(r *http.Request) (send.IntentListFilter, error) {
 	if filter.From != nil && filter.To != nil && !filter.From.Before(*filter.To) {
 		return filter, apperr.Validation(apperr.CodeConflict, "from must be before to")
 	}
+	if value := q.Get("limit"); value != "" {
+		limit, err := strconv.Atoi(value)
+		if err != nil || limit < 1 || limit > 100 {
+			return filter, apperr.Validation(apperr.CodeConflict, "invalid limit")
+		}
+		filter.Limit = limit
+	}
+	if value := q.Get("cursor"); value != "" {
+		decoded, err := base64.RawURLEncoding.DecodeString(value)
+		if err != nil {
+			return filter, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+		}
+		id, err := strconv.ParseInt(string(decoded), 10, 64)
+		if err != nil || id < 1 {
+			return filter, apperr.Validation(apperr.CodeConflict, "invalid cursor")
+		}
+		filter.AfterID = id
+	}
 	return filter, nil
+}
+
+func encodeIntentCursor(id int64) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(id, 10)))
 }
 
 func (s *Server) handleGetSendJob(w http.ResponseWriter, r *http.Request) {

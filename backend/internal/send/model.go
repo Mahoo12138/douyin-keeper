@@ -80,6 +80,13 @@ type IntentListFilter struct {
 	Status    string
 	From      *time.Time
 	To        *time.Time
+	Limit     int
+	AfterID   int64
+}
+
+type IntentListPage struct {
+	Items       []*SendIntent
+	NextAfterID int64
 }
 
 type SendJob struct {
@@ -135,4 +142,10 @@ type Repository interface {
 	SetIntentStatus(ctx context.Context, intentID int64, status IntentStatus, errorCode *string, nextAttemptAt *time.Time, at time.Time) error
 	SetIntentLastJob(ctx context.Context, intentID, jobID int64) error
 	CountJobsForIntent(ctx context.Context, intentID int64) (int, error)
+}
+
+// PageRepository is the API-facing cursor projection. The legacy list method
+// remains available for internal callers that need the bounded snapshot query.
+type PageRepository interface {
+	ListIntentsByUserPage(ctx context.Context, userID int64, filter IntentListFilter) ([]*SendIntent, error)
 }

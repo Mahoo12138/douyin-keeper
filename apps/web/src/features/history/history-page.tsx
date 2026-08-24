@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { CalendarDays, ChevronRight, Filter, Search, X } from 'lucide-react'
 import { listAccounts, listSendIntents, type components } from '@douyin-keeper/sdk-ts'
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@douyin-keeper/ui-web'
@@ -55,13 +55,15 @@ export function HistoryPage() {
     from: dateBoundary(fromDate, false),
     to: dateBoundary(toDate, true),
   }), [accountFilter, fromDate, friendFilter, statusFilter, toDate])
-  const historyQ = useQuery({
+  const historyQ = useInfiniteQuery({
     queryKey: ['send-intents', filters],
-    queryFn: () => listSendIntents(token as string, filters),
+    queryFn: ({ pageParam }) => listSendIntents(token as string, { ...filters, limit: 50, cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     enabled: !!token && !invalidDateRange,
   })
 
-  const items = historyQ.data?.items ?? []
+  const items = historyQ.data?.pages.flatMap((page) => page.items) ?? []
   const friendOptions = useMemo(() => {
     const friends = new Map<string, string>()
     items.forEach((item) => friends.set(item.friend.id, item.friend.display_name))
@@ -115,7 +117,7 @@ export function HistoryPage() {
         <CardHeader>
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
             <div><CardTitle>执行记录</CardTitle><CardDescription>{visibleItems.length === items.length ? `共 ${items.length} 条记录` : `筛选出 ${visibleItems.length} / ${items.length} 条记录`}</CardDescription></div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground"><Filter className="size-4" />最多展示最近 100 条</div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground"><Filter className="size-4" />默认加载最近 50 条</div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -132,6 +134,7 @@ export function HistoryPage() {
           ) : (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-14 text-center"><CalendarDays className="size-8 text-muted-foreground" /><p className="mt-3 font-medium">暂无发送记录</p><p className="mt-1 text-sm text-muted-foreground">任务开始执行后，记录会出现在这里。</p></div>
           )}
+          {historyQ.hasNextPage && <div className="flex justify-center"><Button variant="outline" onClick={() => void historyQ.fetchNextPage()} disabled={historyQ.isFetchingNextPage}>{historyQ.isFetchingNextPage ? '加载中…' : '加载更多记录'}</Button></div>}
         </CardContent>
       </Card>
       {selected && <HistoryDetailDrawer intent={selected} token={token as string} onClose={() => setSelected(null)} />}
