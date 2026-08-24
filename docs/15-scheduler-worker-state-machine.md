@@ -550,6 +550,7 @@ cancel_requested_at = now()
 Worker：
 
 - claim 后、平台调用前，以及长轮询/同步落库前重新读取 `cancel_requested_at`；
+- QR/SMS 的 `login.start`、轮询、验证码提交和最终 `session.validate` 前必须执行最后一次取消检查；
 - Sidecar 支持 cancel 时发 cancel；
 - 清理临时文件/profile；
 - 最终写 `cancelled`。

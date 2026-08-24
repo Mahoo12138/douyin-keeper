@@ -123,11 +123,20 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 		defer os.RemoveAll(profileDir)
 		exportPath := filepath.Join(profileDir, "session-state.json")
 
-		startResponse, err := deps.Sidecar.Call(ctx, sidecar.Request{
-			ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
-			Op: sidecar.OpsLoginSMSStart, DeadlineMS: 60_000,
-			Input: smsStartInput(profileDir, ref.Phone),
+		var startResponse *sidecar.Response
+		cancelled, callErr := callIfNotCancelled(ctx, deps.Jobs, claimed, deps.Now, func() error {
+			var callErr error
+			startResponse, callErr = deps.Sidecar.Call(ctx, sidecar.Request{
+				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
+				Op: sidecar.OpsLoginSMSStart, DeadlineMS: 60_000,
+				Input: smsStartInput(profileDir, ref.Phone),
+			})
+			return callErr
 		})
+		if cancelled {
+			return callErr
+		}
+		err = callErr
 		if err != nil {
 			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 			return fail(apperr.CodeAdapterUnavailable)
@@ -174,11 +183,19 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 				}
 				continue
 			}
-			response, callErr := deps.Sidecar.Call(ctx, sidecar.Request{
-				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
-				Op: sidecar.OpsLoginSMSVerify, DeadlineMS: 60_000,
-				Input: smsVerifyInput(started.LoginHandle, code, exportPath),
+			var response *sidecar.Response
+			cancelled, callErr := callIfNotCancelled(ctx, deps.Jobs, claimed, deps.Now, func() error {
+				var err error
+				response, err = deps.Sidecar.Call(ctx, sidecar.Request{
+					ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
+					Op: sidecar.OpsLoginSMSVerify, DeadlineMS: 60_000,
+					Input: smsVerifyInput(started.LoginHandle, code, exportPath),
+				})
+				return err
 			})
+			if cancelled {
+				return callErr
+			}
 			if callErr != nil {
 				observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 				return fail(apperr.CodeAdapterUnavailable)

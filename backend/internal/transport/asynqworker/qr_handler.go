@@ -3,6 +3,7 @@ package asynqworker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -149,11 +150,20 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		defer os.RemoveAll(profileDir)
 		exportPath := filepath.Join(profileDir, "session-state.json")
 
-		startResponse, err := deps.Sidecar.Call(ctx, sidecar.Request{
-			ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
-			Op: sidecar.OpsLoginQRStart, DeadlineMS: 60_000,
-			Input: map[string]any{"profile_dir": profileDir, "locale": "zh-CN"},
+		var startResponse *sidecar.Response
+		cancelled, callErr := callIfNotCancelled(ctx, deps.Jobs, claimed, deps.Now, func() error {
+			var callErr error
+			startResponse, callErr = deps.Sidecar.Call(ctx, sidecar.Request{
+				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
+				Op: sidecar.OpsLoginQRStart, DeadlineMS: 60_000,
+				Input: map[string]any{"profile_dir": profileDir, "locale": "zh-CN"},
+			})
+			return callErr
 		})
+		if cancelled {
+			return callErr
+		}
+		err = callErr
 		if err != nil {
 			observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 			return fail(apperr.CodeAdapterUnavailable)
@@ -196,11 +206,19 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
 				return err
 			}
-			response, callErr := deps.Sidecar.Call(ctx, sidecar.Request{
-				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
-				Op: sidecar.OpsLoginQRPoll, DeadlineMS: 10_000,
-				Input: map[string]any{"login_handle": started.LoginHandle, "export_session_file": exportPath},
+			var response *sidecar.Response
+			cancelled, callErr := callIfNotCancelled(ctx, deps.Jobs, claimed, deps.Now, func() error {
+				var err error
+				response, err = deps.Sidecar.Call(ctx, sidecar.Request{
+					ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
+					Op: sidecar.OpsLoginQRPoll, DeadlineMS: 10_000,
+					Input: map[string]any{"login_handle": started.LoginHandle, "export_session_file": exportPath},
+				})
+				return err
 			})
+			if cancelled {
+				return callErr
+			}
 			if callErr != nil {
 				observeWorkerRisk(ctx, deps.Risk, acct.ID, apperr.CodeAdapterUnavailable, capability.AdapterBrowserConsumer, claimed.PublicID.String())
 				return fail(apperr.CodeAdapterUnavailable)
@@ -276,26 +294,45 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 	if err := deps.Sessions.Store(ctx, acct.ID, acct.UserPublicID, acct.PublicID, plaintext); err != nil {
 		return finishBindFailure(ctx, deps, claimed, apperr.CodeInternal)
 	}
-	if err := deps.Sessions.WithTempFile(ctx, acct.ID, acct.UserPublicID, acct.PublicID, func(path string) error {
-		response, callErr := deps.Sidecar.Call(ctx, sidecar.Request{
-			ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
-			Op: sidecar.OpsSessionValidate, DeadlineMS: 60_000,
-			Input: map[string]any{"session": map[string]any{"kind": "playwright_storage_state_file", "path": path}},
+	if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+		return err
+	}
+	var validationCancelled bool
+	validationErr := deps.Sessions.WithTempFile(ctx, acct.ID, acct.UserPublicID, acct.PublicID, func(path string) error {
+		cancelled, callErr := callIfNotCancelled(ctx, deps.Jobs, claimed, deps.Now, func() error {
+			response, err := deps.Sidecar.Call(ctx, sidecar.Request{
+				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
+				Op: sidecar.OpsSessionValidate, DeadlineMS: 60_000,
+				Input: map[string]any{"session": map[string]any{"kind": "playwright_storage_state_file", "path": path}},
+			})
+			if err != nil {
+				return err
+			}
+			if code := sidecarErrorCode(response); code != "" {
+				return newSidecarCodeError(code)
+			}
+			var valid struct {
+				Valid bool `json:"valid"`
+			}
+			if err := decodeResult(response, &valid); err != nil || !valid.Valid {
+				return qrValidationError{}
+			}
+			return nil
 		})
-		if callErr != nil {
-			return callErr
+		validationCancelled = cancelled
+		if cancelled && callErr == nil {
+			return errCancellationConsumed
 		}
-		if code := sidecarErrorCode(response); code != "" {
-			return newSidecarCodeError(code)
+		return callErr
+	})
+	if validationCancelled {
+		if errors.Is(validationErr, errCancellationConsumed) {
+			return nil
 		}
-		var valid struct {
-			Valid bool `json:"valid"`
-		}
-		if err := decodeResult(response, &valid); err != nil || !valid.Valid {
-			return qrValidationError{}
-		}
-		return nil
-	}); err != nil {
+		return validationErr
+	}
+	if validationErr != nil {
+		err := validationErr
 		code := apperr.CodeAdapterUnavailable
 		if _, ok := err.(qrValidationError); ok {
 			code = apperr.CodeAdapterIncompatible

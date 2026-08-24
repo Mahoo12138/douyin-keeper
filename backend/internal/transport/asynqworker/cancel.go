@@ -3,10 +3,13 @@ package asynqworker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
 )
+
+var errCancellationConsumed = errors.New("job cancellation consumed")
 
 type cancellationStore interface {
 	IsCancelRequested(context.Context, int64) (bool, error)
@@ -33,4 +36,15 @@ func cancelIfRequested(ctx context.Context, jobs cancellationStore, claimed *job
 		return true, err
 	}
 	return true, jobs.Finish(ctx, claimed.ID, job.StatusCancelled, nil, now())
+}
+
+// callIfNotCancelled closes the final race between a cancellation check and
+// an irreversible platform call. The callback is never invoked after the
+// worker consumes a cancellation request.
+func callIfNotCancelled(ctx context.Context, jobs cancellationStore, claimed *job.Job, now func() time.Time, call func() error) (bool, error) {
+	cancelled, err := cancelIfRequested(ctx, jobs, claimed, now)
+	if cancelled || err != nil {
+		return cancelled, err
+	}
+	return false, call()
 }

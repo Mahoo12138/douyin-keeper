@@ -51,3 +51,33 @@ func TestCancelIfRequestedLeavesActiveJobAlone(t *testing.T) {
 		t.Fatalf("done=%t err=%v status=%s events=%d", done, err, store.status, len(store.events))
 	}
 }
+
+func TestCallIfNotCancelledSkipsPlatformCall(t *testing.T) {
+	store := &fakeCancellationStore{requested: true}
+	claimed := &job.Job{ID: 9, PublicID: uuid.New(), Status: job.StatusRunning}
+	called := false
+	cancelled, err := callIfNotCancelled(context.Background(), store, claimed, time.Now, func() error {
+		called = true
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cancelled || called || store.status != job.StatusCancelled {
+		t.Fatalf("cancelled=%t platform called=%t status=%s", cancelled, called, store.status)
+	}
+}
+
+func TestCallIfNotCancelledInvokesPlatformCallWhenActive(t *testing.T) {
+	store := &fakeCancellationStore{}
+	claimed := &job.Job{ID: 10, PublicID: uuid.New(), Status: job.StatusRunning}
+	called := false
+	wantErr := context.DeadlineExceeded
+	cancelled, err := callIfNotCancelled(context.Background(), store, claimed, time.Now, func() error {
+		called = true
+		return wantErr
+	})
+	if err != wantErr || cancelled || !called {
+		t.Fatalf("cancelled=%t err=%v called=%t, want callback error and invocation", cancelled, err, called)
+	}
+}
