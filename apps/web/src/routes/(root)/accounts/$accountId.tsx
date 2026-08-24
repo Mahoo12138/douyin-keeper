@@ -4,7 +4,7 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { ArrowLeft, CheckCircle2, Clock3, History, ListChecks, RefreshCw, Send, ShieldCheck, Smartphone, UsersRound } from 'lucide-react'
 import { accountCapabilities, checkAccountSession, listFriends, listSendIntents, listTasks, syncAccountFriends, updateFriend, type components } from '@douyin-keeper/sdk-ts'
-import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton } from '@douyin-keeper/ui-web'
+import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from '@douyin-keeper/ui-web'
 
 import { getToken } from '@/auth/session'
 import { waitForJobEvents } from '@/lib/job-progress'
@@ -90,13 +90,16 @@ function AccountDetailPage() {
 				<div className="flex flex-wrap gap-2 sm:justify-end"><Button variant="outline" onClick={() => void runAccountAction('session')} disabled={busyAction !== null}><RefreshCw className={busyAction === 'session' ? 'animate-spin' : ''} />检查登录态</Button><Button onClick={() => void runAccountAction('friends')} disabled={busyAction !== null}><UsersRound />同步好友</Button></div>
 			</div>
 
-			<div className="flex gap-1 overflow-x-auto border-b" role="tablist" aria-label="账号详情分区">{tabs.map((item) => <button key={item.value} type="button" role="tab" aria-selected={tab === item.value} onClick={() => setTab(item.value)} className={`shrink-0 border-b-2 px-3 py-2.5 text-sm transition-colors ${tab === item.value ? 'border-primary font-medium text-foreground' : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'}`}>{item.label}</button>)}</div>
-
-			{tab === 'overview' && <OverviewTab account={account} intents={intents} stats={intentStats} intentsError={intentsQ.isError} onRetry={() => void intentsQ.refetch()} />}
-			{tab === 'friends' && <FriendsTab friends={friends} tasks={tasks} accountId={accountId} loading={friendsQ.isLoading || tasksQ.isLoading} error={friendsQ.isError || tasksQ.isError} pendingFriendId={pendingFriendId} onToggle={toggleFriend} onRetry={() => { void friendsQ.refetch(); void tasksQ.refetch() }} hasNextPage={friendsQ.hasNextPage} fetchingNextPage={friendsQ.isFetchingNextPage} onLoadMore={() => void friendsQ.fetchNextPage()} />}
-			{tab === 'tasks' && <TasksTab tasks={tasks} friends={friendMap} loading={tasksQ.isLoading || friendsQ.isLoading} error={tasksQ.isError || friendsQ.isError} onRetry={() => { void tasksQ.refetch(); void friendsQ.refetch() }} />}
-			{tab === 'history' && <HistoryTab intents={intents} loading={intentsQ.isLoading} error={intentsQ.isError} onRetry={() => void intentsQ.refetch()} onSelect={setSelectedIntent} />}
-			{tab === 'capabilities' && <div className="space-y-4"><CapabilityPanel account={account} capabilities={(capabilitiesQ.data?.items ?? []) as Capability[]} loading={capabilitiesQ.isLoading} error={capabilitiesQ.isError} /><Card><CardHeader><CardTitle className="text-base">登录与能力说明</CardTitle><CardDescription>能力快照只描述当前账号是否可用，不展示 Session、Cookie 或平台内部凭据。</CardDescription></CardHeader><CardContent className="grid gap-3 text-sm sm:grid-cols-2"><Fact label="上次会话检查" value={formatDate(account.last_session_check_at)} /><Fact label="上次好友同步" value={formatDate(account.last_friend_sync_at)} /></CardContent></Card></div>}
+			<Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} id="account-detail-tabs">
+				<TabsList aria-label="账号详情分区">
+					{tabs.map((item) => <TabsTrigger key={item.value} value={item.value}>{item.label}</TabsTrigger>)}
+				</TabsList>
+				<TabsContent value="overview">{tab === 'overview' && <OverviewTab account={account} intents={intents} stats={intentStats} intentsError={intentsQ.isError} onRetry={() => void intentsQ.refetch()} />}</TabsContent>
+				<TabsContent value="friends">{tab === 'friends' && <FriendsTab friends={friends} tasks={tasks} accountId={accountId} loading={friendsQ.isLoading || tasksQ.isLoading} error={friendsQ.isError || tasksQ.isError} pendingFriendId={pendingFriendId} onToggle={toggleFriend} onRetry={() => { void friendsQ.refetch(); void tasksQ.refetch() }} hasNextPage={friendsQ.hasNextPage} fetchingNextPage={friendsQ.isFetchingNextPage} onLoadMore={() => void friendsQ.fetchNextPage()} />}</TabsContent>
+				<TabsContent value="tasks">{tab === 'tasks' && <TasksTab tasks={tasks} friends={friendMap} loading={tasksQ.isLoading || friendsQ.isLoading} error={tasksQ.isError || friendsQ.isError} onRetry={() => { void tasksQ.refetch(); void friendsQ.refetch() }} />}</TabsContent>
+				<TabsContent value="history">{tab === 'history' && <HistoryTab intents={intents} loading={intentsQ.isLoading} error={intentsQ.isError} onRetry={() => void intentsQ.refetch()} onSelect={setSelectedIntent} />}</TabsContent>
+				<TabsContent value="capabilities">{tab === 'capabilities' && <div className="space-y-4"><CapabilityPanel account={account} capabilities={(capabilitiesQ.data?.items ?? []) as Capability[]} loading={capabilitiesQ.isLoading} error={capabilitiesQ.isError} /><Card><CardHeader><CardTitle className="text-base">登录与能力说明</CardTitle><CardDescription>能力快照只描述当前账号是否可用，不展示 Session、Cookie 或平台内部凭据。</CardDescription></CardHeader><CardContent className="grid gap-3 text-sm sm:grid-cols-2"><Fact label="上次会话检查" value={formatDate(account.last_session_check_at)} /><Fact label="上次好友同步" value={formatDate(account.last_friend_sync_at)} /></CardContent></Card></div>}</TabsContent>
+			</Tabs>
 			{selectedIntent && <HistoryDetailDrawer intent={selectedIntent} token={token as string} onClose={() => setSelectedIntent(null)} />}
 		</div>
 	)
