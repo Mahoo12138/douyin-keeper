@@ -386,7 +386,8 @@ MVP 中抖音账号首次绑定仍推荐在 PC 完成。小程序对未绑定账
 当前 M5 已接入管理员只读运行时汇总：通过 Asynq Inspector 展示 interactive/browser/light pool 在线状态、活动 Worker 与并发，展示队列 pending/active/retry/延迟和最近 24 小时失败 Job，并结合 PostgreSQL lease 与 Scheduler leader 状态展示运行概况；构建版本和 Sidecar 版本在运行时尚未上报时显示“未上报”。
 
 Generic Job 明细已独立接入 `/admin/jobs`：管理员可按状态和 Job 类型筛选并通过统一 cursor
-查看绑定、同步和会话检查的生命周期元数据；页面不展示事件 payload、Session、Cookie 或消息正文。
+查看绑定、同步、平台会话归档、发送调度和能力探针等生命周期元数据；类型筛选提供已登记 Job
+建议值，同时保留自定义类型输入，页面不展示事件 payload、Session、Cookie 或消息正文。
 
 ### 3.5 Adapter 页面
 
