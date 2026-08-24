@@ -55,9 +55,51 @@ type AccountSummary struct {
 	LatestError        *RecentError
 }
 
+type WorkerPoolSummary struct {
+	Name              string
+	Online            bool
+	StartedAt         *time.Time
+	LastObservedAt    *time.Time
+	ActiveWorkers     int
+	Concurrency       int
+	Version           *string
+	PlaywrightVersion *string
+	ProtocolVersion   *string
+}
+
+type QueueSummary struct {
+	Name           string
+	Pool           string
+	Pending        int
+	Active         int
+	Scheduled      int
+	Retry          int
+	Failed         int
+	Processed      int
+	LatencySeconds int
+	Paused         bool
+}
+
+type RuntimeSummary struct {
+	ObservedAt             time.Time
+	APIVersion             *string
+	WorkerVersion          *string
+	PlaywrightSidecar      *string
+	ProtocolSidecar        *string
+	Pools                  []WorkerPoolSummary
+	Queues                 []QueueSummary
+	RunningJobs            int
+	FailedJobs24h          int
+	BrowserSlotsUsed       int
+	BrowserSlotsLimit      int
+	SchedulerOnline        bool
+	SchedulerLeaderExpires *time.Time
+}
+
 type Repository interface {
 	ListUserSummaries(ctx context.Context, limit int) ([]UserSummary, error)
 	ListAccountSummaries(ctx context.Context, limit int) ([]AccountSummary, error)
+	GetRuntimeSummary(ctx context.Context) (RuntimeSummary, error)
 }
 
 type Service struct {
@@ -74,6 +116,10 @@ func (s *Service) ListUsers(ctx context.Context, limit int) ([]UserSummary, erro
 
 func (s *Service) ListAccounts(ctx context.Context, limit int) ([]AccountSummary, error) {
 	return s.repo.ListAccountSummaries(ctx, normalizeLimit(limit))
+}
+
+func (s *Service) Runtime(ctx context.Context) (RuntimeSummary, error) {
+	return s.repo.GetRuntimeSummary(ctx)
 }
 
 func normalizeLimit(limit int) int {

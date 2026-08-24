@@ -5,17 +5,25 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/admin"
 )
 
 type AdminRepo struct {
-	pool *pgxpool.Pool
+	pool      *pgxpool.Pool
+	inspector *asynq.Inspector
+	redis     *redis.Client
 }
 
-func NewAdminRepo(pool *pgxpool.Pool) *AdminRepo {
-	return &AdminRepo{pool: pool}
+func NewAdminRepo(pool *pgxpool.Pool, rdb *redis.Client) *AdminRepo {
+	repo := &AdminRepo{pool: pool, redis: rdb}
+	if rdb != nil {
+		repo.inspector = asynq.NewInspectorFromRedisClient(rdb)
+	}
+	return repo
 }
 
 func (r *AdminRepo) ListUserSummaries(ctx context.Context, limit int) ([]admin.UserSummary, error) {
@@ -183,6 +191,121 @@ func (r *AdminRepo) ListAccountSummaries(ctx context.Context, limit int) ([]admi
 		return nil, err
 	}
 	return items, nil
+}
+
+const schedulerLeaderKey = "lock:scheduler:leader"
+
+var runtimePools = []struct {
+	name        string
+	queue       string
+	concurrency int
+}{
+	{name: "interactive", queue: "interactive", concurrency: 2},
+	{name: "browser", queue: "browser", concurrency: 3},
+	{name: "light", queue: "light", concurrency: 8},
+}
+
+func (r *AdminRepo) GetRuntimeSummary(ctx context.Context) (admin.RuntimeSummary, error) {
+	var summary admin.RuntimeSummary
+	summary.ObservedAt = time.Now()
+	summary.BrowserSlotsLimit = 3
+	summary.Pools = make([]admin.WorkerPoolSummary, 0, len(runtimePools))
+	for _, pool := range runtimePools {
+		summary.Pools = append(summary.Pools, admin.WorkerPoolSummary{
+			Name: pool.name, Concurrency: pool.concurrency,
+		})
+	}
+	summary.Queues = make([]admin.QueueSummary, 0, len(runtimePools))
+
+	if r.inspector != nil {
+		servers, err := r.inspector.Servers()
+		if err != nil {
+			return admin.RuntimeSummary{}, err
+		}
+		for _, server := range servers {
+			poolIndex := runtimePoolIndex(server.Queues)
+			if poolIndex < 0 {
+				continue
+			}
+			pool := &summary.Pools[poolIndex]
+			if !pool.Online {
+				pool.Concurrency = 0
+			}
+			pool.Online = true
+			startedAt := server.Started
+			pool.StartedAt = &startedAt
+			observedAt := summary.ObservedAt
+			pool.LastObservedAt = &observedAt
+			pool.ActiveWorkers += len(server.ActiveWorkers)
+			pool.Concurrency += server.Concurrency
+		}
+		existingQueues, err := r.inspector.Queues()
+		if err != nil {
+			return admin.RuntimeSummary{}, err
+		}
+		existing := make(map[string]struct{}, len(existingQueues))
+		for _, queue := range existingQueues {
+			existing[queue] = struct{}{}
+		}
+		for _, runtimePool := range runtimePools {
+			queueSummary := admin.QueueSummary{Name: runtimePool.queue, Pool: runtimePool.name}
+			if _, ok := existing[runtimePool.queue]; ok {
+				info, err := r.inspector.GetQueueInfo(runtimePool.queue)
+				if err != nil {
+					return admin.RuntimeSummary{}, err
+				}
+				queueSummary.Pending = info.Pending
+				queueSummary.Active = info.Active
+				queueSummary.Scheduled = info.Scheduled
+				queueSummary.Retry = info.Retry
+				queueSummary.Failed = info.Failed
+				queueSummary.Processed = info.Processed
+				queueSummary.LatencySeconds = int(info.Latency.Seconds())
+				queueSummary.Paused = info.Paused
+			}
+			summary.Queues = append(summary.Queues, queueSummary)
+		}
+		for _, pool := range summary.Pools {
+			if pool.Name == "browser" {
+				summary.BrowserSlotsUsed = pool.ActiveWorkers
+				break
+			}
+		}
+	}
+
+	if err := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*)::int FROM jobs WHERE status IN ('running', 'waiting_user'))
+			+ (SELECT COUNT(*)::int FROM send_jobs WHERE status = 'running'),
+			(SELECT COUNT(*)::int FROM jobs WHERE status = 'failed' AND created_at >= now() - interval '24 hours')
+			+ (SELECT COUNT(*)::int FROM send_jobs WHERE status = 'failed' AND created_at >= now() - interval '24 hours')
+	`).Scan(&summary.RunningJobs, &summary.FailedJobs24h); err != nil {
+		return admin.RuntimeSummary{}, err
+	}
+
+	if r.redis != nil {
+		exists, err := r.redis.Exists(ctx, schedulerLeaderKey).Result()
+		if err != nil {
+			return admin.RuntimeSummary{}, err
+		}
+		summary.SchedulerOnline = exists > 0
+		if summary.SchedulerOnline {
+			if ttl, err := r.redis.PTTL(ctx, schedulerLeaderKey).Result(); err == nil && ttl > 0 {
+				expiresAt := time.Now().Add(ttl)
+				summary.SchedulerLeaderExpires = &expiresAt
+			}
+		}
+	}
+	return summary, nil
+}
+
+func runtimePoolIndex(queues map[string]int) int {
+	for index, pool := range runtimePools {
+		if _, ok := queues[pool.queue]; ok {
+			return index
+		}
+	}
+	return -1
 }
 
 var _ admin.Repository = (*AdminRepo)(nil)

@@ -52,6 +52,14 @@ export async function listAdminAccounts(accessToken: string, options?: { limit?:
   return data
 }
 
+export async function getAdminRuntime(accessToken: string) {
+  const { data, error } = await api.GET('/admin/workers', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (error) throwApiError(error, 'admin runtime lookup failed')
+  return data
+}
+
 export async function redeemCardCode(accessToken: string, code: string) {
   const { data, error } = await api.POST('/entitlements/redeem', {
     headers: { Authorization: `Bearer ${accessToken}` },

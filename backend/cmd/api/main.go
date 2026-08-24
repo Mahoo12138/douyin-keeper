@@ -81,7 +81,7 @@ func main() {
 	taskRepo := postgres.NewTaskRepo(pool)
 	sendRepo := postgres.NewSendRepo(pool)
 	capRepo := postgres.NewCapabilityRepo(pool)
-	adminRepo := postgres.NewAdminRepo(pool)
+	adminRepo := postgres.NewAdminRepo(pool, rdb)
 	outboxRepo := postgres.NewOutboxRepo(pool)
 
 	// ---- services ----

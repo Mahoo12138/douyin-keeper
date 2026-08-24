@@ -330,6 +330,8 @@ MVP 中抖音账号首次绑定仍推荐在 PC 完成。小程序对未绑定账
 - 失败 Job；
 - Browser slot 使用情况。
 
+当前 M5 已接入管理员只读运行时汇总：通过 Asynq Inspector 展示 interactive/browser/light pool 在线状态、活动 Worker 与并发，展示队列 pending/active/retry/延迟和最近 24 小时失败 Job，并结合 PostgreSQL lease 与 Scheduler leader 状态展示运行概况；构建版本和 Sidecar 版本在运行时尚未上报时显示“未上报”。
+
 ### 3.5 Adapter 页面
 
 展示的是“平台接入健康度”，不是内部 Cookie：

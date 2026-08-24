@@ -53,3 +53,20 @@ func TestAdminAccountViewIncludesOperationalSummary(t *testing.T) {
 		t.Fatalf("latest error = %+v", view.LatestError)
 	}
 }
+
+func TestAdminRuntimeViewIncludesPoolsQueuesAndHealth(t *testing.T) {
+	observedAt := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	view := adminRuntimeViewFrom(admin.RuntimeSummary{
+		ObservedAt: observedAt, RunningJobs: 2, FailedJobs24h: 4,
+		BrowserSlotsUsed: 1, BrowserSlotsLimit: 3, SchedulerOnline: true,
+		Pools:  []admin.WorkerPoolSummary{{Name: "browser", Online: true, ActiveWorkers: 1, Concurrency: 3}},
+		Queues: []admin.QueueSummary{{Name: "browser", Pool: "browser", Pending: 5, Active: 1, Retry: 2, LatencySeconds: 7}},
+	})
+
+	if view.ObservedAt != "2026-08-24T09:00:00Z" || view.RunningJobs != 2 || view.FailedJobs24h != 4 || !view.SchedulerOnline {
+		t.Fatalf("runtime view = %+v", view)
+	}
+	if len(view.Pools) != 1 || view.Pools[0].ActiveWorkers != 1 || len(view.Queues) != 1 || view.Queues[0].Pending != 5 {
+		t.Fatalf("runtime pools/queues = %+v / %+v", view.Pools, view.Queues)
+	}
+}

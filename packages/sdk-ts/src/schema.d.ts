@@ -52,6 +52,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/workers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAdminRuntime"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts": {
         parameters: {
             query?: never;
@@ -542,6 +558,48 @@ export interface components {
             today_send_failed: number;
             latest_error?: components["schemas"]["AdminRecentError"] | null;
         };
+        AdminWorkerPool: {
+            name: string;
+            online: boolean;
+            /** Format: date-time */
+            started_at?: string | null;
+            /** Format: date-time */
+            last_observed_at?: string | null;
+            active_workers: number;
+            concurrency: number;
+            version?: string | null;
+            playwright_version?: string | null;
+            protocol_version?: string | null;
+        };
+        AdminQueue: {
+            name: string;
+            pool: string;
+            pending: number;
+            active: number;
+            scheduled: number;
+            retry: number;
+            failed: number;
+            processed: number;
+            latency_seconds: number;
+            paused: boolean;
+        };
+        AdminRuntime: {
+            /** Format: date-time */
+            observed_at: string;
+            api_version?: string | null;
+            worker_version?: string | null;
+            playwright_sidecar_version?: string | null;
+            protocol_sidecar_version?: string | null;
+            pools: components["schemas"]["AdminWorkerPool"][];
+            queues: components["schemas"]["AdminQueue"][];
+            running_jobs: number;
+            failed_jobs_24h: number;
+            browser_slots_used: number;
+            browser_slots_limit: number;
+            scheduler_online: boolean;
+            /** Format: date-time */
+            scheduler_leader_expires_at?: string | null;
+        };
         Account: {
             /** Format: uuid */
             id: string;
@@ -887,6 +945,26 @@ export interface operations {
                         items: components["schemas"]["AdminAccount"][];
                         next_cursor: string | null;
                     };
+                };
+            };
+        };
+    };
+    getAdminRuntime: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrator worker and queue runtime summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRuntime"];
                 };
             };
         };

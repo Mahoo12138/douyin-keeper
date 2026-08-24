@@ -19,6 +19,10 @@ func (r *repositoryStub) ListAccountSummaries(_ context.Context, limit int) ([]A
 	return nil, nil
 }
 
+func (r *repositoryStub) GetRuntimeSummary(context.Context) (RuntimeSummary, error) {
+	return RuntimeSummary{RunningJobs: 3}, nil
+}
+
 func TestServiceClampsUserListLimit(t *testing.T) {
 	for _, test := range []struct {
 		name  string
@@ -61,5 +65,15 @@ func TestServiceClampsAccountListLimit(t *testing.T) {
 				t.Fatalf("repository limit = %d, want %d", repo.limit, test.want)
 			}
 		})
+	}
+}
+
+func TestServiceReturnsRuntimeSummary(t *testing.T) {
+	summary, err := NewService(&repositoryStub{}).Runtime(context.Background())
+	if err != nil {
+		t.Fatalf("Runtime() error = %v", err)
+	}
+	if summary.RunningJobs != 3 {
+		t.Fatalf("running jobs = %d, want 3", summary.RunningJobs)
 	}
 }

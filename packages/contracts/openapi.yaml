@@ -65,6 +65,16 @@ paths:
                     type:
                     - string
                     - 'null'
+  /admin/workers:
+    get:
+      operationId: getAdminRuntime
+      responses:
+        '200':
+          description: Administrator worker and queue runtime summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminRuntime'
   /accounts:
     get:
       operationId: listAccounts
@@ -859,6 +869,145 @@ components:
           oneOf:
           - $ref: '#/components/schemas/AdminRecentError'
           - type: 'null'
+    AdminWorkerPool:
+      type: object
+      required:
+      - name
+      - online
+      - active_workers
+      - concurrency
+      properties:
+        name:
+          type: string
+        online:
+          type: boolean
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        last_observed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        active_workers:
+          type: integer
+          minimum: 0
+        concurrency:
+          type: integer
+          minimum: 0
+        version:
+          type:
+          - string
+          - 'null'
+        playwright_version:
+          type:
+          - string
+          - 'null'
+        protocol_version:
+          type:
+          - string
+          - 'null'
+    AdminQueue:
+      type: object
+      required:
+      - name
+      - pool
+      - pending
+      - active
+      - scheduled
+      - retry
+      - failed
+      - processed
+      - latency_seconds
+      - paused
+      properties:
+        name:
+          type: string
+        pool:
+          type: string
+        pending:
+          type: integer
+          minimum: 0
+        active:
+          type: integer
+          minimum: 0
+        scheduled:
+          type: integer
+          minimum: 0
+        retry:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        processed:
+          type: integer
+          minimum: 0
+        latency_seconds:
+          type: integer
+          minimum: 0
+        paused:
+          type: boolean
+    AdminRuntime:
+      type: object
+      required:
+      - observed_at
+      - pools
+      - queues
+      - running_jobs
+      - failed_jobs_24h
+      - browser_slots_used
+      - browser_slots_limit
+      - scheduler_online
+      properties:
+        observed_at:
+          type: string
+          format: date-time
+        api_version:
+          type:
+          - string
+          - 'null'
+        worker_version:
+          type:
+          - string
+          - 'null'
+        playwright_sidecar_version:
+          type:
+          - string
+          - 'null'
+        protocol_sidecar_version:
+          type:
+          - string
+          - 'null'
+        pools:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminWorkerPool'
+        queues:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminQueue'
+        running_jobs:
+          type: integer
+          minimum: 0
+        failed_jobs_24h:
+          type: integer
+          minimum: 0
+        browser_slots_used:
+          type: integer
+          minimum: 0
+        browser_slots_limit:
+          type: integer
+          minimum: 0
+        scheduler_online:
+          type: boolean
+        scheduler_leader_expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
     Account:
       type: object
       required:
