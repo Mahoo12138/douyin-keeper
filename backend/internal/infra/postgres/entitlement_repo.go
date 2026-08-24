@@ -54,6 +54,28 @@ func (r *EntitlementRepo) CreatePlan(ctx context.Context, p *entitlement.Plan) e
 	return err
 }
 
+func (r *EntitlementRepo) DisablePlan(ctx context.Context, actorID int64, publicID uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var id int64
+	if err := tx.QueryRow(ctx, `SELECT id FROM entitlement_plans WHERE public_id=$1 FOR UPDATE`, publicID).Scan(&id); err != nil {
+		return mapNoRows(err, apperr.CodeNotFound, "entitlement plan not found")
+	}
+	if _, err := tx.Exec(ctx, `UPDATE entitlement_plans SET status='disabled', updated_at=now() WHERE id=$1`, id); err != nil {
+		return err
+	}
+	detail, _ := json.Marshal(map[string]any{"status": "disabled"})
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, detail_json)
+		VALUES ($1,'entitlement.plan.disable','entitlement_plan',$2,$3)`, actorID, publicID.String(), detail); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (r *EntitlementRepo) GetPlanByPublicID(ctx context.Context, publicID uuid.UUID) (*entitlement.Plan, error) {
 	p, err := scanPlan(From(ctx, r.pool).QueryRow(ctx,
 		`SELECT `+planCols+` FROM entitlement_plans WHERE public_id = $1`, publicID))
@@ -82,7 +104,7 @@ func (r *EntitlementRepo) ListPlans(ctx context.Context) ([]*entitlement.Plan, e
 
 // ---- batches + codes ----
 
-const batchCols = `id, public_id, entitlement_plan_id, name, duration_days, quantity, status, code_version, redeem_not_before, redeem_before, created_by, note, created_at, updated_at`
+const batchCols = `id, public_id, entitlement_plan_id, name, duration_days, quantity, status, code_version, redeem_not_before, redeem_before, created_by, COALESCE(note, ''), created_at, updated_at`
 
 func scanBatch(row pgx.Row) (*entitlement.CardBatch, error) {
 	var b entitlement.CardBatch
@@ -101,6 +123,84 @@ func (r *EntitlementRepo) CreateBatch(ctx context.Context, b *entitlement.CardBa
 		RETURNING id
 	`, b.PublicID, b.EntitlementPlanID, b.Name, b.DurationDays, b.Quantity, b.Status, b.CodeVersion,
 		b.RedeemNotBefore, b.RedeemBefore, b.CreatedBy, b.Note, b.CreatedAt, b.UpdatedAt).Scan(&b.ID)
+}
+
+func (r *EntitlementRepo) ListSummaries(ctx context.Context, limit int) ([]entitlement.CardBatchSummary, error) {
+	return r.listBatchSummaries(ctx, limit, nil)
+}
+
+func (r *EntitlementRepo) GetSummaryByPublicID(ctx context.Context, publicID uuid.UUID) (entitlement.CardBatchSummary, error) {
+	items, err := r.listBatchSummaries(ctx, 1, &publicID)
+	if err != nil {
+		return entitlement.CardBatchSummary{}, err
+	}
+	if len(items) != 1 {
+		return entitlement.CardBatchSummary{}, apperr.NotFound(apperr.CodeNotFound, "card batch not found")
+	}
+	return items[0], nil
+}
+
+func (r *EntitlementRepo) listBatchSummaries(ctx context.Context, limit int, publicID *uuid.UUID) ([]entitlement.CardBatchSummary, error) {
+	var filter any
+	if publicID != nil {
+		filter = *publicID
+	}
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT b.id, b.public_id, b.entitlement_plan_id, b.name, b.duration_days, b.quantity,
+			b.status, b.code_version, b.redeem_not_before, b.redeem_before, b.created_by,
+			COALESCE(b.note, ''), b.created_at, b.updated_at,
+			p.code, p.name, u.display_name,
+			COUNT(*) FILTER (WHERE c.status='unused')::int,
+			COUNT(*) FILTER (WHERE c.status='redeemed')::int,
+			COUNT(*) FILTER (WHERE c.status='revoked')::int
+		FROM card_batches b
+		JOIN entitlement_plans p ON p.id=b.entitlement_plan_id
+		JOIN users u ON u.id=b.created_by
+		LEFT JOIN card_codes c ON c.batch_id=b.id
+		WHERE ($2::uuid IS NULL OR b.public_id=$2)
+		GROUP BY b.id, p.code, p.name, u.display_name
+		ORDER BY b.created_at DESC, b.id DESC
+		LIMIT $1`, limit, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]entitlement.CardBatchSummary, 0)
+	for rows.Next() {
+		var item entitlement.CardBatchSummary
+		if err := rows.Scan(
+			&item.ID, &item.PublicID, &item.EntitlementPlanID, &item.Name, &item.DurationDays, &item.Quantity,
+			&item.Status, &item.CodeVersion, &item.RedeemNotBefore, &item.RedeemBefore, &item.CreatedBy,
+			&item.Note, &item.CreatedAt, &item.UpdatedAt, &item.PlanCode, &item.PlanName,
+			&item.CreatedByDisplayName, &item.UnusedCount, &item.RedeemedCount, &item.RevokedCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (r *EntitlementRepo) DisableBatch(ctx context.Context, actorID int64, publicID uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var id int64
+	if err := tx.QueryRow(ctx, `SELECT id FROM card_batches WHERE public_id=$1 FOR UPDATE`, publicID).Scan(&id); err != nil {
+		return mapNoRows(err, apperr.CodeNotFound, "card batch not found")
+	}
+	if _, err := tx.Exec(ctx, `UPDATE card_batches SET status='disabled', updated_at=now() WHERE id=$1`, id); err != nil {
+		return err
+	}
+	detail, _ := json.Marshal(map[string]any{"status": "disabled"})
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, detail_json)
+		VALUES ($1,'entitlement.batch.disable','card_batch',$2,$3)`, actorID, publicID.String(), detail); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *EntitlementRepo) InsertCodes(ctx context.Context, batchID int64, codes []*entitlement.CardCode) error {
@@ -219,6 +319,36 @@ func (r *EntitlementRepo) RevokeGrant(ctx context.Context, grantID, byUserID int
 		WHERE id=$1 AND revoked_at IS NULL
 	`, grantID, byUserID, reason)
 	return err
+}
+
+func (r *EntitlementRepo) ListRedemptionSummaries(ctx context.Context, limit int) ([]entitlement.RedemptionSummary, error) {
+	rows, err := From(ctx, r.pool).Query(ctx, `
+		SELECT g.public_id, u.public_id, u.display_name, p.code, p.name, g.source_type,
+			g.starts_at, g.expires_at, c.redeemed_at, g.revoked_at,
+			c.code_fingerprint, g.created_at
+		FROM entitlement_grants g
+		JOIN users u ON u.id=g.user_id
+		JOIN entitlement_plans p ON p.id=g.entitlement_plan_id
+		LEFT JOIN card_codes c ON c.id=g.source_card_id
+		ORDER BY g.created_at DESC, g.id DESC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]entitlement.RedemptionSummary, 0)
+	for rows.Next() {
+		var item entitlement.RedemptionSummary
+		if err := rows.Scan(
+			&item.GrantPublicID, &item.UserPublicID, &item.UserDisplayName, &item.PlanCode, &item.PlanName,
+			&item.SourceType, &item.StartsAt, &item.ExpiresAt, &item.RedeemedAt, &item.RevokedAt,
+			&item.CodeFingerprint, &item.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 // ---- daily usage ----

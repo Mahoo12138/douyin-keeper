@@ -99,6 +99,144 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminAccount'
+  /admin/entitlement-plans:
+    get:
+      operationId: listAdminEntitlementPlans
+      responses:
+        '200':
+          description: Administrator entitlement plans
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminEntitlementPlan'
+    post:
+      operationId: createAdminEntitlementPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCreateEntitlementPlanRequest'
+      responses:
+        '201':
+          description: Created entitlement plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminEntitlementPlan'
+  /admin/entitlement-plans/{planId}/disable:
+    post:
+      operationId: disableAdminEntitlementPlan
+      parameters:
+      - name: planId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Entitlement plan disabled
+  /admin/card-batches:
+    get:
+      operationId: listAdminCardBatches
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Administrator card batch summaries
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - next_cursor
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminCardBatch'
+                  next_cursor:
+                    type:
+                    - string
+                    - 'null'
+    post:
+      operationId: createAdminCardBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCreateCardBatchRequest'
+      responses:
+        '201':
+          description: Created card batch with plaintext codes available once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCreateCardBatchResponse'
+  /admin/card-batches/{batchId}:
+    get:
+      operationId: getAdminCardBatch
+      parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Administrator card batch detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCardBatch'
+  /admin/card-batches/{batchId}/disable:
+    post:
+      operationId: disableAdminCardBatch
+      parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Card batch disabled
+  /admin/redemptions:
+    get:
+      operationId: listAdminRedemptions
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Administrator redemption and grant history without plaintext card codes
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - next_cursor
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminRedemption'
+                  next_cursor:
+                    type:
+                    - string
+                    - 'null'
   /admin/workers:
     get:
       operationId: getAdminRuntime
@@ -1034,6 +1172,250 @@ components:
           oneOf:
           - $ref: '#/components/schemas/AdminRecentError'
           - type: 'null'
+    AdminEntitlementPlan:
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - status
+      - account_quota
+      - task_quota
+      - daily_send_quota
+      - features
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+          - active
+          - disabled
+        account_quota:
+          type: integer
+          minimum: 0
+        task_quota:
+          type: integer
+          minimum: 0
+        daily_send_quota:
+          type: integer
+          minimum: 0
+        features:
+          type: object
+          additionalProperties:
+            type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AdminCreateEntitlementPlanRequest:
+      type: object
+      required:
+      - code
+      - name
+      - account_quota
+      - task_quota
+      - daily_send_quota
+      properties:
+        code:
+          type: string
+          maxLength: 50
+        name:
+          type: string
+          maxLength: 100
+        account_quota:
+          type: integer
+          minimum: 0
+        task_quota:
+          type: integer
+          minimum: 0
+        daily_send_quota:
+          type: integer
+          minimum: 0
+        features:
+          type: object
+          additionalProperties:
+            type: boolean
+    AdminCardBatch:
+      type: object
+      required:
+      - id
+      - plan_code
+      - plan_name
+      - name
+      - duration_days
+      - quantity
+      - status
+      - unused_count
+      - redeemed_count
+      - revoked_count
+      - redemption_rate
+      - created_by_display_name
+      - created_at
+      - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        plan_code:
+          type: string
+        plan_name:
+          type: string
+        name:
+          type: string
+        duration_days:
+          type: integer
+          minimum: 1
+        quantity:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum:
+          - active
+          - disabled
+        unused_count:
+          type: integer
+          minimum: 0
+        redeemed_count:
+          type: integer
+          minimum: 0
+        revoked_count:
+          type: integer
+          minimum: 0
+        redemption_rate:
+          type: number
+          minimum: 0
+          maximum: 1
+        created_by_display_name:
+          type: string
+        redeem_not_before:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        redeem_before:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        note:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AdminCreateCardBatchRequest:
+      type: object
+      required:
+      - plan_id
+      - name
+      - duration_days
+      - quantity
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 100
+        duration_days:
+          type: integer
+          minimum: 1
+          maximum: 3660
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        redeem_not_before:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        redeem_before:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        note:
+          type: string
+          maxLength: 500
+    AdminCreateCardBatchResponse:
+      type: object
+      required:
+      - batch
+      - codes
+      properties:
+        batch:
+          $ref: '#/components/schemas/AdminCardBatch'
+        codes:
+          type: array
+          items:
+            type: string
+    AdminRedemption:
+      type: object
+      required:
+      - id
+      - user_id
+      - user_display_name
+      - plan_code
+      - plan_name
+      - source_type
+      - starts_at
+      - expires_at
+      - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        user_display_name:
+          type: string
+        plan_code:
+          type: string
+        plan_name:
+          type: string
+        source_type:
+          type: string
+          enum:
+          - card
+          - admin
+        starts_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        redeemed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        revoked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        code_fingerprint:
+          type:
+          - string
+          - 'null'
+        created_at:
+          type: string
+          format: date-time
     AdminWorkerPool:
       type: object
       required:

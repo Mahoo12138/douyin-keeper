@@ -70,6 +70,75 @@ export async function resumeAdminAccount(accessToken: string, accountId: string)
   return data
 }
 
+export async function listAdminEntitlementPlans(accessToken: string) {
+  const { data, error } = await api.GET('/admin/entitlement-plans', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (error) throwApiError(error, 'admin entitlement plans lookup failed')
+  return data
+}
+
+export async function createAdminEntitlementPlan(accessToken: string, body: components['schemas']['AdminCreateEntitlementPlanRequest']) {
+  const { data, error } = await api.POST('/admin/entitlement-plans', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body,
+  })
+  if (error) throwApiError(error, 'admin entitlement plan creation failed')
+  return data
+}
+
+export async function disableAdminEntitlementPlan(accessToken: string, planId: string) {
+  const { error } = await api.POST('/admin/entitlement-plans/{planId}/disable', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { planId } },
+  })
+  if (error) throwApiError(error, 'admin entitlement plan disable failed')
+}
+
+export async function listAdminCardBatches(accessToken: string, options?: { limit?: number }) {
+  const { data, error } = await api.GET('/admin/card-batches', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { query: options },
+  })
+  if (error) throwApiError(error, 'admin card batches lookup failed')
+  return data
+}
+
+export async function createAdminCardBatch(accessToken: string, body: components['schemas']['AdminCreateCardBatchRequest']) {
+  const { data, error } = await api.POST('/admin/card-batches', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body,
+  })
+  if (error) throwApiError(error, 'admin card batch creation failed')
+  return data
+}
+
+export async function getAdminCardBatch(accessToken: string, batchId: string) {
+  const { data, error } = await api.GET('/admin/card-batches/{batchId}', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { batchId } },
+  })
+  if (error) throwApiError(error, 'admin card batch lookup failed')
+  return data
+}
+
+export async function disableAdminCardBatch(accessToken: string, batchId: string) {
+  const { error } = await api.POST('/admin/card-batches/{batchId}/disable', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { batchId } },
+  })
+  if (error) throwApiError(error, 'admin card batch disable failed')
+}
+
+export async function listAdminRedemptions(accessToken: string, options?: { limit?: number }) {
+  const { data, error } = await api.GET('/admin/redemptions', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { query: options },
+  })
+  if (error) throwApiError(error, 'admin redemptions lookup failed')
+  return data
+}
+
 export async function getAdminRuntime(accessToken: string) {
   const { data, error } = await api.GET('/admin/workers', {
     headers: { Authorization: `Bearer ${accessToken}` },

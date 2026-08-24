@@ -167,7 +167,7 @@ Sidecar Contract 另外维护 JSON Schema，版本化：
 - 风险；
 - Audit。
 
-当前已完成 M5 的用户、账号、Worker/队列、Adapter、风险与审计切片：统一 Web Admin 页面通过管理员角色保护的 `/admin/users`、`/admin/accounts`、`/admin/workers`、`/admin/adapters`、`/admin/risks`、`/admin/audit-logs` API 展示用户资源、账号状态、Capability、发送/风险、运行时队列、Adapter 健康、风险和审计摘要；Adapter 启停、账号暂停/恢复等动作写入审计日志，权益与卡密页面继续按本路线实现。
+当前已完成 M5 的用户、账号、Worker/队列、Adapter、风险、审计以及权益与卡密首个切片：统一 Web Admin 页面通过管理员角色保护的 `/admin/users`、`/admin/accounts`、`/admin/workers`、`/admin/adapters`、`/admin/risks`、`/admin/audit-logs`、`/admin/entitlement-plans`、`/admin/card-batches`、`/admin/redemptions` API 展示用户资源、账号状态、Capability、发送/风险、运行时队列、Adapter 健康、风险、审计和卡密摘要；Adapter 启停、账号暂停/恢复、方案/批次创建与停用等动作写入审计日志。用户级人工 Grant/Revoke 与未使用卡密撤销仍待后续切片实现。
 
 ### M6 — V1.1
 

@@ -516,6 +516,14 @@ PATCH /admin/adapters/{adapter}
 GET  /admin/settings
 PATCH /admin/settings/{key}
 GET  /admin/audit-logs
+GET  /admin/entitlement-plans
+POST /admin/entitlement-plans
+POST /admin/entitlement-plans/{id}/disable
+GET  /admin/card-batches
+POST /admin/card-batches
+GET  /admin/card-batches/{id}
+POST /admin/card-batches/{id}/disable
+GET  /admin/redemptions
 ```
 
 所有会改变用户/账号/全局配置的 Admin 操作必须写 `audit_logs`。

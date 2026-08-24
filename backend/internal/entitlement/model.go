@@ -27,34 +27,59 @@ const (
 )
 
 type Plan struct {
-	ID               int64
-	PublicID         uuid.UUID
-	Code             string // stable | standard | pro
-	Name             string
-	Status           Status
-	AccountQuota     int
-	TaskQuota        int
-	DailySendQuota   int
-	Features         map[string]bool
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID             int64
+	PublicID       uuid.UUID
+	Code           string // stable | standard | pro
+	Name           string
+	Status         Status
+	AccountQuota   int
+	TaskQuota      int
+	DailySendQuota int
+	Features       map[string]bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type CardBatch struct {
-	ID              int64
-	PublicID        uuid.UUID
+	ID                int64
+	PublicID          uuid.UUID
 	EntitlementPlanID int64
-	Name            string
-	DurationDays    int
-	Quantity        int
-	Status          Status
-	CodeVersion     int
-	RedeemNotBefore *time.Time
-	RedeemBefore    *time.Time
-	CreatedBy       int64
-	Note            string
+	Name              string
+	DurationDays      int
+	Quantity          int
+	Status            Status
+	CodeVersion       int
+	RedeemNotBefore   *time.Time
+	RedeemBefore      *time.Time
+	CreatedBy         int64
+	Note              string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+type CardBatchSummary struct {
+	CardBatch
+	PlanCode             string
+	PlanName             string
+	CreatedByDisplayName string
+	UnusedCount          int
+	RedeemedCount        int
+	RevokedCount         int
+}
+
+type RedemptionSummary struct {
+	GrantPublicID   uuid.UUID
+	UserPublicID    uuid.UUID
+	UserDisplayName string
+	PlanCode        string
+	PlanName        string
+	SourceType      GrantSourceType
+	StartsAt        time.Time
+	ExpiresAt       time.Time
+	RedeemedAt      *time.Time
+	RevokedAt       *time.Time
+	CodeFingerprint *string
 	CreatedAt       time.Time
-	UpdatedAt       time.Time
 }
 
 type CardCode struct {
@@ -74,31 +99,31 @@ type CardCode struct {
 }
 
 type Grant struct {
-	ID               int64
-	PublicID         uuid.UUID
-	UserID           int64
+	ID                int64
+	PublicID          uuid.UUID
+	UserID            int64
 	EntitlementPlanID int64
-	SourceType       GrantSourceType
-	SourceCardID     *int64
-	StartsAt         time.Time
-	ExpiresAt        time.Time
-	RevokedAt        *time.Time
-	RevokeReason     *string
+	SourceType        GrantSourceType
+	SourceCardID      *int64
+	StartsAt          time.Time
+	ExpiresAt         time.Time
+	RevokedAt         *time.Time
+	RevokeReason      *string
 
 	Plan *Plan // joined
 }
 
 // EffectiveEntitlement is the API-visible authorization snapshot.
 type EffectiveEntitlement struct {
-	Active       bool
-	GrantID      *uuid.UUID
-	PlanCode     string
-	StartsAt     *time.Time
-	ExpiresAt    *time.Time
-	AccountQuota int
-	TaskQuota    int
+	Active         bool
+	GrantID        *uuid.UUID
+	PlanCode       string
+	StartsAt       *time.Time
+	ExpiresAt      *time.Time
+	AccountQuota   int
+	TaskQuota      int
 	DailySendQuota int
-	Features     map[string]bool
+	Features       map[string]bool
 
 	Usage EntitlementUsage
 }

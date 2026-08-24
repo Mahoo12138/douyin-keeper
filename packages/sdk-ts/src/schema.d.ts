@@ -84,6 +84,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/entitlement-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAdminEntitlementPlans"];
+        put?: never;
+        post: operations["createAdminEntitlementPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/entitlement-plans/{planId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disableAdminEntitlementPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/card-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAdminCardBatches"];
+        put?: never;
+        post: operations["createAdminCardBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/card-batches/{batchId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAdminCardBatch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/card-batches/{batchId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disableAdminCardBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/redemptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAdminRedemptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/workers": {
         parameters: {
             query?: never;
@@ -654,6 +750,97 @@ export interface components {
             today_send_failed: number;
             latest_error?: components["schemas"]["AdminRecentError"] | null;
         };
+        AdminEntitlementPlan: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            status: "active" | "disabled";
+            account_quota: number;
+            task_quota: number;
+            daily_send_quota: number;
+            features: {
+                [key: string]: boolean;
+            };
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AdminCreateEntitlementPlanRequest: {
+            code: string;
+            name: string;
+            account_quota: number;
+            task_quota: number;
+            daily_send_quota: number;
+            features?: {
+                [key: string]: boolean;
+            };
+        };
+        AdminCardBatch: {
+            /** Format: uuid */
+            id: string;
+            plan_code: string;
+            plan_name: string;
+            name: string;
+            duration_days: number;
+            quantity: number;
+            /** @enum {string} */
+            status: "active" | "disabled";
+            unused_count: number;
+            redeemed_count: number;
+            revoked_count: number;
+            redemption_rate: number;
+            created_by_display_name: string;
+            /** Format: date-time */
+            redeem_not_before?: string | null;
+            /** Format: date-time */
+            redeem_before?: string | null;
+            note?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AdminCreateCardBatchRequest: {
+            /** Format: uuid */
+            plan_id: string;
+            name: string;
+            duration_days: number;
+            quantity: number;
+            /** Format: date-time */
+            redeem_not_before?: string | null;
+            /** Format: date-time */
+            redeem_before?: string | null;
+            note?: string;
+        };
+        AdminCreateCardBatchResponse: {
+            batch: components["schemas"]["AdminCardBatch"];
+            codes: string[];
+        };
+        AdminRedemption: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            user_id: string;
+            user_display_name: string;
+            plan_code: string;
+            plan_name: string;
+            /** @enum {string} */
+            source_type: "card" | "admin";
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            redeemed_at?: string | null;
+            /** Format: date-time */
+            revoked_at?: string | null;
+            code_fingerprint?: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
         AdminWorkerPool: {
             name: string;
             online: boolean;
@@ -1129,6 +1316,188 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminAccount"];
+                };
+            };
+        };
+    };
+    listAdminEntitlementPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrator entitlement plans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminEntitlementPlan"][];
+                    };
+                };
+            };
+        };
+    };
+    createAdminEntitlementPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminCreateEntitlementPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Created entitlement plan */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEntitlementPlan"];
+                };
+            };
+        };
+    };
+    disableAdminEntitlementPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Entitlement plan disabled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAdminCardBatches: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrator card batch summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminCardBatch"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+        };
+    };
+    createAdminCardBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminCreateCardBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Created card batch with plaintext codes available once */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminCreateCardBatchResponse"];
+                };
+            };
+        };
+    };
+    getAdminCardBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrator card batch detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminCardBatch"];
+                };
+            };
+        };
+    };
+    disableAdminCardBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Card batch disabled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAdminRedemptions: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Administrator redemption and grant history without plaintext card codes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AdminRedemption"][];
+                        next_cursor: string | null;
+                    };
                 };
             };
         };

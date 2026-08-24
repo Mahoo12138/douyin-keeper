@@ -24,16 +24,16 @@ type TxManager interface {
 // Service implements the entitlement policy. GetEffective reads PostgreSQL
 // directly (no Redis cache) so revocations take effect immediately (docs/13 §8).
 type Service struct {
-	plans   PlanRepository
-	batches BatchRepository
-	grants  GrantRepository
-	usage   UsageRepository
+	plans    PlanRepository
+	batches  BatchRepository
+	grants   GrantRepository
+	usage    UsageRepository
 	userLock UserLocker
-	tx      TxManager
+	tx       TxManager
 	counters ResourceCounters // may be nil
-	audit   AuditSink          // may be nil
-	pepper  []byte
-	now     func() time.Time
+	audit    AuditSink        // may be nil
+	pepper   []byte
+	now      func() time.Time
 }
 
 func NewService(plans PlanRepository, batches BatchRepository, grants GrantRepository,
@@ -145,9 +145,9 @@ func (s *Service) Redeem(ctx context.Context, userID int64, rawCode string) (Gra
 		g := &Grant{
 			PublicID: uuid.New(), UserID: userID,
 			EntitlementPlanID: code.Batch.EntitlementPlanID,
-			SourceType: SourceCard, SourceCardID: &code.ID,
+			SourceType:        SourceCard, SourceCardID: &code.ID,
 			StartsAt: anchor, ExpiresAt: anchor.Add(time.Duration(code.Batch.DurationDays) * 24 * time.Hour),
-			Plan:     code.Plan,
+			Plan: code.Plan,
 		}
 		if err := s.grants.CreateGrant(tctx, g); err != nil {
 			return err
@@ -157,8 +157,8 @@ func (s *Service) Redeem(ctx context.Context, userID int64, rawCode string) (Gra
 		}
 		if s.audit != nil {
 			_ = s.audit.Record(tctx, &userID, "entitlement.redeem", "card_code", code.CodeFingerprint, map[string]any{
-				"grant_id":   g.PublicID.String(),
-				"plan_code":  code.Plan.Code,
+				"grant_id":      g.PublicID.String(),
+				"plan_code":     code.Plan.Code,
 				"duration_days": code.Batch.DurationDays,
 			})
 		}
@@ -300,6 +300,38 @@ func (s *Service) ConfirmCodeForTest(norm, hash []byte) bool {
 
 // ---- admin plan/batch management (docs/12 §4, §12) ----
 
+func (s *Service) ListPlans(ctx context.Context) ([]*Plan, error) {
+	return s.plans.ListPlans(ctx)
+}
+
+func (s *Service) GetPlanByPublicID(ctx context.Context, publicID uuid.UUID) (*Plan, error) {
+	return s.plans.GetPlanByPublicID(ctx, publicID)
+}
+
+func (s *Service) ListBatchSummaries(ctx context.Context, limit int) ([]CardBatchSummary, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	return s.batches.ListSummaries(ctx, limit)
+}
+
+func (s *Service) GetBatchSummary(ctx context.Context, publicID uuid.UUID) (CardBatchSummary, error) {
+	return s.batches.GetSummaryByPublicID(ctx, publicID)
+}
+
+func (s *Service) ListRedemptionSummaries(ctx context.Context, limit int) ([]RedemptionSummary, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	return s.grants.ListRedemptionSummaries(ctx, limit)
+}
+
 func (s *Service) CreatePlan(ctx context.Context, p *Plan) (*Plan, error) {
 	p.PublicID = uuid.New()
 	p.CreatedAt, p.UpdatedAt = s.now(), s.now()
@@ -310,6 +342,32 @@ func (s *Service) CreatePlan(ctx context.Context, p *Plan) (*Plan, error) {
 		p.Features = map[string]bool{}
 	}
 	return p, s.plans.CreatePlan(ctx, p)
+}
+
+func (s *Service) CreatePlanByAdmin(ctx context.Context, actorID int64, p *Plan) (*Plan, error) {
+	if actorID <= 0 {
+		return nil, apperr.Validation(apperr.CodeConflict, "invalid admin actor")
+	}
+	created, err := s.CreatePlan(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	if s.audit == nil {
+		return created, fmt.Errorf("entitlement: audit sink unavailable")
+	}
+	if err := s.audit.Record(ctx, &actorID, "entitlement.plan.create", "entitlement_plan", created.PublicID.String(), map[string]any{
+		"plan_code": created.Code,
+	}); err != nil {
+		return created, err
+	}
+	return created, nil
+}
+
+func (s *Service) DisablePlanByAdmin(ctx context.Context, actorID int64, publicID uuid.UUID) error {
+	if actorID <= 0 || publicID == uuid.Nil {
+		return apperr.Validation(apperr.CodeConflict, "invalid entitlement plan")
+	}
+	return s.plans.DisablePlan(ctx, actorID, publicID)
 }
 
 // CreateBatchWithCodes creates a batch and its `quantity` DK1 card codes,
@@ -360,6 +418,33 @@ func (s *Service) CreateBatchWithCodes(ctx context.Context, b *CardBatch) ([]str
 		return nil, err
 	}
 	return plain, nil
+}
+
+func (s *Service) CreateBatchWithCodesByAdmin(ctx context.Context, actorID int64, b *CardBatch) ([]string, error) {
+	if actorID <= 0 {
+		return nil, apperr.Validation(apperr.CodeConflict, "invalid admin actor")
+	}
+	b.CreatedBy = actorID
+	codes, err := s.CreateBatchWithCodes(ctx, b)
+	if err != nil {
+		return nil, err
+	}
+	if s.audit == nil {
+		return codes, fmt.Errorf("entitlement: audit sink unavailable")
+	}
+	if err := s.audit.Record(ctx, &actorID, "entitlement.batch.create", "card_batch", b.PublicID.String(), map[string]any{
+		"plan_id": b.EntitlementPlanID, "duration_days": b.DurationDays, "quantity": b.Quantity,
+	}); err != nil {
+		return codes, err
+	}
+	return codes, nil
+}
+
+func (s *Service) DisableBatchByAdmin(ctx context.Context, actorID int64, publicID uuid.UUID) error {
+	if actorID <= 0 || publicID == uuid.Nil {
+		return apperr.Validation(apperr.CodeConflict, "invalid card batch")
+	}
+	return s.batches.DisableBatch(ctx, actorID, publicID)
 }
 
 func validateCodeForRedeem(c *CardCode, now time.Time) *apperr.AppError {
