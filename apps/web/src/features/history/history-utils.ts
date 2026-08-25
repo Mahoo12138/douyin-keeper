@@ -1,22 +1,8 @@
-import { listFriends, type components } from '@douyin-keeper/sdk-ts'
+import type { components } from '@douyin-keeper/sdk-ts'
+
+export { listAllFriendsForAccount } from '../friends/friend-pagination'
 
 type HistoryFriend = Pick<components['schemas']['Friend'], 'id' | 'nickname' | 'display_name'>
-
-export async function listAllFriendsForAccount(accessToken: string, accountId: string, loadPage: typeof listFriends = listFriends) {
-  const friends: HistoryFriend[] = []
-  const seenCursors = new Set<string>()
-  let cursor: string | undefined
-
-  while (true) {
-    const page = await loadPage(accessToken, accountId, { limit: 100, cursor })
-    friends.push(...page.items)
-    if (!page.next_cursor || seenCursors.has(page.next_cursor)) break
-    seenCursors.add(page.next_cursor)
-    cursor = page.next_cursor
-  }
-
-  return friends
-}
 
 export function friendOptionsFromFriends(friends: HistoryFriend[]) {
   const options = new Map<string, string>()

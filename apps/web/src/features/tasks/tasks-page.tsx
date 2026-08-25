@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { createTask, deleteTask, listFriends, listMessageTemplates, listTasks, myEntitlement, runTaskNow, updateTask } from '@douyin-keeper/sdk-ts'
+import { createTask, deleteTask, listMessageTemplates, listTasks, myEntitlement, runTaskNow, updateTask } from '@douyin-keeper/sdk-ts'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton } from '@douyin-keeper/ui-web'
 import { Filter, Plus, Search } from 'lucide-react'
 
@@ -11,6 +11,7 @@ import { TaskEditorDrawer } from './task-editor-drawer'
 import { TaskTable } from './task-table'
 import type { Account, Friend, MessageTemplate, Task, TaskDraft } from './task-types'
 import { useAccountsQuery } from '../accounts/use-accounts-query'
+import { listAllFriendsForAccount } from '../friends/friend-pagination'
 
 export function TasksPage() {
   const token = getToken()
@@ -42,21 +43,22 @@ export function TasksPage() {
   const tasks = tasksQ.data?.pages.flatMap((page) => page.items) ?? []
   const friendQueries = useQueries({
     queries: accounts.map((account) => ({
-      queryKey: ['friends', account.id],
-      queryFn: () => listFriends(token as string, account.id, { limit: 100 }),
+      queryKey: ['task-friends', account.id],
+      queryFn: () => listAllFriendsForAccount(token as string, account.id),
       enabled: !!token,
     })),
   })
   const friends = useMemo(() => {
     const index = new Map<string, Friend>()
-    friendQueries.forEach((query) => query.data?.items.forEach((friend) => index.set(friend.id, friend)))
+    friendQueries.forEach((query) => query.data?.forEach((friend) => index.set(friend.id, friend)))
     return index
   }, [friendQueries])
   const friendsByAccount = useMemo(() => {
     const result = new Map<string, Friend[]>()
-    accounts.forEach((account, index) => result.set(account.id, friendQueries[index]?.data?.items ?? []))
+    accounts.forEach((account, index) => result.set(account.id, friendQueries[index]?.data ?? []))
     return result
   }, [accounts, friendQueries])
+  const friendsLoading = friendQueries.some((query) => query.isPending)
 
   const visibleTasks = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('zh-CN')
@@ -166,7 +168,7 @@ export function TasksPage() {
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div><p className="text-sm font-medium text-primary">M3 · 自动维护</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">任务</h1><p className="mt-1 text-sm text-muted-foreground">为已确认好友设置每日火花维护时间窗口和消息。</p></div>
-        <Button onClick={openCreate}><Plus />新建任务</Button>
+        <Button onClick={openCreate} disabled={friendsLoading}><Plus />{friendsLoading ? '加载好友中…' : '新建任务'}</Button>
       </div>
       <Card><CardContent className="grid gap-4 p-5 sm:grid-cols-3"><div><div className="text-xs text-muted-foreground">任务总数</div><div className="mt-1 text-xl font-semibold">{tasks.length}</div></div><div><div className="text-xs text-muted-foreground">每日启用</div><div className="mt-1 text-xl font-semibold text-primary">{enabledCount}</div></div><div><div className="text-xs text-muted-foreground">当前筛选</div><div className="mt-1 text-xl font-semibold">{visibleTasks.length}</div></div></CardContent></Card>
       <Card>
