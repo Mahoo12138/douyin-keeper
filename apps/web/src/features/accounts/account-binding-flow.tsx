@@ -237,6 +237,16 @@ function useAccountBinding(accountId?: string, onSuccess?: () => void) {
       try {
         await cancelJob(token, activeBinding.jobId)
       } catch (error) {
+        const code = typeof error === 'object' && error !== null && 'code' in error
+          ? String((error as { code?: unknown }).code ?? '')
+          : ''
+        const message = error instanceof Error ? error.message : ''
+        if (code === 'CONFLICT' || message === 'job already finished') {
+          setBinding(null)
+          void queryClient.invalidateQueries({ queryKey: ['accounts'] })
+          toast.info('绑定流程已结束')
+          return
+        }
         toast.error(error instanceof Error ? error.message : '取消绑定失败')
         return
       }

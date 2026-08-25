@@ -666,6 +666,23 @@ def test_qr_start_rejects_relative_profile_dir():
         assert exc.code == protocol.ERR_INVALID_REQUEST
 
 
+def test_qr_data_url_ignores_small_data_image_logo():
+    import browser
+    import qr_login
+
+    logo = "data:image/png;base64," + ("L" * 220)
+    qr = "data:image/png;base64," + ("Q" * 220)
+    with browser.launch() as (_pw, _browser, _context, page):
+        page.set_content(f"""
+          <img class="site-logo" src="{logo}" style="width:40px;height:40px">
+          <img class="loading-placeholder" src="{logo}" style="width:300px;height:150px">
+          <img id="douyin_qrcode" src="{qr}" style="width:180px;height:180px">
+        """)
+        value = qr_login._qr_data_url(page)
+
+    assert value == qr
+
+
 def test_interactive_and_probe_operations_reject_unknown_fields():
     import friends_list
     import qr_login
@@ -766,6 +783,37 @@ def test_login_success_does_not_accept_generic_avatar_without_user_identity():
             return Locator(False)
 
     assert qr_login._login_success_visible(LoggedOutPage()) is False
+
+
+def test_login_success_requires_non_empty_user_identity_text():
+    import qr_login
+
+    class Locator:
+        def __init__(self, text, present=True):
+            self.text = text
+            self.present = present
+            self.first = self
+
+        def count(self):
+            return 1 if self.present else 0
+
+        def is_visible(self):
+            return True
+
+        def text_content(self):
+            return self.text
+
+    class Page:
+        def __init__(self, text):
+            self.text = text
+
+        def locator(self, selector):
+            if selector == qr_login.LOGIN_PANEL_SELECTOR:
+                return Locator('', present=False)
+            return Locator(self.text if 'user-info' in selector else '')
+
+    assert qr_login._login_success_visible(Page('')) is False
+    assert qr_login._login_success_visible(Page('real nickname')) is True
 
 
 def test_sms_start_rejects_relative_profile_dir():

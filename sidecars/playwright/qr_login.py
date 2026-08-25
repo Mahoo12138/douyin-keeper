@@ -21,11 +21,9 @@ LOGIN_BUTTONS = (
     "div[role='button']:has-text('登录')",
 )
 QR_SELECTORS = (
-    "#animate_qrcode_container img",
-    "#douyin_login_comp_scan_code img",
-    "#animate_qrcode_container canvas",
-    "img[src^='data:image']",
-    "img[class*='qrcode']",
+    "#animate_qrcode_container img, #animate_qrcode_container canvas",
+    "#douyin_login_comp_scan_code img, #douyin_login_comp_scan_code canvas",
+    "img[class*='qrcode' i], img[id*='qrcode' i], canvas[class*='qrcode' i], canvas[id*='qrcode' i]",
 )
 SESSION_COOKIE_NAMES = ("sessionid", "sessionid_ss", "sid_tt")
 CHALLENGE_TEXTS = ("安全验证", "滑动验证", "人机验证", "身份验证")
@@ -34,8 +32,8 @@ LOGIN_PANEL_SELECTOR = "#douyin_login_comp_flat_panel"
 AUTHENTICATED_SELECTORS = (
     '[data-e2e="user-info"]',
     '[class*="userName"]',
-    'a[href*="/user/"]',
 )
+GENERIC_IDENTITY_TEXT = {"我的", "抖音", "登录", "登录 / 注册", "登录注册"}
 
 _lock = threading.Lock()
 _sessions = {}
@@ -142,7 +140,13 @@ def _login_success_visible(page):
     for selector in AUTHENTICATED_SELECTORS:
         try:
             locator = page.locator(selector)
-            if locator.count() and locator.first.is_visible():
+            if not locator.count() or not locator.first.is_visible():
+                continue
+            try:
+                identity_text = (locator.first.text_content() or "").strip()
+            except Exception:
+                identity_text = ""
+            if identity_text and identity_text not in GENERIC_IDENTITY_TEXT and len(identity_text) <= 128:
                 return True
         except Exception:
             continue
@@ -167,20 +171,27 @@ def _qr_data_url(page):
     try:
         value = page.evaluate(
             """() => {
-              const roots = [
-                document.querySelector('#animate_qrcode_container'),
-                document.querySelector('#douyin_login_comp_scan_code'),
-                document.body,
-              ];
-              for (const root of roots) {
-                if (!root) continue;
-                for (const node of root.querySelectorAll('img,canvas')) {
-                  if (node.tagName === 'CANVAS' && node.toDataURL) {
-                    try { const data = node.toDataURL('image/png'); if (data.length > 200) return data; } catch (_) {}
-                  }
-                  const src = node.currentSrc || node.src || '';
-                  if (src.startsWith('data:image') && src.length > 200) return src;
+              const specificNodes = Array.from(document.querySelectorAll(
+                '#animate_qrcode_container img, #animate_qrcode_container canvas,' +
+                ' #douyin_login_comp_scan_code img, #douyin_login_comp_scan_code canvas,' +
+                ' img[class*="qrcode" i], img[id*="qrcode" i],' +
+                ' canvas[class*="qrcode" i], canvas[id*="qrcode" i]'
+              ));
+              const fallbackNodes = Array.from(document.querySelectorAll('img, canvas'))
+                .filter((node) => !specificNodes.includes(node));
+              const nodes = [...specificNodes, ...fallbackNodes];
+              for (const node of nodes) {
+                const rect = node.getBoundingClientRect();
+                const width = Math.max(rect.width || 0, node.naturalWidth || 0, node.width || 0);
+                const height = Math.max(rect.height || 0, node.naturalHeight || 0, node.height || 0);
+                if (width < 100 || height < 100) continue;
+                const ratio = width / height;
+                if (ratio < 0.75 || ratio > 1.33) continue;
+                if (node.tagName === 'CANVAS' && node.toDataURL) {
+                  try { const data = node.toDataURL('image/png'); if (data.length > 200) return data; } catch (_) {}
                 }
+                const src = node.currentSrc || node.src || '';
+                if (src.startsWith('data:image') && src.length > 200) return src;
               }
               return '';
             }"""
