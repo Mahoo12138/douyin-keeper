@@ -16,6 +16,21 @@ func TestAdminAdapterRepoListsAndAuditsToggle(t *testing.T) {
 	if err != nil || len(items) != 3 {
 		t.Fatalf("adapter list = %+v, err = %v", items, err)
 	}
+	for _, item := range items {
+		if item.Name == "protocol.im" && item.Executable {
+			t.Fatalf("protocol adapter should be disabled in the default catalog: %+v", item)
+		}
+	}
+	repo.SetAdapterExecutable("protocol.im", true)
+	items, err = repo.ListAdapterHealth(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range items {
+		if item.Name == "protocol.im" && !item.Executable {
+			t.Fatalf("verified protocol adapter should be executable: %+v", item)
+		}
+	}
 
 	if _, err := repo.SetAdapterEnabled(ctx, actorID, "browser.consumer", false); err != nil {
 		t.Fatalf("disable adapter: %v", err)

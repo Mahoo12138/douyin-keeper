@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/admin"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/config"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/conversation"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/entitlement"
@@ -29,6 +31,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/notification"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/outbox"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/send"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/task"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/transport/httpapi"
 )
@@ -93,6 +96,13 @@ func main() {
 	sendRepo := postgres.NewSendRepo(pool)
 	capRepo := postgres.NewCapabilityRepo(pool)
 	adminRepo := postgres.NewAdminRepo(pool, rdb)
+	if bundleDir := strings.TrimSpace(cfg.ProtocolBundleDir); bundleDir != "" {
+		if _, verifyErr := sidecar.VerifyBundle(bundleDir, capability.AdapterProtocolIM); verifyErr != nil {
+			log.Warn("protocol sidecar bundle is not executable in admin catalog", "err", verifyErr)
+		} else {
+			adminRepo.SetAdapterExecutable(capability.AdapterProtocolIM, true)
+		}
+	}
 	notificationRepo := postgres.NewNotificationRepo(pool)
 	outboxRepo := postgres.NewOutboxRepo(pool)
 

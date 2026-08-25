@@ -248,6 +248,9 @@ Protocol Bundle 的本地启动边界也已补齐：Worker 在启动可选 Proto
 入口文件 SHA-256；未配置 Bundle 或校验失败时分别保持 `ADAPTER_UNAVAILABLE`/
 `ADAPTER_INCOMPATIBLE`，不会执行未验证的入口文件。真实 SDK、平台 selector 和生产 Bundle
 仍需在外部平台环境联调。
+API 进程复用同一份 Bundle 校验结果更新 Admin Adapter catalog：只有校验通过的 `protocol.im`
+才显示为“可执行”，校验失败或未配置时仍显示实验/未接线，避免管理页面给出与 Worker 不一致的
+运行时判断。
 Capability snapshot 已按 `(account_id, capability, adapter)` 隔离，单个 capability probe 会在
 同一事务内刷新 Browser 与已注册 Protocol lane；Resolver 和发送 Worker 按目标 adapter 精确
 读取，避免 Browser 的不可用结果覆盖 Protocol 首聊能力，也避免 Protocol 探针覆盖已有会话发送能力。

@@ -16,17 +16,29 @@ import (
 )
 
 type AdminRepo struct {
-	pool      *pgxpool.Pool
-	inspector *asynq.Inspector
-	redis     *redis.Client
+	pool               *pgxpool.Pool
+	inspector          *asynq.Inspector
+	redis              *redis.Client
+	executableAdapters map[string]bool
 }
 
 func NewAdminRepo(pool *pgxpool.Pool, rdb *redis.Client) *AdminRepo {
-	repo := &AdminRepo{pool: pool, redis: rdb}
+	repo := &AdminRepo{pool: pool, redis: rdb, executableAdapters: map[string]bool{"browser.consumer": true}}
 	if rdb != nil {
 		repo.inspector = asynq.NewInspectorFromRedisClient(rdb)
 	}
 	return repo
+}
+
+// SetAdapterExecutable reflects the verified runtime catalog in the Admin
+// projection. Browser consumer is executable by default; optional runtimes
+// such as Protocol are enabled only after their bundle passes startup checks.
+func (r *AdminRepo) SetAdapterExecutable(adapter string, executable bool) *AdminRepo {
+	if r.executableAdapters == nil {
+		r.executableAdapters = map[string]bool{"browser.consumer": true}
+	}
+	r.executableAdapters[adapter] = executable
+	return r
 }
 
 func (r *AdminRepo) ListUserSummaries(ctx context.Context, limit int) ([]admin.UserSummary, error) {
@@ -578,12 +590,15 @@ func (r *AdminRepo) ListAdapterHealth(ctx context.Context) ([]admin.AdapterHealt
 			h.status, h.version, h.error_code, h.failure_count,
 			h.circuit_open_until, h.checked_at
 		FROM (VALUES
-			('browser.consumer', TRUE),
-			('browser.creator', FALSE),
-			('protocol.im', FALSE)
+			('browser.consumer', $1::boolean),
+			('browser.creator', $2::boolean),
+			('protocol.im', $3::boolean)
 		) AS catalog(adapter, executable)
 		LEFT JOIN adapter_health h ON h.adapter = catalog.adapter
-		ORDER BY catalog.adapter`)
+		ORDER BY catalog.adapter`,
+		r.executableAdapters["browser.consumer"],
+		r.executableAdapters["browser.creator"],
+		r.executableAdapters["protocol.im"])
 	if err != nil {
 		return nil, err
 	}
