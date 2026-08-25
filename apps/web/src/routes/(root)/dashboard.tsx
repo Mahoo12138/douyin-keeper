@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowRight, Bell, CheckCircle2, Clock3, ListChecks, Plus, Send, ShieldAlert, Smartphone, UserRound } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -12,6 +13,7 @@ import { getToken } from '@/auth/session'
 import { bindingLabel, formatDate, riskLabel, sessionLabel, StatusBadge } from '@/features/accounts/account-status'
 import { countIntentsByAccount, countTasksByAccount, summarizeAccounts, summarizeIntents, todayRange, type Account } from '@/features/dashboard/dashboard-utils'
 import { useAccountsQuery } from '@/features/accounts/use-accounts-query'
+import { flattenPageItems } from '@/lib/query-utils'
 
 export const Route = createFileRoute('/(root)/dashboard')({ component: DashboardPage })
 
@@ -21,17 +23,27 @@ function DashboardPage() {
 	const meQ = useQuery({ queryKey: ['me', token], queryFn: () => me(token as string), enabled: !!token, staleTime: 60_000 })
 	const entQ = useQuery({ queryKey: ['entitlement'], queryFn: () => myEntitlement(token as string), enabled: !!token })
 	const accountsQ = useAccountsQuery(token, { loadAll: true })
-	const tasksQ = useQuery({ queryKey: ['tasks'], queryFn: () => listTasks(token as string), enabled: !!token })
-	const intentsQ = useQuery({
+	const tasksQ = useInfiniteQuery({ queryKey: ['tasks'], queryFn: ({ pageParam }) => listTasks(token as string, { limit: 50, cursor: pageParam }), initialPageParam: undefined as string | undefined, getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined, enabled: !!token })
+	const intentsQ = useInfiniteQuery({
 		queryKey: ['send-intents', 'dashboard', range.day],
-		queryFn: () => listSendIntents(token as string, { from: range.from, to: range.to }),
+		queryFn: ({ pageParam }) => listSendIntents(token as string, { from: range.from, to: range.to, limit: 100, cursor: pageParam }),
+		initialPageParam: undefined as string | undefined,
+		getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
 		enabled: !!token,
 	})
 	const notificationsQ = useQuery({ queryKey: ['notifications'], queryFn: () => listNotifications(token as string, { limit: 5 }), enabled: !!token })
+	useEffect(() => {
+		if (!tasksQ.hasNextPage || tasksQ.isFetchingNextPage) return
+		void tasksQ.fetchNextPage()
+	}, [tasksQ.fetchNextPage, tasksQ.hasNextPage, tasksQ.isFetchingNextPage])
+	useEffect(() => {
+		if (!intentsQ.hasNextPage || intentsQ.isFetchingNextPage) return
+		void intentsQ.fetchNextPage()
+	}, [intentsQ.fetchNextPage, intentsQ.hasNextPage, intentsQ.isFetchingNextPage])
 
 	const accounts = accountsQ.accounts
-	const tasks = tasksQ.data?.items ?? []
-	const intents = intentsQ.data?.items ?? []
+	const tasks = flattenPageItems(tasksQ.data?.pages ?? [])
+	const intents = flattenPageItems(intentsQ.data?.pages ?? [])
 	const notifications = notificationsQ.data?.items ?? []
 	const accountStats = summarizeAccounts(accounts)
 	const intentStats = summarizeIntents(intents)
@@ -39,6 +51,8 @@ function DashboardPage() {
 	const intentsByAccount = countIntentsByAccount(intents)
 	const enabledTasks = tasks.filter((task) => task.enabled).length
 	const hasDataError = [entQ, accountsQ, tasksQ, intentsQ, notificationsQ].some((query) => query.isError)
+	const tasksLoading = tasksQ.isPending || tasksQ.isFetchingNextPage
+	const intentsLoading = intentsQ.isPending || intentsQ.isFetchingNextPage
 
 	return (
 		<div className="space-y-6">
@@ -57,8 +71,8 @@ function DashboardPage() {
 
 			<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 				<StatCard icon={<Smartphone />} label="有效账号" value={accountsQ.isLoading ? undefined : accountsQ.isError ? '—' : `${accountStats.valid} / ${accountStats.bound}`} detail={accountsQ.isError ? '数据暂时不可用' : '有效 / 已绑定'} />
-				<StatCard icon={<Send />} label="今日发送" value={intentsQ.isLoading ? undefined : intentsQ.isError ? '—' : String(intentStats.succeeded)} detail={intentsQ.isError ? '数据暂时不可用' : `待处理 ${intentStats.pending} · 失败 ${intentStats.failed}`} />
-				<StatCard icon={<ListChecks />} label="启用任务" value={tasksQ.isLoading ? undefined : tasksQ.isError ? '—' : `${enabledTasks} / ${tasks.length}`} detail={tasksQ.isError ? '数据暂时不可用' : '启用 / 全部'} />
+				<StatCard icon={<Send />} label="今日发送" value={intentsLoading ? undefined : intentsQ.isError ? '—' : String(intentStats.succeeded)} detail={intentsQ.isError ? '数据暂时不可用' : `待处理 ${intentStats.pending} · 失败 ${intentStats.failed}`} />
+				<StatCard icon={<ListChecks />} label="启用任务" value={tasksLoading ? undefined : tasksQ.isError ? '—' : `${enabledTasks} / ${tasks.length}`} detail={tasksQ.isError ? '数据暂时不可用' : '启用 / 全部'} />
 				<StatCard icon={<Bell />} label="未读通知" value={notificationsQ.isLoading ? undefined : notificationsQ.isError ? '—' : String(notificationsQ.data?.unread_count ?? 0)} detail={notificationsQ.isError ? '数据暂时不可用' : '需要关注的风险与提醒'} />
 			</div>
 
