@@ -277,6 +277,55 @@ def test_conversation_network_identity_extracts_direct_chat_peer_uid():
     assert peer_id == "1412192206591501"
 
 
+def test_message_sender_resolves_peer_from_target_conversation_network_identity():
+    import message_send
+
+    peer_id = message_send._network_peer_id_for_conversation(
+        "0:1:106337616074:1412192206591501",
+        [
+            {"identity": {"conv_id": "0:1:106337616074:1412192206591501"}},
+            {"identity": {"uid": "1412192206591501", "sec_uid": "sec-peer"}},
+        ],
+    )
+    assert peer_id == "1412192206591501"
+
+
+def test_message_sender_finds_conversation_by_network_identity_when_dom_has_no_id():
+    import message_send
+
+    class FakeTitle:
+        def __init__(self, index):
+            self.index = index
+
+        def click(self, **_kwargs):
+            if self.index == 1:
+                message_send._NETWORK_IDENTITY_RECORDS.append({
+                    "identity": {"conv_id": "0:1:106337616074:1412192206591501"},
+                })
+
+    class FakeTitles:
+        def count(self):
+            return 2
+
+        def nth(self, index):
+            return FakeTitle(index)
+
+    class FakePage:
+        def evaluate(self, *_args):
+            return False
+
+        def locator(self, _selector):
+            return FakeTitles()
+
+        def wait_for_timeout(self, _milliseconds):
+            return None
+
+    message_send._NETWORK_IDENTITY_RECORDS = []
+    assert message_send._click_conversation(
+        FakePage(), "0:1:106337616074:1412192206591501"
+    ) is True
+
+
 def test_conversation_list_pages_by_last_platform_id():
     import conversation_list
 

@@ -13,6 +13,7 @@ EDITOR_SELECTORS = (
 SESSION_COOKIE_NAMES = ("sessionid", "sessionid_ss", "sid_tt")
 CHALLENGE_TEXTS = ("安全验证", "滑动验证", "人机验证", "身份验证")
 RATE_LIMIT_TEXTS = ("操作频繁", "请求过于频繁", "访问受限")
+_NETWORK_IDENTITY_RECORDS = []
 
 
 def _error(code, message, retryable=False, detail=None):
@@ -49,9 +50,68 @@ def _session_present(context):
     )
 
 
+def _peer_uid_from_conversation_id(conversation_id):
+    """Extract the numeric peer UID from Douyin's direct-chat conv_id format."""
+    if not isinstance(conversation_id, str):
+        return ""
+    parts = [part.strip() for part in conversation_id.split(":") if part.strip()]
+    for part in reversed(parts):
+        if part.isdigit():
+            return part
+    return ""
+
+
+def _identity_values(record):
+    identity = record.get("identity") if isinstance(record, dict) else None
+    if not isinstance(identity, dict):
+        return {}
+    return {
+        str(key).lower().replace("-", "_"): str(value).strip()
+        for key, value in identity.items()
+        if isinstance(value, (str, int)) and str(value).strip()
+    }
+
+
+def _network_peer_id_for_conversation(conversation_id, records=None):
+    records = _NETWORK_IDENTITY_RECORDS if records is None else records
+    conversation_keys = {
+        "conversation_id", "conversationid", "conv_id", "convid",
+        "conversation_short_id", "conversationshortid",
+    }
+    user_keys = {"uid", "user_id", "userid"}
+    for record in reversed(records or []):
+        identity = _identity_values(record)
+        if not any(identity.get(key) == conversation_id for key in conversation_keys):
+            continue
+        peer_id = _peer_uid_from_conversation_id(conversation_id)
+        if peer_id:
+            return peer_id
+        for key in user_keys:
+            value = identity.get(key, "")
+            if value.isdigit():
+                return value
+    return ""
+
+
+def _network_conversation_ids(records=None):
+    records = _NETWORK_IDENTITY_RECORDS if records is None else records
+    keys = (
+        "conversation_id", "conversationid", "conv_id", "convid",
+        "conversation_short_id", "conversationshortid",
+    )
+    values = []
+    for record in records or []:
+        identity = _identity_values(record)
+        for key in keys:
+            value = identity.get(key, "")
+            if value and value not in values:
+                values.append(value)
+    return values
+
+
 def _click_conversation(page, conversation_id):
     try:
-        return bool(page.evaluate(
+        if page.evaluate(
             """(wanted) => {
               const nodes = Array.from(document.querySelectorAll('[data-conversation-id], [data-conversationid], [data-conv-id], [data-id]'));
               for (const node of nodes) {
@@ -62,12 +122,36 @@ def _click_conversation(page, conversation_id):
               return false;
             }""",
             conversation_id,
-        ))
+        ):
+            return True
+    except Exception:
+        pass
+
+    # The current Douyin consumer DOM does not expose the conversation ID.
+    # Select rows one by one and correlate the resulting chat response instead
+    # of falling back to a nickname-only target.
+    try:
+        titles = page.locator(".conversationConversationItemtitle")
+        count = titles.count()
     except Exception:
         return False
+    for index in range(count):
+        before = len(_NETWORK_IDENTITY_RECORDS)
+        try:
+            titles.nth(index).click(timeout=5_000)
+            page.wait_for_timeout(1_200)
+        except Exception:
+            continue
+        if conversation_id in _network_conversation_ids(_NETWORK_IDENTITY_RECORDS[before:]):
+            return True
+    return False
 
 
-def _current_peer_id(page):
+def _current_peer_id(page, conversation_id=None):
+    if conversation_id:
+        peer_id = _network_peer_id_for_conversation(conversation_id)
+        if peer_id:
+            return peer_id
     try:
         return page.evaluate(
             """() => {
@@ -97,6 +181,49 @@ def _current_peer_id(page):
         ) or ""
     except Exception:
         return ""
+
+
+def _capture_identity_response(response):
+    try:
+        resource_type = response.request.resource_type
+        if resource_type not in ("xhr", "fetch"):
+            return
+        payload = response.json()
+    except Exception:
+        return
+    if not isinstance(payload, (dict, list)):
+        return
+
+    identity_keys = {
+        "conversation_id", "conversationid", "conv_id", "convid",
+        "conversation_short_id", "conversationshortid", "user_id", "userid",
+        "uid", "sec_uid", "secuid", "sec_user_id", "secuserid",
+    }
+
+    def collect_records(value, path="", depth=0):
+        if depth > 5 or len(_NETWORK_IDENTITY_RECORDS) >= 400:
+            return
+        if isinstance(value, dict):
+            identity = {}
+            for key, item in value.items():
+                normalized_key = str(key).lower().replace("-", "_")
+                if normalized_key in identity_keys and isinstance(item, (str, int)):
+                    text = str(item).strip()
+                    if text and len(text) <= 512:
+                        identity[normalized_key] = text
+            if identity:
+                _NETWORK_IDENTITY_RECORDS.append({
+                    "url": response.url.split("?", 1)[0],
+                    "path": path,
+                    "identity": identity,
+                })
+            for key, item in value.items():
+                collect_records(item, (path + "." + str(key)).strip("."), depth + 1)
+        elif isinstance(value, list):
+            for index, item in enumerate(value[:80]):
+                collect_records(item, "%s[%d]" % (path, index), depth + 1)
+
+    collect_records(payload)
 
 
 def _editor(page):
@@ -173,7 +300,13 @@ def send_text(input_data):
     if not isinstance(text, str) or not text.strip() or len(text) > 2000:
         raise _error(protocol.ERR_INVALID_REQUEST, "message.text must be 1..2000 characters")
 
+    global _NETWORK_IDENTITY_RECORDS
     with browser.launch(state_in=session_path) as (_pw, _browser, context, page):
+        _NETWORK_IDENTITY_RECORDS = []
+        try:
+            page.on("response", _capture_identity_response)
+        except Exception:
+            pass
         page.goto(CHAT_URL, wait_until="domcontentloaded", timeout=60_000)
         page.wait_for_timeout(1_500)
         if _visible_text(page, CHALLENGE_TEXTS):
@@ -185,7 +318,7 @@ def send_text(input_data):
         if not _click_conversation(page, conversation_id):
             raise _error(protocol.ERR_CONVERSATION_NOT_FOUND, "conversation is unavailable")
         page.wait_for_timeout(800)
-        peer_id = _current_peer_id(page)
+        peer_id = _current_peer_id(page, conversation_id)
         if peer_id != platform_user_id:
             raise _error(protocol.ERR_TARGET_IDENTITY_MISMATCH, "conversation peer does not match target")
         editor = _editor(page)
