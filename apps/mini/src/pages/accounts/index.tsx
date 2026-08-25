@@ -26,6 +26,7 @@ export default function Accounts() {
   const [bindingPhone, setBindingPhone] = useState('')
   const [bindingJobId, setBindingJobId] = useState('')
   const [bindingStatus, setBindingStatus] = useState('')
+  const [bindingAccountId, setBindingAccountId] = useState('')
 
   const load = useCallback(async () => {
     const token = getAccessToken()
@@ -88,8 +89,8 @@ export default function Accounts() {
   if (state === 'error') return <View className="mini-page account-page"><View className="account-error"><Text className="account-error-icon">!</Text><Text className="account-empty-title">账号列表暂时不可用</Text><Text className="muted">{error || '请检查网络连接后重试。'}</Text><Button className="account-secondary-button" onClick={() => void load()}>重新加载</Button></View></View>
 
   const selectedAccount = accounts.find((account) => account.id === selectedAccountId)
-  if (screen === 'detail' && selectedAccount) return <AccountDetail account={selectedAccount} menuOpen={menuOpen} busy={busy} error={error} onBack={() => { setMenuOpen(false); setScreen('list') }} onMenu={() => setMenuOpen((current) => !current)} onAction={(action) => void runAccountAction(selectedAccount, action)} onDelete={() => void releaseAccount(selectedAccount)} onBind={() => { setMenuOpen(false); setBindingMethod('qr'); setScreen('bind') }} />
-  if (screen === 'bind') return <BindingScreen method={bindingMethod} phone={bindingPhone} jobId={bindingJobId} status={bindingStatus} busy={busy} error={error} onBack={() => { setBindingJobId(''); setScreen('list') }} onMethodChange={setBindingMethod} onPhoneChange={setBindingPhone} onStart={() => void startBinding()} onCancel={() => void cancelBinding()} />
+  if (screen === 'detail' && selectedAccount) return <AccountDetail account={selectedAccount} menuOpen={menuOpen} busy={busy} error={error} onBack={() => { setMenuOpen(false); setScreen('list') }} onMenu={() => setMenuOpen((current) => !current)} onAction={(action) => void runAccountAction(selectedAccount, action)} onDelete={() => void releaseAccount(selectedAccount)} onBind={() => { setMenuOpen(false); setBindingAccountId(selectedAccount.id); setBindingMethod('qr'); setScreen('bind') }} />
+  if (screen === 'bind') return <BindingScreen method={bindingMethod} phone={bindingPhone} jobId={bindingJobId} status={bindingStatus} busy={busy} error={error} onBack={() => { setBindingJobId(''); setBindingAccountId(''); setScreen('list') }} onMethodChange={setBindingMethod} onPhoneChange={setBindingPhone} onStart={() => void startBinding()} onCancel={() => void cancelBinding()} />
 
   async function runAccountAction(account: Account, action: 'session' | 'friends' | 'pause' | 'resume') {
     const token = getAccessToken()
@@ -140,7 +141,7 @@ export default function Accounts() {
     setBusy('bind')
     setError('')
     try {
-      const job = await createAccountBinding(token, bindingMethod, { phone: bindingMethod === 'sms' ? bindingPhone.trim() : undefined })
+      const job = await createAccountBinding(token, bindingMethod, { phone: bindingMethod === 'sms' ? bindingPhone.trim() : undefined, accountId: bindingAccountId || undefined })
       setBindingJobId(job.job_id)
       setBindingStatus('绑定任务已创建，等待后端进度')
     } catch (cause) {
@@ -158,6 +159,7 @@ export default function Accounts() {
       await cancelJob(token, bindingJobId)
       setBindingJobId('')
       setBindingStatus('')
+      setBindingAccountId('')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '取消绑定失败')
     } finally {
@@ -166,15 +168,20 @@ export default function Accounts() {
   }
 
   return <View className="mini-page account-page">
-    <View className="account-page-header"><View><Text className="account-page-kicker">Douyin Keeper</Text><Text className="account-page-title">我的账号</Text></View><Button className="account-add-button" onClick={() => { setError(''); setScreen('bind') }}>+</Button></View>
+    <View className="account-page-header"><View><Text className="account-page-kicker">Douyin Keeper</Text><Text className="account-page-title">我的账号</Text></View><Button className="account-add-button" onClick={() => { setError(''); setBindingAccountId(''); setScreen('bind') }}>+</Button></View>
     <View className="account-quota"><View><Text className="account-quota-label">账号概览</Text><Text className="account-quota-value">{accounts.length} <Text className="account-quota-total">/ {accountQuota ?? '∞'}</Text></Text><Text className="account-quota-caption">已绑定 / 可绑定上限</Text></View><Button className="account-quota-action" onClick={() => { setError(''); setScreen('bind') }}>升级配额</Button><View className="account-quota-line"><View style={{ width: `${accountQuota ? Math.min(100, accounts.length / accountQuota * 100) : accounts.length ? 24 : 0}%` }} /></View></View>
     {error && <View className="account-inline-error"><Text>{error}</Text></View>}
-    {accounts.length === 0 ? <EmptyAccounts onBind={() => setScreen('bind')} /> : <View>{accounts.map((account) => <AccountCard account={account} key={account.id} onSelect={() => { setSelectedAccountId(account.id); setScreen('detail') }} />)}<Button className="account-add-card" onClick={() => setScreen('bind')}><Text className="account-add-card-plus">+</Text><View><Text>添加新账号</Text><Text className="muted">最多可绑定 {accountQuota ?? '多个'} 个账号</Text></View></Button></View>}
+    {accounts.length === 0 ? <EmptyAccounts onBind={() => { setBindingAccountId(''); setScreen('bind') }} /> : <View>{accounts.map((account) => <AccountCard account={account} key={account.id} onSelect={() => { setSelectedAccountId(account.id); setScreen('detail') }} />)}<Button className="account-add-card" onClick={() => { setBindingAccountId(''); setScreen('bind') }}><Text className="account-add-card-plus">+</Text><View><Text>添加新账号</Text><Text className="muted">最多可绑定 {accountQuota ?? '多个'} 个账号</Text></View></Button></View>}
   </View>
 }
 
 function AccountCard({ account, onSelect }: { account: Account; onSelect: () => void }) {
-  return <Button className="account-card" onClick={onSelect}><Avatar src={account.avatar_url} name={account.nickname || '未命名'} size="large" /><View className="account-card-copy"><View className="account-card-top"><Text className="account-card-name">{account.nickname || '未命名账号'}</Text><Text className={`account-tag account-tag-${account.binding_status}`}>{bindingLabel(account.binding_status)}</Text></View><Text className="account-card-status"><StatusDot tone={account.session_status === 'valid' ? 'green' : 'amber'} />{sessionLabel(account.session_status)}</Text><View className="account-card-stats"><View><Text>{account.friend_count}</Text><Text className="muted">活跃好友</Text></View><View><Text>{account.enabled_task_count}</Text><Text className="muted">活跃任务</Text></View><View><Text>{account.today_send_succeeded}%</Text><Text className="muted">今日完成率</Text></View></View></View><Text className="account-chevron">›</Text></Button>
+  return <Button className="account-card" onClick={onSelect}><Avatar src={account.avatar_url} name={account.nickname || '未命名'} size="large" /><View className="account-card-copy"><View className="account-card-top"><Text className="account-card-name">{account.nickname || '未命名账号'}</Text><Text className={`account-tag account-tag-${account.binding_status}`}>{bindingLabel(account.binding_status)}</Text></View><Text className="account-card-status"><StatusDot tone={account.session_status === 'valid' ? 'green' : 'amber'} />{sessionLabel(account.session_status)}</Text><View className="account-card-stats"><View><Text>{account.friend_count}</Text><Text className="muted">活跃好友</Text></View><View><Text>{account.enabled_task_count}</Text><Text className="muted">活跃任务</Text></View><View><Text>{completionRate(account)}%</Text><Text className="muted">今日完成率</Text></View></View></View><Text className="account-chevron">›</Text></Button>
+}
+
+function completionRate(account: Account) {
+  const total = account.today_send_succeeded + account.today_send_failed
+  return total ? Math.round(account.today_send_succeeded / total * 100) : 0
 }
 
 function AccountDetail({ account, menuOpen, busy, error, onBack, onMenu, onAction, onDelete, onBind }: { account: Account; menuOpen: boolean; busy: string; error: string; onBack: () => void; onMenu: () => void; onAction: (action: 'session' | 'friends' | 'pause' | 'resume') => void; onDelete: () => void; onBind: () => void }) {
