@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { friendsById, summarizeAccountIntents, tasksForAccount } from '../src/features/accounts/account-detail-utils.ts'
+import { flattenPageItems, friendsById, summarizeAccountIntents, tasksForAccount } from '../src/features/accounts/account-detail-utils.ts'
+
+test('flattenPageItems preserves cursor page order for account detail sections', () => {
+	assert.deepEqual(flattenPageItems([{ items: ['first', 'second'] }, { items: ['third'] }]), ['first', 'second', 'third'])
+})
 
 test('tasksForAccount keeps only tasks owned by the account', () => {
 	const tasks = [

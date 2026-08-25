@@ -9,6 +9,10 @@ export function tasksForAccount(tasks: AccountDetailTask[], accountId: string) {
 	return tasks.filter((task) => task.account_id === accountId)
 }
 
+export function flattenPageItems<T>(pages: Array<{ items: T[] }>) {
+	return pages.flatMap((page) => page.items)
+}
+
 export function summarizeAccountIntents(intents: AccountDetailIntent[]) {
 	return intents.reduce(
 		(stats, intent) => {
