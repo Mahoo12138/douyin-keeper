@@ -1,5 +1,5 @@
 export default defineAppConfig({
-  pages: ['pages/index/index', 'pages/spark/index', 'pages/history/index', 'pages/accounts/index', 'pages/login/index'],
+  pages: ['pages/index/index', 'pages/spark/index', 'pages/tasks/index', 'pages/accounts/index', 'pages/history/index', 'pages/login/index'],
   window: {
     backgroundTextStyle: 'light',
     navigationBarBackgroundColor: '#ffffff',
@@ -8,11 +8,12 @@ export default defineAppConfig({
   },
   tabBar: {
     color: '#8a8a8a',
-    selectedColor: '#1f1f1f',
+    selectedColor: '#18b979',
     list: [
       { pagePath: 'pages/index/index', text: '首页' },
-      { pagePath: 'pages/spark/index', text: '火花' },
-      { pagePath: 'pages/history/index', text: '记录' },
+      { pagePath: 'pages/spark/index', text: '好友' },
+      { pagePath: 'pages/tasks/index', text: '任务' },
+      { pagePath: 'pages/accounts/index', text: '账号' },
       { pagePath: 'pages/login/index', text: '我的' },
     ],
   },

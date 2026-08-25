@@ -165,6 +165,21 @@ export function listTasks(token: string) {
   return request<Collection<components['schemas']['SparkTask']>>('/tasks', { token })
 }
 
+export type CreateTaskInput = {
+  account_id: string
+  friend_id: string
+  enabled: boolean
+  timezone: string
+  window_start: string
+  window_end: string
+  message: { kind: 'text' | 'sticker'; body: string }
+  allow_first_message?: boolean
+}
+
+export function createTask(token: string, input: CreateTaskInput) {
+  return request<components['schemas']['SparkTask']>('/tasks', { method: 'POST', token, data: input })
+}
+
 export type UpdateTaskPatch = {
   enabled?: boolean
   timezone?: string
@@ -182,6 +197,10 @@ export function updateTask(token: string, taskId: string, patch: UpdateTaskPatch
   })
 }
 
+export function deleteTask(token: string, taskId: string) {
+  return request<void>(`/tasks/${taskId}`, { method: 'DELETE', token })
+}
+
 export function runTaskNow(token: string, taskId: string, idempotencyKey: string) {
   return request<{ intent_id: string; job_id: string; status: 'queued' }>(`/tasks/${taskId}/run-now`, {
     method: 'POST', token, headers: { 'Idempotency-Key': idempotencyKey },
@@ -194,7 +213,7 @@ export function checkAccountSession(token: string, accountId: string) {
   })
 }
 
-export type SendHistoryOptions = { from?: string; to?: string; status?: components['schemas']['SendIntent']['status'] }
+export type SendHistoryOptions = { from?: string; to?: string; status?: components['schemas']['SendIntent']['status']; task_id?: string; account_id?: string; friend_id?: string }
 
 export function listSendIntents(token: string, options: SendHistoryOptions = {}) {
   const query = Object.entries(options).filter(([, value]) => value).map(([key, value]) => `${key}=${encodeURIComponent(value!)}`).join('&')
