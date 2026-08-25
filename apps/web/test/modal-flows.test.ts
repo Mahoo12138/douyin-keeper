@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import test from 'node:test'
+
+const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+const templates = source('../src/features/templates/message-templates-page.tsx')
+const entitlements = source('../src/features/admin/admin-entitlement-panels.tsx')
+const settings = source('../src/features/admin/admin-settings-page.tsx')
+const accounts = source('../src/features/accounts/account-binding-flow.tsx')
+const header = source('../src/components/global-header.tsx')
+
+test('form-heavy surfaces use the shared Radix dialog pattern', () => {
+  assert.match(templates, /<Dialog open=\{!!editor\}/)
+  assert.match(templates, /<DialogContent>/)
+  assert.match(entitlements, /function RevokeDialog/)
+  assert.match(entitlements, /<DialogContent className="max-w-3xl">/)
+  assert.match(settings, /<Dialog open=\{formOpen\}/)
+})
+
+test('account binding guards quota with a recoverable entitlement dialog', () => {
+  assert.match(accounts, /entitlementDialogOpen/)
+  assert.match(accounts, /先激活权益，再添加账号/)
+  assert.match(accounts, /to="\/entitlement"/)
+})
+
+test('avatar menu keeps identity, workspace actions, and sign-out discoverable', () => {
+  assert.match(header, /工作区/)
+  assert.match(header, /帮助与安全边界/)
+  assert.match(header, /管理控制台/)
+  assert.match(header, /退出登录/)
+})

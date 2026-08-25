@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import {
   cancelJob,
   createAccountBinding,
+  myEntitlement,
   streamJobEvents,
   submitSMSVerification,
   type JobEventEnvelope,
 } from '@douyin-keeper/sdk-ts'
-import { ArrowLeft, Smartphone } from 'lucide-react'
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, useOverlayBehavior } from '@douyin-keeper/ui-web'
+import { ArrowLeft, ArrowRight, ShieldAlert, Smartphone } from 'lucide-react'
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, Label } from '@douyin-keeper/ui-web'
 
 import { getToken } from '@/auth/session'
 import { AccountBindingPanel } from './account-binding-panel'
@@ -24,7 +25,7 @@ export function AccountBindingFlow({ mode = 'embedded', accountId, onSuccess }: 
   const binding = useAccountBinding(accountId, onSuccess)
 
   if (mode === 'page') {
-    return <BindingPage binding={binding} />
+    return <><BindingPage binding={binding} />{binding.entitlementDialogOpen && <EntitlementRequiredDialog onClose={binding.closeEntitlementDialog} />}</>
   }
 
   return (
@@ -38,6 +39,8 @@ export function AccountBindingFlow({ mode = 'embedded', accountId, onSuccess }: 
         <BindingChoiceDialog binding={binding} />
       )}
 
+      {binding.entitlementDialogOpen && <EntitlementRequiredDialog onClose={binding.closeEntitlementDialog} />}
+
       {binding.binding && <AccountBindingPanel binding={binding.binding} relogin={binding.isRebinding} submittingCode={binding.submittingCode} onSubmitSMSCode={binding.binding.method === 'sms' ? binding.submitSMSCode : undefined} onCancel={() => void binding.cancelBinding()} />}
     </>
   )
@@ -46,19 +49,21 @@ export function AccountBindingFlow({ mode = 'embedded', accountId, onSuccess }: 
 type BindingController = ReturnType<typeof useAccountBinding>
 
 function BindingChoiceDialog({ binding }: { binding: BindingController }) {
-  const dialogRef = useOverlayBehavior<HTMLDivElement>(true, binding.closeChoice)
-
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4" role="presentation">
-      <Card ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="binding-choice-title" className="w-full max-w-md shadow-2xl">
-        <CardHeader>
-          <CardTitle id="binding-choice-title">{binding.isRebinding ? '选择重新登录方式' : '选择绑定方式'}</CardTitle>
-          <CardDescription>{binding.isRebinding ? '重新登录会替换当前账号 Session，验证失败时不会改变原有登录态。' : '扫码适合快速绑定；短信方式需要输入抖音账号手机号和验证码。'}</CardDescription>
-        </CardHeader>
+    <Dialog open onOpenChange={(open) => { if (!open) binding.closeChoice() }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{binding.isRebinding ? '选择重新登录方式' : '选择绑定方式'}</DialogTitle>
+          <DialogDescription>{binding.isRebinding ? '重新登录会替换当前账号 Session，验证失败时不会改变原有登录态。' : '扫码适合快速绑定；短信方式需要输入抖音账号手机号和验证码。'}</DialogDescription>
+        </DialogHeader>
         <BindingMethodForm binding={binding} embedded />
-      </Card>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
+}
+
+function EntitlementRequiredDialog({ onClose }: { onClose: () => void }) {
+  return <Dialog open onOpenChange={(open) => { if (!open) onClose() }}><DialogContent><DialogHeader><div className="mb-2 flex size-11 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600"><ShieldAlert className="size-5" /></div><DialogTitle>先激活权益，再添加账号</DialogTitle><DialogDescription>当前权益没有可用的账号配额。兑换卡密或由管理员授权后，就可以继续绑定抖音账号。</DialogDescription></DialogHeader><div className="px-6 py-1"><div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 text-sm leading-6 text-muted-foreground">已绑定账号不会受影响；前往权益页可以查看当前使用量、有效期并兑换卡密。</div></div><DialogFooter><Button variant="outline" onClick={onClose}>稍后处理</Button><Button asChild onClick={onClose}><Link to="/entitlement">去权益页<ArrowRight /></Link></Button></DialogFooter></DialogContent></Dialog>
 }
 
 function BindingPage({ binding }: { binding: BindingController }) {
@@ -119,8 +124,10 @@ function BindingMethodForm({ binding, embedded = false }: { binding: BindingCont
 function useAccountBinding(accountId?: string, onSuccess?: () => void) {
   const token = getToken()
   const queryClient = useQueryClient()
+  const entitlementQ = useQuery({ queryKey: ['entitlement'], queryFn: () => myEntitlement(token as string), enabled: !!token && !accountId, staleTime: 30_000 })
   const [binding, setBinding] = useState<BindingState | null>(null)
   const [bindingChoice, setBindingChoice] = useState(false)
+  const [entitlementDialogOpen, setEntitlementDialogOpen] = useState(false)
   const [bindingMethod, setBindingMethod] = useState<BindingMethod>('qr')
   const [bindingPhone, setBindingPhone] = useState('')
   const [submittingCode, setSubmittingCode] = useState(false)
@@ -128,8 +135,23 @@ function useAccountBinding(accountId?: string, onSuccess?: () => void) {
 
   useEffect(() => () => bindingAbort.current?.abort(), [])
 
+  function hasAccountCapacity() {
+    if (accountId) return true
+    const entitlement = entitlementQ.data
+    if (!entitlement) return true
+    const accountQuota = entitlement.account_quota ?? Number.POSITIVE_INFINITY
+    return entitlement.active && (entitlement.usage?.accounts_used ?? 0) < accountQuota
+  }
+
+  function ensureAccountCapacity() {
+    if (hasAccountCapacity()) return true
+    setEntitlementDialogOpen(true)
+    return false
+  }
+
   async function startBinding(method: BindingMethod = bindingMethod) {
     if (!token) return
+    if (!ensureAccountCapacity()) return
     const phone = bindingPhone.trim()
     if (method === 'sms' && !isSMSPhoneValid(phone)) {
       toast.error('请输入有效的手机号')
@@ -226,8 +248,10 @@ function useAccountBinding(accountId?: string, onSuccess?: () => void) {
     bindingMethod,
     bindingPhone,
     submittingCode,
-    openChoice: () => setBindingChoice(true),
+    openChoice: () => { if (ensureAccountCapacity()) setBindingChoice(true) },
     closeChoice: () => setBindingChoice(false),
+    entitlementDialogOpen,
+    closeEntitlementDialog: () => setEntitlementDialogOpen(false),
     setBindingMethod,
     setBindingPhone,
     startBinding,

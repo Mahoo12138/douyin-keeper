@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createMessageTemplate, deleteMessageTemplate, listMessageTemplates, updateMessageTemplate, type MessageTemplateInput, type MessageTemplatePatch } from '@douyin-keeper/sdk-ts'
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton } from '@douyin-keeper/ui-web'
-import { FileText, Pencil, Plus, Save, Sparkles, Trash2, X } from 'lucide-react'
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, Label, Skeleton } from '@douyin-keeper/ui-web'
+import { FileText, Pencil, Plus, Save, Sparkles, Trash2 } from 'lucide-react'
 
 import { getToken } from '@/auth/session'
 import { SelectField } from '@/components/select-field'
@@ -55,10 +55,12 @@ export function MessageTemplatesPage() {
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div><p className="text-sm font-medium text-primary">V1.1 · 消息配置</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">消息模板池</h1><p className="mt-1 text-sm text-muted-foreground">管理可复用的文字和贴纸内容，在任务编辑时快速套用。</p></div>
-        {!editor && <Button onClick={() => setEditor({ ...emptyEditor })}><Plus />新建模板</Button>}
+      <Button onClick={() => setEditor({ ...emptyEditor })}><Plus />新建模板</Button>
       </div>
 
-      {editor && <TemplateEditor editor={editor} saving={saveMutation.isPending} onChange={(patch) => setEditor((current) => current ? { ...current, ...patch } : current)} onSave={save} onClose={() => setEditor(null)} />}
+      <Dialog open={!!editor} onOpenChange={(open) => { if (!open) setEditor(null) }}>
+        {editor && <TemplateEditor editor={editor} saving={saveMutation.isPending} onChange={(patch) => setEditor((current) => current ? { ...current, ...patch } : current)} onSave={save} onClose={() => setEditor(null)} />}
+      </Dialog>
 
       <Card>
         <CardHeader><div className="flex items-center gap-3"><div className="rounded-lg bg-primary/10 p-2 text-primary"><FileText className="size-5" /></div><div><CardTitle>我的模板</CardTitle><CardDescription>{templates.length ? `共 ${templates.length} 个模板，套用到任务后会保存为任务自己的内容快照。` : '模板只属于当前账号用户，不会暴露给其他用户。'}</CardDescription></div></div></CardHeader>
@@ -70,7 +72,7 @@ export function MessageTemplatesPage() {
 }
 
 function TemplateEditor({ editor, saving, onChange, onSave, onClose }: { editor: Editor; saving: boolean; onChange: (patch: Partial<Editor>) => void; onSave: () => void; onClose: () => void }) {
-  return <Card className="border-primary/30"><CardHeader><div className="flex items-start justify-between gap-4"><div><CardTitle>{editor.id ? '编辑模板' : '新建模板'}</CardTitle><CardDescription>名称用于在任务编辑器中识别，内容会在保存时去除首尾空格。</CardDescription></div><Button variant="ghost" size="icon" onClick={onClose} aria-label="关闭模板编辑"><X /></Button></div></CardHeader><CardContent className="grid gap-4 md:grid-cols-[minmax(180px,0.8fr)_minmax(150px,0.5fr)_minmax(280px,1.7fr)_auto] md:items-end"><div className="space-y-1.5"><Label htmlFor="template-name">模板名称</Label><Input id="template-name" value={editor.name} maxLength={80} onChange={(event) => onChange({ name: event.target.value })} placeholder="例如：晚安问候" /></div><SelectField id="template-kind" label="类型" value={editor.kind} onChange={(value) => onChange({ kind: value as Editor['kind'] })} options={[{ value: 'text', label: '文字' }, { value: 'sticker', label: '贴纸' }]} /><div className="space-y-1.5"><Label htmlFor="template-body">{editor.kind === 'sticker' ? '贴纸 ID' : '模板内容'}</Label>{editor.kind === 'sticker' ? <Input id="template-body" value={editor.body} maxLength={500} onChange={(event) => onChange({ body: event.target.value })} placeholder="输入稳定 sticker_id" /> : <textarea id="template-body" value={editor.body} maxLength={500} rows={2} onChange={(event) => onChange({ body: event.target.value })} placeholder="输入可复用的文字内容" className="flex min-h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring" />}</div><div className="flex gap-2"><Button variant="outline" onClick={onClose} disabled={saving}>取消</Button><Button onClick={onSave} disabled={saving}><Save />{saving ? '保存中…' : '保存'}</Button></div></CardContent></Card>
+  return <DialogContent><DialogHeader><DialogTitle>{editor.id ? '编辑模板' : '新建模板'}</DialogTitle><DialogDescription>名称用于在任务编辑器中识别，内容会在保存时去除首尾空格。</DialogDescription></DialogHeader><div className="grid gap-4 px-6 py-6"><div className="space-y-1.5"><Label htmlFor="template-name">模板名称</Label><Input id="template-name" value={editor.name} maxLength={80} onChange={(event) => onChange({ name: event.target.value })} placeholder="例如：晚安问候" /></div><SelectField id="template-kind" label="类型" value={editor.kind} onChange={(value) => onChange({ kind: value as Editor['kind'] })} options={[{ value: 'text', label: '文字' }, { value: 'sticker', label: '贴纸' }]} /><div className="space-y-1.5"><Label htmlFor="template-body">{editor.kind === 'sticker' ? '贴纸 ID' : '模板内容'}</Label>{editor.kind === 'sticker' ? <Input id="template-body" value={editor.body} maxLength={500} onChange={(event) => onChange({ body: event.target.value })} placeholder="输入稳定 sticker_id" /> : <textarea id="template-body" value={editor.body} maxLength={500} rows={5} onChange={(event) => onChange({ body: event.target.value })} placeholder="输入可复用的文字内容" className="flex min-h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring" />}</div></div><DialogFooter><Button variant="outline" onClick={onClose} disabled={saving}>取消</Button><Button onClick={onSave} disabled={saving}><Save />{saving ? '保存中…' : '保存模板'}</Button></DialogFooter></DialogContent>
 }
 
 function TemplateList({ templates, deletingId, onEdit, onDelete }: { templates: Template[]; deletingId: string | null; onEdit: (item: Template) => void; onDelete: (item: Template) => void }) {

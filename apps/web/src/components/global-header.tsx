@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
-import { HelpCircle, Menu, ShieldCheck, Sparkles, LogOut, X } from 'lucide-react'
+import { ChevronRight, HelpCircle, LogOut, Menu, Settings, ShieldCheck, Sparkles, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Avatar, AvatarFallback, Badge, Button, DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, ThemeToggle } from '@douyin-keeper/ui-web'
 import { listNotifications, me, myEntitlement } from '@douyin-keeper/sdk-ts'
@@ -96,23 +96,33 @@ export function GlobalHeader() {
               <span className="max-w-28 truncate font-medium">{displayName}</span>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>
-                <p className="text-sm font-medium">{displayName}</p>
-                <p className="text-xs text-muted-foreground">{identityQ.data?.role === 'admin' ? '管理员' : '普通用户'}</p>
-              </DropdownMenuLabel>
-              <DropdownMenuItem asChild><Link to="/entitlement" className="text-primary">{entitlementLabel}</Link></DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem asChild><Link to="/help"><HelpCircle />帮助与安全边界</Link></DropdownMenuItem>
-                {identityQ.data?.role === 'admin' && <DropdownMenuItem asChild><Link to="/admin"><ShieldCheck />管理控制台</Link></DropdownMenuItem>}
-                <DropdownMenuItem asChild><Link to="/settings">设置</Link></DropdownMenuItem>
+            <DropdownMenuContent align="end" sideOffset={10} className="w-72 overflow-hidden rounded-2xl p-0">
+              <div className="border-b bg-primary/[0.06] px-4 py-4">
+                <div className="flex items-start gap-3">
+                  <Avatar className="size-11 border-2 border-background shadow-sm">
+                    <AvatarFallback className="bg-primary text-sm font-semibold text-primary-foreground">{initials}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{displayName}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{identityQ.data?.role === 'admin' ? '管理员' : '普通用户'}</p>
+                    <DropdownMenuItem asChild className="mt-3 min-h-0 rounded-xl border border-primary/15 bg-background/80 p-0 hover:bg-background focus:bg-background"><Link to="/entitlement" className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left"><span className="min-w-0"><span className="flex items-center gap-1.5 text-xs font-medium"><span className={`size-1.5 rounded-full ${entitlementQ.data?.active ? 'bg-emerald-500' : 'bg-amber-500'}`} />{entitlementQ.data?.active ? '权益有效' : '未激活权益'}</span><span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{entitlementLabel}</span></span><ChevronRight className="size-3.5 shrink-0 text-muted-foreground" /></Link></DropdownMenuItem>
+                  </div>
+                </div>
+              </div>
+              <DropdownMenuLabel className="px-4 pb-1 pt-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">工作区</DropdownMenuLabel>
+              <DropdownMenuGroup className="px-2 pb-2">
+                <DropdownMenuItem asChild className="min-h-11 rounded-xl px-3"><Link to="/help"><span className="flex size-8 items-center justify-center rounded-lg bg-muted"><HelpCircle className="size-4" /></span><span className="flex-1"><span className="block">帮助与安全边界</span><span className="mt-0.5 block text-xs font-normal text-muted-foreground">了解哪些动作会被暂停</span></span><ChevronRight className="size-3.5 text-muted-foreground" /></Link></DropdownMenuItem>
+                {identityQ.data?.role === 'admin' && <DropdownMenuItem asChild className="min-h-11 rounded-xl px-3"><Link to="/admin"><span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary"><ShieldCheck className="size-4" /></span><span className="flex-1"><span className="block">管理控制台</span><span className="mt-0.5 block text-xs font-normal text-muted-foreground">用户、权益与运行状态</span></span><ChevronRight className="size-3.5 text-muted-foreground" /></Link></DropdownMenuItem>}
+                <DropdownMenuItem asChild className="min-h-11 rounded-xl px-3"><Link to="/settings"><span className="flex size-8 items-center justify-center rounded-lg bg-muted"><Settings className="size-4" /></span><span className="flex-1"><span className="block">设置</span><span className="mt-0.5 block text-xs font-normal text-muted-foreground">通知与登录安全</span></span><ChevronRight className="size-3.5 text-muted-foreground" /></Link></DropdownMenuItem>
               </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => void signOut()}>
-                <LogOut />
-                退出登录
-              </DropdownMenuItem>
+              <DropdownMenuSeparator className="my-0" />
+              <div className="p-2">
+                <DropdownMenuItem className="min-h-10 rounded-xl px-3 text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => void signOut()}>
+                  <LogOut className="size-4" />
+                  <span className="flex-1">退出登录</span>
+                  <span className="text-xs text-destructive/70">当前设备</span>
+                </DropdownMenuItem>
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
           <Button

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  Dialog,
+  DialogContent,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -10,6 +12,13 @@ import {
 
 test('shared dropdown menu exports the keyboard-accessible shell primitives', () => {
   for (const primitive of [DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger]) {
+    assert.ok(primitive)
+    assert.ok(['function', 'object'].includes(typeof primitive))
+  }
+})
+
+test('shared dialog exports the accessible modal shell primitives', () => {
+  for (const primitive of [Dialog, DialogContent]) {
     assert.ok(primitive)
     assert.ok(['function', 'object'].includes(typeof primitive))
   }

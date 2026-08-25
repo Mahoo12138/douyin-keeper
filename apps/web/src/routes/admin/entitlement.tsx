@@ -81,15 +81,13 @@ function AdminEntitlementList() {
         </Card>
       )}
       <section className="space-y-3">
-        <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
           <h2 className="text-lg font-semibold">权益方案</h2>
           <p className="text-sm text-muted-foreground">停用只阻止新的发行与兑换，不影响已存在的授权。</p>
+          </div>
+          <PlanCreateForm pending={planMutation.isPending} onSubmit={(value) => planMutation.mutate(value)} />
         </div>
-        <Card>
-          <CardContent className="p-4">
-            <PlanCreateForm pending={planMutation.isPending} onSubmit={(value) => planMutation.mutate(value)} />
-          </CardContent>
-        </Card>
         {plansQ.isPending ? (
           <ListLoading />
         ) : plans.length ? (
@@ -108,15 +106,13 @@ function AdminEntitlementList() {
         )}
       </section>
       <section className="space-y-3">
-        <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
           <h2 className="text-lg font-semibold">卡密批次</h2>
           <p className="text-sm text-muted-foreground">明文卡密仅在生成成功后显示一次；刷新页面后无法找回。</p>
+          </div>
+          <BatchCreateForm plans={plans} pending={batchMutation.isPending} onSubmit={(value) => batchMutation.mutate(value)} />
         </div>
-        <Card>
-          <CardContent className="p-4">
-            <BatchCreateForm plans={plans} pending={batchMutation.isPending} onSubmit={(value) => batchMutation.mutate(value)} />
-          </CardContent>
-        </Card>
         {generatedCodes.length > 0 && (
           <Card className="border-primary/30">
             <CardHeader>
