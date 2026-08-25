@@ -85,6 +85,24 @@ func cancelQRSession(client sidecar.Client, loginHandle string) {
 	})
 }
 
+type resettableSidecar interface {
+	sidecar.Client
+	Close() error
+}
+
+func startQRWithRecovery(ctx context.Context, client sidecar.Client, request sidecar.Request) (*sidecar.Response, error) {
+	response, err := client.Call(ctx, request)
+	if err != nil || sidecarErrorCode(response) != sidecar.ErrInternal {
+		return response, err
+	}
+	resetter, ok := client.(resettableSidecar)
+	if !ok {
+		return response, err
+	}
+	_ = resetter.Close()
+	return client.Call(ctx, request)
+}
+
 func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, *asynq.Task) error {
 	return func(ctx context.Context, t *asynq.Task) error {
 		var envelope struct {
@@ -166,7 +184,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		var startResponse *sidecar.Response
 		cancelled, callErr := callIfNotCancelledWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed), func() error {
 			var callErr error
-			startResponse, callErr = deps.Sidecar.Call(ctx, sidecar.Request{
+			startResponse, callErr = startQRWithRecovery(ctx, deps.Sidecar, sidecar.Request{
 				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
 				Op: sidecar.OpsLoginQRStart, DeadlineMS: 60_000,
 				Input: map[string]any{"profile_dir": profileDir, "locale": "zh-CN"},

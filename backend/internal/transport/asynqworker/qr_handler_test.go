@@ -104,6 +104,27 @@ type bindSessionStub struct {
 	operations []string
 }
 
+type qrStartRecoveryStub struct {
+	closed bool
+	calls  int
+}
+
+func (s *qrStartRecoveryStub) Call(context.Context, sidecar.Request) (*sidecar.Response, error) {
+	s.calls++
+	if !s.closed {
+		return &sidecar.Response{OK: false, Error: &sidecar.Error{Code: sidecar.ErrInternal}}, nil
+	}
+	return &sidecar.Response{OK: true, Result: map[string]any{
+		"login_handle": "qr-recovered",
+		"qr":           map[string]any{"format": "data_url", "value": "data:image/png;base64:test"},
+	}}, nil
+}
+
+func (s *qrStartRecoveryStub) Close() error {
+	s.closed = true
+	return nil
+}
+
 func (r *bindSessionStub) Store(ctx context.Context, _ int64, _, _ uuid.UUID, _ []byte) error {
 	r.operations = append(r.operations, bindOperation(ctx, "store"))
 	return nil
@@ -166,6 +187,23 @@ func TestQRResultDecoders(t *testing.T) {
 	}
 	if got := mapSidecarError(sidecar.ErrSMSCodeExpired); got != apperr.CodeSMSExpired {
 		t.Fatalf("mapped SMS expiry = %q", got)
+	}
+}
+
+func TestQRStartRecoversFromStaleSidecarRuntime(t *testing.T) {
+	stub := &qrStartRecoveryStub{}
+	response, err := startQRWithRecovery(context.Background(), stub, sidecar.Request{
+		ProtocolVersion: sidecar.ProtocolVersion,
+		RequestID:       uuid.New().String(),
+		Op:              sidecar.OpsLoginQRStart,
+		DeadlineMS:      60_000,
+		Input:           map[string]any{"profile_dir": "/tmp/qr-test", "locale": "zh-CN"},
+	})
+	if err != nil {
+		t.Fatalf("startQRWithRecovery() error = %v", err)
+	}
+	if response == nil || !response.OK || stub.calls != 2 || !stub.closed {
+		t.Fatalf("response = %#v, calls = %d, closed = %t", response, stub.calls, stub.closed)
 	}
 }
 
