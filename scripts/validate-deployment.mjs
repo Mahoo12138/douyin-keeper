@@ -46,6 +46,24 @@ export function assertEnvTemplatesSynchronized(rootTemplate, deployTemplate) {
   }
 }
 
+export function assertRuntimeEnvContract(rootTemplate) {
+  const values = parseEnv(rootTemplate)
+  const requiredRuntimeKeys = [
+    'PROTOCOL_SIDECAR_COMMAND',
+    'PROTOCOL_SIDECAR_BUNDLE_DIR',
+    'WORKER_BROWSER_CONCURRENCY',
+    'MAX_GLOBAL_BROWSERS',
+    'BROWSER_SEMAPHORE_TTL',
+    'OUTBOX_BATCH_SIZE',
+    'OUTBOX_POLL_INTERVAL',
+    'SCHEDULE_BATCH_SIZE',
+    'SCHEDULE_INTERVAL',
+  ]
+  for (const key of requiredRuntimeKeys) {
+    if (!(key in values)) throw new Error(`env template is missing runtime key ${key}`)
+  }
+}
+
 export function assertProductionComposeContract(composeText) {
   for (const service of productionServices) {
     if (!new RegExp(`^  ${service}:$`, 'm').test(composeText)) {
@@ -111,6 +129,7 @@ export async function validateDeployment({ checkDocker = true, projectRoot = roo
     readFile(join(projectRoot, 'deploy/docker/worker.Dockerfile'), 'utf8'),
   ])
   assertEnvTemplatesSynchronized(rootEnv, deployEnv)
+  assertRuntimeEnvContract(rootEnv)
   assertProductionComposeContract(compose)
   assertDockerfileContract(backendDockerfile, workerDockerfile)
 
