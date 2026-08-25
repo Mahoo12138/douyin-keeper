@@ -9,7 +9,8 @@ import {
   resumeAccount,
   syncAccountFriends,
 } from '@douyin-keeper/sdk-ts'
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton } from '@douyin-keeper/ui-web'
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Skeleton } from '@douyin-keeper/ui-web'
+import { ShieldAlert, Trash2 } from 'lucide-react'
 
 import { getToken } from '@/auth/session'
 import { waitForJobEvents } from '@/lib/job-progress'
@@ -24,6 +25,7 @@ export function AccountsPage() {
   const queryClient = useQueryClient()
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null)
+  const [releaseTarget, setReleaseTarget] = useState<Account | null>(null)
 
   const accountsQ = useAccountsQuery(token)
   const selectedAccount = accountsQ.accounts.find((account) => account.id === selectedAccountId)
@@ -60,14 +62,16 @@ export function AccountsPage() {
     }
   }
 
-  async function releaseAccount(account: Account) {
-    if (!token || !window.confirm(`确认解除“${account.nickname || '未命名账号'}”的绑定吗？未执行任务会被取消，会话也会被撤销。`)) return
+  async function releaseAccount() {
+    if (!token || !releaseTarget) return
+    const account = releaseTarget
     const key = `${account.id}:release`
     setBusyAction(key)
     try {
       await deleteAccount(token, account.id)
       setSelectedAccountId(null)
       await queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      setReleaseTarget(null)
       toast.success('账号已解除绑定')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '解除绑定失败')
@@ -108,7 +112,7 @@ export function AccountsPage() {
                 onSession={(account) => void runAccountAction(account, 'session')}
                 onFriends={(account) => void runAccountAction(account, 'friends')}
                 onPause={(account) => void runAccountAction(account, account.paused_at ? 'resume' : 'pause')}
-                onRelease={(account) => void releaseAccount(account)}
+                onRelease={(account) => setReleaseTarget(account)}
               />
               {accountsQ.hasNextPage && <div className="mt-4 flex justify-center"><Button variant="outline" onClick={() => void accountsQ.fetchNextPage()} disabled={accountsQ.isFetchingNextPage}>{accountsQ.isFetchingNextPage ? '加载中…' : '加载更多账号'}</Button></div>}
             </>
@@ -117,6 +121,50 @@ export function AccountsPage() {
       </Card>
 
       {selectedAccount && <CapabilityPanel account={selectedAccount} capabilities={capabilitiesQ.data?.items ?? []} loading={capabilitiesQ.isLoading} error={capabilitiesQ.isError} />}
+
+      <ReleaseAccountDialog
+        account={releaseTarget}
+        pending={busyAction === `${releaseTarget?.id}:release`}
+        onOpenChange={(open) => {
+          if (!open && busyAction !== `${releaseTarget?.id}:release`) setReleaseTarget(null)
+        }}
+        onConfirm={() => void releaseAccount()}
+      />
     </div>
+  )
+}
+
+function ReleaseAccountDialog({ account, pending, onOpenChange, onConfirm }: {
+  account: Account | null
+  pending: boolean
+  onOpenChange: (open: boolean) => void
+  onConfirm: () => void
+}) {
+  return (
+    <Dialog open={!!account} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <div className="mb-2 flex size-11 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+            <ShieldAlert className="size-5" />
+          </div>
+          <DialogTitle>解除抖音账号绑定？</DialogTitle>
+          <DialogDescription>
+            将解除“{account?.nickname || '未命名账号'}”的绑定，并撤销当前会话。
+          </DialogDescription>
+        </DialogHeader>
+        <div className="px-6 py-5">
+          <div className="rounded-xl border border-destructive/20 bg-destructive/[0.06] p-4 text-sm leading-6 text-muted-foreground">
+            未执行的任务会被取消，好友与火花任务不会继续使用这个账号。此操作不会影响你的抖音账号本身。
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>保留账号</Button>
+          <Button variant="destructive" onClick={onConfirm} disabled={pending}>
+            <Trash2 />
+            {pending ? '解除中…' : '确认解除绑定'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

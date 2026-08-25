@@ -7,6 +7,7 @@ import { FileText, Pencil, Plus, Save, Sparkles, Trash2 } from 'lucide-react'
 
 import { getToken } from '@/auth/session'
 import { SelectField } from '@/components/select-field'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 
 type Template = NonNullable<Awaited<ReturnType<typeof listMessageTemplates>>>['items'][number]
 type Editor = MessageTemplateInput & { id?: string }
@@ -17,6 +18,7 @@ export function MessageTemplatesPage() {
   const token = getToken()
   const queryClient = useQueryClient()
   const [editor, setEditor] = useState<Editor | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Template | null>(null)
   const templatesQ = useInfiniteQuery({
     queryKey: ['message-templates'],
     queryFn: ({ pageParam }) => listMessageTemplates(token as string, { limit: 50, cursor: pageParam }),
@@ -37,6 +39,7 @@ export function MessageTemplatesPage() {
     mutationFn: (id: string) => deleteMessageTemplate(token as string, id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['message-templates'] })
+      setDeleteTarget(null)
       toast.success('模板已删除')
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : '删除模板失败'),
@@ -64,8 +67,9 @@ export function MessageTemplatesPage() {
 
       <Card>
         <CardHeader><div className="flex items-center gap-3"><div className="rounded-lg bg-primary/10 p-2 text-primary"><FileText className="size-5" /></div><div><CardTitle>我的模板</CardTitle><CardDescription>{templates.length ? `共 ${templates.length} 个模板，套用到任务后会保存为任务自己的内容快照。` : '模板只属于当前账号用户，不会暴露给其他用户。'}</CardDescription></div></div></CardHeader>
-        <CardContent>{templatesQ.isLoading ? <TemplateLoading /> : templatesQ.isError ? <ErrorState onRetry={() => void templatesQ.refetch()} /> : templates.length ? <><TemplateList templates={templates} deletingId={deleteMutation.isPending ? deleteMutation.variables : null} onEdit={(item) => setEditor({ id: item.id, name: item.name, kind: item.kind, body: item.body })} onDelete={(item) => { if (window.confirm(`确定删除“${item.name}”吗？`)) deleteMutation.mutate(item.id) }} />{templatesQ.hasNextPage && <div className="mt-6 flex justify-center"><Button variant="outline" onClick={() => void templatesQ.fetchNextPage()} disabled={templatesQ.isFetchingNextPage}>{templatesQ.isFetchingNextPage ? '加载中…' : '加载更多模板'}</Button></div>}</> : <EmptyState onCreate={() => setEditor({ ...emptyEditor })} />}</CardContent>
+        <CardContent>{templatesQ.isLoading ? <TemplateLoading /> : templatesQ.isError ? <ErrorState onRetry={() => void templatesQ.refetch()} /> : templates.length ? <><TemplateList templates={templates} deletingId={deleteMutation.isPending ? deleteMutation.variables : null} onEdit={(item) => setEditor({ id: item.id, name: item.name, kind: item.kind, body: item.body })} onDelete={setDeleteTarget} />{templatesQ.hasNextPage && <div className="mt-6 flex justify-center"><Button variant="outline" onClick={() => void templatesQ.fetchNextPage()} disabled={templatesQ.isFetchingNextPage}>{templatesQ.isFetchingNextPage ? '加载中…' : '加载更多模板'}</Button></div>}</> : <EmptyState onCreate={() => setEditor({ ...emptyEditor })} />}</CardContent>
       </Card>
+      <ConfirmDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !deleteMutation.isPending) setDeleteTarget(null) }} title="删除消息模板？" description={deleteTarget ? `确定删除“${deleteTarget.name}”吗？` : '确定删除这个消息模板吗？'} impact="删除后，已有任务中的内容快照不会改变；之后无法在任务编辑器中继续套用这个模板。" confirmLabel="删除模板" confirmVariant="destructive" pending={deleteMutation.isPending} onConfirm={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget.id) }} />
       <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/20"><Sparkles className="mt-0.5 size-4 shrink-0 text-amber-600" /><p className="text-muted-foreground">模板不会自动修改已有任务。任务页选择模板时会复制当前内容，避免后续编辑模板时意外改变正在执行的任务。</p></div>
     </div>
   )

@@ -79,7 +79,7 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 			return deps.Jobs.Heartbeat(heartbeatCtx, claimed.ID, deps.WorkerID, deps.LockTTL)
 		})
 		defer stopHeartbeat()
-		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+		if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 			return err
 		}
 		fail := func(code string) error {
@@ -101,7 +101,7 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 			return fail(apperr.CodeAccountBusy)
 		}
 		defer func() { _ = lock.Release(context.Background()) }()
-		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+		if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 			return err
 		}
 
@@ -120,7 +120,7 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 		exportPath := filepath.Join(profileDir, "session-state.json")
 
 		var startResponse *sidecar.Response
-		cancelled, callErr := callIfNotCancelled(ctx, deps.Jobs, claimed, deps.Now, func() error {
+		cancelled, callErr := callIfNotCancelledWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed), func() error {
 			var callErr error
 			startResponse, callErr = deps.Sidecar.Call(ctx, sidecar.Request{
 				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
@@ -163,7 +163,7 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+			if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 				return err
 			}
 			code, getErr := deps.Redis.GetDel(ctx, job.SMSVerificationKey(claimed.PublicID)).Result()
@@ -177,7 +177,7 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 				continue
 			}
 			var response *sidecar.Response
-			cancelled, callErr := callIfNotCancelled(ctx, deps.Jobs, claimed, deps.Now, func() error {
+			cancelled, callErr := callIfNotCancelledWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed), func() error {
 				var err error
 				response, err = deps.Sidecar.Call(ctx, sidecar.Request{
 					ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),

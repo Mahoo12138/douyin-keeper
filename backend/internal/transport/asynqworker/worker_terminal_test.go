@@ -156,6 +156,23 @@ func TestFinishBindRiskFailureKeepsChallengeEventAndRiskInJobTx(t *testing.T) {
 	}
 }
 
+func TestFinishBindRiskFailureReleasesInitialBindingReservation(t *testing.T) {
+	j := &bindJobRepoStub{}
+	accounts := &bindAccountRepoStub{account: &account.Account{ID: 20, BindingStatus: account.BindingBinding}}
+	risk := &transactionalRiskStub{}
+	now := func() time.Time { return time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC) }
+	accountID := int64(20)
+	claimed := &job.Job{ID: 17, PublicID: uuid.New(), AccountID: &accountID, Type: "account.bind.qr", Status: job.StatusRunning}
+	deps := QRBindDeps{Jobs: j, Accounts: accounts, Tx: bindTxStub{}, Risk: risk, Now: now}
+
+	if err := finishBindRiskFailure(context.Background(), deps, claimed, 20, "ADAPTER_UNAVAILABLE"); err != nil {
+		t.Fatal(err)
+	}
+	if len(accounts.operations) != 1 || accounts.operations[0] != "tx:binding" {
+		t.Fatalf("account operations = %#v, want transactional binding release", accounts.operations)
+	}
+}
+
 func TestFinishRebindRiskFailureDoesNotProjectOntoOldSession(t *testing.T) {
 	j := &bindJobRepoStub{}
 	risk := &transactionalRiskStub{}

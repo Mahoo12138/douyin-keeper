@@ -17,5 +17,6 @@ test('labels binding methods for the shared flow', () => {
 
 test('explains re-login identity mismatch without implying the old session was replaced', () => {
   assert.match(bindingErrorMessage('error', 'ACCOUNT_IDENTITY_MISMATCH'), /原有登录态未改变/)
-  assert.equal(bindingErrorMessage('challenge_required'), '需要完成平台安全验证。')
+  assert.match(bindingErrorMessage('challenge_required'), /完成平台安全验证/)
+  assert.match(bindingErrorMessage('error', 'CHALLENGE_REQUIRED'), /完成平台安全验证/)
 })

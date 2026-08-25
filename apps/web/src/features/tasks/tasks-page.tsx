@@ -14,6 +14,7 @@ import { getTaskPageState } from './task-page-state'
 import { useAccountsQuery } from '../accounts/use-accounts-query'
 import { listAllFriendsForAccount } from '../friends/friend-pagination'
 import { SelectField } from '@/components/select-field'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 
 export function TasksPage() {
   const token = getToken()
@@ -23,6 +24,7 @@ export function TasksPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all')
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null)
   const [editor, setEditor] = useState<{ draft: TaskDraft; mode: 'create' | 'edit' } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null)
 
   const accountsQ = useAccountsQuery(token, { loadAll: true })
   const accounts = accountsQ.accounts
@@ -157,12 +159,13 @@ export function TasksPage() {
     } finally { setBusyTaskId(null) }
   }
 
-  async function removeTask(task: Task) {
-    if (!token || !window.confirm('确定删除这个火花任务吗？删除后需要重新创建配置。')) return
-    setBusyTaskId(task.id)
+  async function removeTask() {
+    if (!token || !deleteTarget) return
+    setBusyTaskId(deleteTarget.id)
     try {
-      await deleteTask(token, task.id)
+      await deleteTask(token, deleteTarget.id)
       await queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      setDeleteTarget(null)
       toast.success('任务已删除')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '删除任务失败')
@@ -185,11 +188,12 @@ export function TasksPage() {
         <CardHeader><div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end"><div><CardTitle>火花任务</CardTitle><CardDescription>{visibleTasks.length === tasks.length ? `共 ${tasks.length} 个任务` : `筛选出 ${visibleTasks.length} / ${tasks.length} 个任务`}</CardDescription></div><div className="flex items-center gap-2 text-xs text-muted-foreground"><Filter className="size-4" />保存后配置生效</div></div></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-[minmax(200px,1fr)_repeat(2,minmax(150px,220px))]"><div className="space-y-1.5"><Label htmlFor="task-search">搜索任务</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="task-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="账号、好友或消息内容" className="pl-9" /></div></div><FilterSelect label="账号" value={accountFilter} onChange={setAccountFilter} options={[{ value: 'all', label: '全部账号' }, ...accounts.map((account) => ({ value: account.id, label: account.nickname || '未命名账号' }))]} /><FilterSelect label="状态" value={statusFilter} onChange={(value) => setStatusFilter(value as 'all' | 'enabled' | 'disabled')} options={[{ value: 'all', label: '全部状态' }, { value: 'enabled', label: '每日启用' }, { value: 'disabled', label: '已停用' }]} /></div>
-          {pageState === 'tasks-error' ? <TaskDataError title="任务列表暂时不可用" description="请重试加载任务；现有账号数据不会受到影响。" onRetry={() => void tasksQ.refetch()} /> : visibleTasks.length ? <TaskTable tasks={visibleTasks} accounts={accounts} friends={friends} busyTaskId={busyTaskId} onToggle={(task, enabled) => void toggleTask(task, enabled)} onEdit={openEdit} onRun={(task) => void runTask(task)} onDelete={(task) => void removeTask(task)} /> : <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center"><p className="font-medium">{tasks.length ? '没有符合条件的任务' : '还没有火花任务'}</p><p className="mt-1 text-sm text-muted-foreground">{tasks.length ? '尝试清除筛选条件。' : '为已确认好友创建第一个每日维护任务。'}</p>{!tasks.length && <Button className="mt-4" variant="outline" onClick={openCreate}>创建任务</Button>}</div>}
+          {pageState === 'tasks-error' ? <TaskDataError title="任务列表暂时不可用" description="请重试加载任务；现有账号数据不会受到影响。" onRetry={() => void tasksQ.refetch()} /> : visibleTasks.length ? <TaskTable tasks={visibleTasks} accounts={accounts} friends={friends} busyTaskId={busyTaskId} onToggle={(task, enabled) => void toggleTask(task, enabled)} onEdit={openEdit} onRun={(task) => void runTask(task)} onDelete={setDeleteTarget} /> : <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center"><p className="font-medium">{tasks.length ? '没有符合条件的任务' : '还没有火花任务'}</p><p className="mt-1 text-sm text-muted-foreground">{tasks.length ? '尝试清除筛选条件。' : '为已确认好友创建第一个每日维护任务。'}</p>{!tasks.length && <Button className="mt-4" variant="outline" onClick={openCreate}>创建任务</Button>}</div>}
           {tasksQ.hasNextPage ? <div className="flex justify-center"><Button variant="outline" onClick={() => void tasksQ.fetchNextPage()} disabled={tasksQ.isFetchingNextPage}>{tasksQ.isFetchingNextPage ? '加载中…' : '加载更多任务'}</Button></div> : null}
         </CardContent>
       </Card>
       {editor && <TaskEditorDrawer draft={editor.draft} accounts={accounts} friends={editorFriends} templates={templates} templatesHasNextPage={templatesQ.hasNextPage} templatesLoadingMore={templatesQ.isFetchingNextPage} onTemplatesLoadMore={() => void templatesQ.fetchNextPage()} creatorFirstMessageAllowed={creatorFirstMessageAllowed} creatorFirstMessageLoading={entitlementQ.isLoading} saving={busyTaskId === (editor.draft.id ?? 'new')} onChange={(patch) => setEditor((current) => current ? { ...current, draft: { ...current.draft, ...patch } } : current)} onAccountChange={changeEditorAccount} onTemplateApply={applyTemplate} onClose={() => setEditor(null)} onSave={() => void saveTask()} />}
+      <ConfirmDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !busyTaskId) setDeleteTarget(null) }} title="删除火花任务？" description="删除后，这个任务的发送配置将不再保留，需要重新创建。" impact="正在执行或等待执行的任务也会停止，不会影响抖音账号和好友数据。" confirmLabel="删除任务" confirmVariant="destructive" pending={busyTaskId === deleteTarget?.id} onConfirm={() => void removeTask()} />
     </div>
   )
 }

@@ -29,6 +29,7 @@ QR_SELECTORS = (
 )
 SESSION_COOKIE_NAMES = ("sessionid", "sessionid_ss", "sid_tt")
 CHALLENGE_TEXTS = ("安全验证", "滑动验证", "人机验证", "身份验证")
+CHALLENGE_TITLES = ("验证码中间页", "安全验证", "人机验证")
 LOGIN_PANEL_SELECTOR = "#douyin_login_comp_flat_panel"
 AUTHENTICATED_SELECTORS = (
     '[data-e2e="user-info"]',
@@ -112,6 +113,17 @@ def _challenge_visible(page):
                 return True
         except Exception:
             continue
+    return False
+
+
+def _verification_interstitial_visible(page):
+    """Detect the platform's verification interstitial before QR rendering."""
+    try:
+        title = (page.title() or "").strip()
+        if any(text in title for text in CHALLENGE_TITLES):
+            return True
+    except Exception:
+        pass
     return False
 
 
@@ -244,10 +256,18 @@ def start(input_data):
         _pw, _browser, context, page = manager.__enter__()
         entered = True
         page.goto(HOME_URL, wait_until="domcontentloaded", timeout=30000)
+        if _verification_interstitial_visible(page) or _challenge_visible(page):
+            manager.__exit__(None, None, None)
+            entered = False
+            raise _error("CHALLENGE_REQUIRED", "platform verification is required")
         if not _cookies_have_session(context):
             _click_login(page)
         qr = ""
         for _ in range(20):
+            if _verification_interstitial_visible(page) or _challenge_visible(page):
+                manager.__exit__(None, None, None)
+                entered = False
+                raise _error("CHALLENGE_REQUIRED", "platform verification is required")
             qr = _qr_data_url(page)
             if qr:
                 break

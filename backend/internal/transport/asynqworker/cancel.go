@@ -38,11 +38,68 @@ func cancelIfRequested(ctx context.Context, jobs cancellationStore, claimed *job
 	return true, jobs.Finish(ctx, claimed.ID, job.StatusCancelled, nil, now())
 }
 
+// cancelIfRequestedWithCleanup is the binding-specific cancellation path. A
+// new binding reserves an account-quota slot before the worker starts; when a
+// user cancels, close the Job and release that reservation in one transaction.
+func cancelIfRequestedWithCleanup(
+	ctx context.Context,
+	jobs cancellationStore,
+	tx job.TxManager,
+	claimed *job.Job,
+	now func() time.Time,
+	cleanup func(context.Context) error,
+) (bool, error) {
+	if claimed.CancelRequestedAt == nil {
+		requested, err := jobs.IsCancelRequested(ctx, claimed.ID)
+		if err != nil {
+			return false, err
+		}
+		if !requested {
+			return false, nil
+		}
+	}
+	if tx == nil || cleanup == nil {
+		cancelled, err := cancelIfRequested(ctx, jobs, claimed, now)
+		if !cancelled || err != nil {
+			return cancelled, err
+		}
+		return true, cleanup(ctx)
+	}
+	err := tx.WithinTx(ctx, func(tctx context.Context) error {
+		if err := jobs.AppendEvent(tctx, claimed.ID, job.JobEvent{
+			EventType: "cancelled", Payload: json.RawMessage(`{"reason":"user_requested"}`), CreatedAt: now(),
+		}); err != nil {
+			return err
+		}
+		if err := jobs.Finish(tctx, claimed.ID, job.StatusCancelled, nil, now()); err != nil {
+			return err
+		}
+		return cleanup(tctx)
+	})
+	return true, err
+}
+
 // callIfNotCancelled closes the final race between a cancellation check and
 // an irreversible platform call. The callback is never invoked after the
 // worker consumes a cancellation request.
 func callIfNotCancelled(ctx context.Context, jobs cancellationStore, claimed *job.Job, now func() time.Time, call func() error) (bool, error) {
 	cancelled, err := cancelIfRequested(ctx, jobs, claimed, now)
+	if cancelled || err != nil {
+		return cancelled, err
+	}
+	return false, call()
+}
+
+func callIfNotCancelledWithCleanup(
+	ctx context.Context,
+	jobs cancellationStore,
+	tx job.TxManager,
+	claimed *job.Job,
+	now func() time.Time,
+	cleanup func(context.Context) error,
+	call func() error,
+) (bool, error) {
+	cancelled, err := cancelIfRequestedWithCleanup(ctx, jobs, tx, claimed, now, cleanup)
 	if cancelled || err != nil {
 		return cancelled, err
 	}

@@ -55,6 +55,7 @@ func (r *bindJobRepoStub) RequestCancel(context.Context, int64, time.Time) error
 
 type bindAccountRepoStub struct {
 	operations []string
+	account    *account.Account
 }
 
 func (r *bindAccountRepoStub) ListOwned(context.Context, int64) ([]*account.Account, error) {
@@ -64,7 +65,7 @@ func (r *bindAccountRepoStub) GetOwned(context.Context, int64, uuid.UUID) (*acco
 	return nil, nil
 }
 func (r *bindAccountRepoStub) GetByID(context.Context, int64) (*account.Account, error) {
-	return nil, nil
+	return r.account, nil
 }
 func (r *bindAccountRepoStub) Create(context.Context, *account.Account) error { return nil }
 func (r *bindAccountRepoStub) SetBindingStatus(ctx context.Context, _ int64, _ account.BindingStatus) error {

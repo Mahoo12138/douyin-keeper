@@ -108,7 +108,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			return deps.Jobs.Heartbeat(heartbeatCtx, claimed.ID, deps.WorkerID, deps.LockTTL)
 		})
 		defer stopHeartbeat()
-		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+		if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 			return err
 		}
 		fail := func(code string) error {
@@ -129,7 +129,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			return fail(apperr.CodeAccountBusy)
 		}
 		defer func() { _ = lock.Release(context.Background()) }()
-		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+		if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 			return err
 		}
 
@@ -148,7 +148,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		exportPath := filepath.Join(profileDir, "session-state.json")
 
 		var startResponse *sidecar.Response
-		cancelled, callErr := callIfNotCancelled(ctx, deps.Jobs, claimed, deps.Now, func() error {
+		cancelled, callErr := callIfNotCancelledWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed), func() error {
 			var callErr error
 			startResponse, callErr = deps.Sidecar.Call(ctx, sidecar.Request{
 				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
@@ -174,7 +174,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
 			return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
 		}
-		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+		if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 			return err
 		}
 		if err := deps.Jobs.MarkWaiting(ctx, claimed.ID, deps.LockTTL); err != nil {
@@ -197,11 +197,11 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+			if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 				return err
 			}
 			var response *sidecar.Response
-			cancelled, callErr := callIfNotCancelled(ctx, deps.Jobs, claimed, deps.Now, func() error {
+			cancelled, callErr := callIfNotCancelledWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed), func() error {
 				var err error
 				response, err = deps.Sidecar.Call(ctx, sidecar.Request{
 					ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
@@ -238,7 +238,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 				lastState = "scanned"
 			}
 			if polled.State == "authenticated" && polled.SessionExported {
-				if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+				if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 					return err
 				}
 				return completeQRBind(ctx, deps, claimed, acct, exportPath, polled)
@@ -260,7 +260,7 @@ func completeQRBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct
 }
 
 func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *account.Account, exportPath string, identity bindIdentity) error {
-	if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+	if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 		return err
 	}
 	if identity.PlatformUserID == "" {
@@ -276,12 +276,12 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 	if err != nil {
 		return finishBindFailure(ctx, deps, claimed, apperr.CodeAdapterIncompatible)
 	}
-	if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+	if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 		return err
 	}
 	var validationCancelled bool
 	validationErr := func() error {
-		cancelled, callErr := callIfNotCancelled(ctx, deps.Jobs, claimed, deps.Now, func() error {
+		cancelled, callErr := callIfNotCancelledWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed), func() error {
 			response, err := deps.Sidecar.Call(ctx, sidecar.Request{
 				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
 				Op: sidecar.OpsSessionValidate, DeadlineMS: 60_000,
@@ -328,7 +328,7 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 		observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, code, deps.Now)
 		return finishBindRiskFailure(ctx, deps, claimed, acct.ID, code)
 	}
-	if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
+	if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 		return err
 	}
 	if deps.Tx == nil || deps.Outbox == nil {
@@ -401,11 +401,18 @@ func enqueueInitialFriendsSync(ctx context.Context, deps QRBindDeps, acct *accou
 }
 
 func finishBindFailure(ctx context.Context, deps QRBindDeps, claimed *job.Job, code string) error {
+	cleanup := releaseInitialBinding(deps, claimed)
 	if deps.Tx == nil {
 		_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "error", Payload: mustJSON(map[string]string{"code": code}), CreatedAt: deps.Now()})
-		return deps.Jobs.Finish(ctx, claimed.ID, job.StatusFailed, &code, deps.Now())
+		if err := deps.Jobs.Finish(ctx, claimed.ID, job.StatusFailed, &code, deps.Now()); err != nil {
+			return err
+		}
+		if cleanup != nil {
+			return cleanup(ctx)
+		}
+		return nil
 	}
-	return commitWorkerFailure(ctx, deps.Tx, deps.Jobs, nil, claimed, 0, code, "", "", nil, deps.Now)
+	return commitWorkerFailure(ctx, deps.Tx, deps.Jobs, nil, claimed, 0, code, "", "", nil, deps.Now, cleanup)
 }
 
 func finishBindRiskFailure(ctx context.Context, deps QRBindDeps, claimed *job.Job, acctID int64, code string, events ...job.JobEvent) error {
@@ -433,7 +440,30 @@ func finishBindRiskFailure(ctx context.Context, deps QRBindDeps, claimed *job.Jo
 		risk = nil
 	}
 	return commitWorkerFailureWithEvents(ctx, deps.Tx, deps.Jobs, risk, claimed, acctID, code,
-		capability.AdapterBrowserConsumer, claimed.PublicID.String(), fallback, events, deps.Now)
+		capability.AdapterBrowserConsumer, claimed.PublicID.String(), fallback, events, deps.Now,
+		releaseInitialBinding(deps, claimed))
+}
+
+// releaseInitialBinding gives back the quota reservation created for a new
+// binding when its terminal job fails. Re-login jobs reuse a bound account and
+// must keep the existing binding/session untouched.
+func releaseInitialBinding(deps QRBindDeps, claimed *job.Job) func(context.Context) error {
+	if claimed == nil || isRebindJob(claimed) || claimed.AccountID == nil || deps.Accounts == nil {
+		return nil
+	}
+	return func(ctx context.Context) error {
+		acct, err := deps.Accounts.GetByID(ctx, *claimed.AccountID)
+		if err != nil {
+			if app, ok := apperr.As(err); ok && app.Code == apperr.CodeNotFound {
+				return nil
+			}
+			return err
+		}
+		if acct != nil && acct.BindingStatus == account.BindingBinding {
+			return deps.Accounts.SetBindingStatus(ctx, acct.ID, account.BindingUnbound)
+		}
+		return nil
+	}
 }
 
 func isRebindJob(claimed *job.Job) bool {
