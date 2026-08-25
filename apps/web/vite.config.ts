@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 import { manualChunks } from './vite-chunks'
+import { apiProxy } from './vite-proxy'
 
 // SPA for the Go backend: /api is proxied in dev; production builds emit
 // dist/ which the Go binary serves via go:embed (docs/16 §2).
@@ -22,7 +23,9 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5173,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8080', changeOrigin: true },
+      // Keep the browser Origin and Host aligned for cookie-backed refresh/logout
+      // checks; production already serves the SPA and API from one origin.
+      '/api': apiProxy,
     },
   },
   preview: {

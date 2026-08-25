@@ -68,7 +68,8 @@ keeper-backend
 
 本地开发使用 Vite 提供 SPA，`apps/web/vite.config.ts` 将 dev/preview 服务固定绑定到
 IPv4 loopback（`127.0.0.1`），与 README 中的访问地址一致；生产运行不依赖该服务，仍只
-从 Backend 的 `go:embed` 静态文件系统提供页面。
+从 Backend 的 `go:embed` 静态文件系统提供页面。开发代理保留原始 Host，不改写浏览器
+Origin 对应的主机名，使 HttpOnly Cookie 的刷新/退出同源校验与生产单体部署一致。
 
 生产构建使用 TanStack Router 自动路由拆包，并对 React、Router、Query、UI、表单和图标
 依赖生成带 hash 的共享 vendor chunk；统一 SPA 发布边界保持不变，但用户只在进入对应
