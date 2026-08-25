@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +18,62 @@ type ConversationRepo struct {
 }
 
 func NewConversationRepo(pool *pgxpool.Pool) *ConversationRepo { return &ConversationRepo{pool: pool} }
+
+// SyncBatch upserts a complete page crawl without deleting conversations that
+// are absent from the platform response. Platform lists can be filtered or
+// eventually consistent; an explicit archive/delete signal is required before
+// changing the local index state.
+func (r *ConversationRepo) SyncBatch(ctx context.Context, accountID int64, items []conversation.SyncItem, at time.Time) error {
+	for _, item := range items {
+		if item.PlatformConversationID == "" || item.PlatformUserID == "" {
+			return fmt.Errorf("conversation sync: stable platform ids are required")
+		}
+		if item.Channel != "consumer" && item.Channel != "creator" {
+			return fmt.Errorf("conversation sync: unsupported channel %q", item.Channel)
+		}
+		friendID, err := r.upsertConversationFriend(ctx, accountID, item, at)
+		if err != nil {
+			return err
+		}
+		_, err = From(ctx, r.pool).Exec(ctx, `
+			INSERT INTO conversations (public_id, account_id, friend_id, platform_conversation_id,
+				channel, last_message_at, last_synced_at, created_at, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$7,$7)
+			ON CONFLICT (account_id, platform_conversation_id) DO UPDATE SET
+				friend_id=EXCLUDED.friend_id, channel=EXCLUDED.channel,
+				last_message_at=COALESCE(EXCLUDED.last_message_at, conversations.last_message_at),
+				last_synced_at=EXCLUDED.last_synced_at, updated_at=EXCLUDED.updated_at`,
+			uuid.New(), accountID, friendID, item.PlatformConversationID, item.Channel,
+			item.LastMessageAt, at)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ConversationRepo) upsertConversationFriend(ctx context.Context, accountID int64, item conversation.SyncItem, at time.Time) (int64, error) {
+	var friendID int64
+	err := From(ctx, r.pool).QueryRow(ctx, `
+		UPDATE friends SET identity_status='resolved', display_name=$3,
+			has_conversation=true, last_seen_at=$4, updated_at=$4, deleted_at=NULL
+		WHERE account_id=$1 AND platform_user_id=$2
+		RETURNING id`, accountID, item.PlatformUserID, item.DisplayName, at).Scan(&friendID)
+	if err == nil {
+		return friendID, nil
+	}
+	if err != pgx.ErrNoRows {
+		return 0, err
+	}
+	if err := From(ctx, r.pool).QueryRow(ctx, `
+		INSERT INTO friends (public_id, account_id, platform_user_id, identity_status,
+			display_name, has_conversation, last_seen_at, created_at, updated_at)
+		VALUES ($1,$2,$3,'resolved',$4,true,$5,$5,$5)
+		RETURNING id`, uuid.New(), accountID, item.PlatformUserID, item.DisplayName, at).Scan(&friendID); err != nil {
+		return 0, err
+	}
+	return friendID, nil
+}
 
 func (r *ConversationRepo) ListByAccountOwned(ctx context.Context, userID int64, accountPublicID uuid.UUID, filter conversation.ListFilter) ([]*conversation.Conversation, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
@@ -147,4 +204,5 @@ func (r *ConversationRepo) getByOwnedID(ctx context.Context, userID int64, accou
 
 var _ conversation.Repository = (*ConversationRepo)(nil)
 var _ conversation.PageRepository = (*ConversationRepo)(nil)
+var _ conversation.SyncRepository = (*ConversationRepo)(nil)
 var _ conversation.PlatformArchiveRepository = (*ConversationRepo)(nil)

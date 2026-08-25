@@ -27,7 +27,7 @@ func TestAdminEntitlementViewsExposeSummariesOnly(t *testing.T) {
 		UserPublicID:  uuid.MustParse("99999999-9999-9999-9999-999999999999"), UserDisplayName: "demo",
 		PlanPublicID: uuid.MustParse("66666666-6666-6666-6666-666666666666"),
 		PlanCode:     "standard", PlanName: "标准版", SourceType: entitlement.SourceCard,
-		StartsAt: now.Add(-time.Hour), ExpiresAt: now.Add(24 * time.Hour), CodeFingerprint: &fingerprint, RevokeReason: &reason, CreatedAt: now,
+		StartsAt: now.Add(-time.Hour), ExpiresAt: time.Now().Add(24 * time.Hour), CodeFingerprint: &fingerprint, RevokeReason: &reason, CreatedAt: now,
 	})
 	if redemption.CodeFingerprint == nil || *redemption.CodeFingerprint != fingerprint || redemption.ID == "" || redemption.PlanID == "" || redemption.Status != "active" || redemption.RevokeReason == nil {
 		t.Fatalf("redemption view = %+v", redemption)

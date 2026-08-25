@@ -349,6 +349,15 @@ export async function syncAccountFriends(accessToken: string, accountId: string)
   return data
 }
 
+export async function syncAccountConversations(accessToken: string, accountId: string) {
+  const { data, error } = await api.POST('/accounts/{accountId}/conversations-sync', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { path: { accountId } },
+  })
+  if (error) throwApiError(error, 'conversation sync failed')
+  return data
+}
+
 export async function pauseAccount(accessToken: string, accountId: string) {
   const { error } = await api.POST('/accounts/{accountId}/pause', {
     headers: { Authorization: `Bearer ${accessToken}` },

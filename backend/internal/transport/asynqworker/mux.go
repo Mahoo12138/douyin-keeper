@@ -17,6 +17,7 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/conversation"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/friend"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/asynqqueue"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
@@ -40,6 +41,7 @@ var outboxKinds = []string{
 	asynqqueue.KindAccountBindSMS,
 	asynqqueue.KindSessionCheckBrowser,
 	asynqqueue.KindFriendsSyncBrowser,
+	asynqqueue.KindConversationsSyncBrowser,
 	asynqqueue.KindConversationArchive,
 	asynqqueue.KindSendDispatch,
 	asynqqueue.KindSendBrowser,
@@ -55,7 +57,7 @@ func NewMux(loader PayloadLoader, log *slog.Logger) *asynq.ServeMux {
 	return newMux(loader, nil, nil, nil, nil, log)
 }
 
-// SessionCheckDeps wires the session-check, friends-sync and browser-send jobs.
+// SessionCheckDeps wires the session-check, friend/conversation sync and browser-send jobs.
 // Sidecar availability/capability checks remain the final execution gate.
 type SessionCheckDeps struct {
 	Jobs     job.Repository
@@ -63,11 +65,12 @@ type SessionCheckDeps struct {
 	Sessions interface {
 		WithTempFile(context.Context, int64, uuid.UUID, uuid.UUID, func(string) error) error
 	}
-	Sidecar sidecar.Client
-	Redis   *redis.Client
-	Friends friend.SyncRepository
-	Targets friend.SendTargetRepository
-	Tasks   interface {
+	Sidecar       sidecar.Client
+	Redis         *redis.Client
+	Friends       friend.SyncRepository
+	Conversations conversation.SyncRepository
+	Targets       friend.SendTargetRepository
+	Tasks         interface {
 		GetByID(context.Context, int64) (*task.SparkTask, error)
 	}
 	Sends        send.Repository
@@ -174,6 +177,10 @@ func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindD
 		}
 		if kind == asynqqueue.KindFriendsSyncBrowser && sessionDeps != nil && sessionDeps.Friends != nil {
 			register(kind, friendsSyncHandler(loader, *sessionDeps))
+			continue
+		}
+		if kind == asynqqueue.KindConversationsSyncBrowser && sessionDeps != nil && sessionDeps.Conversations != nil {
+			register(kind, conversationsSyncHandler(loader, *sessionDeps))
 			continue
 		}
 		if kind == asynqqueue.KindConversationArchive && sessionDeps != nil {

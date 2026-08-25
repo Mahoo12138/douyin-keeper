@@ -67,6 +67,7 @@ func main() {
 	jobRepo := postgres.NewJobRepo(pool)
 	accountRepo := postgres.NewAccountRepo(pool)
 	friendRepo := postgres.NewFriendRepo(pool)
+	conversationRepo := postgres.NewConversationRepo(pool)
 	taskRepo := postgres.NewTaskRepo(pool)
 	sendRepo := postgres.NewSendRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
@@ -100,7 +101,7 @@ func main() {
 	workerID += ":" + time.Now().Format("20060102150405")
 	mux := asynqworker.NewBrowserMux(outboxRepo, asynqworker.SessionCheckDeps{
 		Jobs: jobRepo, Accounts: accountRepo, Sessions: sessionSvc, Sidecar: sidecarClient,
-		Redis: rdb, Friends: friendRepo, Targets: friendRepo, Tasks: taskRepo, Sends: sendRepo,
+		Redis: rdb, Friends: friendRepo, Conversations: conversationRepo, Targets: friendRepo, Tasks: taskRepo, Sends: sendRepo,
 		Outbox:       outboxRepo,
 		Capabilities: postgres.NewCapabilityRepo(pool),
 		Health:       healthService,

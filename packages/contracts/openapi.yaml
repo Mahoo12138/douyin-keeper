@@ -755,6 +755,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/JobRef'
+  /accounts/{accountId}/conversations-sync:
+    post:
+      operationId: syncAccountConversations
+      parameters:
+      - $ref: '#/components/parameters/AccountId'
+      responses:
+        '202':
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobRef'
   /accounts/{accountId}/capabilities:
     get:
       operationId: getAccountCapabilities

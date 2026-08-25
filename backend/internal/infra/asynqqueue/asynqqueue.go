@@ -14,16 +14,17 @@ import (
 // Task kinds (outbox.kind -> asynq task type). These align with docs/15 §18
 // queue split: interactive / browser / light.
 const (
-	KindAccountBindQR       = "account.bind.qr"
-	KindAccountBindSMS      = "account.bind.sms" // future
-	KindSessionCheckBrowser = "account.session_check.browser"
-	KindFriendsSyncBrowser  = "account.friends_sync.browser"
-	KindConversationArchive = "conversation.archive.browser"
-	KindSendDispatch        = "send.dispatch"
-	KindSendBrowser         = "send.browser"
-	KindSendProtocol        = "send.protocol"
-	KindCapabilityProbe     = "capability.probe"
-	KindNotificationWechat  = "notification.wechat.send"
+	KindAccountBindQR            = "account.bind.qr"
+	KindAccountBindSMS           = "account.bind.sms" // future
+	KindSessionCheckBrowser      = "account.session_check.browser"
+	KindFriendsSyncBrowser       = "account.friends_sync.browser"
+	KindConversationsSyncBrowser = "account.conversations_sync.browser"
+	KindConversationArchive      = "conversation.archive.browser"
+	KindSendDispatch             = "send.dispatch"
+	KindSendBrowser              = "send.browser"
+	KindSendProtocol             = "send.protocol"
+	KindCapabilityProbe          = "capability.probe"
+	KindNotificationWechat       = "notification.wechat.send"
 
 	QueueInteractive = "interactive"
 	QueueBrowser     = "browser"
@@ -35,7 +36,7 @@ func QueueFor(kind string) string {
 	switch kind {
 	case KindAccountBindQR, KindAccountBindSMS:
 		return QueueInteractive
-	case KindSessionCheckBrowser, KindFriendsSyncBrowser, KindConversationArchive, KindSendBrowser:
+	case KindSessionCheckBrowser, KindFriendsSyncBrowser, KindConversationsSyncBrowser, KindConversationArchive, KindSendBrowser:
 		return QueueBrowser
 	case KindSendDispatch, KindSendProtocol, KindCapabilityProbe, KindNotificationWechat:
 		return QueueLight

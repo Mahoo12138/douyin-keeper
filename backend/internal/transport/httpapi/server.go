@@ -162,6 +162,7 @@ func (s *Server) Router() http.Handler {
 			private.Post("/accounts/bindings", s.handleCreateBinding)
 			private.Post("/accounts/{accountId}/session-check", s.handleAccountSessionCheck)
 			private.Post("/accounts/{accountId}/friends-sync", s.handleAccountFriendsSync)
+			private.Post("/accounts/{accountId}/conversations-sync", s.handleAccountConversationsSync)
 			private.Post("/accounts/{accountId}/pause", s.handleAccountPause)
 			private.Post("/accounts/{accountId}/resume", s.handleAccountResume)
 			private.Delete("/accounts/{accountId}", s.handleAccountDelete)

@@ -144,7 +144,7 @@ func TestForwardedHeadersRequireTrustedProxyPeer(t *testing.T) {
 }
 
 func TestAuthenticateRejectsDisabledUserBeforeHandler(t *testing.T) {
-	now := time.Date(2026, 8, 25, 9, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	user := &auth.User{PublicID: uuid.MustParse("99999999-9999-9999-9999-999999999999"), Role: auth.RoleUser, Status: auth.UserDisabled}
 	secret := []byte("test-signing-key")
 	token, err := auth.IssueAccess(secret, time.Minute, user, uuid.NewString(), auth.ClientWeb, now)

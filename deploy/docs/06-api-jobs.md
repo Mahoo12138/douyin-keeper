@@ -29,6 +29,7 @@
 - `POST /api/accounts/bindings`（`method=qr|sms`；SMS 额外接收手机号；可选 `account_id` 重新登录已有账号）
 - `POST /api/accounts/:id/session-check`
 - `POST /api/accounts/:id/friends-sync`
+- `POST /api/accounts/:id/conversations-sync`
 - `POST /api/accounts/:id/pause`
 - `POST /api/accounts/:id/resume`
 - `DELETE /api/accounts/:id`
@@ -41,6 +42,7 @@
 
 ### Conversations
 
+- `POST /api/accounts/:id/conversations-sync`（创建会话索引同步 Job）
 - `GET /api/accounts/:id/conversations`（默认只返回未归档会话；`include_archived=true` 用于管理查看）
 - `PATCH /api/accounts/:id/conversations/:conversationId`（设置用户侧归档标记）
 - `POST /api/accounts/:id/conversations/:conversationId/platform-archive`（创建平台侧归档 Job，body 为 `{"archived":true|false}`）
@@ -51,6 +53,8 @@
 `PLATFORM_ARCHIVE_UNAVAILABLE`，selector 变化或回执未知时保持 fail-closed。平台归档请求现已
 进入通用 Job/Transactional Outbox、Browser Worker 和账号锁链路；Worker 只在 Sidecar 返回
 确认回执后将 Job 标记成功，不会修改本地 `conversations.archived_at` 或复用本地 API 假装平台操作成功。
+会话同步 Job 会按平台会话 ID 游标读取全部 `conversations.list` 页面，并在单一事务中 upsert 对端好友和会话索引；
+稳定 ID 重复、游标不前进、通道或时间字段非法时整次同步 fail-closed，不提交部分快照。
 
 ### Tasks
 

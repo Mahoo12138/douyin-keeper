@@ -324,6 +324,11 @@ GET /jobs/{job_id}/events
 
 返回 Job。
 
+### `POST /accounts/{account_id}/conversations-sync`
+
+返回 Job。Worker 会在 Browser Sidecar 中按 `conversations.list` 的平台会话 ID 游标读取完整结果，
+仅在所有页面成功且稳定 ID、通道、时间字段通过校验后，在一个数据库事务中写入会话索引；失败不会提交部分快照。
+
 ### `POST /accounts/{account_id}/pause`
 
 可选 body：
@@ -800,6 +805,7 @@ GET  /accounts
 POST /accounts/bindings
 POST /accounts/{id}/session-check
 POST /accounts/{id}/friends-sync
+POST /accounts/{id}/conversations-sync
 POST /accounts/{id}/pause
 POST /accounts/{id}/resume
 DELETE /accounts/{id}

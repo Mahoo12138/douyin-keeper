@@ -39,6 +39,23 @@ type ListPage struct {
 	NextAfterID int64
 }
 
+// SyncItem is the adapter-neutral snapshot returned by conversations.list.
+// Platform IDs are the only identity keys; display names are refreshed for
+// presentation only.
+type SyncItem struct {
+	PlatformConversationID string
+	PlatformUserID         string
+	DisplayName            string
+	Channel                string
+	LastMessageAt          *time.Time
+}
+
+// SyncRepository is the worker-only write slice for a complete conversation
+// crawl. It intentionally does not expose bulk mutation to HTTP handlers.
+type SyncRepository interface {
+	SyncBatch(ctx context.Context, accountID int64, items []SyncItem, at time.Time) error
+}
+
 type Repository interface {
 	ListByAccountOwned(ctx context.Context, userID int64, accountPublicID uuid.UUID, filter ListFilter) ([]*Conversation, error)
 	SetArchived(ctx context.Context, userID int64, accountPublicID, conversationPublicID uuid.UUID, archived bool, at time.Time) (*Conversation, error)

@@ -270,6 +270,30 @@ func (s *Service) RequestFriendsSync(ctx context.Context, userID int64, publicID
 		outbox.KindFriendsSyncBrowser, false)
 }
 
+// RequestConversationsSync starts an account-scoped conversation crawl. It
+// uses the same entitlement gate as friend sync because both are read-only
+// platform indexing operations for the bound account.
+func (s *Service) RequestConversationsSync(ctx context.Context, userID int64, publicID uuid.UUID) (uuid.UUID, error) {
+	acct, err := s.repo.GetOwned(ctx, userID, publicID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if acct.BindingStatus != BindingBound {
+		return uuid.Nil, apperr.Conflict(apperr.CodeConflict, "account is not bound")
+	}
+	dec, err := s.gate.Authorize(ctx, entitlement.AuthorizationRequest{
+		UserID: userID, Action: entitlement.ActionFriendsSync,
+	})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if !dec.Allowed {
+		return uuid.Nil, gateErr(dec.ReasonCode)
+	}
+	return s.createPlatformJob(ctx, acct, "account.conversations_sync.browser",
+		outbox.KindConversationsSyncBrowser, false)
+}
+
 // Pause defers all future automated work for the account (risk / user choice).
 func (s *Service) Pause(ctx context.Context, userID int64, publicID uuid.UUID) error {
 	acct, err := s.repo.GetOwned(ctx, userID, publicID)

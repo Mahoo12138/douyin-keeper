@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { listConversations, requestPlatformConversationArchive, setConversationArchived, type components } from '@douyin-keeper/sdk-ts'
+import { listConversations, requestPlatformConversationArchive, setConversationArchived, syncAccountConversations, type components } from '@douyin-keeper/sdk-ts'
 import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@douyin-keeper/ui-web'
-import { Archive, ArchiveRestore, CloudCog, Filter, MessageCircle, Search, Smartphone } from 'lucide-react'
+import { Archive, ArchiveRestore, CloudCog, Filter, MessageCircle, RefreshCw, Search, Smartphone } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { getToken } from '@/auth/session'
+import { waitForJobEvents } from '@/lib/job-progress'
 import { useAccountsQuery } from '../accounts/use-accounts-query'
 import { getPlatformArchiveAction } from './conversation-utils'
 import { SelectField } from '@/components/select-field'
@@ -48,6 +49,17 @@ export function ConversationsPage() {
       requestPlatformConversationArchive(token as string, accountId as string, conversationId, archived),
     onSuccess: () => toast.success('平台归档任务已提交，等待后台与适配器确认'),
     onError: (error) => toast.error(error instanceof Error ? error.message : '提交平台归档任务失败；平台状态未改变'),
+  })
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const job = await syncAccountConversations(token as string, accountId as string)
+      await waitForJobEvents(token as string, job.job_id)
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['conversations', accountId] })
+      toast.success('会话同步完成')
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : '会话同步失败'),
   })
 
   const conversations = conversationsQ.data?.pages.flatMap((page) => page.items) ?? []
@@ -97,7 +109,7 @@ export function ConversationsPage() {
         <CardHeader>
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
             <div><CardTitle>已建立会话</CardTitle><CardDescription>{visibleConversations.length === conversations.length ? `共 ${conversations.length} 个会话` : `筛选出 ${visibleConversations.length} / ${conversations.length} 个会话`}</CardDescription></div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground"><Filter className="size-4" />数据来自最近一次好友同步</div>
+            <div className="flex flex-wrap items-center gap-3"><div className="flex items-center gap-2 text-xs text-muted-foreground"><Filter className="size-4" />数据来自最近一次会话同步</div><Button size="sm" variant="outline" onClick={() => syncMutation.mutate()} disabled={!accountId || syncMutation.isPending}><RefreshCw className={syncMutation.isPending ? 'mr-1.5 size-4 animate-spin' : 'mr-1.5 size-4'} />{syncMutation.isPending ? '同步中…' : '同步会话'}</Button></div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -151,9 +163,9 @@ function ConversationSelect({ label, value, onChange, options }: { label: string
 
 function SummaryCard({ label, value }: { label: string; value: string | number }) { return <Card><CardContent className="p-5"><div className="text-xs text-muted-foreground">{label}</div><div className="mt-1 truncate text-xl font-semibold">{value}</div></CardContent></Card> }
 
-function EmptyState({ hasFilters, onReset }: { hasFilters: boolean; onReset: () => void }) { return <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-14 text-center"><MessageCircle className="size-8 text-muted-foreground" /><p className="mt-3 font-medium">{hasFilters ? '没有符合条件的会话' : '还没有会话数据'}</p>{hasFilters ? <Button className="mt-4" variant="outline" onClick={onReset}>清除筛选</Button> : <p className="mt-1 text-sm text-muted-foreground">先到「好友与火花」页同步好友。</p>}</div> }
+function EmptyState({ hasFilters, onReset }: { hasFilters: boolean; onReset: () => void }) { return <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-14 text-center"><MessageCircle className="size-8 text-muted-foreground" /><p className="mt-3 font-medium">{hasFilters ? '没有符合条件的会话' : '还没有会话数据'}</p>{hasFilters ? <Button className="mt-4" variant="outline" onClick={onReset}>清除筛选</Button> : <p className="mt-1 text-sm text-muted-foreground">点击“同步会话”读取账号当前会话。</p>}</div> }
 
-function ErrorState({ onRetry }: { onRetry: () => void }) { return <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-10 text-center"><p className="font-medium">会话列表暂时不可用</p><p className="mt-1 text-sm text-muted-foreground">请稍后重试，或先确认账号已经完成好友同步。</p><Button className="mt-4" variant="outline" onClick={onRetry}>重新加载</Button></div> }
+function ErrorState({ onRetry }: { onRetry: () => void }) { return <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-10 text-center"><p className="font-medium">会话列表暂时不可用</p><p className="mt-1 text-sm text-muted-foreground">请稍后重试，或先确认账号已经完成会话同步。</p><Button className="mt-4" variant="outline" onClick={onRetry}>重新加载</Button></div> }
 
 function ConversationsLoading() { return <div className="space-y-6"><Skeleton className="h-20 w-full" /><div className="grid gap-3 sm:grid-cols-4"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div><Skeleton className="h-[420px] w-full" /></div> }
 

@@ -59,6 +59,7 @@ func main() {
 	capabilityRepo := postgres.NewCapabilityRepo(pool)
 	accountRepo := postgres.NewAccountRepo(pool)
 	friendRepo := postgres.NewFriendRepo(pool)
+	conversationRepo := postgres.NewConversationRepo(pool)
 	taskRepo := postgres.NewTaskRepo(pool)
 	sendRepo := postgres.NewSendRepo(pool)
 	outboxRepo := postgres.NewOutboxRepo(pool)
@@ -102,7 +103,7 @@ func main() {
 	protocolWorkerID += ":" + time.Now().Format("20060102150405")
 	protocolDeps := &asynqworker.SessionCheckDeps{
 		Accounts: accountRepo, Sessions: sessionSvc, Sidecar: protocolClient, Redis: rdb,
-		Targets: friendRepo, Tasks: taskRepo, Sends: sendRepo, Capabilities: capabilityRepo,
+		Friends: friendRepo, Conversations: conversationRepo, Targets: friendRepo, Tasks: taskRepo, Sends: sendRepo, Capabilities: capabilityRepo,
 		Outbox: outboxRepo,
 		Health: healthService, Risk: riskService, Entitlement: entitlementSvc, Quota: entitlementSvc,
 		Tx: workerTx, WorkerID: protocolWorkerID, LockTTL: 2 * time.Minute, Metrics: metrics,

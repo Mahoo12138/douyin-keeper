@@ -32,14 +32,15 @@ type Outbox interface {
 
 // Kind constants mirror asynqqueue kinds.
 const (
-	KindAccountBindQR       = "account.bind.qr"
-	KindAccountBindSMS      = "account.bind.sms"
-	KindSessionCheckBrowser = "account.session_check.browser"
-	KindFriendsSyncBrowser  = "account.friends_sync.browser"
-	KindConversationArchive = "conversation.archive.browser"
-	KindSendDispatch        = "send.dispatch"
-	KindSendBrowser         = "send.browser"
-	KindSendProtocol        = "send.protocol"
-	KindCapabilityProbe     = "capability.probe"
-	KindNotificationWechat  = "notification.wechat.send"
+	KindAccountBindQR            = "account.bind.qr"
+	KindAccountBindSMS           = "account.bind.sms"
+	KindSessionCheckBrowser      = "account.session_check.browser"
+	KindFriendsSyncBrowser       = "account.friends_sync.browser"
+	KindConversationsSyncBrowser = "account.conversations_sync.browser"
+	KindConversationArchive      = "conversation.archive.browser"
+	KindSendDispatch             = "send.dispatch"
+	KindSendBrowser              = "send.browser"
+	KindSendProtocol             = "send.protocol"
+	KindCapabilityProbe          = "capability.probe"
+	KindNotificationWechat       = "notification.wechat.send"
 )

@@ -144,6 +144,21 @@ func (s *Server) handleAccountFriendsSync(w http.ResponseWriter, r *http.Request
 	writeAccepted(w, JobRef{JobID: jobID})
 }
 
+func (s *Server) handleAccountConversationsSync(w http.ResponseWriter, r *http.Request) {
+	p := auth.MustPrincipal(r.Context())
+	accountID, err := uuid.Parse(pathParam(r, "accountId"))
+	if err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid account id"))
+		return
+	}
+	jobID, err := s.accounts.RequestConversationsSync(r.Context(), p.UserID, accountID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeAccepted(w, JobRef{JobID: jobID})
+}
+
 func (s *Server) handleAccountCapabilities(w http.ResponseWriter, r *http.Request) {
 	p := auth.MustPrincipal(r.Context())
 	accountID, err := uuid.Parse(pathParam(r, "accountId"))
