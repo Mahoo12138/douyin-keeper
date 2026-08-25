@@ -336,7 +336,7 @@ MVP 中抖音账号首次绑定仍推荐在 PC 完成。小程序对未绑定账
 
 ## 3. PC 管理后台
 
-实现决策（2026-08）：参考 `reference/tinyship-main/apps/tanstack-app`，将 Admin 与 PC C 端合并为单一 `apps/web` TanStack App。普通用户页面使用现有顶层路由，管理页面统一放在 `/admin/*` 嵌套路由并由角色守卫保护；两者共用组件库、主题、登录态和构建产物。该决策接受管理员代码进入同一 bundle 的体积取舍，换取统一路由、主题和发布边界。
+实现决策（2026-08）：参考 `reference/tinyship-main/apps/tanstack-app`，将 Admin 与 PC C 端合并为单一 `apps/web` TanStack App。普通用户页面使用现有顶层路由，管理页面统一放在 `/admin/*` 嵌套路由并由角色守卫保护；两者共用组件库、主题、登录态和构建产物。统一发布边界不等于统一首屏加载：TanStack Router 按路由拆分页面 chunk，Vite 另外拆分 React、Router、Query、UI 等共享 vendor，用户访问某个页面时才加载对应模块。
 
 导航：
 

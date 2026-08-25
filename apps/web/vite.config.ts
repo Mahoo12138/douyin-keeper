@@ -3,12 +3,13 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
+import { manualChunks } from './vite-chunks'
 
 // SPA for the Go backend: /api is proxied in dev; production builds emit
 // dist/ which the Go binary serves via go:embed (docs/16 §2).
 export default defineConfig({
   plugins: [
-    TanStackRouterVite(),
+    TanStackRouterVite({ target: 'react', autoCodeSplitting: true }),
     react(),
     tailwindcss(),
     // Scoped to this app: scanning the whole workspace picks up the vendored
@@ -30,5 +31,6 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    rollupOptions: { output: { manualChunks } },
   },
 })
