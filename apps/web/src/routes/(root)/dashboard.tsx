@@ -23,7 +23,7 @@ function DashboardPage() {
 	const meQ = useQuery({ queryKey: ['me', token], queryFn: () => me(token as string), enabled: !!token, staleTime: 60_000 })
 	const entQ = useQuery({ queryKey: ['entitlement'], queryFn: () => myEntitlement(token as string), enabled: !!token })
 	const accountsQ = useAccountsQuery(token, { loadAll: true })
-	const tasksQ = useInfiniteQuery({ queryKey: ['tasks'], queryFn: ({ pageParam }) => listTasks(token as string, { limit: 50, cursor: pageParam }), initialPageParam: undefined as string | undefined, getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined, enabled: !!token })
+	const tasksQ = useInfiniteQuery({ queryKey: ['tasks'], queryFn: ({ pageParam }) => listTasks(token as string, { limit: 50, cursor: pageParam }), initialPageParam: undefined as string | undefined, getNextPageParam: (lastPage) => lastPage?.next_cursor ?? undefined, enabled: !!token })
 	const intentsQ = useInfiniteQuery({
 		queryKey: ['send-intents', 'dashboard', range.day],
 		queryFn: ({ pageParam }) => listSendIntents(token as string, { from: range.from, to: range.to, limit: 100, cursor: pageParam }),

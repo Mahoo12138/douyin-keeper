@@ -18,11 +18,16 @@ CONTACT_TITLE = ".conversationConversationItemtitle"
 LIST_MARKER = ".conversationConversationItemtitle, [class*='conversationConversationItem']"
 MAX_SCROLL_ROUNDS = 24
 STABLE_ROUNDS = 3
+_NETWORK_IDENTITY_RECORDS = []
+_IDENTITY_CACHE = {}
 
 
 EXTRACT_JS = r"""
 () => {
-  const rows = Array.from(document.querySelectorAll('.conversationConversationItemtitle'));
+  const titles = Array.from(document.querySelectorAll('.conversationConversationItemtitle'));
+  const rows = titles.length
+    ? titles
+    : Array.from(document.querySelectorAll('[class*="conversationConversationItem"]'));
   const result = [];
   const attr = (node, names) => {
     for (const name of names) {
@@ -101,6 +106,7 @@ EXTRACT_JS = r"""
     for (let i = 0; i < 5 && row; i += 1) row = row.parentElement;
     row = row || title;
     const nodes = nodesFor(title, row);
+    const rowKey = firstAttr(nodes, ['data-index']) || text(row);
     const conversationID = conversationIDFrom(nodes);
     const peerID = peerIDFrom(nodes);
     const timeNode = row.querySelector?.('time[datetime], [data-last-message-at]');
@@ -113,6 +119,7 @@ EXTRACT_JS = r"""
       peer_display_name: displayName,
       channel,
       last_message_at: lastMessageAt || null,
+      _row_key: rowKey || displayName,
     });
   }
   return result;
@@ -207,6 +214,84 @@ def _normalize_items(raw_items):
     return items
 
 
+def _peer_uid_from_conversation_id(conversation_id):
+    """Extract the numeric peer UID from Douyin's direct-chat conv_id format."""
+    if not isinstance(conversation_id, str):
+        return ""
+    parts = [part.strip() for part in conversation_id.split(":") if part.strip()]
+    for part in reversed(parts):
+        if part.isdigit():
+            return part
+    return ""
+
+
+def _network_identity(records):
+    """Return a stable conversation ID and peer UID from chat API responses."""
+    conversation_id = ""
+    user_ids = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        identity = record.get("identity")
+        if not isinstance(identity, dict):
+            continue
+        for key in ("conversation_id", "conversationid", "conv_id", "convid", "conversation_short_id", "conversationshortid"):
+            value = identity.get(key)
+            if isinstance(value, str) and value.strip():
+                conversation_id = value.strip()
+                break
+        for key in ("uid", "user_id", "userid"):
+            value = identity.get(key)
+            if isinstance(value, (str, int)) and str(value).strip():
+                user_id = str(value).strip()
+                if user_id not in user_ids:
+                    user_ids.append(user_id)
+    peer_id = _peer_uid_from_conversation_id(conversation_id)
+    if not peer_id:
+        peer_id = next((value for value in reversed(user_ids) if value.isdigit()), "")
+    return conversation_id, peer_id
+
+
+def _resolve_missing_rows(page, raw_items):
+    """Open visible rows so the chat API exposes the stable IDs hidden by the DOM."""
+    global _IDENTITY_CACHE, _NETWORK_IDENTITY_RECORDS
+    try:
+        titles = page.locator('.conversationConversationItemtitle')
+        title_count = titles.count()
+    except Exception:
+        return raw_items
+    if title_count == 0:
+        return raw_items
+
+    resolved = []
+    for index, raw in enumerate(raw_items):
+        if not isinstance(raw, dict):
+            continue
+        item = dict(raw)
+        cache_key = str(raw.get("_row_key") or raw.get("peer_display_name") or index)
+        cached = _IDENTITY_CACHE.get(cache_key)
+        if cached:
+            item["platform_conversation_id"], item["peer_platform_user_id"] = cached
+            resolved.append(item)
+            continue
+        if index >= title_count:
+            resolved.append(item)
+            continue
+        try:
+            before = len(_NETWORK_IDENTITY_RECORDS)
+            titles.nth(index).click(timeout=5_000)
+            page.wait_for_timeout(1_200)
+            conversation_id, peer_id = _network_identity(_NETWORK_IDENTITY_RECORDS[before:])
+            if conversation_id and peer_id:
+                _IDENTITY_CACHE[cache_key] = (conversation_id, peer_id)
+                item["platform_conversation_id"] = conversation_id
+                item["peer_platform_user_id"] = peer_id
+        except Exception:
+            pass
+        resolved.append(item)
+    return resolved
+
+
 def _page_after(items, cursor, limit):
     """Return one page and its stable platform-ID cursor."""
     start = 0
@@ -232,6 +317,8 @@ def _extract(page):
     try:
         raw_items = page.evaluate(EXTRACT_JS) or []
         normalized = _normalize_items(raw_items)
+        if raw_items and not normalized:
+            normalized = _normalize_items(_resolve_missing_rows(page, raw_items))
         if raw_items and not normalized:
             raise _error(
                 protocol.ERR_BROWSER_SELECTOR_CHANGED,
@@ -292,8 +379,66 @@ def _collect(page, cursor, limit):
 
 
 def list_conversations(input_data):
+    global _NETWORK_IDENTITY_RECORDS, _IDENTITY_CACHE
     state_path, cursor, limit = _validate_input(input_data)
     with browser.launch(state_in=state_path) as (_pw, _browser, context, page):
+        _NETWORK_IDENTITY_RECORDS = []
+        _IDENTITY_CACHE = {}
+
+        def capture_response(response):
+            try:
+                resource_type = response.request.resource_type
+                if resource_type not in ("xhr", "fetch"):
+                    return
+                payload = response.json()
+            except Exception:
+                return
+            if not isinstance(payload, (dict, list)):
+                return
+
+            identity_keys = {
+                "conversation_id", "conversationid", "conv_id", "convid",
+                "conversation_short_id", "conversationshortid",
+                "user_id", "userid", "uid", "sec_uid", "secuid",
+                "sec_user_id", "secuserid",
+            }
+            label_keys = {"nickname", "display_name", "username", "user_name", "name", "title"}
+
+            def collect_records(value, path="", depth=0):
+                if depth > 5 or len(_NETWORK_IDENTITY_RECORDS) >= 400:
+                    return
+                if isinstance(value, dict):
+                    identity = {}
+                    labels = {}
+                    for key, item in value.items():
+                        normalized_key = str(key).lower().replace("-", "_")
+                        if normalized_key in identity_keys and isinstance(item, (str, int)):
+                            text = str(item).strip()
+                            if text and len(text) <= 512:
+                                identity[normalized_key] = text
+                        if normalized_key in label_keys and isinstance(item, str):
+                            text = item.strip()
+                            if text and len(text) <= 128:
+                                labels[normalized_key] = text
+                    if identity:
+                        _NETWORK_IDENTITY_RECORDS.append({
+                            "url": response.url.split("?", 1)[0],
+                            "path": path,
+                            "identity": identity,
+                            "labels": labels,
+                        })
+                    for key, item in value.items():
+                        collect_records(item, (path + "." + str(key)).strip("."), depth + 1)
+                elif isinstance(value, list):
+                    for index, item in enumerate(value[:80]):
+                        collect_records(item, "%s[%d]" % (path, index), depth + 1)
+
+            collect_records(payload)
+
+        try:
+            page.on("response", capture_response)
+        except Exception:
+            pass
         page.goto(CHAT_URL, wait_until="domcontentloaded", timeout=60_000)
         page.wait_for_timeout(2_000)
         if _visible_text(page, CHALLENGE_TEXTS):
@@ -302,10 +447,6 @@ def list_conversations(input_data):
             raise _error(protocol.ERR_SESSION_EXPIRED, "session is no longer valid")
         if _visible_text(page, RATE_LIMIT_TEXTS):
             raise _error(protocol.ERR_PLATFORM_RATE_LIMITED, "platform rate limit was detected")
-        try:
-            marker = page.locator(LIST_MARKER)
-            marker.first.wait_for(state="attached", timeout=25_000)
-        except Exception as exc:
-            raise _error(protocol.ERR_BROWSER_SELECTOR_CHANGED, "conversation list selectors are unavailable") from exc
+        page.wait_for_timeout(1_000)
         items, next_cursor = _collect(page, cursor, limit)
         return {"items": items, "next_cursor": next_cursor}

@@ -259,6 +259,24 @@ def test_conversation_list_normalizes_only_stable_identity_rows():
     }]
 
 
+def test_conversation_extractor_keeps_a_broad_row_fallback():
+    import conversation_list
+
+    assert "[class*=" in conversation_list.EXTRACT_JS
+    assert "conversationConversationItem" in conversation_list.EXTRACT_JS
+
+
+def test_conversation_network_identity_extracts_direct_chat_peer_uid():
+    import conversation_list
+
+    conversation_id, peer_id = conversation_list._network_identity([
+        {"identity": {"conv_id": "0:1:106337616074:1412192206591501"}},
+        {"identity": {"uid": "1412192206591501", "sec_uid": "sec-peer"}},
+    ])
+    assert conversation_id == "0:1:106337616074:1412192206591501"
+    assert peer_id == "1412192206591501"
+
+
 def test_conversation_list_pages_by_last_platform_id():
     import conversation_list
 

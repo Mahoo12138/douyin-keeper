@@ -32,14 +32,14 @@ export function TasksPage() {
     queryKey: ['tasks'],
     queryFn: ({ pageParam }) => listTasks(token as string, { limit: 50, cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    getNextPageParam: (lastPage) => lastPage?.next_cursor ?? undefined,
     enabled: !!token,
   })
   const templatesQ = useInfiniteQuery({
     queryKey: ['message-templates'],
     queryFn: ({ pageParam }) => listMessageTemplates(token as string, { limit: 50, cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    getNextPageParam: (lastPage) => lastPage?.next_cursor ?? undefined,
     enabled: !!token,
   })
   const entitlementQ = useQuery({ queryKey: ['entitlement'], queryFn: () => myEntitlement(token as string), enabled: !!token })
