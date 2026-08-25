@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"time"
+
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 )
 
 // handleHealthLive: process is alive, no dependencies checked (docs/16 §11).
@@ -19,6 +21,10 @@ func (s *Server) handleHealthReady(w http.ResponseWriter, r *http.Request) {
 	if s.pg != nil {
 		if err := s.pg.Ping(ctx); err != nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable", "db": "error"})
+			return
+		}
+		if err := postgres.CheckSchemaReady(ctx, s.pg); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable", "schema": "outdated"})
 			return
 		}
 	}
