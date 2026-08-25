@@ -34,7 +34,7 @@ LOGIN_PANEL_SELECTOR = "#douyin_login_comp_flat_panel"
 AUTHENTICATED_SELECTORS = (
     '[data-e2e="user-info"]',
     '[class*="userName"]',
-    '[class*="avatar"]',
+    'a[href*="/user/"]',
 )
 
 _lock = threading.Lock()

@@ -745,6 +745,29 @@ def test_qr_poll_keeps_platform_verification_session_open():
         qr_login._sessions.pop("qr-challenge", None)
 
 
+def test_login_success_does_not_accept_generic_avatar_without_user_identity():
+    import qr_login
+
+    class Locator:
+        def __init__(self, visible):
+            self.visible = visible
+            self.first = self
+
+        def count(self):
+            return 1 if self.visible else 0
+
+        def is_visible(self):
+            return self.visible
+
+    class LoggedOutPage:
+        def locator(self, selector):
+            if "avatar" in selector:
+                return Locator(True)
+            return Locator(False)
+
+    assert qr_login._login_success_visible(LoggedOutPage()) is False
+
+
 def test_sms_start_rejects_relative_profile_dir():
     import sms_login
 
