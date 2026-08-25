@@ -17,6 +17,7 @@ const (
 	NameLoginSMS            = "login.sms"
 	NameSessionValidate     = "session.validate"
 	NameFriendsSync         = "friends.sync"
+	NameConversationsSync   = "conversations.sync"
 	NameMessageTextExisting = "message.send.text.existing"
 	NameMessageTextFirst    = "message.send.text.first"
 	NameMessageSticker      = "message.send.sticker.existing"
@@ -41,7 +42,7 @@ const (
 	StatusUnknown     = "unknown"
 )
 
-var KnownNames = []string{NameLoginQR, NameLoginSMS, NameSessionValidate, NameFriendsSync, NameMessageTextExisting,
+var KnownNames = []string{NameLoginQR, NameLoginSMS, NameSessionValidate, NameFriendsSync, NameConversationsSync, NameMessageTextExisting,
 	NameMessageTextFirst, NameMessageSticker}
 
 type Capability struct {

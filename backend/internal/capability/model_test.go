@@ -62,8 +62,21 @@ func TestFromHealthMarksAdvertisedAndMissingCapabilities(t *testing.T) {
 	if byName[NameSessionValidate].Status != StatusAvailable || byName[NameMessageTextExisting].Status != StatusAvailable {
 		t.Fatalf("advertised capabilities were not available: %+v", byName)
 	}
-	if byName[NameFriendsSync].Status != StatusUnavailable || byName[NameLoginQR].Status != StatusUnavailable {
+	if byName[NameFriendsSync].Status != StatusUnavailable || byName[NameConversationsSync].Status != StatusUnavailable || byName[NameLoginQR].Status != StatusUnavailable {
 		t.Fatalf("missing capabilities were not unavailable: %+v", byName)
+	}
+}
+
+func TestFromHealthAdvertisesConversationSync(t *testing.T) {
+	snapshots := FromHealth(42, HealthSnapshot{
+		Status:       AdapterStatusHealthy,
+		Adapter:      AdapterBrowserConsumer,
+		Capabilities: []string{NameConversationsSync},
+	}, time.Now())
+	for _, snapshot := range snapshots {
+		if snapshot.Name == NameConversationsSync && snapshot.Status != StatusAvailable {
+			t.Fatalf("conversation sync capability = %q, want %q", snapshot.Status, StatusAvailable)
+		}
 	}
 }
 

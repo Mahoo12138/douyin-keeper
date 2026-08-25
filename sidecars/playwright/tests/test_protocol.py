@@ -4,6 +4,7 @@ import json
 import sys
 import os
 import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -64,6 +65,7 @@ def test_health_success_envelope():
     assert out["meta"]["adapter"] == "browser.consumer"
     # Envelope round-trips through the JSON schema's required fields.
     assert set(["protocol_version", "request_id", "ok", "result", "meta"]).issubset(out)
+    assert "conversations.sync" in out["result"]["capabilities"]
 
 
 def test_unsupported_op_is_structured_failure():
@@ -129,25 +131,138 @@ def test_platform_conversation_archive_rejects_unknown_nested_fields():
             assert exc.code == protocol.ERR_INVALID_REQUEST
 
 
-def test_platform_conversation_list_validates_and_fails_closed_until_selector_exists():
-    import sidecar
+def test_conversation_list_normalizes_only_stable_identity_rows():
+    import conversation_list
 
+    rows = conversation_list._normalize_items([
+        {
+            "platform_conversation_id": "conversation-1",
+            "peer_platform_user_id": "user-1",
+            "peer_display_name": "  Jasmine  ",
+            "channel": "consumer",
+            "last_message_at": "2026-08-25T10:00:00Z",
+        },
+        {"platform_conversation_id": "conversation-1", "peer_platform_user_id": "user-1"},
+        {"platform_conversation_id": "conversation-without-peer", "peer_display_name": "Cannot target"},
+        {"platform_conversation_id": "", "peer_platform_user_id": "user-2"},
+    ])
+    assert rows == [{
+        "platform_conversation_id": "conversation-1",
+        "peer_platform_user_id": "user-1",
+        "peer_display_name": "Jasmine",
+        "channel": "consumer",
+        "last_message_at": "2026-08-25T10:00:00Z",
+    }]
+
+
+def test_conversation_list_pages_by_last_platform_id():
+    import conversation_list
+
+    items = conversation_list._normalize_items([
+        {"platform_conversation_id": "c1", "peer_platform_user_id": "u1"},
+        {"platform_conversation_id": "c2", "peer_platform_user_id": "u2"},
+        {"platform_conversation_id": "c3", "peer_platform_user_id": "u3"},
+    ])
+    page, cursor = conversation_list._page_after(items, None, 2)
+    assert [item["platform_conversation_id"] for item in page] == ["c1", "c2"]
+    assert cursor == "c2"
+    page, cursor = conversation_list._page_after(items, "c2", 2)
+    assert [item["platform_conversation_id"] for item in page] == ["c3"]
+    assert cursor is None
+
+
+def test_conversation_list_rejects_expired_platform_cursor():
+    import conversation_list
+
+    try:
+        conversation_list._page_after(
+            [{"platform_conversation_id": "c1", "peer_platform_user_id": "u1"}],
+            "missing",
+            100,
+        )
+        assert False, "expected ProtocolError"
+    except protocol.ProtocolError as exc:
+        assert exc.code == protocol.ERR_INVALID_REQUEST
+        assert exc.detail == {
+            "operation": "conversations.list",
+            "reason": "cursor_not_found",
+        }
+
+
+class _FakeLocator:
+    def __init__(self, count=0):
+        self._count = count
+        self.first = self
+
+    def count(self):
+        return self._count
+
+    def is_visible(self):
+        return False
+
+    def wait_for(self, **_kwargs):
+        return None
+
+
+class _FakePage:
+    def __init__(self, batches):
+        self._batches = list(batches)
+        self.mouse = self
+
+    def goto(self, *_args, **_kwargs):
+        return None
+
+    def wait_for_timeout(self, _milliseconds):
+        return None
+
+    def get_by_text(self, *_args, **_kwargs):
+        return _FakeLocator()
+
+    def locator(self, _selector):
+        return _FakeLocator(count=1)
+
+    def evaluate(self, _script):
+        if self._batches:
+            return self._batches.pop(0)
+        return []
+
+    def wheel(self, *_args):
+        return None
+
+
+class _FakeContext:
+    def cookies(self):
+        return [{"name": "sessionid", "value": "session"}]
+
+
+def test_conversation_list_uses_browser_adapter_and_returns_cursor(monkeypatch):
+    import conversation_list
+
+    page = _FakePage([
+        [
+            {"platform_conversation_id": "c1", "peer_platform_user_id": "u1"},
+            {"platform_conversation_id": "c2", "peer_platform_user_id": "u2"},
+        ],
+        [
+            {"platform_conversation_id": "c2", "peer_platform_user_id": "u2"},
+            {"platform_conversation_id": "c3", "peer_platform_user_id": "u3"},
+        ],
+    ])
+
+    @contextmanager
+    def fake_launch(**_kwargs):
+        yield None, None, _FakeContext(), page
+
+    monkeypatch.setattr(conversation_list.browser, "launch", fake_launch)
     with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
         json.dump({"cookies": []}, state)
         state.flush()
-        req = make_req("conversations.list")
-        req["input"] = {
+        result = conversation_list.list_conversations({
             "session": {"kind": "playwright_storage_state_file", "path": state.name},
-            "cursor": None,
-            "limit": 100,
-        }
-        out = sidecar.handle(req)
-    assert out["ok"] is False
-    assert out["error"]["code"] == protocol.ERR_ADAPTER_UNAVAILABLE
-    assert out["error"]["detail"] == {
-        "operation": "conversations.list",
-        "reason": "selector_not_configured",
-    }
+            "limit": 2,
+        })
+    assert [item["platform_conversation_id"] for item in result["items"]] == ["c1", "c2"]
+    assert result["next_cursor"] == "c2"
 
 
 def test_platform_conversation_list_rejects_invalid_pagination_before_adapter_call():

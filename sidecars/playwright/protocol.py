@@ -131,6 +131,7 @@ def health_result():
             "login.sms",
             "session.validate",
             "friends.sync",
+            "conversations.sync",
             "message.send.text.existing",
         ],
     }
