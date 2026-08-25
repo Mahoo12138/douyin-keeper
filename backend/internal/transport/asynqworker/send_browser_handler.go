@@ -22,8 +22,9 @@ import (
 )
 
 type sendMessageResult struct {
-	Confirmed         bool   `json:"confirmed"`
-	PlatformMessageID string `json:"platform_message_id"`
+	Confirmed          bool   `json:"confirmed"`
+	PlatformMessageID  string `json:"platform_message_id"`
+	ConfirmationSource string `json:"confirmation_source"`
 }
 
 type messageSendPlan struct {
@@ -282,7 +283,7 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 				acct.UserID, intent.LocalDate, now, adapterConfig.adapter, mapped, sendRiskFallback(deps, acct.ID, mapped, now))
 		}
 		var result sendMessageResult
-		if err := decodeResult(response, &result); err != nil || !result.Confirmed || result.PlatformMessageID == "" {
+		if err := decodeResult(response, &result); err != nil || !result.Confirmed || !validMessageConfirmationSource(result.ConfirmationSource) {
 			if deps.Health != nil {
 				_ = deps.Health.ObserveFailure(ctx, adapterConfig.adapter, "", sidecar.ErrAdapterIncompatible, now())
 			}
@@ -292,12 +293,25 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		if deps.Health != nil {
 			_ = deps.Health.ObserveSuccess(ctx, adapterConfig.adapter, "", now())
 		}
-		messageID := result.PlatformMessageID
-		if err := finishSendWithQuota(ctx, deps, claimed, send.JobSucceeded, "", false, &messageID, send.IntentSucceeded,
+		var messageID *string
+		if strings.TrimSpace(result.PlatformMessageID) != "" {
+			value := strings.TrimSpace(result.PlatformMessageID)
+			messageID = &value
+		}
+		if err := finishSendWithQuota(ctx, deps, claimed, send.JobSucceeded, "", false, messageID, send.IntentSucceeded,
 			acct.UserID, intent.LocalDate, now, adapterConfig.adapter); err != nil {
 			return err
 		}
 		return nil
+	}
+}
+
+func validMessageConfirmationSource(source string) bool {
+	switch strings.TrimSpace(source) {
+	case "network_receipt", "browser_visible_message", "browser_message_id":
+		return true
+	default:
+		return false
 	}
 }
 

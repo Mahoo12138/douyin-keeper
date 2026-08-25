@@ -8,9 +8,10 @@ returned as sendable conversations.
 
 import browser
 import protocol
+from message_send import _open_message_panel
 
 
-CHAT_URL = "https://www.douyin.com/chat"
+CHAT_URL = "https://www.douyin.com/chat?isPopup=1"
 SESSION_COOKIE_NAMES = ("sessionid", "sessionid_ss", "sid_tt")
 CHALLENGE_TEXTS = ("安全验证", "滑动验证", "人机验证", "身份验证")
 RATE_LIMIT_TEXTS = ("操作频繁", "请求过于频繁", "访问受限")
@@ -463,6 +464,8 @@ def list_conversations(input_data):
             raise _error(protocol.ERR_SESSION_EXPIRED, "session is no longer valid")
         if _visible_text(page, RATE_LIMIT_TEXTS):
             raise _error(protocol.ERR_PLATFORM_RATE_LIMITED, "platform rate limit was detected")
+        _open_message_panel(page)
+        page.wait_for_timeout(1_500)
         page.wait_for_timeout(1_000)
         items, next_cursor = _collect(page, cursor, limit)
         return {"items": items, "next_cursor": next_cursor}

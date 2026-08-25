@@ -68,6 +68,19 @@ func TestMapSendSidecarErrors(t *testing.T) {
 	}
 }
 
+func TestValidMessageConfirmationSourceAllowsVisibleBubbleWithoutPlatformID(t *testing.T) {
+	for _, source := range []string{"network_receipt", "browser_visible_message", "browser_message_id"} {
+		if !validMessageConfirmationSource(source) {
+			t.Fatalf("confirmation source %q should be accepted", source)
+		}
+	}
+	for _, source := range []string{"", "unknown", "platform_message_id"} {
+		if validMessageConfirmationSource(source) {
+			t.Fatalf("confirmation source %q should be rejected", source)
+		}
+	}
+}
+
 func TestSendSidecarErrorCodeTreatsMalformedResponseAsUnavailable(t *testing.T) {
 	if got := sendSidecarErrorCode(nil); got != sidecar.ErrAdapterUnavailable {
 		t.Fatalf("nil response code = %q", got)

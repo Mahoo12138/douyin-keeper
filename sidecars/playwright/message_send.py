@@ -1,19 +1,26 @@
 """Existing-conversation text sender for Sidecar Protocol v1."""
 
+import json
+
 import browser
 import protocol
 
 
-CHAT_URL = "https://www.douyin.com/chat"
+# The popup chat route is the route Douyin uses for the consumer message list
+# and keeps the virtualized conversation pane mounted for row selection.
+CHAT_URL = "https://www.douyin.com/chat?isPopup=1"
 EDITOR_SELECTORS = (
-    "textarea",
+    "div[class*='chat-input-'] div[contenteditable='true']",
+    "div[contenteditable='true'][role='textbox']",
     "[contenteditable='true']",
+    "textarea",
     "div[role='textbox']",
 )
 SESSION_COOKIE_NAMES = ("sessionid", "sessionid_ss", "sid_tt")
 CHALLENGE_TEXTS = ("安全验证", "滑动验证", "人机验证", "身份验证")
 RATE_LIMIT_TEXTS = ("操作频繁", "请求过于频繁", "访问受限")
 _NETWORK_IDENTITY_RECORDS = []
+_NETWORK_MESSAGE_RECEIPTS = []
 
 
 def _error(code, message, retryable=False, detail=None):
@@ -79,8 +86,8 @@ def _network_peer_id_for_conversation(conversation_id, records=None):
         "conversation_short_id", "conversationshortid",
     }
     user_keys = {"uid", "user_id", "userid"}
-    sec_user_ids = []
     uid_to_sec = {}
+    exact_records = []
     for record in reversed(records or []):
         identity = _identity_values(record)
         for user_key in user_keys:
@@ -91,26 +98,24 @@ def _network_peer_id_for_conversation(conversation_id, records=None):
                 sec_value = identity.get(sec_key, "")
                 if sec_value:
                     uid_to_sec[user_value] = sec_value
-        if not any(identity.get(key) == conversation_id for key in conversation_keys):
-            for key in ("sec_uid", "secuid", "sec_user_id", "secuserid"):
-                value = identity.get(key, "")
-                if value and value not in sec_user_ids:
-                    sec_user_ids.append(value)
-            continue
+        if any(identity.get(key) == conversation_id for key in conversation_keys):
+            exact_records.append(identity)
+    peer_uid = _peer_uid_from_conversation_id(conversation_id)
+    for identity in exact_records:
         for key in ("sec_uid", "secuid", "sec_user_id", "secuserid"):
             value = identity.get(key, "")
-            if value and value not in sec_user_ids:
-                sec_user_ids.append(value)
-        peer_id = _peer_uid_from_conversation_id(conversation_id)
-        if peer_id in uid_to_sec:
-            return uid_to_sec[peer_id]
-        if sec_user_ids:
-            return sec_user_ids[0]
-        if peer_id:
-            return peer_id
+            if value:
+                return value
         for key in user_keys:
             value = identity.get(key, "")
-            if value.isdigit():
+            if value and value == peer_uid:
+                return uid_to_sec.get(value, value)
+    if peer_uid in uid_to_sec:
+        return uid_to_sec[peer_uid]
+    if exact_records:
+        for key in user_keys:
+            value = exact_records[0].get(key, "")
+            if value:
                 return value
     return ""
 
@@ -131,7 +136,143 @@ def _network_conversation_ids(records=None):
     return values
 
 
-def _click_conversation(page, conversation_id):
+def _open_message_panel(page):
+    """进入抖音“消息”面板，再查找虚拟化会话行。"""
+    try:
+        messages = page.get_by_text("消息", exact=True)
+        message_count = messages.count()
+        if message_count == 0:
+            return False
+        for index in range(message_count - 1, -1, -1):
+            candidate = messages.nth(index)
+            if not candidate.is_visible():
+                continue
+            try:
+                candidate.click(timeout=5_000, force=True)
+            except Exception:
+                candidate.click(timeout=5_000)
+            page.wait_for_timeout(1_500)
+            return True
+    except AttributeError:
+        return False
+    except Exception:
+        pass
+    try:
+        return bool(page.evaluate("""() => {
+          const nodes = Array.from(document.querySelectorAll('*')).filter((node) => {
+            const rect = node.getBoundingClientRect();
+            return (node.textContent || '').trim() === '消息' && rect.width > 0 && rect.height > 0;
+          });
+          const target = nodes[nodes.length - 1];
+          if (!target) return false;
+          for (let current = target, depth = 0; current && depth < 5; current = current.parentElement, depth += 1) {
+            current.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, view: window}));
+          }
+          return true;
+        }"""))
+    except Exception:
+        return False
+
+
+def _network_target_seen(conversation_id, platform_user_id, records=None):
+    """Match a newly opened row by conversation ID and/or its stable peer IDs."""
+    records = _NETWORK_IDENTITY_RECORDS if records is None else records
+    if conversation_id in _network_conversation_ids(records):
+        return True
+    peer_uid = _peer_uid_from_conversation_id(conversation_id)
+    for record in records or []:
+        identity = _identity_values(record)
+        sec_uid = next(
+            (identity.get(key, "") for key in ("sec_uid", "secuid", "sec_user_id", "secuserid")
+             if identity.get(key, "")),
+            "",
+        )
+        if platform_user_id and sec_uid == platform_user_id:
+            return True
+        if peer_uid and any(identity.get(key, "") == peer_uid for key in ("uid", "user_id", "userid")):
+            return True
+    return False
+
+
+def _message_id_from_payload(value, depth=0):
+    """Find a server-assigned message ID without treating conversation IDs as messages."""
+    if depth > 7:
+        return ""
+    message_keys = {
+        "server_message_id", "server_messageid", "message_id", "messageid", "msg_id", "msgid",
+        "servermessageid", "message_key", "message_uuid",
+    }
+    if isinstance(value, dict):
+        for key, item in value.items():
+            normalized = str(key).lower().replace("-", "_")
+            if normalized in message_keys and isinstance(item, (str, int)) and str(item).strip():
+                return str(item).strip()[:256]
+        for item in value.values():
+            result = _message_id_from_payload(item, depth + 1)
+            if result:
+                return result
+    elif isinstance(value, list):
+        for item in value[:100]:
+            result = _message_id_from_payload(item, depth + 1)
+            if result:
+                return result
+    return ""
+
+
+def _message_response_ok(status, payload):
+    if not isinstance(status, (int, float)) or not 200 <= status < 300:
+        return False
+    if not isinstance(payload, dict):
+        return True
+    values = []
+    for key in ("status_code", "err_no", "errno", "error_code", "code"):
+        if key in payload:
+            values.append(payload.get(key) in (0, "0", None))
+    nested = payload.get("data")
+    if isinstance(nested, dict):
+        for key in ("status_code", "err_no", "errno", "error_code", "code"):
+            if key in nested:
+                values.append(nested.get(key) in (0, "0", None))
+    return all(values) if values else True
+
+
+def _capture_message_response(response):
+    try:
+        if str(response.request.method or "").upper() != "POST":
+            return
+        url = response.url.split("?", 1)[0]
+        lowered_url = url.lower()
+        is_known_send_endpoint = "/v1/message/send" in lowered_url
+        is_generic_send_endpoint = "send" in lowered_url and (
+            "message" in lowered_url or "msg" in lowered_url or "imapi.douyin.com" in lowered_url
+        )
+        if not is_known_send_endpoint and not is_generic_send_endpoint:
+            return
+        try:
+            payload = response.json()
+        except Exception:
+            payload = json.loads(response.text())
+    except Exception:
+        return
+    global _NETWORK_MESSAGE_RECEIPTS
+    receipt = {
+        "ok": _message_response_ok(response.status, payload),
+        "status": response.status,
+        "message_id": _message_id_from_payload(payload),
+        "url": url,
+    }
+    _NETWORK_MESSAGE_RECEIPTS.append(receipt)
+    protocol.log(
+        f"message send response url={url} status={response.status} "
+        f"ok={receipt['ok']} message_id={bool(receipt['message_id'])}"
+    )
+
+
+def _last_message_receipt():
+    return _NETWORK_MESSAGE_RECEIPTS[-1] if _NETWORK_MESSAGE_RECEIPTS else None
+
+
+def _click_conversation(page, conversation_id, platform_user_id=None):
     try:
         if page.evaluate(
             """(wanted) => {
@@ -152,20 +293,47 @@ def _click_conversation(page, conversation_id):
     # The current Douyin consumer DOM does not expose the conversation ID.
     # Select rows one by one and correlate the resulting chat response instead
     # of falling back to a nickname-only target.
-    try:
-        titles = page.locator(".conversationConversationItemtitle")
-        count = titles.count()
-    except Exception:
-        return False
-    for index in range(count):
-        before = len(_NETWORK_IDENTITY_RECORDS)
+    # The list is virtualized and can mount a little after the popup route
+    # becomes DOM-ready. Give it a bounded readiness window before scanning.
+    for _ in range(8):
         try:
-            titles.nth(index).click(timeout=5_000)
-            page.wait_for_timeout(1_200)
+            titles = page.locator(".conversationConversationItemtitle")
+            count = titles.count()
+            if count:
+                break
         except Exception:
-            continue
-        if conversation_id in _network_conversation_ids(_NETWORK_IDENTITY_RECORDS[before:]):
-            return True
+            count = 0
+        page.wait_for_timeout(750)
+    if not count:
+        return False
+
+    # Selecting a row can emit the identity response after the click handler
+    # returns. Re-scan the mounted rows with a slightly longer correlation
+    # window, but never accept a nickname-only match.
+    for _ in range(2):
+        try:
+            titles = page.locator(".conversationConversationItemtitle")
+            count = titles.count()
+        except Exception:
+            return False
+        for index in range(count):
+            before = len(_NETWORK_IDENTITY_RECORDS)
+            try:
+                titles.nth(index).click(timeout=5_000)
+                page.wait_for_timeout(1_800)
+            except Exception:
+                continue
+            if _network_target_seen(
+                conversation_id,
+                platform_user_id,
+                _NETWORK_IDENTITY_RECORDS[before:],
+            ):
+                return True
+        try:
+            page.mouse.wheel(0, 900)
+        except Exception:
+            pass
+        page.wait_for_timeout(900)
     return False
 
 
@@ -298,6 +466,34 @@ def _new_message_id(page, text, before_ids):
     return ""
 
 
+def _visible_message_count(page, text):
+    """Count new visible chat bubbles without counting the editor itself."""
+    try:
+        value = page.evaluate(
+            """(wanted) => {
+              const normalize = (value) => String(value || '').replace(/\\s+/g, ' ').trim();
+              const target = normalize(wanted);
+              if (!target) return 0;
+              const nodes = Array.from(document.querySelectorAll('body *'));
+              return nodes.filter((node) => {
+                if (node.closest('[contenteditable=\"true\"], textarea, input')) return false;
+                const rect = node.getBoundingClientRect();
+                if (!rect.width || !rect.height) return false;
+                const content = normalize(node.innerText || node.textContent);
+                if (!content.includes(target)) return false;
+                return !Array.from(node.children).some((child) => {
+                  if (child.closest('[contenteditable=\"true\"], textarea, input')) return false;
+                  return normalize(child.innerText || child.textContent).includes(target);
+                });
+              }).length;
+            }""",
+            text,
+        )
+        return int(value or 0)
+    except Exception:
+        return 0
+
+
 def send_text(input_data):
     if not isinstance(input_data, dict):
         raise _error(protocol.ERR_INVALID_REQUEST, "input must be an object")
@@ -322,22 +518,26 @@ def send_text(input_data):
     if not isinstance(text, str) or not text.strip() or len(text) > 2000:
         raise _error(protocol.ERR_INVALID_REQUEST, "message.text must be 1..2000 characters")
 
-    global _NETWORK_IDENTITY_RECORDS
+    global _NETWORK_IDENTITY_RECORDS, _NETWORK_MESSAGE_RECEIPTS
     with browser.launch(state_in=session_path) as (_pw, _browser, context, page):
         _NETWORK_IDENTITY_RECORDS = []
+        _NETWORK_MESSAGE_RECEIPTS = []
         try:
             page.on("response", _capture_identity_response)
+            page.on("response", _capture_message_response)
         except Exception:
             pass
         page.goto(CHAT_URL, wait_until="domcontentloaded", timeout=60_000)
-        page.wait_for_timeout(1_500)
+        page.wait_for_timeout(3_000)
         if _visible_text(page, CHALLENGE_TEXTS):
             raise _error(protocol.ERR_CHALLENGE_REQUIRED, "platform challenge is required")
         if not _session_present(context):
             raise _error(protocol.ERR_SESSION_EXPIRED, "session is no longer valid")
         if _visible_text(page, RATE_LIMIT_TEXTS):
             raise _error(protocol.ERR_PLATFORM_RATE_LIMITED, "platform rate limit was detected")
-        if not _click_conversation(page, conversation_id):
+        _open_message_panel(page)
+        page.wait_for_timeout(1_500)
+        if not _click_conversation(page, conversation_id, platform_user_id):
             raise _error(protocol.ERR_CONVERSATION_NOT_FOUND, "conversation is unavailable")
         page.wait_for_timeout(800)
         peer_id = _current_peer_id(page, conversation_id)
@@ -347,20 +547,66 @@ def send_text(input_data):
         if editor is None:
             raise _error(protocol.ERR_BROWSER_SELECTOR_CHANGED, "message editor is unavailable")
         before_message_ids = set(_message_ids(page, text))
+        before_visible_message_count = _visible_message_count(page, text)
         editor.click()
         try:
-            editor.fill(text)
+            editor.press("Control+A")
+            editor.press("Backspace")
+            editor.type(text, delay=20)
         except Exception:
-            page.keyboard.press("Control+A")
-            page.keyboard.press("Delete")
-            page.keyboard.type(text, delay=20)
+            try:
+                editor.fill(text)
+            except Exception:
+                page.keyboard.press("Control+A")
+                page.keyboard.press("Delete")
+                page.keyboard.type(text, delay=20)
         if text not in _editor_text(editor):
             raise _error(protocol.ERR_BROWSER_SELECTOR_CHANGED, "message text was not entered")
-        page.keyboard.press("Enter")
-        page.wait_for_timeout(1_000)
+        try:
+            editor.press("Enter")
+        except Exception:
+            page.keyboard.press("Enter")
+        # The consumer UI can render the sent bubble after the request has
+        # completed, and some versions do not expose a message ID in either
+        # the response body or DOM. Give both confirmation paths a bounded
+        # window before declaring the outcome unknown.
+        for _ in range(6):
+            page.wait_for_timeout(500)
+            receipt = _last_message_receipt()
+            if receipt or _visible_message_count(page, text) > before_visible_message_count:
+                break
+        receipt = _last_message_receipt()
+        visible_message_count = _visible_message_count(page, text)
+        protocol.log(
+            f"message send receipts={len(_NETWORK_MESSAGE_RECEIPTS)} "
+            f"last={receipt} dom_ids={len(_message_ids(page, text))} "
+            f"visible_messages={visible_message_count} before={before_visible_message_count}"
+        )
+        if receipt and receipt.get("ok") and receipt.get("message_id"):
+            return {
+                "confirmed": True,
+                "platform_message_id": receipt["message_id"],
+                "confirmation_source": "network_receipt",
+            }
+        if receipt and not receipt.get("ok"):
+            raise _error(
+                protocol.ERR_ADAPTER_INCOMPATIBLE,
+                "platform rejected the message send",
+                detail={"outcome": "rejected", "status": receipt.get("status")},
+            )
+        if visible_message_count > before_visible_message_count:
+            return {
+                "confirmed": True,
+                "platform_message_id": _new_message_id(page, text, before_message_ids),
+                "confirmation_source": "browser_visible_message",
+            }
         if text in _editor_text(editor):
             raise _error(protocol.ERR_ADAPTER_INCOMPATIBLE, "message send was not confirmed", detail={"outcome": "unknown"})
         message_id = _new_message_id(page, text, before_message_ids)
         if not message_id:
             raise _error(protocol.ERR_ADAPTER_INCOMPATIBLE, "platform message id was not observed", detail={"outcome": "unknown"})
-        return {"confirmed": True, "platform_message_id": message_id}
+        return {
+            "confirmed": True,
+            "platform_message_id": message_id,
+            "confirmation_source": "browser_message_id",
+        }

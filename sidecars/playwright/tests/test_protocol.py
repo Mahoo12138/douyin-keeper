@@ -290,6 +290,20 @@ def test_message_sender_resolves_peer_from_target_conversation_network_identity(
     assert peer_id == "sec-peer"
 
 
+def test_message_sender_does_not_use_unrelated_network_sec_uid_for_peer_mapping():
+    import message_send
+
+    peer_id = message_send._network_peer_id_for_conversation(
+        "0:1:106337616074:1412192206591501",
+        [
+            {"identity": {"sec_uid": "unrelated-peer"}},
+            {"identity": {"conv_id": "0:1:106337616074:1412192206591501"}},
+            {"identity": {"uid": "1412192206591501", "sec_uid": "sec-peer"}},
+        ],
+    )
+    assert peer_id == "sec-peer"
+
+
 def test_message_sender_finds_conversation_by_network_identity_when_dom_has_no_id():
     import message_send
 
@@ -324,6 +338,32 @@ def test_message_sender_finds_conversation_by_network_identity_when_dom_has_no_i
     assert message_send._click_conversation(
         FakePage(), "0:1:106337616074:1412192206591501"
     ) is True
+
+
+def test_message_sender_matches_new_row_by_target_peer_identity():
+    import message_send
+
+    assert message_send._network_target_seen(
+        "0:1:106337616074:1412192206591501",
+        "sec-peer",
+        [{"identity": {"uid": "1412192206591501", "sec_uid": "sec-peer"}}],
+    ) is True
+
+
+def test_message_sender_has_explicit_message_panel_navigation():
+    import message_send
+
+    assert "消息" in message_send._open_message_panel.__doc__
+
+
+def test_message_sender_extracts_successful_server_receipt():
+    import message_send
+
+    payload = {"status_code": 0, "data": {"message_id": "server-msg-1"}}
+    assert message_send._message_response_ok(200, payload) is True
+    assert message_send._message_id_from_payload(payload) == "server-msg-1"
+    assert message_send._message_response_ok(200, {"status_code": 1}) is False
+    assert message_send._message_id_from_payload({"data": {"serverMessageId": "server-msg-2"}}) == "server-msg-2"
 
 
 def test_conversation_list_pages_by_last_platform_id():
