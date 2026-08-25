@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { checkAccountSession, getMe, listMyEntitlementGrants, listNotifications, markAllNotificationsRead, markNotificationRead, myEntitlement, redeemCardCode, runTaskNow, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, getMe, listMyEntitlementGrants, listNotifications, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, resumeAccount, runTaskNow, syncAccountFriends, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -128,5 +128,38 @@ describe('mini API auth recovery', () => {
     expect(result.job_id).toBe('job-1')
     expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/accounts/account-1/session-check')
     expect(requestMock.mock.calls[0]?.[0]?.method).toBe('POST')
+  })
+
+  it('uses the account operations from the frozen backend contract', async () => {
+    requestMock
+      .mockResolvedValueOnce({ statusCode: 202, data: { job_id: 'job-bind' } })
+      .mockResolvedValueOnce({ statusCode: 200, data: { id: 'job-bind', status: 'waiting_user', type: 'account.bind.qr' } })
+      .mockResolvedValueOnce({ statusCode: 202, data: undefined })
+      .mockResolvedValueOnce({ statusCode: 202, data: { job_id: 'job-sync' } })
+      .mockResolvedValueOnce({ statusCode: 204, data: undefined })
+      .mockResolvedValueOnce({ statusCode: 204, data: undefined })
+      .mockResolvedValueOnce({ statusCode: 204, data: undefined })
+      .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ capability: 'send_text', status: 'available', checked_at: '2026-08-26T00:00:00Z' }] } })
+
+    await createAccountBinding('access-1', 'qr')
+    await getJob('access-1', 'job-bind')
+    await cancelJob('access-1', 'job-bind')
+    await syncAccountFriends('access-1', 'account-1')
+    await pauseAccount('access-1', 'account-1')
+    await resumeAccount('access-1', 'account-1')
+    await deleteAccount('access-1', 'account-1')
+    const capabilities = await accountCapabilities('access-1', 'account-1')
+
+    expect(capabilities.items[0]?.status).toBe('available')
+    expect(requestMock.mock.calls.map((call) => [call[0]?.url, call[0]?.method])).toEqual([
+      ['/api/v1/accounts/bindings', 'POST'],
+      ['/api/v1/jobs/job-bind', 'GET'],
+      ['/api/v1/jobs/job-bind/cancel', 'POST'],
+      ['/api/v1/accounts/account-1/friends-sync', 'POST'],
+      ['/api/v1/accounts/account-1/pause', 'POST'],
+      ['/api/v1/accounts/account-1/resume', 'POST'],
+      ['/api/v1/accounts/account-1', 'DELETE'],
+      ['/api/v1/accounts/account-1/capabilities', 'GET'],
+    ])
   })
 })

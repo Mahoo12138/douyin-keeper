@@ -7,7 +7,7 @@ const API_BASE_URL = (process.env.TARO_APP_API_BASE_URL || '/api/v1').replace(/\
 
 type Collection<T> = { items: T[]; next_cursor?: string | null }
 type ApiErrorBody = { error?: { code?: string; message?: string } }
-type RequestOptions = { token?: string | null; method?: 'GET' | 'POST' | 'PATCH'; data?: unknown; headers?: Record<string, string>; skipRefresh?: boolean }
+type RequestOptions = { token?: string | null; method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; data?: unknown; headers?: Record<string, string>; skipRefresh?: boolean }
 
 export class MiniApiError extends Error {
   constructor(public readonly code: string, message: string, public readonly statusCode: number) {
@@ -112,6 +112,41 @@ export function getMe(token: string) {
 
 export function listAccounts(token: string) {
   return request<Collection<components['schemas']['Account']>>('/accounts', { token })
+}
+
+export function createAccountBinding(token: string, method: 'qr' | 'sms', options: { phone?: string; accountId?: string } = {}) {
+  return request<components['schemas']['JobRef']>('/accounts/bindings', {
+    method: 'POST', token,
+    data: { method, ...(options.phone ? { phone: options.phone } : {}), ...(options.accountId ? { account_id: options.accountId } : {}) },
+  })
+}
+
+export function getJob(token: string, jobId: string) {
+  return request<components['schemas']['Job']>(`/jobs/${jobId}`, { token })
+}
+
+export function cancelJob(token: string, jobId: string) {
+  return request<void>(`/jobs/${jobId}/cancel`, { method: 'POST', token })
+}
+
+export function pauseAccount(token: string, accountId: string) {
+  return request<void>(`/accounts/${accountId}/pause`, { method: 'POST', token })
+}
+
+export function resumeAccount(token: string, accountId: string) {
+  return request<void>(`/accounts/${accountId}/resume`, { method: 'POST', token })
+}
+
+export function deleteAccount(token: string, accountId: string) {
+  return request<void>(`/accounts/${accountId}`, { method: 'DELETE', token })
+}
+
+export function syncAccountFriends(token: string, accountId: string) {
+  return request<components['schemas']['JobRef']>(`/accounts/${accountId}/friends-sync`, { method: 'POST', token })
+}
+
+export function accountCapabilities(token: string, accountId: string) {
+  return request<{ items: components['schemas']['Capability'][] }>(`/accounts/${accountId}/capabilities`, { token })
 }
 
 export function listFriends(token: string, accountId: string) {
