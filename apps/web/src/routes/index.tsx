@@ -1,8 +1,11 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
+import { LandingPage } from '@/features/landing/landing-page'
+import { canActivate } from '@/lib/auth-guard'
+
 export const Route = createFileRoute('/')({
-  beforeLoad: () => {
-    throw redirect({ to: '/dashboard' })
+  beforeLoad: async () => {
+    if (await canActivate()) throw redirect({ to: '/dashboard' })
   },
-  component: () => null,
+  component: LandingPage,
 })

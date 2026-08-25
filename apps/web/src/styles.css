@@ -53,3 +53,35 @@
     @apply bg-background text-foreground antialiased;
   }
 }
+
+@keyframes landing-rise {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes landing-breathe {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-12deg) scale(1); }
+  50% { transform: translate3d(0, -10px, 0) rotate(-10deg) scale(1.02); }
+}
+
+.landing-page ::selection { background: var(--chart-1); color: var(--foreground); }
+.landing-reveal { animation: landing-rise 700ms cubic-bezier(.16, 1, .3, 1) both; }
+.landing-reveal-delayed { animation-delay: 120ms; }
+.landing-hero { background: radial-gradient(circle at 78% 35%, color-mix(in oklab, var(--chart-1) 14%, transparent), transparent 28%), radial-gradient(circle at 20% 75%, color-mix(in oklab, var(--chart-4) 10%, transparent), transparent 25%), var(--background); }
+.landing-orbit { pointer-events: none; position: absolute; border: 1px solid color-mix(in oklab, var(--chart-1) 22%, transparent); border-radius: 9999px; }
+.landing-orbit-one { right: -12rem; top: 10%; height: 38rem; width: 68rem; transform: rotate(-16deg); }
+.landing-orbit-two { bottom: -15rem; left: -17rem; height: 32rem; width: 58rem; border-color: color-mix(in oklab, var(--chart-4) 18%, transparent); transform: rotate(18deg); }
+.landing-blob { pointer-events: none; position: absolute; border-radius: 9999px; filter: blur(70px); opacity: .16; }
+.landing-blob-one { right: 16%; top: 12%; height: 11rem; width: 11rem; background: var(--chart-1); animation: landing-breathe 8s ease-in-out infinite; }
+.landing-blob-two { bottom: 16%; left: 13%; height: 9rem; width: 9rem; background: var(--chart-4); animation: landing-breathe 10s ease-in-out 1s infinite reverse; }
+.landing-clay-ring { position: absolute; border-radius: 47% 53% 50% 50% / 44% 45% 55% 56%; border: 18px solid color-mix(in oklab, var(--chart-1) 82%, var(--foreground)); box-shadow: inset 0 -10px 0 color-mix(in oklab, var(--foreground) 13%, transparent), 0 24px 50px color-mix(in oklab, var(--chart-1) 18%, transparent); animation: landing-breathe 9s ease-in-out infinite; }
+.landing-clay-ring-back { right: 10%; top: 10%; height: 17rem; width: 17rem; border-color: color-mix(in oklab, var(--chart-4) 72%, var(--background)); transform: rotate(-18deg); opacity: .8; }
+.landing-clay-ring-middle { left: 7%; top: 28%; height: 21rem; width: 21rem; border-width: 26px; border-color: color-mix(in oklab, var(--chart-3) 78%, var(--background)); animation-delay: 300ms; }
+.landing-clay-ring-front { bottom: 6%; right: 12%; height: 19rem; width: 19rem; border-width: 22px; border-color: color-mix(in oklab, var(--chart-1) 88%, var(--background)); animation-delay: 600ms; }
+.landing-status-card { transform: rotate(-4deg); }
+.landing-coil-label { transform: rotate(5deg); }
+.landing-cta { background: var(--foreground); }
+.landing-cta-orbit { pointer-events: none; position: absolute; left: 50%; top: 50%; height: 42rem; width: 70rem; border: 1px solid color-mix(in oklab, var(--chart-1) 34%, transparent); border-radius: 50%; transform: translate(-50%, -50%) rotate(-12deg); }
+@media (prefers-reduced-motion: reduce) {
+  .landing-reveal, .landing-blob, .landing-clay-ring { animation: none; }
+}
