@@ -31,9 +31,16 @@ func (r *ConversationRepo) SyncBatch(ctx context.Context, accountID int64, items
 		if item.Channel != "consumer" && item.Channel != "creator" {
 			return fmt.Errorf("conversation sync: unsupported channel %q", item.Channel)
 		}
-		friendID, err := r.upsertConversationFriend(ctx, accountID, item, at)
+		friendID, found, err := r.findConversationFriend(ctx, accountID, item, at)
 		if err != nil {
 			return err
+		}
+		// A conversation is not proof that the other party is a friend. The
+		// friends.list adapter is the source of friend membership; keeping this
+		// guard here prevents a chat-only account from being promoted into a
+		// sendable friend when the two crawls are out of order or incomplete.
+		if !found {
+			continue
 		}
 		_, err = From(ctx, r.pool).Exec(ctx, `
 			INSERT INTO conversations (public_id, account_id, friend_id, platform_conversation_id,
@@ -52,27 +59,19 @@ func (r *ConversationRepo) SyncBatch(ctx context.Context, accountID int64, items
 	return nil
 }
 
-func (r *ConversationRepo) upsertConversationFriend(ctx context.Context, accountID int64, item conversation.SyncItem, at time.Time) (int64, error) {
+func (r *ConversationRepo) findConversationFriend(ctx context.Context, accountID int64, item conversation.SyncItem, at time.Time) (int64, bool, error) {
 	var friendID int64
 	err := From(ctx, r.pool).QueryRow(ctx, `
-		UPDATE friends SET identity_status='resolved', display_name=$3,
-			has_conversation=true, last_seen_at=$4, updated_at=$4, deleted_at=NULL
-		WHERE account_id=$1 AND platform_user_id=$2
-		RETURNING id`, accountID, item.PlatformUserID, item.DisplayName, at).Scan(&friendID)
+		UPDATE friends SET has_conversation=true, last_seen_at=$3, updated_at=$3
+		WHERE account_id=$1 AND platform_user_id=$2 AND deleted_at IS NULL
+		RETURNING id`, accountID, item.PlatformUserID, at).Scan(&friendID)
 	if err == nil {
-		return friendID, nil
+		return friendID, true, nil
 	}
 	if err != pgx.ErrNoRows {
-		return 0, err
+		return 0, false, err
 	}
-	if err := From(ctx, r.pool).QueryRow(ctx, `
-		INSERT INTO friends (public_id, account_id, platform_user_id, identity_status,
-			display_name, has_conversation, last_seen_at, created_at, updated_at)
-		VALUES ($1,$2,$3,'resolved',$4,true,$5,$5,$5)
-		RETURNING id`, uuid.New(), accountID, item.PlatformUserID, item.DisplayName, at).Scan(&friendID); err != nil {
-		return 0, err
-	}
-	return friendID, nil
+	return 0, false, nil
 }
 
 func (r *ConversationRepo) ListByAccountOwned(ctx context.Context, userID int64, accountPublicID uuid.UUID, filter conversation.ListFilter) ([]*conversation.Conversation, error) {

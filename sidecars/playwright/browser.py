@@ -54,6 +54,8 @@ def launch(user_data_dir=None, state_in=None, locale="zh-CN"):
             "timezone_id": "Asia/Shanghai",
             "viewport": {"width": 1280, "height": 720},
         }
+        if os.environ.get("PLAYWRIGHT_IGNORE_HTTPS_ERRORS", "").lower() in ("1", "true", "yes"):
+            context_options["ignore_https_errors"] = True
         if user_data_dir:
             os.makedirs(user_data_dir, mode=0o700, exist_ok=True)
             context = pw.chromium.launch_persistent_context(user_data_dir, **context_options)

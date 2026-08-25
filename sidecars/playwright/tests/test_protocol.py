@@ -274,7 +274,7 @@ def test_conversation_network_identity_extracts_direct_chat_peer_uid():
         {"identity": {"uid": "1412192206591501", "sec_uid": "sec-peer"}},
     ])
     assert conversation_id == "0:1:106337616074:1412192206591501"
-    assert peer_id == "1412192206591501"
+    assert peer_id == "sec-peer"
 
 
 def test_message_sender_resolves_peer_from_target_conversation_network_identity():
@@ -287,7 +287,7 @@ def test_message_sender_resolves_peer_from_target_conversation_network_identity(
             {"identity": {"uid": "1412192206591501", "sec_uid": "sec-peer"}},
         ],
     )
-    assert peer_id == "1412192206591501"
+    assert peer_id == "sec-peer"
 
 
 def test_message_sender_finds_conversation_by_network_identity_when_dom_has_no_id():
@@ -992,6 +992,30 @@ def test_friends_extracts_identity_from_extended_douyin_row_fields():
     assert by_name["Direct friend"]["conversation"]["platform_conversation_id"] == "conversation-direct"
     assert by_name["Query friend"]["platform_user_id"] == "sec-query"
     assert by_name["Query friend"]["conversation"]["platform_conversation_id"] == "conversation-query"
+
+
+def test_friends_relation_adapter_keeps_only_mutual_users():
+    import friends_list
+
+    friend = friends_list._friend_from_relation({
+        "nickname": "真正好友",
+        "sec_uid": "sec-mutual",
+        "follow_status": 2,
+        "follower_status": 1,
+    })
+    assert friend["platform_user_id"] == "sec-mutual"
+    assert friend["identity_status"] == "resolved"
+    assert friends_list._friend_from_relation({
+        "nickname": "聊天对象",
+        "sec_uid": "sec-chat-only",
+        "follow_status": 0,
+        "follower_status": 0,
+    }) is None
+    assert friends_list._friend_from_relation({
+        "nickname": "粉丝列表中的互关用户",
+        "sec_uid": "sec-follower-mutual",
+        "follow_status": 2,
+    }, from_follower_list=True)["platform_user_id"] == "sec-follower-mutual"
 
 
 def test_message_send_rejects_missing_target_ids():

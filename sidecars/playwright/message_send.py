@@ -79,11 +79,33 @@ def _network_peer_id_for_conversation(conversation_id, records=None):
         "conversation_short_id", "conversationshortid",
     }
     user_keys = {"uid", "user_id", "userid"}
+    sec_user_ids = []
+    uid_to_sec = {}
     for record in reversed(records or []):
         identity = _identity_values(record)
+        for user_key in user_keys:
+            user_value = identity.get(user_key, "")
+            if not user_value:
+                continue
+            for sec_key in ("sec_uid", "secuid", "sec_user_id", "secuserid"):
+                sec_value = identity.get(sec_key, "")
+                if sec_value:
+                    uid_to_sec[user_value] = sec_value
         if not any(identity.get(key) == conversation_id for key in conversation_keys):
+            for key in ("sec_uid", "secuid", "sec_user_id", "secuserid"):
+                value = identity.get(key, "")
+                if value and value not in sec_user_ids:
+                    sec_user_ids.append(value)
             continue
+        for key in ("sec_uid", "secuid", "sec_user_id", "secuserid"):
+            value = identity.get(key, "")
+            if value and value not in sec_user_ids:
+                sec_user_ids.append(value)
         peer_id = _peer_uid_from_conversation_id(conversation_id)
+        if peer_id in uid_to_sec:
+            return uid_to_sec[peer_id]
+        if sec_user_ids:
+            return sec_user_ids[0]
         if peer_id:
             return peer_id
         for key in user_keys:

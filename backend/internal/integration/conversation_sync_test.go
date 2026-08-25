@@ -9,6 +9,7 @@ import (
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/conversation"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/friend"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/postgres"
 )
 
@@ -30,6 +31,13 @@ func TestConversationSyncIsIdempotentAndPreservesLocalState(t *testing.T) {
 	tx := postgres.NewTxManager(pool)
 	platformConversationID := "conversation-sync-" + uuid.NewString()
 	platformUserID := "conversation-peer-" + uuid.NewString()
+	if err := tx.WithinTx(ctx, func(tctx context.Context) error {
+		return friends.SyncBatch(tctx, acct.ID, []friend.SyncItem{{
+			PlatformUserID: &platformUserID, IdentityStatus: friend.IdentityResolved, DisplayName: "初始昵称",
+		}}, []string{platformUserID}, nil, time.Now().UTC())
+	}); err != nil {
+		t.Fatal(err)
+	}
 	messageAt := time.Now().UTC().Truncate(time.Microsecond)
 	syncAt := messageAt.Add(time.Minute)
 	item := conversation.SyncItem{
@@ -51,6 +59,19 @@ func TestConversationSyncIsIdempotentAndPreservesLocalState(t *testing.T) {
 	}
 	if err := friends.UpdateSparkEnabled(ctx, friendItems[0].ID, true); err != nil {
 		t.Fatal(err)
+	}
+
+	// A chat-only identity must not be promoted into the friend projection.
+	unknownItem := item
+	unknownItem.PlatformConversationID = "conversation-chat-only-" + uuid.NewString()
+	unknownItem.PlatformUserID = "chat-only-" + uuid.NewString()
+	if err := tx.WithinTx(ctx, func(tctx context.Context) error {
+		return conversations.SyncBatch(tctx, acct.ID, []conversation.SyncItem{unknownItem}, syncAt)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if items, err := friends.ListByAccountOwned(ctx, userID, acct.PublicID); err != nil || len(items) != 1 {
+		t.Fatalf("chat-only conversation must not create a friend: err=%v friends=%+v", err, items)
 	}
 
 	item.DisplayName = "更新昵称"

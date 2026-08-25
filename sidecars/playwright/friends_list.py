@@ -4,10 +4,80 @@ import browser
 import protocol
 
 
-CHAT_URL = "https://www.douyin.com/chat"
+SELF_URL = "https://www.douyin.com/user/self"
 SESSION_COOKIE_NAMES = ("sessionid", "sessionid_ss", "sid_tt")
 CHALLENGE_TEXTS = ("安全验证", "滑动验证", "人机验证", "身份验证")
 RATE_LIMIT_TEXTS = ("操作频繁", "请求过于频繁", "访问受限")
+_NETWORK_FRIENDS = {}
+
+
+def _is_mutual_friend(row, from_follower_list=False):
+    if str(row.get("follow_status")) != "2":
+        return False
+    # Every row from follower/list is already known to follow the account;
+    # older response variants omit follower_status in that endpoint.
+    return from_follower_list or str(row.get("follower_status")) == "1"
+
+
+def _avatar_url(row):
+    avatar = row.get("avatar_thumb") or row.get("avatar_medium") or row.get("avatar_larger")
+    if isinstance(avatar, dict):
+        values = avatar.get("url_list")
+        if isinstance(values, list) and values:
+            return str(values[0]).strip() or None
+    if isinstance(avatar, str):
+        return avatar.strip() or None
+    return None
+
+
+def _friend_from_relation(row, from_follower_list=False):
+    if not isinstance(row, dict) or not _is_mutual_friend(row, from_follower_list):
+        return None
+    platform_user_id = str(row.get("sec_uid") or row.get("uid") or "").strip()
+    display_name = str(row.get("remark_name") or row.get("nickname") or "").strip()
+    if not platform_user_id or not display_name or len(display_name) > 128:
+        return None
+    return {
+        "platform_user_id": platform_user_id[:256],
+        "identity_status": "resolved",
+        "display_name": display_name,
+        "nickname": str(row.get("nickname") or display_name).strip()[:128],
+        "short_id": str(row.get("short_id") or "").strip()[:128] or None,
+        "avatar_url": _avatar_url(row),
+        "streak_days": 0,
+        "has_conversation": False,
+        "conversation": None,
+    }
+
+
+def _capture_relation_response(response):
+    """Collect only users from the authenticated account's follower list."""
+    global _NETWORK_FRIENDS
+    try:
+        if response.request.resource_type not in ("xhr", "fetch"):
+            return
+        payload = response.json()
+    except Exception:
+        return
+    url = response.url.split("?", 1)[0]
+    if not url.endswith("/aweme/v1/web/user/follower/list/") or not isinstance(payload, dict):
+        return
+
+    def walk(value, depth=0):
+        if depth > 6:
+            return
+        if isinstance(value, dict):
+            if value.get("sec_uid") or value.get("uid"):
+                item = _friend_from_relation(value, from_follower_list=True)
+                if item:
+                    _NETWORK_FRIENDS[item["platform_user_id"]] = item
+            for child in value.values():
+                walk(child, depth + 1)
+        elif isinstance(value, list):
+            for child in value[:100]:
+                walk(child, depth + 1)
+
+    walk(payload)
 
 EXTRACT_JS = r"""
 () => {
@@ -159,14 +229,51 @@ def _extract(page):
 
 
 def list_friends(input_data):
+    global _NETWORK_FRIENDS
     if not isinstance(input_data, dict):
         raise _error(protocol.ERR_INVALID_REQUEST, "input must be an object")
     if set(input_data) - {"session"}:
         raise _error(protocol.ERR_INVALID_REQUEST, "input contains unknown fields")
     state_path = protocol._session_file(input_data)
+    _NETWORK_FRIENDS = {}
     with browser.launch(state_in=state_path) as (_pw, _browser, context, page):
-        page.goto(CHAT_URL, wait_until="domcontentloaded", timeout=60_000)
+        try:
+            page.on("response", _capture_relation_response)
+        except Exception:
+            pass
+        page.goto(SELF_URL, wait_until="domcontentloaded", timeout=60_000)
         page.wait_for_timeout(2_000)
+        try:
+            followers = page.locator("a").filter(has_text="粉丝")
+            if followers.count() and followers.first.is_visible():
+                followers.first.click(timeout=5_000)
+                page.wait_for_timeout(5_000)
+            else:
+                followers = page.get_by_text("粉丝", exact=True)
+                for index in range(followers.count() - 1, -1, -1):
+                    try:
+                        candidate = followers.nth(index)
+                        if candidate.is_visible():
+                            candidate.click(timeout=5_000, force=True)
+                            page.wait_for_timeout(5_000)
+                            break
+                    except Exception:
+                        continue
+                # Douyin's profile counters are sometimes rendered as a
+                # text span inside a delegated-click container. Trigger the
+                # same bubbling event on the visible counter and its parents
+                # when Playwright's locator click cannot reach that handler.
+                page.evaluate("""() => {
+                    const nodes = Array.from(document.querySelectorAll('*'))
+                      .filter(node => (node.textContent || '').trim() === '粉丝');
+                    const target = nodes[nodes.length - 1];
+                    for (let current = target, i = 0; current && i < 5; current = current.parentElement, i += 1) {
+                      current.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, view: window}));
+                    }
+                }""")
+                page.wait_for_timeout(5_000)
+        except Exception:
+            pass
         if _visible_text(page, CHALLENGE_TEXTS):
             raise _error(protocol.ERR_CHALLENGE_REQUIRED, "platform challenge is required")
         if not _cookies_have_session(context):
@@ -179,13 +286,11 @@ def list_friends(input_data):
         stable_rounds = 0
         for _ in range(24):
             before = len(collected)
-            for item in _extract(page):
-                key = item.get("platform_user_id") or (
-                    (item.get("conversation") or {}).get("platform_conversation_id")
-                ) or item.get("display_name")
+            for item in _NETWORK_FRIENDS.values():
+                key = item.get("platform_user_id")
                 if key and key not in seen:
                     seen.add(key)
-                    collected.append(item)
+                    collected.append(dict(item))
             if len(collected) == before:
                 stable_rounds += 1
                 if stable_rounds >= 3:
@@ -197,4 +302,6 @@ def list_friends(input_data):
             except Exception:
                 pass
             page.wait_for_timeout(700)
+        if not collected:
+            raise _error(protocol.ERR_BROWSER_SELECTOR_CHANGED, "friend relation data is unavailable")
         return {"friends": collected, "complete": True}

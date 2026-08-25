@@ -229,6 +229,8 @@ def _network_identity(records):
     """Return a stable conversation ID and peer UID from chat API responses."""
     conversation_id = ""
     user_ids = []
+    sec_user_ids = []
+    uid_to_sec = {}
     for record in records:
         if not isinstance(record, dict):
             continue
@@ -246,7 +248,21 @@ def _network_identity(records):
                 user_id = str(value).strip()
                 if user_id not in user_ids:
                     user_ids.append(user_id)
+        for key in ("sec_uid", "secuid", "sec_user_id", "secuserid"):
+            value = identity.get(key)
+            if isinstance(value, (str, int)) and str(value).strip():
+                sec_user_id = str(value).strip()
+                if sec_user_id not in sec_user_ids:
+                    sec_user_ids.append(sec_user_id)
+                for user_key in ("uid", "user_id", "userid"):
+                    user_value = identity.get(user_key)
+                    if isinstance(user_value, (str, int)) and str(user_value).strip():
+                        uid_to_sec[str(user_value).strip()] = sec_user_id
     peer_id = _peer_uid_from_conversation_id(conversation_id)
+    if peer_id and peer_id in uid_to_sec:
+        peer_id = uid_to_sec[peer_id]
+    elif sec_user_ids:
+        peer_id = sec_user_ids[-1]
     if not peer_id:
         peer_id = next((value for value in reversed(user_ids) if value.isdigit()), "")
     return conversation_id, peer_id
