@@ -243,6 +243,11 @@ outcome 未知时保持 fail-closed；真实 Protocol SDK 和平台 selector 仍
 `platform_user_id` 的输入契约，真实 Platform/Creator adapter 未部署时仍由 `protocol.im` lane
 fail-closed，且不会把协议任务误交给 Browser Sidecar；
 真实平台首聊动作仍等待 Sidecar SDK 与 selector 联调。
+Protocol Bundle 的本地启动边界也已补齐：Worker 在启动可选 Protocol 进程前严格解析固定
+`manifest.json`，校验 `protocol_version`、`protocol.im` 身份、相对入口路径、非符号链接和
+入口文件 SHA-256；未配置 Bundle 或校验失败时分别保持 `ADAPTER_UNAVAILABLE`/
+`ADAPTER_INCOMPATIBLE`，不会执行未验证的入口文件。真实 SDK、平台 selector 和生产 Bundle
+仍需在外部平台环境联调。
 已实现的会话列表、平台归档、文本发送、贴纸发送和首聊操作也已同步到 operation-specific
 Sidecar JSON Schema，并由契约检查覆盖未知嵌套字段；QR/SMS 登录、Session Validate 和
 好友同步的输入边界也已同步，轮询在认证完成前仍允许省略导出路径。

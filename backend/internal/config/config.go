@@ -37,6 +37,8 @@ type Config struct {
 	// Browser adapter (docs/10)
 	PlaywrightSidecarCommand string
 	PlaywrightSidecarScript  string
+	ProtocolSidecarCommand   string
+	ProtocolBundleDir        string
 	BrowserConcurrency       int
 	MaxGlobalBrowsers        int
 	BrowserSemaphoreTTL      time.Duration
@@ -84,6 +86,8 @@ func Load() *Config {
 		LoginProfileDir:          env("LOGIN_PROFILE_DIR", "/tmp/douyin-keeper/login"),
 		PlaywrightSidecarCommand: env("PLAYWRIGHT_SIDECAR_COMMAND", "python3"),
 		PlaywrightSidecarScript:  env("PLAYWRIGHT_SIDECAR_SCRIPT", "sidecars/playwright/sidecar.py"),
+		ProtocolSidecarCommand:   env("PROTOCOL_SIDECAR_COMMAND", "node"),
+		ProtocolBundleDir:        env("PROTOCOL_SIDECAR_BUNDLE_DIR", ""),
 		BrowserConcurrency:       positiveIntEnv("WORKER_BROWSER_CONCURRENCY", 3),
 		MaxGlobalBrowsers:        positiveIntEnv("MAX_GLOBAL_BROWSERS", 3),
 		BrowserSemaphoreTTL:      positiveDur("BROWSER_SEMAPHORE_TTL", 2*time.Minute),

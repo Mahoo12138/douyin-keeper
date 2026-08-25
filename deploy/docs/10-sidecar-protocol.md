@@ -612,8 +612,27 @@ Sidecar operation 与领域 capability 分离：
 
 Protocol Sidecar 属于可选实验性能力：
 
-- 远端 Bundle 必须经过固定 manifest + SHA-256 校验；
-- 不兼容时返回 `ADAPTER_INCOMPATIBLE`；
+- 远端 Bundle 必须包含固定文件 `manifest.json`，Worker 只接受以下字段，未知字段直接拒绝：
+
+  ```json
+  {
+    "protocol_version": 1,
+    "adapter": "protocol.im",
+    "adapter_version": "2026.08.25",
+    "entrypoint": "index.mjs",
+    "entrypoint_sha256": "<64 位小写十六进制 SHA-256>"
+  }
+  ```
+
+  `entrypoint` 必须是 Bundle 内的相对路径，不能是绝对路径、路径穿越或符号链接；Worker
+  在启动进程前重新计算入口文件 SHA-256，并要求 `protocol_version`、`adapter` 与当前
+  控制面完全匹配。校验通过后才允许以 Bundle 目录作为工作目录启动入口文件。
+- `worker-light` 通过 `PROTOCOL_SIDECAR_BUNDLE_DIR` 启用校验后的 Bundle，使用
+  `PROTOCOL_SIDECAR_COMMAND`（默认 `node`）启动 manifest 指定的入口；未设置 Bundle
+  时不启动 Protocol 进程。
+- 未配置 Bundle 时，Protocol lane 使用 `ADAPTER_UNAVAILABLE` 的 unavailable client；
+  manifest、入口文件或哈希不兼容时使用 `ADAPTER_INCOMPATIBLE`，两种情况都保持
+  fail-closed，不会把任务交给 Browser Sidecar；
 - 连续兼容性失败触发 Go 层全局 circuit breaker；
 - Sidecar 不得持有数据库、Redis、Session master key；
 - Protocol 失败不得直接修改 `DouyinAccount.session_status`；

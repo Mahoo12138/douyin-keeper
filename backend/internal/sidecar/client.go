@@ -130,26 +130,40 @@ func (NopClient) Call(_ context.Context, req Request) (*Response, error) {
 type UnavailableClient struct {
 	Adapter string
 	Version string
+	Code    string
 	Message string
 }
 
 func NewUnavailableClient(adapter, message string) *UnavailableClient {
+	return NewUnavailableClientWithCode(adapter, ErrAdapterUnavailable, message)
+}
+
+// NewUnavailableClientWithCode keeps an adapter registered in the control
+// plane while returning a precise fail-closed error, such as an incompatible
+// bundle manifest.
+func NewUnavailableClientWithCode(adapter, code, message string) *UnavailableClient {
 	if adapter == "" {
 		adapter = "unavailable"
+	}
+	if code == "" {
+		code = ErrAdapterUnavailable
 	}
 	if message == "" {
 		message = "adapter runtime is not configured"
 	}
-	return &UnavailableClient{Adapter: adapter, Version: "unconfigured", Message: message}
+	return &UnavailableClient{Adapter: adapter, Version: "unconfigured", Code: code, Message: message}
 }
 
 func (c *UnavailableClient) Call(_ context.Context, req Request) (*Response, error) {
-	adapter, version, message := c.Adapter, c.Version, c.Message
+	adapter, version, code, message := c.Adapter, c.Version, c.Code, c.Message
 	if adapter == "" {
 		adapter = "unavailable"
 	}
 	if version == "" {
 		version = "unconfigured"
+	}
+	if code == "" {
+		code = ErrAdapterUnavailable
 	}
 	if message == "" {
 		message = "adapter runtime is not configured"
@@ -158,7 +172,7 @@ func (c *UnavailableClient) Call(_ context.Context, req Request) (*Response, err
 		ProtocolVersion: ProtocolVersion,
 		RequestID:       req.RequestID,
 		OK:              false,
-		Error:           &Error{Code: ErrAdapterUnavailable, Retryable: false, Message: message},
+		Error:           &Error{Code: code, Retryable: false, Message: message},
 		Meta:            Meta{Adapter: adapter, AdapterVersion: version},
 	}, nil
 }

@@ -52,3 +52,13 @@ func TestLoadBrowserConcurrencyConfigFallsBackForNonPositiveValues(t *testing.T)
 		t.Fatalf("invalid browser config did not fall back to defaults: %+v", cfg)
 	}
 }
+
+func TestLoadProtocolBundleConfig(t *testing.T) {
+	t.Setenv("PROTOCOL_SIDECAR_COMMAND", "nodejs")
+	t.Setenv("PROTOCOL_SIDECAR_BUNDLE_DIR", "/opt/keeper/protocol")
+
+	cfg := Load()
+	if cfg.ProtocolSidecarCommand != "nodejs" || cfg.ProtocolBundleDir != "/opt/keeper/protocol" {
+		t.Fatalf("protocol bundle config = (%q, %q)", cfg.ProtocolSidecarCommand, cfg.ProtocolBundleDir)
+	}
+}

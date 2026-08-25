@@ -25,6 +25,7 @@ import (
 // session file, never through command arguments or queue payloads.
 type ProcessClient struct {
 	command string
+	dir     string
 	args    []string
 
 	mu     sync.Mutex
@@ -39,7 +40,14 @@ type ProcessClient struct {
 var ErrProcessStart = errors.New("sidecar process start failed")
 
 func NewProcessClient(command string, args ...string) *ProcessClient {
-	return &ProcessClient{command: command, args: append([]string(nil), args...)}
+	return NewProcessClientInDir(command, "", args...)
+}
+
+// NewProcessClientInDir is used for verified bundles whose entrypoint may use
+// sibling runtime files. The working directory is never inferred from input
+// requests; it is fixed when the worker constructs the client.
+func NewProcessClientInDir(command, dir string, args ...string) *ProcessClient {
+	return &ProcessClient{command: command, dir: dir, args: append([]string(nil), args...)}
 }
 
 func (c *ProcessClient) startLocked() error {
@@ -50,6 +58,7 @@ func (c *ProcessClient) startLocked() error {
 		return errors.New("sidecar: empty process command")
 	}
 	cmd := exec.Command(c.command, c.args...)
+	cmd.Dir = c.dir
 	cmd.Stderr = os.Stderr
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

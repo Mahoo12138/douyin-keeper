@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -94,8 +95,28 @@ func main() {
 	}
 	browserSidecarClient := sidecar.NewProcessClient(cfg.PlaywrightSidecarCommand, sidecarScript)
 	defer browserSidecarClient.Close()
-	protocolClient := sidecar.NewUnavailableClient(capability.AdapterProtocolIM,
+	var protocolClient sidecar.Client = sidecar.NewUnavailableClient(capability.AdapterProtocolIM,
 		"protocol SDK is not configured in this worker image")
+	var protocolProcessClient *sidecar.ProcessClient
+	if bundleDir := strings.TrimSpace(cfg.ProtocolBundleDir); bundleDir != "" {
+		manifest, verifyErr := sidecar.VerifyBundle(bundleDir, capability.AdapterProtocolIM)
+		if verifyErr != nil {
+			log.Warn("protocol sidecar bundle rejected", "err", verifyErr)
+			protocolClient = sidecar.NewUnavailableClientWithCode(capability.AdapterProtocolIM,
+				sidecar.ErrAdapterIncompatible, "protocol sidecar bundle is incompatible")
+		} else {
+			// The manifest path is resolved relative to the fixed bundle working
+			// directory; passing it as a relative command prevents double-prefixing
+			// when PROTOCOL_SIDECAR_BUNDLE_DIR itself is relative.
+			protocolProcessClient = sidecar.NewProcessClientInDir(cfg.ProtocolSidecarCommand, bundleDir, manifest.Entrypoint)
+			protocolClient = protocolProcessClient
+			log.Info("protocol sidecar bundle accepted", "adapter", manifest.Adapter,
+				"version", manifest.AdapterVersion, "entrypoint", manifest.Entrypoint)
+		}
+	}
+	if protocolProcessClient != nil {
+		defer protocolProcessClient.Close()
+	}
 	protocolWorkerID, _ := os.Hostname()
 	if protocolWorkerID == "" {
 		protocolWorkerID = "worker-light"
