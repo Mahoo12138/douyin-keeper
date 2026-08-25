@@ -70,6 +70,21 @@ type bindIdentity struct {
 	AvatarURL      *string `json:"avatar_url"`
 }
 
+func cancelQRSession(client sidecar.Client, loginHandle string) {
+	if client == nil || loginHandle == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, _ = client.Call(ctx, sidecar.Request{
+		ProtocolVersion: sidecar.ProtocolVersion,
+		RequestID:       uuid.New().String(),
+		Op:              sidecar.OpsLoginQRCancel,
+		DeadlineMS:      5_000,
+		Input:           map[string]any{"login_handle": loginHandle},
+	})
+}
+
 func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, *asynq.Task) error {
 	return func(ctx context.Context, t *asynq.Task) error {
 		var envelope struct {
@@ -175,6 +190,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
 			return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
 		}
+		defer cancelQRSession(deps.Sidecar, started.LoginHandle)
 		if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 			return err
 		}

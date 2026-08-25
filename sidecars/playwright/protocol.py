@@ -15,6 +15,7 @@ OPS = {
     "health.check",
     "login.qr.start",
     "login.qr.poll",
+    "login.qr.cancel",
     "login.sms.start",
     "login.sms.verify",
     "session.validate",

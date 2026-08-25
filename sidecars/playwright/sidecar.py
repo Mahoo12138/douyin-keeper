@@ -78,6 +78,8 @@ def handle(req):
             return protocol.success(req, qr_login.start(req.get("input")), "browser.consumer", duration_ms=duration())
         if op == "login.qr.poll":
             return protocol.success(req, qr_login.poll(req.get("input")), "browser.consumer", duration_ms=duration())
+        if op == "login.qr.cancel":
+            return protocol.success(req, qr_login.cancel(req.get("input")), "browser.consumer", duration_ms=duration())
         if op == "login.sms.start":
             return protocol.success(req, sms_login.start(req.get("input")), "browser.consumer", duration_ms=duration())
         if op == "login.sms.verify":

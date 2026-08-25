@@ -317,6 +317,20 @@ def cleanup_expired(now=None):
     return len(items)
 
 
+def cancel(input_data):
+    input_data = _input_object(input_data)
+    if set(input_data) - {"login_handle"}:
+        raise _error("INVALID_REQUEST", "input contains unknown fields")
+    handle = input_data.get("login_handle")
+    if not isinstance(handle, str) or not handle or len(handle) > 128:
+        raise _error("INVALID_REQUEST", "login handle is required")
+    with _lock:
+        item = _sessions.pop(handle, None)
+    if item is not None:
+        item.close()
+    return {"state": "cancelled"}
+
+
 def poll(input_data):
     input_data = _input_object(input_data)
     if set(input_data) - {"login_handle", "export_session_file"}:

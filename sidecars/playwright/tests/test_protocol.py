@@ -21,6 +21,35 @@ def test_parse_valid_request():
     assert req["op"] == "health.check"
 
 
+def test_parse_accepts_qr_cancel_request():
+    req = protocol.parse_request(json.dumps(make_req("login.qr.cancel")))
+    assert req["op"] == "login.qr.cancel"
+
+
+def test_qr_cancel_releases_session():
+    import qr_login
+
+    class _Manager:
+        def __init__(self):
+            self.closed = False
+
+        def __exit__(self, *_args):
+            self.closed = True
+
+    manager = _Manager()
+    handle = "qr_test_cancel"
+    item = qr_login.QRLogin(handle, manager, object(), object(), "/tmp/profile", datetime.now(timezone.utc))
+    with qr_login._lock:
+        qr_login._sessions[handle] = item
+
+    result = qr_login.cancel({"login_handle": handle})
+
+    assert result == {"state": "cancelled"}
+    assert manager.closed is True
+    with qr_login._lock:
+        assert handle not in qr_login._sessions
+
+
 def test_parse_rejects_wrong_version():
     bad = make_req()
     bad["protocol_version"] = 2

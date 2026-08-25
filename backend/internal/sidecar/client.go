@@ -21,6 +21,7 @@ const (
 	OpsHealthCheck          = "health.check"
 	OpsLoginQRStart         = "login.qr.start"
 	OpsLoginQRPoll          = "login.qr.poll"
+	OpsLoginQRCancel        = "login.qr.cancel"
 	OpsLoginSMSStart        = "login.sms.start"
 	OpsLoginSMSVerify       = "login.sms.verify"
 	OpsSessionValidate      = "session.validate"
@@ -96,7 +97,7 @@ const (
 
 func IsKnownOperation(op string) bool {
 	switch op {
-	case OpsHealthCheck, OpsLoginQRStart, OpsLoginQRPoll, OpsLoginSMSStart,
+	case OpsHealthCheck, OpsLoginQRStart, OpsLoginQRPoll, OpsLoginQRCancel, OpsLoginSMSStart,
 		OpsLoginSMSVerify, OpsSessionValidate, OpsFriendsList, OpsConversationsList,
 		OpsConversationsArchive, OpsMessageSendText, OpsMessageSendSticker, OpsMessageSendFirst:
 		return true
