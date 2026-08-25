@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { HelpCircle, Menu, ShieldCheck, Sparkles, LogOut, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { Avatar, AvatarFallback, Badge, Button, ThemeToggle } from '@douyin-keeper/ui-web'
+import { Avatar, AvatarFallback, Badge, Button, DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, ThemeToggle } from '@douyin-keeper/ui-web'
 import { listNotifications, me, myEntitlement } from '@douyin-keeper/sdk-ts'
 
 import { getToken, signOut as signOutSession } from '@/auth/session'
@@ -87,37 +87,34 @@ export function GlobalHeader() {
         </nav>
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
           <ThemeToggle />
-          <details className="group relative hidden sm:block">
-            <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-md px-2 text-sm outline-none transition-colors hover:bg-accent focus-visible:ring-1 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="hidden min-h-10 items-center gap-2 rounded-md px-2 text-sm outline-none transition-colors hover:bg-accent focus-visible:ring-1 focus-visible:ring-ring sm:flex">
               <Avatar className="size-8 border border-border">
                 <AvatarFallback className="text-xs">{initials}</AvatarFallback>
               </Avatar>
               <span className="max-w-28 truncate font-medium">{displayName}</span>
-            </summary>
-            <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg">
-              <div className="px-3 py-2">
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>
                 <p className="text-sm font-medium">{displayName}</p>
                 <p className="text-xs text-muted-foreground">{identityQ.data?.role === 'admin' ? '管理员' : '普通用户'}</p>
-                <Link to="/entitlement" className="mt-2 block text-xs text-primary hover:underline">{entitlementLabel}</Link>
-              </div>
-              <Link to="/help" className="flex min-h-10 items-center gap-2 rounded-md px-3 text-sm hover:bg-accent"><HelpCircle className="size-4" />帮助与安全边界</Link>
-              {identityQ.data?.role === 'admin' && <>
-                <div className="my-1 h-px bg-border" />
-                <Link to="/admin" className="flex min-h-10 items-center gap-2 rounded-md px-3 text-sm hover:bg-accent">
-                  <ShieldCheck className="size-4" />
-                  管理控制台
-                </Link>
-              </>}
-              <div className="my-1 h-px bg-border" />
-              <Link to="/settings" className="flex min-h-10 items-center gap-2 rounded-md px-3 text-sm hover:bg-accent">
-                设置
-              </Link>
-              <button type="button" className="flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm text-destructive hover:bg-destructive/10" onClick={() => void signOut()}>
-                <LogOut className="size-4" />
+              </DropdownMenuLabel>
+              <DropdownMenuItem asChild><Link to="/entitlement" className="text-primary">{entitlementLabel}</Link></DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem asChild><Link to="/help"><HelpCircle />帮助与安全边界</Link></DropdownMenuItem>
+                {identityQ.data?.role === 'admin' && <DropdownMenuItem asChild><Link to="/admin"><ShieldCheck />管理控制台</Link></DropdownMenuItem>}
+                <DropdownMenuItem asChild><Link to="/settings">设置</Link></DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => void signOut()}>
+                <LogOut />
                 退出登录
-              </button>
-            </div>
-          </details>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             variant="ghost"
             size="icon"

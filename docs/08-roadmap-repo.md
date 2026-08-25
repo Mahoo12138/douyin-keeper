@@ -21,6 +21,8 @@ Admin 与 C 端可以共享：
 - Auth 逻辑
 
 当前实现统一为一个 `apps/web` 应用：普通用户使用顶层路由，Admin 使用 `/admin/*` 嵌套路由，共享登录态、组件库、主题和构建产物；统一用户壳提供用户菜单、管理员入口和响应式移动导航，退出会同时撤销后端会话并清理内存 Token。
+用户端用户菜单使用 `packages/ui-web` 共享 Radix DropdownMenu，统一 Portal、焦点回收、Escape
+关闭和键盘方向导航语义；Admin 继续复用同一套主题 Provider 与基础组件。
 
 ### 微信小程序
 
