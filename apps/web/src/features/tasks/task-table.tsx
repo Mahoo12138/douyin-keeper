@@ -39,12 +39,17 @@ export function TaskTable({
           const account = accounts.find((item) => item.id === task.account_id)
           const friend = friends.get(task.friend_id)
           const busy = busyTaskId === task.id
+          const identityLabel = friend?.platform_identity_status === 'resolved'
+            ? '身份已确认'
+            : friend?.short_id
+              ? `抖音号 ${friend.short_id}`
+              : '身份信息待同步'
           return (
             <TableRow key={task.id}>
               <TableCell className="pl-5">
                 <div className="min-w-[155px]">
                   <div className="font-medium">{friend?.nickname || friend?.display_name || '好友'}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{friend?.short_id ? `抖音号 ${friend.short_id}` : '身份信息待同步'}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{identityLabel}</div>
                 </div>
               </TableCell>
               <TableCell className="whitespace-nowrap text-sm">{account?.nickname || '账号'}</TableCell>
