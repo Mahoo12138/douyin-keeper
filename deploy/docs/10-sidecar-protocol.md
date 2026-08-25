@@ -185,7 +185,8 @@ Result：
     "session.validate",
     "friends.sync",
     "conversations.sync",
-    "message.send.text.existing"
+    "message.send.text.existing",
+    "message.send.sticker.existing"
   ]
 }
 ```
@@ -505,10 +506,11 @@ Success：
 返回 `confirmed=true` 和 `platform_message_id`；贴纸能力不可用时返回稳定错误码，
 Go worker 会 fail-closed。
 
-当前 Sidecar 已完成 `session`、双重目标 ID 和 `sticker_id` 的输入校验；真实贴纸 selector
-尚未部署时返回 `ADAPTER_UNAVAILABLE`，并在 `error.detail` 标明
-`{"operation":"message.send_sticker","reason":"selector_not_configured"}`，不得返回
-成功 envelope。`packages/contracts/sidecar/v1.schema.json` 同时为
+当前 Sidecar 已完成 `session`、双重目标 ID、表情面板 selector 和 `sticker_id` 的输入校验；
+只有精确匹配稳定资源 ID 并观察到发送前不存在、发送后新增的 `platform_message_id` 才返回成功。
+selector 变化或 Playwright/adapter 未部署时返回 `ADAPTER_UNAVAILABLE` 或
+`BROWSER_SELECTOR_CHANGED`，回执未知时返回 `ADAPTER_INCOMPATIBLE` 并携带
+`{"outcome":"unknown"}`，不得返回成功 envelope。`packages/contracts/sidecar/v1.schema.json` 同时为
 `conversations.list`、`conversations.archive`、`message.send_text`、`message.send_sticker`、
 `message.send_first`、QR/SMS 登录、`session.validate` 和 `friends.list` 提供 operation-specific
 input 定义，`contracts:check` 会覆盖合法请求及未知嵌套字段。

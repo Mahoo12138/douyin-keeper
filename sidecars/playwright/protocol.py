@@ -133,6 +133,7 @@ def health_result():
             "friends.sync",
             "conversations.sync",
             "message.send.text.existing",
+            "message.send.sticker.existing",
         ],
     }
 

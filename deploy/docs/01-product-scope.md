@@ -86,8 +86,9 @@
 服务通知已完成订阅偏好、事务性 outbox、light worker 投递状态和小程序授权入口；
 真实投递仍需要配置微信模板 ID 并在真实小程序环境验证订阅额度。会话列表 Sidecar 已实现消费者
 会话页 selector、稳定会话/对端 ID 提取和基于平台会话 ID 的分页游标；真实抖音账号环境仍需验证
-页面结构与返回数据。贴纸发送仍依赖真实平台环境联调；会话列表在 selector 不可用或身份字段不稳定
-时保持 fail-closed，Sticker 的稳定目标/资源 ID 校验与未配置响应也已冻结。
+页面结构与返回数据。贴纸发送 Sidecar 已实现表情面板 selector、稳定 `sticker_id` 匹配和新增
+`platform_message_id` 回执；真实抖音账号环境仍需验证页面结构与平台回执。会话列表在 selector
+不可用或身份字段不稳定时保持 fail-closed，Sticker 也只在稳定资源 ID 和新消息 ID 均确认后成功。
 
 ## 5. V1.2
 

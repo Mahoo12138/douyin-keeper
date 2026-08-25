@@ -66,6 +66,7 @@ def test_health_success_envelope():
     # Envelope round-trips through the JSON schema's required fields.
     assert set(["protocol_version", "request_id", "ok", "result", "meta"]).issubset(out)
     assert "conversations.sync" in out["result"]["capabilities"]
+    assert "message.send.sticker.existing" in out["result"]["capabilities"]
 
 
 def test_unsupported_op_is_structured_failure():
@@ -293,28 +294,126 @@ def test_platform_conversation_list_rejects_missing_session_before_adapter_call(
         assert exc.code == protocol.ERR_INVALID_REQUEST
 
 
-def test_sticker_send_validates_and_fails_closed_until_selector_exists():
-    import sidecar
+def test_sticker_confirmation_requires_a_new_platform_message_id():
+    import sticker_send
 
+    assert sticker_send._new_message_id({"message-old"}, {"message-old", "message-new"}) == "message-new"
+    assert sticker_send._new_message_id({"message-old"}, {"message-old"}) == ""
+
+
+class _StickerLocator:
+    def __init__(self, count=0, visible=False):
+        self._count = count
+        self._visible = visible
+        self.first = self
+
+    def count(self):
+        return self._count
+
+    def nth(self, _index):
+        return self
+
+    def is_visible(self):
+        return self._visible
+
+    def click(self, **_kwargs):
+        return None
+
+
+class _StickerPage:
+    def __init__(self, message_ids):
+        self.message_ids = list(message_ids)
+        self.mouse = self
+
+    def goto(self, *_args, **_kwargs):
+        return None
+
+    def wait_for_timeout(self, _milliseconds):
+        return None
+
+    def get_by_text(self, *_args, **_kwargs):
+        return _StickerLocator()
+
+    def locator(self, selector):
+        import sticker_send
+
+        if selector in sticker_send.STICKER_TRIGGER_SELECTORS:
+            return _StickerLocator(count=1, visible=True)
+        if selector in sticker_send.STICKER_PANEL_SELECTORS:
+            return _StickerLocator(count=1, visible=True)
+        if selector == sticker_send.STICKER_ITEM_SELECTOR:
+            return _StickerLocator(count=1, visible=True)
+        return _StickerLocator()
+
+    def evaluate(self, script, *args):
+        if "data-conversation-id" in script:
+            return True
+        if "data-user-id" in script:
+            return "user-1"
+        if "data-sticker-id" in script:
+            return True
+        if "data-msg-id" in script:
+            return list(self.message_ids)
+        return False
+
+
+def test_sticker_sender_requires_identity_and_receipt(monkeypatch):
+    import sticker_send
+
+    page = _StickerPage(["message-old"])
+
+    @contextmanager
+    def fake_launch(**_kwargs):
+        yield None, None, _FakeContext(), page
+
+    monkeypatch.setattr(sticker_send.browser, "launch", fake_launch)
     with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
         json.dump({"cookies": []}, state)
         state.flush()
-        req = make_req("message.send_sticker")
-        req["input"] = {
+        try:
+            sticker_send.send_sticker({
+                "session": {"kind": "playwright_storage_state_file", "path": state.name},
+                "target": {"platform_user_id": "user-1", "platform_conversation_id": "conversation-1"},
+                "message": {"sticker_id": "sticker-001"},
+            })
+            assert False, "expected ProtocolError"
+        except protocol.ProtocolError as exc:
+            assert exc.code == protocol.ERR_ADAPTER_INCOMPATIBLE
+            assert exc.detail == {"outcome": "unknown"}
+
+
+def test_sticker_sender_returns_only_a_new_platform_message_id(monkeypatch):
+    import sticker_send
+
+    class ReceiptPage(_StickerPage):
+        def __init__(self):
+            super().__init__(["message-old"])
+            self.receipt_seen = False
+
+        def evaluate(self, script, *args):
+            if "data-msg-id" in script:
+                if not self.receipt_seen:
+                    self.receipt_seen = True
+                    return ["message-old"]
+                return ["message-old", "message-new"]
+            return super().evaluate(script, *args)
+
+    page = ReceiptPage()
+
+    @contextmanager
+    def fake_launch(**_kwargs):
+        yield None, None, _FakeContext(), page
+
+    monkeypatch.setattr(sticker_send.browser, "launch", fake_launch)
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
+        json.dump({"cookies": []}, state)
+        state.flush()
+        result = sticker_send.send_sticker({
             "session": {"kind": "playwright_storage_state_file", "path": state.name},
-            "target": {
-                "platform_user_id": "user-1",
-                "platform_conversation_id": "conversation-1",
-            },
+            "target": {"platform_user_id": "user-1", "platform_conversation_id": "conversation-1"},
             "message": {"sticker_id": "sticker-001"},
-        }
-        out = sidecar.handle(req)
-    assert out["ok"] is False
-    assert out["error"]["code"] == protocol.ERR_ADAPTER_UNAVAILABLE
-    assert out["error"]["detail"] == {
-        "operation": "message.send_sticker",
-        "reason": "selector_not_configured",
-    }
+        })
+    assert result == {"confirmed": True, "platform_message_id": "message-new"}
 
 
 def test_sticker_send_rejects_unstable_or_incomplete_target_before_adapter_call():
