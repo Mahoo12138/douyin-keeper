@@ -135,7 +135,7 @@ login.sms.verify       # V1.1
 session.validate
 friends.list
 conversations.list
-conversations.archive   # platform-side archive; fail-closed until selector adapter lands
+conversations.archive   # platform-side archive; requires a verified selector and receipt
 message.send_text
 message.send_sticker   # V1.1
 message.send_first     # V1.2
@@ -152,10 +152,12 @@ message.send_first     # V1.2
 }
 ```
 
-真实 selector、菜单确认和平台回执尚未部署时，Sidecar 必须返回
-`PLATFORM_ARCHIVE_UNAVAILABLE`，不得返回成功 envelope；后续接入仍需由 Job/Outbox
-和账号锁控制执行与幂等。当前 Go Worker 已完成该链路接线，并要求成功响应同时确认目标
-会话 ID、目标归档状态和平台回执；本地 `conversations.archived_at` 仍不会被该操作写入。
+当前 Browser adapter 已接入目标会话菜单、可选对端身份校验和平台状态/成功提示回执；只有同时
+确认目标会话 ID、目标归档状态和平台回执才返回成功。真实 selector、菜单结构和平台回执仍需
+真实账号环境验证；adapter 未部署时返回 `PLATFORM_ARCHIVE_UNAVAILABLE`，selector 变化时返回
+`BROWSER_SELECTOR_CHANGED`，回执未知时返回 `ADAPTER_INCOMPATIBLE` 并携带
+`{"outcome":"unknown"}`，不得返回成功 envelope。后续执行仍由 Job/Outbox 和账号锁控制幂等，
+本地 `conversations.archived_at` 不会被该操作写入。
 
 Go 不向 Sidecar 传 DOM selector / XPath / webpack module id。
 

@@ -428,7 +428,8 @@ MVP 允许：
 
 请求体同样使用 `{"archived": true|false}`，响应为 `202` 和 `JobRef`。该接口只创建平台
 归档 Job；Worker 会在获取账号锁、加载临时会话并收到 Sidecar 确认回执后结束 Job，未配置
-真实 selector 时以 `ADAPTER_UNAVAILABLE` 失败，不改变产品侧归档索引。
+adapter 时以 `ADAPTER_UNAVAILABLE` 失败，selector 变化或回执未知时保持 fail-closed，不改变
+产品侧归档索引。
 
 ## 7.2 Message Templates
 

@@ -84,25 +84,99 @@ def test_first_message_operation_fails_closed_until_adapter_is_available():
     assert out["error"]["code"] == protocol.ERR_UNSUPPORTED_OPERATION
 
 
-def test_platform_conversation_archive_validates_and_fails_closed_until_selector_exists():
-    import sidecar
+class _ArchiveLocator:
+    def __init__(self, count=0, visible=False):
+        self._count = count
+        self._visible = visible
+        self.first = self
 
+    def count(self):
+        return self._count
+
+    def nth(self, _index):
+        return self
+
+    def is_visible(self):
+        return self._visible
+
+    def click(self, **_kwargs):
+        return None
+
+
+class _ArchivePage:
+    def __init__(self, archived=True, peer_id="user-1"):
+        self.archived = archived
+        self.peer_id = peer_id
+
+    def goto(self, *_args, **_kwargs):
+        return None
+
+    def wait_for_timeout(self, _milliseconds):
+        return None
+
+    def get_by_text(self, value, **_kwargs):
+        return _ArchiveLocator(count=1, visible=value in {"归档", "确定"})
+
+    def evaluate(self, script, *_args):
+        if "data-user-id" in script:
+            return self.peer_id
+        if "menu.click()" in script or "node.click()" in script:
+            return True
+        if "platform_conversation_id: id" in script:
+            return {"platform_conversation_id": "conversation-1", "archived": self.archived}
+        return None
+
+
+def test_platform_conversation_archive_requires_platform_receipt(monkeypatch):
+    import conversation_archive
+
+    page = _ArchivePage(archived=True)
+
+    @contextmanager
+    def fake_launch(**_kwargs):
+        yield None, None, _FakeContext(), page
+
+    monkeypatch.setattr(conversation_archive.browser, "launch", fake_launch)
     with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
         json.dump({"cookies": []}, state)
         state.flush()
-        req = make_req("conversations.archive")
-        req["input"] = {
+        result = conversation_archive.archive({
             "session": {"kind": "playwright_storage_state_file", "path": state.name},
-            "target": {"platform_conversation_id": "conversation-1"},
+            "target": {
+                "platform_user_id": "user-1",
+                "platform_conversation_id": "conversation-1",
+            },
             "archived": True,
-        }
-        out = sidecar.handle(req)
-    assert out["ok"] is False
-    assert out["error"]["code"] == protocol.ERR_PLATFORM_ARCHIVE_UNAVAILABLE
-    assert out["error"]["detail"] == {
-        "operation": "conversations.archive",
-        "reason": "selector_not_configured",
+        })
+    assert result == {
+        "confirmed": True,
+        "platform_conversation_id": "conversation-1",
+        "archived": True,
     }
+
+
+def test_platform_conversation_archive_rejects_identity_mismatch(monkeypatch):
+    import conversation_archive
+
+    page = _ArchivePage(archived=True, peer_id="other-user")
+
+    @contextmanager
+    def fake_launch(**_kwargs):
+        yield None, None, _FakeContext(), page
+
+    monkeypatch.setattr(conversation_archive.browser, "launch", fake_launch)
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as state:
+        json.dump({"cookies": []}, state)
+        state.flush()
+        try:
+            conversation_archive.archive({
+                "session": {"kind": "playwright_storage_state_file", "path": state.name},
+                "target": {"platform_user_id": "user-1", "platform_conversation_id": "conversation-1"},
+                "archived": True,
+            })
+            assert False, "expected ProtocolError"
+        except protocol.ProtocolError as exc:
+            assert exc.code == protocol.ERR_TARGET_IDENTITY_MISMATCH
 
 
 def test_platform_conversation_archive_rejects_missing_session_before_adapter_call():

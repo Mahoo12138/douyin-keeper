@@ -228,8 +228,9 @@ Sidecar 已冻结稳定目标/资源 ID 校验、表情面板 selector 和新平
 会话归档已先完成用户侧索引闭环：新增 `archived_at`、归档/恢复 API、默认隐藏归档
 查询、统一 Web 会话筛选与响应式操作按钮；会话页同时提供明确的“请求平台归档/恢复”操作，提交
 后台 Job 后只反馈“已提交”，不提前假设平台状态；平台侧 `conversations.archive` Sidecar 输入契约
-已冻结并保持 fail-closed，平台归档请求的 Job/Outbox、Browser Worker、账号锁与确认回执校验
-已接线；真实 selector 和平台回执仍待适配器联调。
+已冻结并保持 fail-closed，Browser adapter 已接入目标会话菜单、身份校验和平台状态/成功提示
+回执；平台归档请求的 Job/Outbox、Browser Worker、账号锁与确认回执校验已接线，真实 selector
+和平台回执仍待适配器联调。
 
 M7 的本地 Protocol 前置切片已完成 v1 envelope 加固和 `send.protocol` worker 控制面接线：
 Go/Python 双侧校验 deadline、输入对象和未知字段，Go ProcessClient 还严格校验响应 envelope 的必填字段与 `error.detail` 对象边界，失败响应透传 `error.detail`，发送

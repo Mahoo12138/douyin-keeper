@@ -46,10 +46,11 @@
 - `POST /api/accounts/:id/conversations/:conversationId/platform-archive`（创建平台侧归档 Job，body 为 `{"archived":true|false}`）
 
 会话归档当前只更新产品侧索引，不调用抖音平台操作。平台侧归档的
-`conversations.archive` Sidecar 输入契约已冻结，但真实 selector 尚未部署；在平台适配器可用
-前必须返回 `PLATFORM_ARCHIVE_UNAVAILABLE`。平台归档请求现已进入通用 Job/Transactional
-Outbox、Browser Worker 和账号锁链路；Worker 只在 Sidecar 返回确认回执后将 Job 标记成功，
-不会修改本地 `conversations.archived_at` 或复用本地 API 假装平台操作成功。
+`conversations.archive` Sidecar 输入契约已冻结，Browser adapter 已接入目标菜单和回执校验；
+真实 selector、菜单结构和平台回执仍需真实环境验证，未部署时返回
+`PLATFORM_ARCHIVE_UNAVAILABLE`，selector 变化或回执未知时保持 fail-closed。平台归档请求现已
+进入通用 Job/Transactional Outbox、Browser Worker 和账号锁链路；Worker 只在 Sidecar 返回
+确认回执后将 Job 标记成功，不会修改本地 `conversations.archived_at` 或复用本地 API 假装平台操作成功。
 
 ### Tasks
 
