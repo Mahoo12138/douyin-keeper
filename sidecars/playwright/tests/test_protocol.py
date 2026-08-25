@@ -1018,6 +1018,20 @@ def test_friends_relation_adapter_keeps_only_mutual_users():
     }, from_follower_list=True)["platform_user_id"] == "sec-follower-mutual"
 
 
+def test_friends_follower_scan_waits_for_exhausted_pagination():
+    import friends_list
+
+    assert friends_list._follower_scan_complete(True, True, 20) is False
+    assert friends_list._follower_scan_complete(False, False, 20) is False
+    assert friends_list._follower_scan_complete(True, False, friends_list.FOLLOWER_STABLE_ROUNDS - 1) is False
+    assert friends_list._follower_scan_complete(True, False, friends_list.FOLLOWER_STABLE_ROUNDS) is True
+    assert friends_list._follower_scan_complete(True, None, 20, at_bottom=False) is False
+    assert friends_list._follower_scan_complete(True, None, 20, at_bottom=True) is True
+    assert friends_list._follower_scan_complete(True, True, friends_list.FOLLOWER_BOTTOM_STABLE_ROUNDS - 1, at_bottom=True) is False
+    assert friends_list._follower_scan_complete(True, True, friends_list.FOLLOWER_BOTTOM_STABLE_ROUNDS, at_bottom=True) is True
+    assert friends_list._follower_scan_complete(True, True, friends_list.FOLLOWER_BOTTOM_STABLE_ROUNDS, scroll_stuck=True) is True
+
+
 def test_message_send_rejects_missing_target_ids():
     import message_send
 

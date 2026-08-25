@@ -8,7 +8,12 @@ SELF_URL = "https://www.douyin.com/user/self"
 SESSION_COOKIE_NAMES = ("sessionid", "sessionid_ss", "sid_tt")
 CHALLENGE_TEXTS = ("安全验证", "滑动验证", "人机验证", "身份验证")
 RATE_LIMIT_TEXTS = ("操作频繁", "请求过于频繁", "访问受限")
+MAX_FOLLOWER_SCROLL_ROUNDS = 120
+FOLLOWER_STABLE_ROUNDS = 4
+FOLLOWER_BOTTOM_STABLE_ROUNDS = 8
 _NETWORK_FRIENDS = {}
+_NETWORK_FOLLOWER_HAS_MORE = None
+_NETWORK_FOLLOWER_RESPONSE_SEEN = False
 
 
 def _is_mutual_friend(row, from_follower_list=False):
@@ -52,7 +57,7 @@ def _friend_from_relation(row, from_follower_list=False):
 
 def _capture_relation_response(response):
     """Collect only users from the authenticated account's follower list."""
-    global _NETWORK_FRIENDS
+    global _NETWORK_FRIENDS, _NETWORK_FOLLOWER_HAS_MORE, _NETWORK_FOLLOWER_RESPONSE_SEEN
     try:
         if response.request.resource_type not in ("xhr", "fetch"):
             return
@@ -62,6 +67,12 @@ def _capture_relation_response(response):
     url = response.url.split("?", 1)[0]
     if not url.endswith("/aweme/v1/web/user/follower/list/") or not isinstance(payload, dict):
         return
+    _NETWORK_FOLLOWER_RESPONSE_SEEN = True
+    has_more = payload.get("has_more")
+    if has_more is None and isinstance(payload.get("data"), dict):
+        has_more = payload["data"].get("has_more")
+    if has_more is not None:
+        _NETWORK_FOLLOWER_HAS_MORE = str(has_more).lower() in ("1", "true", "yes")
 
     def walk(value, depth=0):
         if depth > 6:
@@ -78,6 +89,79 @@ def _capture_relation_response(response):
                 walk(child, depth + 1)
 
     walk(payload)
+
+
+def _scroll_follower_list(page):
+    """Scroll the visible follower list, rather than assuming the document owns it."""
+    try:
+        result = page.evaluate("""() => {
+          const visible = (node) => {
+            if (!node) return false;
+            const rect = node.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          };
+          const styleScrollable = (node) => {
+            const style = window.getComputedStyle(node);
+            return /(auto|scroll)/.test(style.overflowY || '');
+          };
+          const dialogs = Array.from(document.querySelectorAll(
+            '[role="dialog"], [class*="modal"], [class*="Modal"], [class*="drawer"], [class*="Drawer"]'
+          )).filter(visible);
+          const scope = dialogs.length ? dialogs[dialogs.length - 1] : document;
+          const documentScroller = document.scrollingElement;
+          const candidates = [
+            ...(scope === document ? [] : [scope]),
+            ...Array.from(scope.querySelectorAll ? scope.querySelectorAll('*') : []),
+            documentScroller,
+          ].filter((node, index, all) => (
+            node && all.indexOf(node) === index && visible(node) &&
+            node.scrollHeight > node.clientHeight + 20 && styleScrollable(node)
+          ));
+          const target = candidates.sort((left, right) => (
+            (right.scrollHeight - right.clientHeight) - (left.scrollHeight - left.clientHeight)
+          ))[0];
+          if (!target) {
+            window.scrollTo(0, documentScroller?.scrollHeight || 0);
+            return {moved: false, atBottom: true};
+          }
+          const before = target.scrollTop;
+          const next = Math.min(
+            target.scrollHeight,
+            before + Math.max(900, Math.floor(target.clientHeight * 0.9))
+          );
+          target.scrollTop = next;
+          target.dispatchEvent(new Event('scroll', {bubbles: true}));
+          return {
+            moved: target.scrollTop > before,
+            atBottom: target.scrollTop + target.clientHeight >= target.scrollHeight - 8,
+          };
+        }""")
+        if isinstance(result, dict):
+            return {
+                "moved": bool(result.get("moved")),
+                "at_bottom": bool(result.get("atBottom")),
+            }
+    except Exception:
+        pass
+    try:
+        page.mouse.wheel(0, 1_200)
+        return {"moved": True, "at_bottom": False}
+    except Exception:
+        return {"moved": False, "at_bottom": False}
+
+
+def _follower_scan_complete(response_seen, has_more, stable_rounds, at_bottom=False, scroll_stuck=False):
+    """Require exhausted pagination, or a settled list at the physical bottom."""
+    if not response_seen or stable_rounds < FOLLOWER_STABLE_ROUNDS:
+        return False
+    if has_more is False:
+        return True
+    if has_more is None and at_bottom:
+        return True
+    # Some Douyin responses keep has_more=1 after the virtualized list has
+    # stopped producing new rows. Only trust this fallback after a longer
+    # quiet period and after the actual scroll container reached its bottom.
+    return bool(at_bottom or scroll_stuck) and stable_rounds >= FOLLOWER_BOTTOM_STABLE_ROUNDS
 
 EXTRACT_JS = r"""
 () => {
@@ -229,13 +313,15 @@ def _extract(page):
 
 
 def list_friends(input_data):
-    global _NETWORK_FRIENDS
+    global _NETWORK_FRIENDS, _NETWORK_FOLLOWER_HAS_MORE, _NETWORK_FOLLOWER_RESPONSE_SEEN
     if not isinstance(input_data, dict):
         raise _error(protocol.ERR_INVALID_REQUEST, "input must be an object")
     if set(input_data) - {"session"}:
         raise _error(protocol.ERR_INVALID_REQUEST, "input contains unknown fields")
     state_path = protocol._session_file(input_data)
     _NETWORK_FRIENDS = {}
+    _NETWORK_FOLLOWER_HAS_MORE = None
+    _NETWORK_FOLLOWER_RESPONSE_SEEN = False
     with browser.launch(state_in=state_path) as (_pw, _browser, context, page):
         try:
             page.on("response", _capture_relation_response)
@@ -284,7 +370,9 @@ def list_friends(input_data):
         collected = []
         seen = set()
         stable_rounds = 0
-        for _ in range(24):
+        at_bottom = False
+        scroll_stuck_rounds = 0
+        for _ in range(MAX_FOLLOWER_SCROLL_ROUNDS):
             before = len(collected)
             for item in _NETWORK_FRIENDS.values():
                 key = item.get("platform_user_id")
@@ -293,15 +381,23 @@ def list_friends(input_data):
                     collected.append(dict(item))
             if len(collected) == before:
                 stable_rounds += 1
-                if stable_rounds >= 3:
+                if _follower_scan_complete(
+                    _NETWORK_FOLLOWER_RESPONSE_SEEN,
+                    _NETWORK_FOLLOWER_HAS_MORE,
+                    stable_rounds,
+                    at_bottom,
+                    scroll_stuck_rounds >= FOLLOWER_BOTTOM_STABLE_ROUNDS,
+                ):
                     break
             else:
                 stable_rounds = 0
-            try:
-                page.mouse.wheel(0, 900)
-            except Exception:
-                pass
-            page.wait_for_timeout(700)
+            scroll_state = _scroll_follower_list(page)
+            at_bottom = bool(scroll_state.get("at_bottom"))
+            if scroll_state.get("moved"):
+                scroll_stuck_rounds = 0
+            else:
+                scroll_stuck_rounds += 1
+            page.wait_for_timeout(900)
         if not collected:
             raise _error(protocol.ERR_BROWSER_SELECTOR_CHANGED, "friend relation data is unavailable")
         return {"friends": collected, "complete": True}
