@@ -84,9 +84,10 @@ def _open_conversation_menu(page, conversation_id):
                 '[data-conversation-menu]', '[aria-label*="更多"]', '[aria-label*="菜单"]',
                 '[title*="更多"]', '[title*="菜单"]', '[class*="more"]', '[class*="More"]'
               ];
-              const rows = Array.from(document.querySelectorAll('[data-conversation-id], [data-conversationid]'));
+              const rows = Array.from(document.querySelectorAll('[data-conversation-id], [data-conversationid], [data-conv-id], [data-id]'));
               for (const row of rows) {
-                const id = row.getAttribute('data-conversation-id') || row.getAttribute('data-conversationid');
+                const id = row.getAttribute('data-conversation-id') || row.getAttribute('data-conversationid') ||
+                  row.getAttribute('data-conv-id') || row.getAttribute('data-id');
                 if (id !== wanted) continue;
                 row.scrollIntoView({block: 'center'});
                 for (const selector of menuSelectors) {
@@ -111,9 +112,10 @@ def _platform_state(page, conversation_id):
     try:
         value = page.evaluate(
             """(wanted) => {
-              const rows = Array.from(document.querySelectorAll('[data-conversation-id], [data-conversationid]'));
+              const rows = Array.from(document.querySelectorAll('[data-conversation-id], [data-conversationid], [data-conv-id], [data-id]'));
               for (const row of rows) {
-                const id = row.getAttribute('data-conversation-id') || row.getAttribute('data-conversationid');
+                const id = row.getAttribute('data-conversation-id') || row.getAttribute('data-conversationid') ||
+                  row.getAttribute('data-conv-id') || row.getAttribute('data-id');
                 if (id !== wanted) continue;
                 const raw = row.getAttribute('data-archived') || row.getAttribute('aria-archived');
                 let archived = null;

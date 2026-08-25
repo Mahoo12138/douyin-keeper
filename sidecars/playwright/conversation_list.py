@@ -32,9 +32,67 @@ EXTRACT_JS = r"""
     return '';
   };
   const text = (node) => (node?.textContent || '').trim();
-  const hrefID = (row) => {
-    const href = row?.querySelector?.('a[href*="/user/"]')?.getAttribute('href') || '';
-    return href.match(/\/user\/([^/?#]+)/)?.[1] || '';
+  const decode = (value) => {
+    try { return decodeURIComponent(String(value || '')).trim(); }
+    catch (_) { return String(value || '').trim(); }
+  };
+  const nodesFor = (title, row) => {
+    const nodes = [title, row, ...(row?.querySelectorAll?.('*') || [])];
+    let parent = title?.parentElement;
+    for (let i = 0; i < 5 && parent; i += 1, parent = parent.parentElement) nodes.push(parent);
+    return [...new Set(nodes.filter(Boolean))];
+  };
+  const firstAttr = (nodes, names) => {
+    for (const node of nodes) {
+      const value = attr(node, names);
+      if (value) return value;
+    }
+    return '';
+  };
+  const hrefs = (nodes) => nodes
+    .flatMap((node) => {
+      if (node?.matches?.('a[href]')) return [node.getAttribute('href') || ''];
+      return Array.from(node?.querySelectorAll?.('a[href]') || []).map((a) => a.getAttribute('href') || '');
+    })
+    .filter(Boolean);
+  const queryValue = (href, names) => {
+    try {
+      const base = window.location.origin && window.location.origin !== 'null'
+        ? window.location.origin : 'https://www.douyin.com';
+      const url = new URL(href, base);
+      for (const name of names) {
+        const value = url.searchParams.get(name);
+        if (value) return decode(value);
+      }
+    } catch (_) {}
+    return '';
+  };
+  const pathValue = (href) => decode(href.match(/\/(?:user|profile)\/([^/?#]+)/i)?.[1] || '');
+  const peerIDFrom = (nodes) => {
+    const direct = firstAttr(nodes, [
+      'data-user-id', 'data-uid', 'data-userid', 'data-sec-uid', 'data-sec_uid', 'data-secuid'
+    ]);
+    if (direct) return decode(direct);
+    for (const href of hrefs(nodes)) {
+      const fromQuery = queryValue(href, ['sec_uid', 'secUid', 'sec-uid', 'uid', 'user_id', 'userId']);
+      if (fromQuery) return fromQuery;
+      const fromPath = pathValue(href);
+      if (fromPath) return fromPath;
+    }
+    return '';
+  };
+  const conversationIDFrom = (nodes) => {
+    const direct = firstAttr(nodes, [
+      'data-conversation-id', 'data-conversationid', 'data-conv-id', 'data-conversation', 'data-conversation-key'
+    ]);
+    if (direct) return decode(direct);
+    const rowID = firstAttr(nodes.slice(0, 2), ['data-id']);
+    if (rowID) return decode(rowID);
+    for (const href of hrefs(nodes)) {
+      const value = queryValue(href, ['conversation_id', 'conversationId', 'conversation-id', 'conv_id', 'convId']);
+      if (value) return value;
+    }
+    return '';
   };
   for (const title of rows) {
     const displayName = text(title);
@@ -42,10 +100,9 @@ EXTRACT_JS = r"""
     let row = title;
     for (let i = 0; i < 5 && row; i += 1) row = row.parentElement;
     row = row || title;
-    const conversationID = attr(row, ['data-conversation-id', 'data-conversationid']) ||
-      attr(title, ['data-conversation-id', 'data-conversationid']);
-    const peerID = attr(row, ['data-user-id', 'data-uid', 'data-userid']) ||
-      attr(title, ['data-user-id', 'data-uid', 'data-userid']) || hrefID(row);
+    const nodes = nodesFor(title, row);
+    const conversationID = conversationIDFrom(nodes);
+    const peerID = peerIDFrom(nodes);
     const timeNode = row.querySelector?.('time[datetime], [data-last-message-at]');
     const lastMessageAt = attr(timeNode, ['datetime', 'data-last-message-at']) ||
       attr(row, ['data-last-message-at']);

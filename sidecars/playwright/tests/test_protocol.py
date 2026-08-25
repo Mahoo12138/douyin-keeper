@@ -808,6 +808,34 @@ def test_friends_list_rejects_missing_session_file():
         assert exc.code == protocol.ERR_SESSION_EXPIRED
 
 
+def test_friends_extracts_identity_from_extended_douyin_row_fields():
+    import browser
+    import friends_list
+
+    with browser.launch() as (_pw, _browser, _context, page):
+        page.set_content("""
+          <div class="conversationConversationItem" data-conversation-id="conversation-direct">
+            <div><div><div><div>
+              <div class="conversationConversationItemtitle" data-sec-uid="sec-direct">Direct friend</div>
+            </div></div></div></div>
+          </div>
+          <div class="conversationConversationItem" data-id="conversation-query">
+            <div><div><div><div>
+              <div class="conversationConversationItemtitle">
+                <a href="/chat?sec_uid=sec-query&conversation_id=conversation-query">Query friend</a>
+              </div>
+            </div></div></div></div>
+          </div>
+        """)
+        rows = friends_list._extract(page)
+
+    by_name = {row["display_name"]: row for row in rows}
+    assert by_name["Direct friend"]["platform_user_id"] == "sec-direct"
+    assert by_name["Direct friend"]["conversation"]["platform_conversation_id"] == "conversation-direct"
+    assert by_name["Query friend"]["platform_user_id"] == "sec-query"
+    assert by_name["Query friend"]["conversation"]["platform_conversation_id"] == "conversation-query"
+
+
 def test_message_send_rejects_missing_target_ids():
     import message_send
 

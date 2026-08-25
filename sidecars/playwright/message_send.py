@@ -53,9 +53,10 @@ def _click_conversation(page, conversation_id):
     try:
         return bool(page.evaluate(
             """(wanted) => {
-              const nodes = Array.from(document.querySelectorAll('[data-conversation-id], [data-conversationid]'));
+              const nodes = Array.from(document.querySelectorAll('[data-conversation-id], [data-conversationid], [data-conv-id], [data-id]'));
               for (const node of nodes) {
-                const value = node.getAttribute('data-conversation-id') || node.getAttribute('data-conversationid');
+                const value = node.getAttribute('data-conversation-id') || node.getAttribute('data-conversationid') ||
+                  node.getAttribute('data-conv-id') || node.getAttribute('data-id');
                 if (value === wanted) { node.click(); return true; }
               }
               return false;
@@ -70,13 +71,26 @@ def _current_peer_id(page):
     try:
         return page.evaluate(
             """() => {
-              const nodes = Array.from(document.querySelectorAll('[data-user-id], [data-uid], a[href*="/user/"]'));
+              const nodes = Array.from(document.querySelectorAll(
+                '[data-user-id], [data-uid], [data-userid], [data-sec-uid], [data-sec_uid], [data-secuid], a[href]'
+              ));
               for (const node of nodes) {
-                const direct = node.getAttribute('data-user-id') || node.getAttribute('data-uid');
+                const direct = node.getAttribute('data-user-id') || node.getAttribute('data-uid') ||
+                  node.getAttribute('data-userid') || node.getAttribute('data-sec-uid') ||
+                  node.getAttribute('data-sec_uid') || node.getAttribute('data-secuid');
                 if (direct) return direct;
                 const href = node.getAttribute('href') || '';
-                const match = href.match(/\/user\/([^/?#]+)/);
-                if (match) return match[1];
+                try {
+                  const base = window.location.origin && window.location.origin !== 'null'
+                    ? window.location.origin : 'https://www.douyin.com';
+                  const url = new URL(href, base);
+                  for (const key of ['sec_uid', 'secUid', 'sec-uid', 'uid', 'user_id', 'userId']) {
+                    const value = url.searchParams.get(key);
+                    if (value) return decodeURIComponent(value);
+                  }
+                } catch (_) {}
+                const match = href.match(/\/(?:user|profile)\/([^/?#]+)/i);
+                if (match) return decodeURIComponent(match[1]);
               }
               return '';
             }"""
