@@ -48,9 +48,31 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "integration: migrate:", err)
 		os.Exit(1)
 	}
+	if err := resetTestData(ctx, pool); err != nil {
+		fmt.Fprintln(os.Stderr, "integration: reset:", err)
+		os.Exit(1)
+	}
 	code := m.Run()
 	pool.Close()
 	os.Exit(code)
+}
+
+// resetTestData makes repeated local runs deterministic without touching the
+// migration ledger. TEST_DATABASE_URL is explicitly a disposable database;
+// production and the developer database are never reset by this package.
+func resetTestData(ctx context.Context, pool *pgxpool.Pool) error {
+	var tables *string
+	if err := pool.QueryRow(ctx, `
+		SELECT string_agg(format('%I.%I', schemaname, tablename), ',')
+		FROM pg_tables
+		WHERE schemaname = 'public' AND tablename <> 'schema_migrations'`).Scan(&tables); err != nil {
+		return err
+	}
+	if tables == nil || *tables == "" {
+		return nil
+	}
+	_, err := pool.Exec(ctx, "TRUNCATE TABLE "+*tables+" RESTART IDENTITY CASCADE")
+	return err
 }
 
 // ensureTestDB connects to the maintenance db and creates the target database

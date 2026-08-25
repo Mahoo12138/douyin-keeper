@@ -84,10 +84,13 @@ func (s *Service) GetEffective(ctx context.Context, userID int64) (EffectiveEnti
 	grantPub := g.PublicID
 	starts, expires := g.StartsAt, g.ExpiresAt
 	eff = EffectiveEntitlement{
-		Active: true, GrantID: &grantPub, PlanCode: g.Plan.Code,
+		Active: !g.ExpiresAt.Before(now) && !g.ExpiresAt.Equal(now), GrantID: &grantPub, PlanCode: g.Plan.Code,
 		StartsAt: &starts, ExpiresAt: &expires,
 		AccountQuota: g.Plan.AccountQuota, TaskQuota: g.Plan.TaskQuota,
 		DailySendQuota: g.Plan.DailySendQuota, Features: g.Plan.Features,
+	}
+	if !eff.Active {
+		return eff, nil
 	}
 	usage, err := s.loadUsage(ctx, userID, EffectiveLocalDate(now))
 	if err != nil {
@@ -302,12 +305,12 @@ func (s *Service) Authorize(ctx context.Context, req AuthorizationRequest) (Auth
 		return AuthorizationDecision{}, err
 	}
 	dec := AuthorizationDecision{ReasonCode: "ALLOWED", Entitlement: &eff}
-	if !eff.Active {
-		dec.Allowed, dec.ReasonCode = false, apperr.CodeEntitlementRequired
-		return dec, nil
-	}
 	if eff.ExpiresAt != nil && !eff.ExpiresAt.After(s.now()) {
 		dec.Allowed, dec.ReasonCode = false, apperr.CodeEntitlementExpired
+		return dec, nil
+	}
+	if !eff.Active {
+		dec.Allowed, dec.ReasonCode = false, apperr.CodeEntitlementRequired
 		return dec, nil
 	}
 	if req.RequiredFeature != "" && !eff.Features[req.RequiredFeature] {

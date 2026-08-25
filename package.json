@@ -13,6 +13,11 @@
     "build:spa": "pnpm build:web && node scripts/stage-webassets.mjs",
     "typecheck": "pnpm -r typecheck",
     "contracts:check": "node packages/contracts/validate.mjs",
-    "deployment:check": "node scripts/validate-deployment.mjs"
+    "deployment:check": "node scripts/validate-deployment.mjs",
+    "test:contracts": "pnpm contracts:check",
+    "test:backend": "go -C backend test ./...",
+    "test:sidecar": "python3 -m pytest sidecars/playwright/tests -q",
+    "test:web": "pnpm --filter @douyin-keeper/sdk-ts test && pnpm --filter @douyin-keeper/web test",
+    "test": "pnpm test:contracts && pnpm test:backend && pnpm test:sidecar && pnpm test:web"
   }
 }

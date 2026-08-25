@@ -90,7 +90,7 @@ func TestAdminEntitlementSummariesAndDisableAudit(t *testing.T) {
 	decision, err := ent.Authorize(ctx, entitlement.AuthorizationRequest{
 		UserID: adminGrantUserID, Action: entitlement.ActionSendExecute,
 	})
-	if err != nil || decision.Allowed || decision.ReasonCode != apperr.CodeEntitlementExpired {
+	if err != nil || decision.Allowed || decision.ReasonCode != apperr.CodeEntitlementRequired {
 		t.Fatalf("revoked grant must be rejected immediately: decision=%+v err=%v", decision, err)
 	}
 	userGrants, err = ent.ListUserGrantSummaries(ctx, adminGrantUserID, 100)

@@ -40,7 +40,7 @@ func (r *NotificationRepo) List(ctx context.Context, userID int64, filter notifi
 
 	query := `
 		SELECT id, public_id, user_id, type, priority, title, body,
-		       resource_type, resource_id, dedupe_key, read_at, created_at, expires_at
+		       resource_type, resource_id, COALESCE(dedupe_key, ''), read_at, created_at, expires_at
 		FROM notifications
 		WHERE user_id=$1 AND (expires_at IS NULL OR expires_at > now())`
 	args := []any{userID}
@@ -83,7 +83,7 @@ func (r *NotificationRepo) ListByUserPage(ctx context.Context, userID int64, fil
 
 	query := `
 		SELECT id, public_id, user_id, type, priority, title, body,
-		       resource_type, resource_id, dedupe_key, read_at, created_at, expires_at
+		       resource_type, resource_id, COALESCE(dedupe_key, ''), read_at, created_at, expires_at
 		FROM notifications
 		WHERE user_id=$1 AND (expires_at IS NULL OR expires_at > now())`
 	args := []any{userID, filter.AfterCreatedAt, filter.AfterID}

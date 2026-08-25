@@ -58,6 +58,12 @@ func TestCapabilityRepoUpsertAndLookup(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if err := repo.Upsert(ctx, capability.Capability{
+		AccountID: acct.ID, Name: capability.NameMessageTextFirst,
+		Status: capability.StatusUnavailable, Adapter: &protocol, ErrorCode: &errorCode, CheckedAt: freshAt,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	got, err = repo.GetByAccountAndName(ctx, acct.ID, capability.NameMessageTextExisting)
 	if err != nil || got == nil || got.Status != capability.StatusUnavailable || got.ErrorCode == nil || *got.ErrorCode != errorCode {
 		t.Fatalf("upsert did not replace snapshot: got=%+v err=%v", got, err)

@@ -427,7 +427,7 @@ func (r *EntitlementRepo) GetEffectiveGrant(ctx context.Context, userID int64, n
 	g, err := scanGrant(From(ctx, r.pool).QueryRow(ctx, `
 		SELECT `+grantCols+` FROM entitlement_grants g
 		WHERE g.user_id = $1 AND g.revoked_at IS NULL
-		  AND g.starts_at <= $2 AND $2 < g.expires_at
+		  AND g.starts_at <= $2
 		ORDER BY g.expires_at DESC
 		LIMIT 1
 	`, userID, now))
@@ -472,8 +472,8 @@ func (r *EntitlementRepo) ListExpiringGrants(ctx context.Context, now, until tim
 		LEFT JOIN notifications n ON n.user_id=g.user_id
 		  AND n.dedupe_key = 'entitlement-expiry:' || g.public_id::text || ':' ||
 		    CASE
-		      WHEN g.expires_at <= $1 + interval '1 day' THEN '1'
-		      WHEN g.expires_at <= $1 + interval '3 days' THEN '3'
+			  WHEN g.expires_at <= $1::timestamptz + interval '1 day' THEN '1'
+			  WHEN g.expires_at <= $1::timestamptz + interval '3 days' THEN '3'
 		      ELSE '7'
 		    END
 		WHERE g.revoked_at IS NULL AND g.starts_at <= $1

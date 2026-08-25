@@ -71,6 +71,7 @@ func TestSchedulerCreatesDailyIntentAndOutboxOnce(t *testing.T) {
 	if err := postgres.NewTaskRepo(pool).Create(ctx, tk); err != nil {
 		t.Fatal(err)
 	}
+	defer func() { _, _ = pool.Exec(ctx, `UPDATE spark_tasks SET enabled = false WHERE id = $1`, tk.ID) }()
 	if _, err := pool.Exec(ctx, `UPDATE spark_tasks SET enabled = false WHERE id <> $1`, tk.ID); err != nil {
 		t.Fatal(err)
 	}

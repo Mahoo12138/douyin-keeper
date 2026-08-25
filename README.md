@@ -60,14 +60,18 @@ curl -s localhost:8080/api/v1/entitlements/redeem -H "authorization: Bearer $TOK
 curl -s localhost:8080/api/v1/me/entitlement -H "authorization: Bearer $TOKEN"
 ```
 
-Tests (integration tests require `TEST_DATABASE_URL`, and skip cleanly without it):
+Tests (the mini program is intentionally excluded from this root test entry; backend integration tests
+require `TEST_DATABASE_URL` and skip cleanly without it):
 
 ```bash
 docker compose -f deploy/compose/docker-compose.dev.yml up -d
-cd backend
-$env:TEST_DATABASE_URL='postgres://keeper:change-me@localhost:5432/douyin_keeper_test?sslmode=disable'
-go test ./...
+python3 -m pip install -r sidecars/playwright/requirements.txt
+export TEST_DATABASE_URL='postgres://keeper:change-me@localhost:5432/douyin_keeper_test?sslmode=disable'
+pnpm test
 ```
+
+The focused entries are also available as `pnpm test:backend`, `pnpm test:sidecar`, and
+`pnpm test:web`; `pnpm test:contracts` validates the OpenAPI and Sidecar schemas.
 
 ## Frontend
 
