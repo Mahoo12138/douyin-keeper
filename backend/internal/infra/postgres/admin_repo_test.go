@@ -11,4 +11,11 @@ func TestAdminRepoExecutableCatalogDefaultsToBrowser(t *testing.T) {
 	if !repo.executableAdapters["protocol.im"] {
 		t.Fatalf("protocol adapter was not enabled: %#v", repo.executableAdapters)
 	}
+	if repo.browserSlotsLimit != 3 {
+		t.Fatalf("default browser slots limit = %d", repo.browserSlotsLimit)
+	}
+	repo.SetBrowserSlotsLimit(7)
+	if repo.browserSlotsLimit != 7 {
+		t.Fatalf("configured browser slots limit = %d", repo.browserSlotsLimit)
+	}
 }

@@ -20,14 +20,24 @@ type AdminRepo struct {
 	inspector          *asynq.Inspector
 	redis              *redis.Client
 	executableAdapters map[string]bool
+	browserSlotsLimit  int
 }
 
 func NewAdminRepo(pool *pgxpool.Pool, rdb *redis.Client) *AdminRepo {
-	repo := &AdminRepo{pool: pool, redis: rdb, executableAdapters: map[string]bool{"browser.consumer": true}}
+	repo := &AdminRepo{pool: pool, redis: rdb, executableAdapters: map[string]bool{"browser.consumer": true}, browserSlotsLimit: 3}
 	if rdb != nil {
 		repo.inspector = asynq.NewInspectorFromRedisClient(rdb)
 	}
 	return repo
+}
+
+// SetBrowserSlotsLimit keeps the Admin projection aligned with the shared
+// MAX_GLOBAL_BROWSERS deployment setting used by worker-browser.
+func (r *AdminRepo) SetBrowserSlotsLimit(limit int) *AdminRepo {
+	if limit > 0 {
+		r.browserSlotsLimit = limit
+	}
+	return r
 }
 
 // SetAdapterExecutable reflects the verified runtime catalog in the Admin
@@ -704,7 +714,7 @@ var runtimePools = []struct {
 func (r *AdminRepo) GetRuntimeSummary(ctx context.Context) (admin.RuntimeSummary, error) {
 	var summary admin.RuntimeSummary
 	summary.ObservedAt = time.Now()
-	summary.BrowserSlotsLimit = 3
+	summary.BrowserSlotsLimit = r.browserSlotsLimit
 	summary.Pools = make([]admin.WorkerPoolSummary, 0, len(runtimePools))
 	for _, pool := range runtimePools {
 		summary.Pools = append(summary.Pools, admin.WorkerPoolSummary{

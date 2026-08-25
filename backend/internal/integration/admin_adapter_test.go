@@ -11,6 +11,11 @@ func TestAdminAdapterRepoListsAndAuditsToggle(t *testing.T) {
 	ctx := context.Background()
 	actorID := newUser(t)
 	repo := postgres.NewAdminRepo(pool, nil)
+	repo.SetBrowserSlotsLimit(7)
+	runtime, err := repo.GetRuntimeSummary(ctx)
+	if err != nil || runtime.BrowserSlotsLimit != 7 {
+		t.Fatalf("browser slot limit = %d, err = %v", runtime.BrowserSlotsLimit, err)
+	}
 
 	items, err := repo.ListAdapterHealth(ctx)
 	if err != nil || len(items) != 3 {
