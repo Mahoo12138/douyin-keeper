@@ -13,6 +13,10 @@ export function flattenPageItems<T>(pages: Array<{ items: T[] }>) {
 	return pages.flatMap((page) => page.items)
 }
 
+export function accountTodayIntentFilters(accountId: string, range: { from: string; to: string }) {
+	return { account_id: accountId, from: range.from, to: range.to }
+}
+
 export function summarizeAccountIntents(intents: AccountDetailIntent[]) {
 	return intents.reduce(
 		(stats, intent) => {

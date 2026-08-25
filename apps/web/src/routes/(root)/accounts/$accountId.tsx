@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { toast } from 'sonner'
@@ -12,7 +12,8 @@ import { CapabilityPanel } from '@/features/accounts/capability-panel'
 import { bindingLabel, formatDate, riskLabel, sessionLabel, StatusBadge } from '@/features/accounts/account-status'
 import { type Account, type Capability } from '@/features/accounts/account-types'
 import { useAccountsQuery } from '@/features/accounts/use-accounts-query'
-import { flattenPageItems, friendsById, summarizeAccountIntents, tasksForAccount } from '@/features/accounts/account-detail-utils'
+import { accountTodayIntentFilters, flattenPageItems, friendsById, summarizeAccountIntents, tasksForAccount } from '@/features/accounts/account-detail-utils'
+import { todayRange } from '@/features/dashboard/dashboard-utils'
 import { FriendTable } from '@/features/friends/friend-table'
 import type { Friend, SparkTask } from '@/features/friends/friend-types'
 import { HistoryDetailDrawer } from '@/features/history/history-detail-drawer'
@@ -34,13 +35,21 @@ function AccountDetailPage() {
 	const friendsQ = useInfiniteQuery({ queryKey: ['account-friends', accountId], queryFn: ({ pageParam }) => listFriends(token as string, accountId, { limit: 50, cursor: pageParam }), initialPageParam: undefined as string | undefined, getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined, enabled: !!token })
 	const tasksQ = useInfiniteQuery({ queryKey: ['tasks'], queryFn: ({ pageParam }) => listTasks(token as string, { limit: 50, cursor: pageParam }), initialPageParam: undefined as string | undefined, getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined, enabled: !!token })
 	const intentsQ = useInfiniteQuery({ queryKey: ['send-intents', 'account', accountId], queryFn: ({ pageParam }) => listSendIntents(token as string, { account_id: accountId, limit: 50, cursor: pageParam }), initialPageParam: undefined as string | undefined, getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined, enabled: !!token })
+	const today = todayRange()
+	const todayIntentsQ = useInfiniteQuery({ queryKey: ['send-intents', 'account', 'today', accountId, today.day], queryFn: ({ pageParam }) => listSendIntents(token as string, { ...accountTodayIntentFilters(accountId, today), limit: 100, cursor: pageParam }), initialPageParam: undefined as string | undefined, getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined, enabled: !!token })
 	const capabilitiesQ = useQuery({ queryKey: ['account-capabilities', accountId], queryFn: () => accountCapabilities(token as string, accountId), enabled: !!token })
+	useEffect(() => {
+		if (!todayIntentsQ.hasNextPage || todayIntentsQ.isFetchingNextPage) return
+		void todayIntentsQ.fetchNextPage()
+	}, [todayIntentsQ.fetchNextPage, todayIntentsQ.hasNextPage, todayIntentsQ.isFetchingNextPage])
 
 	const account = accountsQ.accounts.find((item) => item.id === accountId)
 	const friends = friendsQ.data?.pages.flatMap((page) => page.items) ?? []
 	const tasks = tasksForAccount(flattenPageItems(tasksQ.data?.pages ?? []), accountId)
 	const intents = flattenPageItems(intentsQ.data?.pages ?? [])
+	const todayIntents = flattenPageItems(todayIntentsQ.data?.pages ?? [])
 	const intentStats = summarizeAccountIntents(intents)
+	const todayIntentStats = summarizeAccountIntents(todayIntents)
 	const friendMap = friendsById(friends)
 
 	async function runAccountAction(action: 'session' | 'friends') {
@@ -94,7 +103,7 @@ function AccountDetailPage() {
 				<TabsList aria-label="账号详情分区">
 					{tabs.map((item) => <TabsTrigger key={item.value} value={item.value}>{item.label}</TabsTrigger>)}
 				</TabsList>
-				<TabsContent value="overview">{tab === 'overview' && <OverviewTab account={account} intents={intents} stats={intentStats} intentsError={intentsQ.isError} onRetry={() => void intentsQ.refetch()} />}</TabsContent>
+				<TabsContent value="overview">{tab === 'overview' && <OverviewTab account={account} intents={todayIntents} stats={todayIntentStats} intentsLoading={todayIntentsQ.isPending || todayIntentsQ.isFetchingNextPage} intentsError={todayIntentsQ.isError} onRetry={() => void todayIntentsQ.refetch()} />}</TabsContent>
 				<TabsContent value="friends">{tab === 'friends' && <FriendsTab friends={friends} tasks={tasks} accountId={accountId} loading={friendsQ.isLoading || tasksQ.isLoading} error={friendsQ.isError || tasksQ.isError} pendingFriendId={pendingFriendId} onToggle={toggleFriend} onRetry={() => { void friendsQ.refetch(); void tasksQ.refetch() }} hasNextPage={friendsQ.hasNextPage} fetchingNextPage={friendsQ.isFetchingNextPage} onLoadMore={() => void friendsQ.fetchNextPage()} tasksHasNextPage={tasksQ.hasNextPage} tasksFetchingNextPage={tasksQ.isFetchingNextPage} onTasksLoadMore={() => void tasksQ.fetchNextPage()} />}</TabsContent>
 				<TabsContent value="tasks">{tab === 'tasks' && <TasksTab tasks={tasks} friends={friendMap} loading={tasksQ.isLoading || friendsQ.isLoading} error={tasksQ.isError || friendsQ.isError} onRetry={() => { void tasksQ.refetch(); void friendsQ.refetch() }} hasNextPage={tasksQ.hasNextPage} fetchingNextPage={tasksQ.isFetchingNextPage} onLoadMore={() => void tasksQ.fetchNextPage()} />}</TabsContent>
 				<TabsContent value="history">{tab === 'history' && <HistoryTab intents={intents} loading={intentsQ.isLoading} error={intentsQ.isError} onRetry={() => void intentsQ.refetch()} onSelect={setSelectedIntent} hasNextPage={intentsQ.hasNextPage} fetchingNextPage={intentsQ.isFetchingNextPage} onLoadMore={() => void intentsQ.fetchNextPage()} />}</TabsContent>
@@ -113,9 +122,9 @@ const tabs: Array<{ value: Tab; label: string }> = [
 	{ value: 'capabilities', label: '登录与能力' },
 ]
 
-function OverviewTab({ account, intents, stats, intentsError, onRetry }: { account: Account; intents: Intent[]; stats: ReturnType<typeof summarizeAccountIntents>; intentsError: boolean; onRetry: () => void }) {
+function OverviewTab({ account, intents, stats, intentsLoading, intentsError, onRetry }: { account: Account; intents: Intent[]; stats: ReturnType<typeof summarizeAccountIntents>; intentsLoading: boolean; intentsError: boolean; onRetry: () => void }) {
 	const next = intents.filter((intent) => ['pending', 'queued', 'running', 'retry_wait'].includes(intent.status)).sort((left, right) => new Date(left.scheduled_at).getTime() - new Date(right.scheduled_at).getTime())[0]
-	return <div className="space-y-4"><div className="grid gap-3 sm:grid-cols-4"><SummaryCard icon={<Send />} label="今日成功" value={intentsError ? '—' : stats.succeeded} /><SummaryCard icon={<Clock3 />} label="待处理" value={intentsError ? '—' : stats.pending} tone={stats.pending ? 'warning' : undefined} /><SummaryCard icon={<ShieldCheck />} label="失败" value={intentsError ? '—' : stats.failed} tone={stats.failed ? 'danger' : undefined} /><SummaryCard icon={<CheckCircle2 />} label="跳过/取消" value={intentsError ? '—' : stats.skipped} /></div><div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><Card><CardHeader><CardTitle>账号状态</CardTitle><CardDescription>登录态、同步和风险状态。</CardDescription></CardHeader><CardContent className="grid gap-3 text-sm sm:grid-cols-2"><Fact label="绑定状态" value={bindingLabel(account.binding_status)} /><Fact label="Session" value={sessionLabel(account.session_status)} /><Fact label="风险状态" value={riskLabel(account.risk_status)} /><Fact label="最近会话检查" value={formatDate(account.last_session_check_at)} /><Fact label="最近好友同步" value={formatDate(account.last_friend_sync_at)} /><Fact label="暂停时间" value={formatDate(account.paused_at)} /></CardContent></Card><Card><CardHeader><CardTitle>下一次任务</CardTitle><CardDescription>当前账号最近的待执行计划。</CardDescription></CardHeader><CardContent>{intentsError ? <DetailError text="发送记录暂时不可用" onRetry={onRetry} /> : next ? <div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 text-primary" /><div><p className="font-medium">{next.friend.display_name}</p><p className="mt-1 text-sm text-muted-foreground">{formatDate(next.scheduled_at)} · {next.task?.body || (next.task?.message_kind === 'sticker' ? '贴纸消息' : '任务')}</p><Badge className="mt-3" variant="muted">{next.status === 'running' ? '执行中' : '等待执行'}</Badge></div></div> : <EmptyPanel icon={<Clock3 />} text="当前没有待执行计划" />}</CardContent></Card></div></div>
+	return <div className="space-y-4"><div className="grid gap-3 sm:grid-cols-4"><SummaryCard icon={<Send />} label="今日成功" value={intentsLoading || intentsError ? '—' : stats.succeeded} /><SummaryCard icon={<Clock3 />} label="待处理" value={intentsLoading || intentsError ? '—' : stats.pending} tone={stats.pending ? 'warning' : undefined} /><SummaryCard icon={<ShieldCheck />} label="失败" value={intentsLoading || intentsError ? '—' : stats.failed} tone={stats.failed ? 'danger' : undefined} /><SummaryCard icon={<CheckCircle2 />} label="跳过/取消" value={intentsLoading || intentsError ? '—' : stats.skipped} /></div><div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><Card><CardHeader><CardTitle>账号状态</CardTitle><CardDescription>登录态、同步和风险状态。</CardDescription></CardHeader><CardContent className="grid gap-3 text-sm sm:grid-cols-2"><Fact label="绑定状态" value={bindingLabel(account.binding_status)} /><Fact label="Session" value={sessionLabel(account.session_status)} /><Fact label="风险状态" value={riskLabel(account.risk_status)} /><Fact label="最近会话检查" value={formatDate(account.last_session_check_at)} /><Fact label="最近好友同步" value={formatDate(account.last_friend_sync_at)} /><Fact label="暂停时间" value={formatDate(account.paused_at)} /></CardContent></Card><Card><CardHeader><CardTitle>下一次任务</CardTitle><CardDescription>当前账号最近的待执行计划。</CardDescription></CardHeader><CardContent>{intentsError ? <DetailError text="发送记录暂时不可用" onRetry={onRetry} /> : intentsLoading ? <DetailListLoading /> : next ? <div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 text-primary" /><div><p className="font-medium">{next.friend.display_name}</p><p className="mt-1 text-sm text-muted-foreground">{formatDate(next.scheduled_at)} · {next.task?.body || (next.task?.message_kind === 'sticker' ? '贴纸消息' : '任务')}</p><Badge className="mt-3" variant="muted">{next.status === 'running' ? '执行中' : '等待执行'}</Badge></div></div> : <EmptyPanel icon={<Clock3 />} text="当前没有待执行计划" />}</CardContent></Card></div></div>
 }
 
 function FriendsTab({ friends, tasks, accountId, loading, error, pendingFriendId, onToggle, onRetry, hasNextPage, fetchingNextPage, onLoadMore, tasksHasNextPage, tasksFetchingNextPage, onTasksLoadMore }: { friends: Friend[]; tasks: SparkTask[]; accountId: string; loading: boolean; error: boolean; pendingFriendId: string | null; onToggle: (friend: Friend, enabled: boolean) => void; onRetry: () => void; hasNextPage: boolean; fetchingNextPage: boolean; onLoadMore: () => void; tasksHasNextPage?: boolean; tasksFetchingNextPage: boolean; onTasksLoadMore: () => void }) {

@@ -1,10 +1,18 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { flattenPageItems, friendsById, summarizeAccountIntents, tasksForAccount } from '../src/features/accounts/account-detail-utils.ts'
+import { accountTodayIntentFilters, flattenPageItems, friendsById, summarizeAccountIntents, tasksForAccount } from '../src/features/accounts/account-detail-utils.ts'
 
 test('flattenPageItems preserves cursor page order for account detail sections', () => {
 	assert.deepEqual(flattenPageItems([{ items: ['first', 'second'] }, { items: ['third'] }]), ['first', 'second', 'third'])
+})
+
+test('account today filters preserve account and product day boundaries', () => {
+	assert.deepEqual(accountTodayIntentFilters('account-a', { from: '2026-08-24T16:00:00.000Z', to: '2026-08-25T16:00:00.000Z' }), {
+		account_id: 'account-a',
+		from: '2026-08-24T16:00:00.000Z',
+		to: '2026-08-25T16:00:00.000Z',
+	})
 })
 
 test('tasksForAccount keeps only tasks owned by the account', () => {
