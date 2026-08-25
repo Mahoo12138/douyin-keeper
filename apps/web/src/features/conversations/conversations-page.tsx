@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { getToken } from '@/auth/session'
 import { useAccountsQuery } from '../accounts/use-accounts-query'
 import { getPlatformArchiveAction } from './conversation-utils'
+import { SelectField } from '@/components/select-field'
 
 type Conversation = components['schemas']['Conversation']
 type Channel = Conversation['channel'] | 'all'
@@ -146,7 +147,7 @@ function ChannelBadge({ channel }: { channel: Conversation['channel'] }) { retur
 
 function IdentityBadge({ status }: { status: Conversation['platform_identity_status'] }) { return <Badge variant={status === 'resolved' ? 'success' : status === 'pending' ? 'warning' : 'destructive'}>{status === 'resolved' ? '已解析' : status === 'pending' ? '待解析' : status === 'ambiguous' ? '有歧义' : '缺失'}</Badge> }
 
-function ConversationSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) { const id = `conversation-filter-${label}`; return <div className="space-y-1.5"><Label htmlFor={id}>{label}</Label><select id={id} value={value} onChange={(event) => onChange(event.target.value)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div> }
+function ConversationSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) { const id = `conversation-filter-${label}`; return <SelectField id={id} label={label} value={value} onChange={onChange} options={options} /> }
 
 function SummaryCard({ label, value }: { label: string; value: string | number }) { return <Card><CardContent className="p-5"><div className="text-xs text-muted-foreground">{label}</div><div className="mt-1 truncate text-xl font-semibold">{value}</div></CardContent></Card> }
 

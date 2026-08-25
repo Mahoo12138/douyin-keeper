@@ -16,6 +16,7 @@ import { getToken } from '@/auth/session'
 import { AccountBindingPanel } from './account-binding-panel'
 import type { BindingState } from './account-types'
 import { bindingErrorMessage, bindingMethodLabel, isSMSPhoneValid, type BindingMethod } from './account-binding-utils'
+import { SelectField } from '@/components/select-field'
 
 type BindingFlowMode = 'embedded' | 'page'
 
@@ -98,13 +99,7 @@ function BindingMethodForm({ binding, embedded = false }: { binding: BindingCont
   return (
     <form className="space-y-4" onSubmit={submit}>
       <CardContent className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor={embedded ? 'binding-method' : 'binding-page-method'}>{binding.isRebinding ? '登录方式' : '绑定方式'}</Label>
-          <select id={embedded ? 'binding-method' : 'binding-page-method'} value={binding.bindingMethod} onChange={(event) => binding.setBindingMethod(event.target.value as BindingMethod)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
-            <option value="qr">{bindingMethodLabel('qr')}</option>
-            <option value="sms">{bindingMethodLabel('sms')}</option>
-          </select>
-        </div>
+        <SelectField id={embedded ? 'binding-method' : 'binding-page-method'} label={binding.isRebinding ? '登录方式' : '绑定方式'} value={binding.bindingMethod} onChange={(value) => binding.setBindingMethod(value as BindingMethod)} options={[{ value: 'qr', label: bindingMethodLabel('qr') }, { value: 'sms', label: bindingMethodLabel('sms') }]} />
         {binding.bindingMethod === 'sms' && (
           <div className="space-y-1.5">
             <Label htmlFor={embedded ? 'binding-phone' : 'binding-page-phone'}>手机号</Label>

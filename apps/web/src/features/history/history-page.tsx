@@ -2,12 +2,13 @@ import { useMemo, useState } from 'react'
 import { useInfiniteQuery, useQueries } from '@tanstack/react-query'
 import { CalendarDays, ChevronRight, Filter, Search, X } from 'lucide-react'
 import { listSendIntents, type components } from '@douyin-keeper/sdk-ts'
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@douyin-keeper/ui-web'
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, DatePicker, Input, Label, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@douyin-keeper/ui-web'
 
 import { getToken } from '@/auth/session'
 import { HistoryDetailDrawer } from './history-detail-drawer'
 import { friendOptionsFromFriends, listAllFriendsForAccount } from './history-utils'
 import { useAccountsQuery } from '../accounts/use-accounts-query'
+import { SelectField } from '@/components/select-field'
 
 type HistoryItem = components['schemas']['SendIntent']
 type HistoryStatus = HistoryItem['status']
@@ -172,13 +173,25 @@ function HistoryFilters({ search, onSearch, account, onAccount, friend, onFriend
     <HistorySelect id="history-account" label="账号" value={account} onChange={onAccount} options={[{ value: 'all', label: '全部账号' }, ...accounts.map((item) => ({ value: item.id, label: item.nickname || '未命名账号' }))]} />
     <HistorySelect id="history-friend" label="好友" value={friend} disabled={friendsLoading} onChange={onFriend} options={friendsLoading ? [{ value: 'all', label: '加载好友中…' }] : [{ value: 'all', label: '全部好友' }, ...friends.map(([value, label]) => ({ value, label }))]} />
     <HistorySelect id="history-status" label="状态" value={status} onChange={(value) => onStatus(value as HistoryStatus | 'all')} options={statusOptions} />
-    <div className="space-y-1.5"><Label htmlFor="history-from">开始日期</Label><Input id="history-from" type="date" value={fromDate} onChange={(event) => onFromDate(event.target.value)} /></div>
-    <div className="space-y-1.5"><Label htmlFor="history-to">结束日期</Label><Input id="history-to" type="date" value={toDate} onChange={(event) => onToDate(event.target.value)} /></div>
+    <div className="space-y-1.5"><Label htmlFor="history-from">开始日期</Label><DatePicker id="history-from" aria-label="开始日期" value={parseInputDate(fromDate)} onChange={(value) => onFromDate(formatInputDate(value))} /></div>
+    <div className="space-y-1.5"><Label htmlFor="history-to">结束日期</Label><DatePicker id="history-to" aria-label="结束日期" value={parseInputDate(toDate)} onChange={(value) => onToDate(formatInputDate(value))} /></div>
   </div>
 }
 
 function HistorySelect({ id, label, value, onChange, options, disabled }: { id: string; label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; disabled?: boolean }) {
-  return <div className="space-y-1.5"><Label htmlFor={id}>{label}</Label><select id={id} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+  return <SelectField id={id} label={label} value={value} disabled={disabled} onChange={onChange} options={options} />
+}
+
+function parseInputDate(value: string) {
+  if (!value) return undefined
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+function formatInputDate(value: Date | undefined) {
+  if (!value) return ''
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
 }
 
 function HistoryTable({ items, onSelect }: { items: HistoryItem[]; onSelect: (item: HistoryItem) => void }) {

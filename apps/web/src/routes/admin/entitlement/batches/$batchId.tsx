@@ -4,6 +4,7 @@ import { getAdminCardBatch, listAdminCardCodes, revokeAdminCardCode } from '@dou
 import { Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@douyin-keeper/ui-web'
 
 import { getToken } from '@/auth/session'
+import { flattenPageItems } from '@/lib/query-utils'
 import { AdminCardCodeTable } from '@/features/admin/admin-entitlement-panels'
 
 export const Route = createFileRoute('/admin/entitlement/batches/$batchId')({ component: AdminCardBatchDetail })
@@ -21,7 +22,7 @@ function AdminCardBatchDetail() {
     queryKey: ['admin-card-codes', batchId],
     queryFn: ({ pageParam }) => listAdminCardCodes(token as string, batchId, { limit: 50, cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    getNextPageParam: (lastPage) => lastPage?.next_cursor ?? undefined,
     enabled: !!token,
   })
   const revokeMutation = useMutation({
@@ -34,7 +35,7 @@ function AdminCardBatchDetail() {
   })
   const error = batchQ.error ?? codesQ.error ?? revokeMutation.error
   const batch = batchQ.data
-  const codes = codesQ.data?.pages.flatMap((page) => page.items) ?? []
+  const codes = flattenPageItems(codesQ.data?.pages ?? [])
 
   return (
     <div className="space-y-8">

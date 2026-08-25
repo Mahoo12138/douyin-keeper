@@ -2,6 +2,7 @@ import { Button, Input, Label, Switch, useOverlayBehavior } from '@douyin-keeper
 import { X } from 'lucide-react'
 
 import type { Account, Friend, MessageTemplate, TaskDraft } from './task-types'
+import { SelectField } from '@/components/select-field'
 
 export function TaskEditorDrawer({
   draft,
@@ -52,17 +53,11 @@ export function TaskEditorDrawer({
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-6">
           <div className="space-y-1.5">
-            <Label htmlFor="task-account">账号</Label>
-            <select id="task-account" value={draft.accountId} onChange={(event) => onAccountChange(event.target.value)} disabled={!!draft.id} className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
-              {accounts.map((account) => <option key={account.id} value={account.id}>{account.nickname || '未命名账号'}</option>)}
-            </select>
+            <SelectField id="task-account" label="账号" value={draft.accountId} onChange={onAccountChange} disabled={!!draft.id} options={accounts.map((account) => ({ value: account.id, label: account.nickname || '未命名账号' }))} />
             {draft.id && <p className="text-xs text-muted-foreground">已创建任务不能更换账号。</p>}
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="task-friend">好友</Label>
-            <select id="task-friend" value={draft.friendId} onChange={(event) => onChange({ friendId: event.target.value })} disabled={!!draft.id} className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
-              {friends.map((friend) => <option key={friend.id} value={friend.id}>{friend.nickname || friend.display_name}</option>)}
-            </select>
+            <SelectField id="task-friend" label="好友" value={draft.friendId} onChange={(value) => onChange({ friendId: value })} disabled={!!draft.id} options={friends.map((friend) => ({ value: friend.id, label: friend.nickname || friend.display_name }))} />
             {draft.id && <p className="text-xs text-muted-foreground">已创建任务不能更换好友。</p>}
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -70,19 +65,10 @@ export function TaskEditorDrawer({
             <div className="space-y-1.5"><Label htmlFor="task-window-end">结束时间</Label><Input id="task-window-end" type="time" value={draft.windowEnd} onChange={(event) => onChange({ windowEnd: event.target.value })} /></div>
           </div>
           <div className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">时区：{draft.timezone}。时间窗口不支持跨午夜。</div>
-          <div className="space-y-1.5">
-            <Label htmlFor="task-message-kind">消息类型</Label>
-            <select id="task-message-kind" value={draft.messageKind} onChange={(event) => onChange({ messageKind: event.target.value as TaskDraft['messageKind'], message: '' })} className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
-              <option value="text">文字消息</option>
-              <option value="sticker">贴纸消息</option>
-            </select>
-          </div>
+          <SelectField id="task-message-kind" label="消息类型" value={draft.messageKind} onChange={(value) => onChange({ messageKind: value as TaskDraft['messageKind'], message: '' })} options={[{ value: 'text', label: '文字消息' }, { value: 'sticker', label: '贴纸消息' }]} />
           <div className="space-y-1.5">
             <Label htmlFor="task-template">从模板套用</Label>
-            <select id="task-template" defaultValue="" onChange={(event) => onTemplateApply(event.target.value)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
-              <option value="">选择一个模板，将内容复制到任务</option>
-              {templates.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.kind === 'sticker' ? '贴纸' : '文字'}</option>)}
-            </select>
+            <SelectField id="task-template" label="" value="" onChange={onTemplateApply} placeholder="选择一个模板，将内容复制到任务" options={[{ value: '', label: '选择一个模板，将内容复制到任务' }, ...templates.map((template) => ({ value: template.id, label: `${template.name} · ${template.kind === 'sticker' ? '贴纸' : '文字'}` }))]} />
             <p className="text-xs text-muted-foreground">套用后仍可继续编辑，任务保存的是当前内容快照。</p>
             {templatesHasNextPage && <Button type="button" variant="ghost" size="sm" onClick={onTemplatesLoadMore} disabled={templatesLoadingMore}>{templatesLoadingMore ? '加载中…' : '加载更多模板'}</Button>}
           </div>

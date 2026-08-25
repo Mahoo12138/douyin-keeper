@@ -5,6 +5,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@dou
 import { useState } from 'react'
 
 import { getToken } from '@/auth/session'
+import { flattenPageItems } from '@/lib/query-utils'
 import { AdminBatchTable, AdminPlanTable, AdminRedemptionTable, BatchCreateForm, PlanCreateForm } from '@/features/admin/admin-entitlement-panels'
 
 export const Route = createFileRoute('/admin/entitlement')({ component: AdminEntitlement })
@@ -22,30 +23,30 @@ function AdminEntitlementList() {
     queryKey: ['admin-entitlement-plans'],
     queryFn: ({ pageParam }) => listAdminEntitlementPlans(token as string, { limit: 50, cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    getNextPageParam: (lastPage) => lastPage?.next_cursor ?? undefined,
     enabled: !!token,
   })
   const batchesQ = useInfiniteQuery({
     queryKey: ['admin-card-batches'],
     queryFn: ({ pageParam }) => listAdminCardBatches(token as string, { limit: 50, cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    getNextPageParam: (lastPage) => lastPage?.next_cursor ?? undefined,
     enabled: !!token,
   })
   const redemptionsQ = useInfiniteQuery({
     queryKey: ['admin-redemptions'],
     queryFn: ({ pageParam }) => listAdminRedemptions(token as string, { limit: 50, cursor: pageParam }),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    getNextPageParam: (lastPage) => lastPage?.next_cursor ?? undefined,
     enabled: !!token,
   })
   const planMutation = useMutation({ mutationFn: (body: Parameters<typeof createAdminEntitlementPlan>[1]) => createAdminEntitlementPlan(token as string, body), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-entitlement-plans'] }) })
   const disablePlanMutation = useMutation({ mutationFn: (id: string) => disableAdminEntitlementPlan(token as string, id), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-entitlement-plans'] }) })
-  const batchMutation = useMutation({ mutationFn: (body: Parameters<typeof createAdminCardBatch>[1]) => createAdminCardBatch(token as string, body), onSuccess: (result) => { setGeneratedCodes(result.codes); void queryClient.invalidateQueries({ queryKey: ['admin-card-batches'] }) } })
+  const batchMutation = useMutation({ mutationFn: (body: Parameters<typeof createAdminCardBatch>[1]) => createAdminCardBatch(token as string, body), onSuccess: (result) => { setGeneratedCodes(Array.isArray(result?.codes) ? result.codes.filter((code): code is string => typeof code === 'string') : []); void queryClient.invalidateQueries({ queryKey: ['admin-card-batches'] }) } })
   const disableBatchMutation = useMutation({ mutationFn: (id: string) => disableAdminCardBatch(token as string, id), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-card-batches'] }) })
-  const plans = plansQ.data?.pages.flatMap((page) => page.items) ?? []
-  const batches = batchesQ.data?.pages.flatMap((page) => page.items) ?? []
-  const redemptions = redemptionsQ.data?.pages.flatMap((page) => page.items) ?? []
+  const plans = flattenPageItems(plansQ.data?.pages ?? [])
+  const batches = flattenPageItems(batchesQ.data?.pages ?? [])
+  const redemptions = flattenPageItems(redemptionsQ.data?.pages ?? [])
   const error = planMutation.error ?? disablePlanMutation.error ?? batchMutation.error ?? disableBatchMutation.error ?? plansQ.error ?? batchesQ.error ?? redemptionsQ.error
 
   async function reload() {

@@ -13,6 +13,7 @@ import type { Friend, SparkFilter, TaskFilter } from './friend-types'
 import { FriendTable } from './friend-table'
 import { isValidBulkWindow, normalizeTimeInput, selectAllResolvedFriends, tasksForSelectedFriends, toggleSelectedFriend } from './friend-bulk-utils'
 import { useAccountsQuery } from '../accounts/use-accounts-query'
+import { SelectField } from '@/components/select-field'
 
 export function FriendsPage() {
   const token = getToken()
@@ -217,14 +218,7 @@ export function FriendsPage() {
 
 function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
   const id = `friend-filter-${label}`
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <select id={id} value={value} onChange={(event) => onChange(event.target.value)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring">
-        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
-    </div>
-  )
+  return <SelectField id={id} label={label} value={value} onChange={onChange} options={options} />
 }
 
 function EmptyFriends({ hasFilters, onReset }: { hasFilters: boolean; onReset: () => void }) {
