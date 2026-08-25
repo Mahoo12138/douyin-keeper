@@ -279,6 +279,9 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 		if claimed.AccountID == nil || claimed.UserID == nil || deps.Sidecar == nil || deps.Redis == nil || deps.Tx == nil {
 			return fail(apperr.CodeInternal)
 		}
+		if err := requireAdapterAccess(ctx, deps.Health, capability.AdapterBrowserConsumer); err != nil {
+			return finishSessionCheckFailure(ctx, deps, claimed, *claimed.AccountID, adapterGateCode(err))
+		}
 		acct, err := deps.Accounts.GetByID(ctx, *claimed.AccountID)
 		if err != nil || acct.UserID != *claimed.UserID {
 			return fail(apperr.CodeNotFound)

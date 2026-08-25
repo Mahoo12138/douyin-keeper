@@ -248,6 +248,9 @@ Sidecar JSON Schema，并由契约检查覆盖未知嵌套字段；QR/SMS 登录
 好友同步的输入边界也已同步，轮询在认证完成前仍允许省略导出路径。
 Resolver 的 fallback 也会检查全局 Adapter health；Browser 被禁用或熔断时返回无 Adapter
 的不可用计划，首聊则继续保留 `protocol.im` 路由身份并 fail-closed。
+账号检查、好友/会话同步和平台归档等 Browser Worker 也在 Sidecar 调用前复用同一全局
+`adapter_health` 闸门；禁用或 open 状态直接以 `ADAPTER_UNAVAILABLE` 终止 Job，不产生
+平台副作用，`capability.probe` 保留为恢复入口。
 Protocol 发送在明确收到 `outcome=not_sent`（或 `platform_write_accepted=false`）且 Browser
 能力可用时，会在同一 Intent 下创建 Browser attempt 2；未知结果不会自动重发。
 

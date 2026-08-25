@@ -161,6 +161,9 @@ Session 状态为 `unknown/valid`、最近一次检查早于周期阈值的账�
 Browser Worker 成功后更新 `last_session_check_at` 和 `session_status=valid`；若返回
 `SESSION_EXPIRED` 或 `CHALLENGE_REQUIRED`，沿用 Risk Service 更新 Session 状态并生成
 账号所有者的站内通知，后续周期扫描不会重复探测已经确认需要人工处理的账号。
+账号检查、好友/会话同步和平台侧会话归档在调用 Browser Sidecar 前统一经过全局
+`adapter_health` 闸门；Adapter 被管理员禁用或 Circuit Breaker 处于 open 时，Job 以
+`ADAPTER_UNAVAILABLE` 失败且不触碰 Sidecar。`capability.probe` 仍是恢复健康快照的探针入口。
 
 ## 4. Run Now
 

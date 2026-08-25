@@ -89,6 +89,9 @@ func platformArchiveHandler(loader PayloadLoader, deps SessionCheckDeps) func(co
 		if claimed.AccountID == nil || claimed.UserID == nil || *claimed.AccountID != payload.AccountID || deps.Accounts == nil || deps.Sessions == nil || deps.Sidecar == nil || deps.Redis == nil || deps.Tx == nil {
 			return fail(apperr.CodeInternal)
 		}
+		if err := requireAdapterAccess(ctx, deps.Health, capability.AdapterBrowserConsumer); err != nil {
+			return fail(adapterGateCode(err))
+		}
 		acct, err := deps.Accounts.GetByID(ctx, *claimed.AccountID)
 		if err != nil || acct == nil || acct.UserID != *claimed.UserID {
 			return fail(apperr.CodeNotFound)

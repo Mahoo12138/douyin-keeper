@@ -89,6 +89,9 @@ func friendsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		if claimed.AccountID == nil || claimed.UserID == nil || deps.Accounts == nil || deps.Sessions == nil || deps.Sidecar == nil || deps.Redis == nil || deps.Friends == nil || deps.Tx == nil {
 			return fail(apperr.CodeInternal)
 		}
+		if err := requireAdapterAccess(ctx, deps.Health, capability.AdapterBrowserConsumer); err != nil {
+			return finishFriendsFailure(ctx, deps, claimed, *claimed.AccountID, adapterGateCode(err), now)
+		}
 		acct, err := deps.Accounts.GetByID(ctx, *claimed.AccountID)
 		if err != nil || acct.UserID != *claimed.UserID {
 			return fail(apperr.CodeNotFound)
