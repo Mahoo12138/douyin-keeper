@@ -845,6 +845,20 @@ def test_login_success_requires_non_empty_user_identity_text():
     assert qr_login._login_success_visible(Page('real nickname')) is True
 
 
+def test_login_success_accepts_session_cookie_without_identity_selector():
+    import qr_login
+
+    class Page:
+        def locator(self, _selector):
+            return type('Locator', (), {'count': lambda self: 0, 'first': self, 'is_visible': lambda self: False})()
+
+    class Context:
+        def cookies(self):
+            return [{'name': 'sessionid', 'value': 'opaque'}]
+
+    assert qr_login._login_success_visible(Page(), Context()) is True
+
+
 def test_sms_start_rejects_relative_profile_dir():
     import sms_login
 

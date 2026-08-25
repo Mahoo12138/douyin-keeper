@@ -129,8 +129,8 @@ def _platform_challenge_visible(page):
     return _verification_interstitial_visible(page) or _challenge_visible(page)
 
 
-def _login_success_visible(page):
-    """Require a page-level signal in addition to session cookies."""
+def _login_success_visible(page, context=None):
+    """Accept a valid session cookie when the login layer has disappeared."""
     try:
         panel = page.locator(LOGIN_PANEL_SELECTOR)
         if panel.count() and panel.first.is_visible():
@@ -150,6 +150,17 @@ def _login_success_visible(page):
                 return True
         except Exception:
             continue
+    if context is None or not _cookies_have_session(context):
+        return False
+    try:
+        url = str(getattr(page, "url", "") or "").lower()
+        if "login" in url or "passport" in url:
+            return False
+    except Exception:
+        pass
+    if _platform_challenge_visible(page) or _qr_visible(page):
+        return False
+    return True
     return False
 
 
@@ -349,7 +360,7 @@ def poll(input_data):
         raise _error("QR_EXPIRED", "login QR session expired")
     if _platform_challenge_visible(item.page):
         return {"state": "challenge_required"}
-    if _cookies_have_session(item.context) and _login_success_visible(item.page):
+    if _cookies_have_session(item.context) and _login_success_visible(item.page, item.context):
         export_path = _export_file(input_data)
         browser.export_state(item.context, export_path)
         identity = _identity(item.page, item.context)
