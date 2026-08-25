@@ -67,11 +67,6 @@ func main() {
 	notificationRepo := postgres.NewNotificationRepo(pool)
 	workerTx := postgres.NewTxManager(pool)
 	healthService := capability.NewHealthService(capabilityRepo, capability.DefaultHealthPolicy()).WithMetrics(metrics)
-	// Protocol remains a control-plane route for first-message jobs, but it is
-	// not an executable adapter until its real SDK is configured. The resolver
-	// therefore only registers the Browser runtime here; protocol jobs still
-	// land in the light worker and fail closed through protocolClient below.
-	resolver := capability.NewResolver(capabilityRepo, healthService, capability.AdapterBrowserConsumer)
 	riskService := risk.NewService(postgres.NewRiskRepo(pool), accountRepo, workerTx, risk.DefaultCooldown).WithNotifier(notificationRepo).WithMetrics(metrics)
 	entitlementRepo := postgres.NewEntitlementRepo(pool)
 	entitlementSvc := entitlement.NewService(entitlementRepo, entitlementRepo, entitlementRepo, entitlementRepo,
@@ -117,6 +112,11 @@ func main() {
 	if protocolProcessClient != nil {
 		defer protocolProcessClient.Close()
 	}
+	executableAdapters := []string{capability.AdapterBrowserConsumer}
+	if protocolProcessClient != nil {
+		executableAdapters = append(executableAdapters, capability.AdapterProtocolIM)
+	}
+	resolver := capability.NewResolver(capabilityRepo, healthService, executableAdapters...)
 	protocolWorkerID, _ := os.Hostname()
 	if protocolWorkerID == "" {
 		protocolWorkerID = "worker-light"
@@ -144,6 +144,10 @@ func main() {
 		Probe: asynqworker.CapabilityProbeDeps{
 			Snapshots: capabilityRepo, Sidecar: browserSidecarClient, Tx: workerTx,
 			Health: healthService, Adapter: capability.AdapterBrowserConsumer,
+			Sidecars: []asynqworker.AdapterSidecar{
+				{Adapter: capability.AdapterBrowserConsumer, Client: browserSidecarClient},
+				{Adapter: capability.AdapterProtocolIM, Client: protocolClient},
+			},
 			Metrics: metrics,
 		},
 		Wechat: asynqworker.WechatNotificationDeps{

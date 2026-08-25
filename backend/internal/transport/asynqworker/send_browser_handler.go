@@ -66,6 +66,22 @@ func valueOrEmpty(value *string) string {
 	return *value
 }
 
+type adapterCapabilityRepository interface {
+	GetByAccountAndNameAndAdapter(context.Context, int64, string, string) (*capability.Capability, error)
+}
+
+func capabilityForAdapter(ctx context.Context, repo interface {
+	GetByAccountAndName(context.Context, int64, string) (*capability.Capability, error)
+}, accountID int64, name, adapter string) (*capability.Capability, error) {
+	if adapterRepo, ok := repo.(adapterCapabilityRepository); ok {
+		return adapterRepo.GetByAccountAndNameAndAdapter(ctx, accountID, name, adapter)
+	}
+	// Lightweight test doubles and older integrations can still provide the
+	// original lookup; production repositories implement the adapter-specific
+	// method above.
+	return repo.GetByAccountAndName(ctx, accountID, name)
+}
+
 type sendAdapterConfig struct {
 	adapter string
 	name    string
@@ -166,7 +182,7 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		if err != nil {
 			return failWithQuota(apperr.CodeAdapterIncompatible)
 		}
-		snapshot, capabilityErr := deps.Capabilities.GetByAccountAndName(ctx, acct.ID, spec.Capability)
+		snapshot, capabilityErr := capabilityForAdapter(ctx, deps.Capabilities, acct.ID, spec.Capability, adapterConfig.adapter)
 		if capabilityErr != nil {
 			return failWithQuota(apperr.CodeInternal)
 		}
@@ -358,7 +374,7 @@ func browserFallbackAvailable(ctx context.Context, deps SessionCheckDeps, accoun
 	if deps.Capabilities == nil {
 		return false, nil
 	}
-	snapshot, err := deps.Capabilities.GetByAccountAndName(ctx, accountID, capabilityName)
+	snapshot, err := capabilityForAdapter(ctx, deps.Capabilities, accountID, capabilityName, capability.AdapterBrowserConsumer)
 	if err != nil {
 		return false, err
 	}

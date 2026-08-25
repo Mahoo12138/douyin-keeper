@@ -271,7 +271,7 @@ func (r *AdminRepo) listAccountSummaries(ctx context.Context, filter admin.Accou
 					'Adapter', c.adapter,
 					'ErrorCode', c.error_code,
 					'CheckedAt', c.checked_at
-				) ORDER BY c.capability)
+				) ORDER BY c.capability, c.adapter)
 				FROM capability_snapshots c
 				WHERE c.account_id = a.id
 			), '[]'::jsonb) AS capabilities,

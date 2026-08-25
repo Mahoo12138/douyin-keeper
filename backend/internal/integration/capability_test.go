@@ -38,6 +38,17 @@ func TestCapabilityRepoUpsertAndLookup(t *testing.T) {
 	if got.Status != capability.StatusAvailable || got.Adapter == nil || *got.Adapter != adapter || !got.CheckedAt.Equal(checkedAt) {
 		t.Fatalf("unexpected snapshot: %+v", got)
 	}
+	protocol := capability.AdapterProtocolIM
+	if err := repo.Upsert(ctx, capability.Capability{
+		AccountID: acct.ID, Name: capability.NameMessageTextFirst,
+		Status: capability.StatusAvailable, Adapter: &protocol, CheckedAt: checkedAt,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	protocolSnapshot, err := repo.GetByAccountAndNameAndAdapter(ctx, acct.ID, capability.NameMessageTextFirst, protocol)
+	if err != nil || protocolSnapshot == nil || protocolSnapshot.Adapter == nil || *protocolSnapshot.Adapter != protocol {
+		t.Fatalf("protocol-specific lookup: got=%+v err=%v", protocolSnapshot, err)
+	}
 
 	errorCode := "ADAPTER_UNAVAILABLE"
 	freshAt := checkedAt.Add(time.Minute)
@@ -52,7 +63,7 @@ func TestCapabilityRepoUpsertAndLookup(t *testing.T) {
 		t.Fatalf("upsert did not replace snapshot: got=%+v err=%v", got, err)
 	}
 	list, err := repo.ListByAccount(ctx, acct.ID)
-	if err != nil || len(list) != 1 {
+	if err != nil || len(list) != 2 {
 		t.Fatalf("list: got=%+v err=%v", list, err)
 	}
 	stale, err := repo.ListStaleProbeTargets(ctx, freshAt.Add(-time.Second), 1000)

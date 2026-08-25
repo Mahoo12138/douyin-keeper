@@ -122,11 +122,20 @@ type SendDispatchDeps struct {
 type CapabilityProbeDeps struct {
 	Snapshots capability.Repository
 	Sidecar   sidecar.Client
+	Sidecars  []AdapterSidecar
 	Tx        job.TxManager
 	Health    capability.HealthObserver
 	Adapter   string
 	Now       func() time.Time
 	Metrics   *telemetry.Metrics
+}
+
+// AdapterSidecar pairs one health client with its registered adapter identity.
+// A single capability probe job can refresh Browser and Protocol snapshots in
+// one transaction without allowing one adapter's result to overwrite another.
+type AdapterSidecar struct {
+	Adapter string
+	Client  sidecar.Client
 }
 
 type WechatSubscriptionSender interface {
@@ -191,7 +200,7 @@ func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindD
 			register(kind, sendDispatchHandler(loader, lightDeps.Dispatch))
 			continue
 		}
-		if kind == asynqqueue.KindCapabilityProbe && lightDeps != nil && lightDeps.Probe.Snapshots != nil && lightDeps.Probe.Sidecar != nil && lightDeps.Probe.Tx != nil {
+		if kind == asynqqueue.KindCapabilityProbe && lightDeps != nil && lightDeps.Probe.Snapshots != nil && probeSidecarsConfigured(lightDeps.Probe) && lightDeps.Probe.Tx != nil {
 			register(kind, capabilityProbeHandler(loader, lightDeps.Probe))
 			continue
 		}

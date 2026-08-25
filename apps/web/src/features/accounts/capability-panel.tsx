@@ -18,7 +18,7 @@ export function CapabilityPanel({ account, capabilities, loading, error }: { acc
           <p className="text-sm text-muted-foreground">尚未完成能力探测。</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {capabilities.map((capability) => <CapabilityItem key={capability.capability} capability={capability} />)}
+			{capabilities.map((capability) => <CapabilityItem key={`${capability.capability}:${capability.adapter ?? 'unassigned'}`} capability={capability} />)}
           </div>
         )}
       </CardContent>

@@ -35,15 +35,32 @@ func (r *probeSnapshotRepo) GetByAccountAndName(_ context.Context, accountID int
 	return nil, nil
 }
 
+func (r *probeSnapshotRepo) GetByAccountAndNameAndAdapter(_ context.Context, accountID int64, name, adapter string) (*capability.Capability, error) {
+	for _, snapshot := range r.snapshots {
+		if snapshot.AccountID == accountID && snapshot.Name == name && snapshot.Adapter != nil && *snapshot.Adapter == adapter {
+			copy := snapshot
+			return &copy, nil
+		}
+	}
+	return nil, nil
+}
+
 func (r *probeSnapshotRepo) Upsert(_ context.Context, snapshot capability.Capability) error {
 	for i := range r.snapshots {
-		if r.snapshots[i].AccountID == snapshot.AccountID && r.snapshots[i].Name == snapshot.Name {
+		if r.snapshots[i].AccountID == snapshot.AccountID && r.snapshots[i].Name == snapshot.Name && sameAdapter(r.snapshots[i].Adapter, snapshot.Adapter) {
 			r.snapshots[i] = snapshot
 			return nil
 		}
 	}
 	r.snapshots = append(r.snapshots, snapshot)
 	return nil
+}
+
+func sameAdapter(left, right *string) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+	return *left == *right
 }
 
 type probeTx struct{}
@@ -147,5 +164,42 @@ func TestCapabilityProbeFailsClosedWhenSidecarUnavailable(t *testing.T) {
 		if snapshot.Status != capability.StatusUnavailable || snapshot.ErrorCode == nil || *snapshot.ErrorCode != sidecar.ErrAdapterUnavailable {
 			t.Fatalf("unexpected unavailable snapshot: %+v", snapshot)
 		}
+	}
+}
+
+func TestCapabilityProbePersistsBrowserAndProtocolSnapshotsSeparately(t *testing.T) {
+	repo := &probeSnapshotRepo{}
+	health := &probeHealthObserver{}
+	browser := &probeSidecar{response: &sidecar.Response{
+		ProtocolVersion: sidecar.ProtocolVersion, OK: true,
+		Result: map[string]any{"status": "healthy", "adapter": capability.AdapterBrowserConsumer, "version": "browser-1", "capabilities": []string{capability.NameMessageTextExisting}},
+		Meta:   sidecar.Meta{Adapter: capability.AdapterBrowserConsumer, AdapterVersion: "browser-1"},
+	}}
+	protocol := &probeSidecar{response: &sidecar.Response{
+		ProtocolVersion: sidecar.ProtocolVersion, OK: true,
+		Result: map[string]any{"status": "healthy", "adapter": capability.AdapterProtocolIM, "version": "protocol-1", "capabilities": []string{capability.NameMessageTextFirst}},
+		Meta:   sidecar.Meta{Adapter: capability.AdapterProtocolIM, AdapterVersion: "protocol-1"},
+	}}
+	handler := capabilityProbeHandler(probeLoader{message: &postgres.PendingMessage{
+		Payload: json.RawMessage(`{"account_id":42}`),
+	}}, CapabilityProbeDeps{
+		Snapshots: repo, Sidecars: []AdapterSidecar{
+			{Adapter: capability.AdapterBrowserConsumer, Client: browser},
+			{Adapter: capability.AdapterProtocolIM, Client: protocol},
+		}, Tx: probeTx{}, Health: health,
+	})
+	if err := handler(context.Background(), asynq.NewTask("capability.probe", []byte(`{"outbox_id":"probe-outbox"}`))); err != nil {
+		t.Fatalf("probe failed: %v", err)
+	}
+	if len(repo.snapshots) != len(capability.KnownNames)*2 || health.successes != 2 {
+		t.Fatalf("snapshots=%d successes=%d", len(repo.snapshots), health.successes)
+	}
+	first, err := repo.GetByAccountAndNameAndAdapter(context.Background(), 42, capability.NameMessageTextFirst, capability.AdapterProtocolIM)
+	if err != nil || first == nil || first.Status != capability.StatusAvailable {
+		t.Fatalf("protocol first-message snapshot=%+v err=%v", first, err)
+	}
+	existing, err := repo.GetByAccountAndNameAndAdapter(context.Background(), 42, capability.NameMessageTextExisting, capability.AdapterBrowserConsumer)
+	if err != nil || existing == nil || existing.Status != capability.StatusAvailable {
+		t.Fatalf("browser existing-message snapshot=%+v err=%v", existing, err)
 	}
 }

@@ -36,81 +36,35 @@ func capabilityProbeHandler(loader PayloadLoader, deps CapabilityProbeDeps) func
 		if deps.Now != nil {
 			now = deps.Now
 		}
-		adapter := deps.Adapter
-		if adapter == "" {
-			adapter = capability.AdapterBrowserConsumer
-		}
-		version := ""
-		failureCode := ""
-		response, callErr := deps.Sidecar.Call(ctx, sidecar.Request{
-			ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
-			Op: sidecar.OpsHealthCheck, DeadlineMS: 5_000, Input: map[string]any{},
-		})
-		if deps.Adapter == "" && response != nil && response.Meta.Adapter != "" {
-			adapter = response.Meta.Adapter
-		}
 		checkedAt := now()
-		var snapshots []capability.Capability
-		if callErr != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
+		results := make([]adapterProbeResult, 0, len(probeSidecars(deps)))
+		for _, probe := range probeSidecars(deps) {
+			result, probeErr := runAdapterProbe(ctx, ref.AccountID, probe, checkedAt)
+			if probeErr != nil {
+				return probeErr
 			}
-			failureCode = sidecar.ErrAdapterUnavailable
-			snapshots = unavailableSnapshots(ref.AccountID, sidecar.ErrAdapterUnavailable, checkedAt)
-		} else if response == nil || !response.OK || response.Error != nil {
-			code := sidecar.ErrAdapterUnavailable
-			if response != nil && response.Error != nil && response.Error.Code != "" {
-				code = response.Error.Code
+			results = append(results, result)
+			healthValue := float64(1)
+			if result.failureCode != "" {
+				healthValue = 0
 			}
-			failureCode = code
-			snapshots = unavailableSnapshots(ref.AccountID, code, checkedAt)
-		} else {
-			var result capability.HealthSnapshot
-			body, decodeErr := json.Marshal(response.Result)
-			if decodeErr != nil || json.Unmarshal(body, &result) != nil || result.Status == "" {
-				failureCode = sidecar.ErrAdapterIncompatible
-				snapshots = unavailableSnapshots(ref.AccountID, sidecar.ErrAdapterIncompatible, checkedAt)
-			} else {
-				if result.Adapter == "" {
-					result.Adapter = response.Meta.Adapter
-				}
-				if result.Version == "" {
-					result.Version = response.Meta.AdapterVersion
-				}
-				if result.Adapter != "" {
-					adapter = result.Adapter
-				}
-				version = result.Version
-				if result.Status != capability.AdapterStatusHealthy {
-					failureCode = sidecar.ErrAdapterUnavailable
-				}
-				snapshots = capability.FromHealth(ref.AccountID, result, checkedAt)
-				for i := range snapshots {
-					if snapshots[i].Status != capability.StatusAvailable {
-						code := sidecar.ErrAdapterUnavailable
-						snapshots[i].ErrorCode = &code
-					}
-				}
-			}
+			deps.Metrics.SetGauge("adapter_health", healthValue, telemetry.Label{Name: "adapter", Value: result.adapter})
 		}
-		healthValue := float64(1)
-		if failureCode != "" {
-			healthValue = 0
-		}
-		deps.Metrics.SetGauge("adapter_health", healthValue, telemetry.Label{Name: "adapter", Value: adapter})
 		return deps.Tx.WithinTx(ctx, func(tctx context.Context) error {
-			if deps.Health != nil {
-				if failureCode != "" {
-					if err := deps.Health.ObserveFailure(tctx, adapter, version, failureCode, checkedAt); err != nil {
+			for _, result := range results {
+				if deps.Health != nil {
+					if result.failureCode != "" {
+						if err := deps.Health.ObserveFailure(tctx, result.adapter, result.version, result.failureCode, checkedAt); err != nil {
+							return err
+						}
+					} else if err := deps.Health.ObserveSuccess(tctx, result.adapter, result.version, checkedAt); err != nil {
 						return err
 					}
-				} else if err := deps.Health.ObserveSuccess(tctx, adapter, version, checkedAt); err != nil {
-					return err
 				}
-			}
-			for _, snapshot := range snapshots {
-				if err := deps.Snapshots.Upsert(tctx, snapshot); err != nil {
-					return err
+				for _, snapshot := range result.snapshots {
+					if err := deps.Snapshots.Upsert(tctx, snapshot); err != nil {
+						return err
+					}
 				}
 			}
 			return nil
@@ -118,12 +72,120 @@ func capabilityProbeHandler(loader PayloadLoader, deps CapabilityProbeDeps) func
 	}
 }
 
-func unavailableSnapshots(accountID int64, code string, checkedAt time.Time) []capability.Capability {
+type adapterProbeResult struct {
+	adapter     string
+	version     string
+	failureCode string
+	snapshots   []capability.Capability
+}
+
+func probeSidecarsConfigured(deps CapabilityProbeDeps) bool {
+	return len(probeSidecars(deps)) > 0
+}
+
+func probeSidecars(deps CapabilityProbeDeps) []AdapterSidecar {
+	if len(deps.Sidecars) > 0 {
+		out := make([]AdapterSidecar, 0, len(deps.Sidecars))
+		for _, probe := range deps.Sidecars {
+			if probe.Client != nil {
+				out = append(out, probe)
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	if deps.Sidecar == nil {
+		return nil
+	}
+	adapter := deps.Adapter
+	if adapter == "" {
+		adapter = capability.AdapterBrowserConsumer
+	}
+	return []AdapterSidecar{{Adapter: adapter, Client: deps.Sidecar}}
+}
+
+func runAdapterProbe(ctx context.Context, accountID int64, probe AdapterSidecar, checkedAt time.Time) (adapterProbeResult, error) {
+	adapter := probe.Adapter
+	if adapter == "" {
+		adapter = capability.AdapterBrowserConsumer
+	}
+	result := adapterProbeResult{adapter: adapter}
+	response, callErr := probe.Client.Call(ctx, sidecar.Request{
+		ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
+		Op: sidecar.OpsHealthCheck, DeadlineMS: 5_000, Input: map[string]any{},
+	})
+	if callErr != nil {
+		if ctx.Err() != nil {
+			return result, ctx.Err()
+		}
+		result.failureCode = sidecar.ErrAdapterUnavailable
+		result.snapshots = unavailableSnapshots(accountID, adapter, result.failureCode, checkedAt)
+		return result, nil
+	}
+	if response == nil || !response.OK || response.Error != nil {
+		code := sidecar.ErrAdapterUnavailable
+		if response != nil && response.Error != nil && response.Error.Code != "" {
+			code = response.Error.Code
+		}
+		result.failureCode = code
+		result.version = responseVersion(response)
+		result.snapshots = unavailableSnapshots(accountID, adapter, code, checkedAt)
+		return result, nil
+	}
+
+	var health capability.HealthSnapshot
+	body, decodeErr := json.Marshal(response.Result)
+	if decodeErr != nil || json.Unmarshal(body, &health) != nil || health.Status == "" {
+		result.failureCode = sidecar.ErrAdapterIncompatible
+		result.version = responseVersion(response)
+		result.snapshots = unavailableSnapshots(accountID, adapter, result.failureCode, checkedAt)
+		return result, nil
+	}
+	reportedAdapter := health.Adapter
+	if reportedAdapter == "" {
+		reportedAdapter = response.Meta.Adapter
+	}
+	if reportedAdapter != "" && reportedAdapter != adapter {
+		result.failureCode = sidecar.ErrAdapterIncompatible
+		result.version = health.Version
+		result.snapshots = unavailableSnapshots(accountID, adapter, result.failureCode, checkedAt)
+		return result, nil
+	}
+	health.Adapter = adapter
+	if health.Version == "" {
+		health.Version = response.Meta.AdapterVersion
+	}
+	result.version = health.Version
+	if health.Status != capability.AdapterStatusHealthy {
+		result.failureCode = sidecar.ErrAdapterUnavailable
+	}
+	result.snapshots = capability.FromHealth(accountID, health, checkedAt)
+	for i := range result.snapshots {
+		adapterCopy := adapter
+		result.snapshots[i].Adapter = &adapterCopy
+		if result.snapshots[i].Status != capability.StatusAvailable {
+			code := sidecar.ErrAdapterUnavailable
+			result.snapshots[i].ErrorCode = &code
+		}
+	}
+	return result, nil
+}
+
+func responseVersion(response *sidecar.Response) string {
+	if response == nil {
+		return ""
+	}
+	return response.Meta.AdapterVersion
+}
+
+func unavailableSnapshots(accountID int64, adapter, code string, checkedAt time.Time) []capability.Capability {
 	result := make([]capability.Capability, 0, len(capability.KnownNames))
+	adapterCopy := adapter
 	for _, name := range capability.KnownNames {
 		errorCode := code
 		result = append(result, capability.Capability{AccountID: accountID, Name: name,
-			Status: capability.StatusUnavailable, ErrorCode: &errorCode, CheckedAt: checkedAt})
+			Status: capability.StatusUnavailable, Adapter: &adapterCopy, ErrorCode: &errorCode, CheckedAt: checkedAt})
 	}
 	return result
 }

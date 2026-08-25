@@ -248,6 +248,9 @@ Protocol Bundle 的本地启动边界也已补齐：Worker 在启动可选 Proto
 入口文件 SHA-256；未配置 Bundle 或校验失败时分别保持 `ADAPTER_UNAVAILABLE`/
 `ADAPTER_INCOMPATIBLE`，不会执行未验证的入口文件。真实 SDK、平台 selector 和生产 Bundle
 仍需在外部平台环境联调。
+Capability snapshot 已按 `(account_id, capability, adapter)` 隔离，单个 capability probe 会在
+同一事务内刷新 Browser 与已注册 Protocol lane；Resolver 和发送 Worker 按目标 adapter 精确
+读取，避免 Browser 的不可用结果覆盖 Protocol 首聊能力，也避免 Protocol 探针覆盖已有会话发送能力。
 已实现的会话列表、平台归档、文本发送、贴纸发送和首聊操作也已同步到 operation-specific
 Sidecar JSON Schema，并由契约检查覆盖未知嵌套字段；QR/SMS 登录、Session Validate 和
 好友同步的输入边界也已同步，轮询在认证完成前仍允许省略导出路径。

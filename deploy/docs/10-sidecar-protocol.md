@@ -608,6 +608,11 @@ Sidecar operation 与领域 capability 分离：
 
 这样未来一个 capability 可以由不同 Adapter 实现。
 
+账号能力快照按 `(account_id, capability, adapter)` 保存。一个账号可以同时存在
+`browser.consumer` 与 `protocol.im` 的同名能力；Worker 读取快照时必须带目标 Adapter，不能用
+另一个 Adapter 的 unavailable/degraded 结果覆盖或放行当前发送路径。周期性 capability probe
+可以在同一事务内刷新多个已注册 Adapter，并分别更新各自的全局 `adapter_health`。
+
 ## 13. Protocol Sidecar 额外约束
 
 Protocol Sidecar 属于可选实验性能力：

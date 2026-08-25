@@ -111,15 +111,23 @@ func (r *Resolver) Resolve(ctx context.Context, accountID int64, req ResolveRequ
 		if err != nil {
 			return Route{}, fmt.Errorf("capability resolver: list snapshots: %w", err)
 		}
-		byCapability := make(map[string]Capability, len(snapshots))
+		byCapability := make(map[string]map[string]Capability, len(snapshots))
 		for _, snapshot := range snapshots {
-			byCapability[snapshot.Name] = snapshot
+			adapter := ""
+			if snapshot.Adapter != nil {
+				adapter = *snapshot.Adapter
+			}
+			if byCapability[snapshot.Name] == nil {
+				byCapability[snapshot.Name] = make(map[string]Capability)
+			}
+			byCapability[snapshot.Name][adapter] = snapshot
 		}
 		for _, candidate := range candidates {
 			if !r.isExecutable(candidate.adapter) {
 				continue
 			}
-			snapshot, ok := byCapability[candidate.capability]
+			byAdapter, ok := byCapability[candidate.capability]
+			snapshot, ok := byAdapter[candidate.adapter]
 			if !ok || snapshot.Status != StatusAvailable || snapshot.Adapter == nil || *snapshot.Adapter != candidate.adapter {
 				continue
 			}

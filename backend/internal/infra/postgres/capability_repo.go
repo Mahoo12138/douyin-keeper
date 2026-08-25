@@ -19,7 +19,7 @@ func NewCapabilityRepo(pool *pgxpool.Pool) *CapabilityRepo { return &CapabilityR
 func (r *CapabilityRepo) ListByAccount(ctx context.Context, accountID int64) ([]capability.Capability, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT account_id, capability, status, adapter, error_code, checked_at
-		FROM capability_snapshots WHERE account_id=$1 ORDER BY capability`, accountID)
+		FROM capability_snapshots WHERE account_id=$1 ORDER BY capability, adapter`, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,27 @@ func (r *CapabilityRepo) GetByAccountAndName(ctx context.Context, accountID int6
 	var c capability.Capability
 	err := From(ctx, r.pool).QueryRow(ctx, `
 		SELECT account_id, capability, status, adapter, error_code, checked_at
-		FROM capability_snapshots WHERE account_id=$1 AND capability=$2`, accountID, name).
+		FROM capability_snapshots WHERE account_id=$1 AND capability=$2
+		ORDER BY CASE WHEN status='available' THEN 0 ELSE 1 END, checked_at DESC, adapter
+		LIMIT 1`, accountID, name).
+		Scan(&c.AccountID, &c.Name, &c.Status, &c.Adapter, &c.ErrorCode, &c.CheckedAt)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// GetByAccountAndNameAndAdapter is the adapter-specific capability gate used
+// by workers. GetByAccountAndName remains as a compatibility view for callers
+// that only need the most recently available observation.
+func (r *CapabilityRepo) GetByAccountAndNameAndAdapter(ctx context.Context, accountID int64, name, adapter string) (*capability.Capability, error) {
+	var c capability.Capability
+	err := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT account_id, capability, status, adapter, error_code, checked_at
+		FROM capability_snapshots WHERE account_id=$1 AND capability=$2 AND adapter=$3`, accountID, name, adapter).
 		Scan(&c.AccountID, &c.Name, &c.Status, &c.Adapter, &c.ErrorCode, &c.CheckedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -51,13 +71,17 @@ func (r *CapabilityRepo) GetByAccountAndName(ctx context.Context, accountID int6
 }
 
 func (r *CapabilityRepo) Upsert(ctx context.Context, c capability.Capability) error {
+	adapter := capability.AdapterBrowserConsumer
+	if c.Adapter != nil && *c.Adapter != "" {
+		adapter = *c.Adapter
+	}
 	_, err := From(ctx, r.pool).Exec(ctx, `
 		INSERT INTO capability_snapshots (account_id, capability, status, adapter, error_code, checked_at)
 		VALUES ($1,$2,$3,$4,$5,$6)
-		ON CONFLICT (account_id, capability) DO UPDATE SET
+		ON CONFLICT (account_id, capability, adapter) DO UPDATE SET
 			status=EXCLUDED.status, adapter=EXCLUDED.adapter, error_code=EXCLUDED.error_code,
 			checked_at=EXCLUDED.checked_at`,
-		c.AccountID, c.Name, c.Status, c.Adapter, c.ErrorCode, c.CheckedAt)
+		c.AccountID, c.Name, c.Status, adapter, c.ErrorCode, c.CheckedAt)
 	return err
 }
 
@@ -69,19 +93,22 @@ func (r *CapabilityRepo) ListStaleProbeTargets(ctx context.Context, before time.
 		SELECT a.id, a.public_id
 		FROM douyin_accounts a
 		LEFT JOIN capability_snapshots c
-		  ON c.account_id = a.id AND c.capability = $1
+		  ON c.account_id = a.id AND c.capability = $1 AND c.adapter = $2
+		LEFT JOIN capability_snapshots p
+		  ON p.account_id = a.id AND p.capability = $3 AND p.adapter = $4
 		WHERE a.binding_status = 'bound' AND a.deleted_at IS NULL
-		  AND (c.checked_at IS NULL OR c.checked_at <= $2)
+		  AND (c.checked_at IS NULL OR c.checked_at <= $5 OR p.checked_at IS NULL OR p.checked_at <= $5)
 		  AND NOT EXISTS (
 			SELECT 1 FROM queue_outbox o
 			WHERE o.kind = 'capability.probe'
 			  AND o.aggregate_type = 'account'
 			  AND o.aggregate_id = a.public_id::text
 			  AND (o.status IN ('pending', 'publishing')
-			       OR (o.status = 'published' AND o.created_at > $2))
+			       OR (o.status = 'published' AND o.created_at > $5))
 		  )
 		ORDER BY a.id
-		LIMIT $3`, capability.NameMessageTextExisting, before, limit)
+		LIMIT $6`, capability.NameMessageTextExisting, capability.AdapterBrowserConsumer,
+		capability.NameMessageTextFirst, capability.AdapterProtocolIM, before, limit)
 	if err != nil {
 		return nil, err
 	}

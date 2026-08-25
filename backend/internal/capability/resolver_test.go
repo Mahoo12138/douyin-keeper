@@ -44,6 +44,19 @@ func TestResolverPrefersProtocolThenFallsBackToExecutableBrowser(t *testing.T) {
 	}
 }
 
+func TestResolverMatchesCapabilitySnapshotToSelectedAdapter(t *testing.T) {
+	protocol, browser := AdapterProtocolIM, AdapterBrowserConsumer
+	resolver := NewResolver(resolverSnapshotRepo{items: []Capability{
+		{Name: NameMessageTextExisting, Status: StatusUnavailable, Adapter: &browser},
+		{Name: NameMessageTextExisting, Status: StatusAvailable, Adapter: &protocol},
+	}}, resolverHealth{allowed: map[string]bool{protocol: true, browser: true}}, protocol, browser)
+
+	route, err := resolver.Resolve(context.Background(), 1, ResolveRequest{MessageKind: "text", HasConversation: true})
+	if err != nil || route.Adapter != protocol || !route.Available {
+		t.Fatalf("adapter-specific route=%+v err=%v", route, err)
+	}
+}
+
 func TestResolverDoesNotRouteProtocolWhenWorkerIsNotRegistered(t *testing.T) {
 	protocol := AdapterProtocolIM
 	resolver := NewResolver(resolverSnapshotRepo{items: []Capability{{
