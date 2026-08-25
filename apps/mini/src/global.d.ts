@@ -4,3 +4,7 @@ declare function defineAppConfig(config: Record<string, unknown>): Record<string
 declare function definePageConfig(config: Record<string, unknown>): Record<string, unknown>
 declare const process: { env: Record<string, string | undefined> }
 declare module '*.css'
+declare module '*.png' {
+  const source: string
+  export default source
+}
