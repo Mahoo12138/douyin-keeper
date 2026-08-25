@@ -18,4 +18,11 @@ func TestAdminRepoExecutableCatalogDefaultsToBrowser(t *testing.T) {
 	if repo.browserSlotsLimit != 7 {
 		t.Fatalf("configured browser slots limit = %d", repo.browserSlotsLimit)
 	}
+	if repo.browserConcurrency != 3 {
+		t.Fatalf("default browser concurrency = %d", repo.browserConcurrency)
+	}
+	repo.SetBrowserConcurrency(5)
+	if repo.browserConcurrency != 5 {
+		t.Fatalf("configured browser concurrency = %d", repo.browserConcurrency)
+	}
 }

@@ -21,10 +21,11 @@ type AdminRepo struct {
 	redis              *redis.Client
 	executableAdapters map[string]bool
 	browserSlotsLimit  int
+	browserConcurrency int
 }
 
 func NewAdminRepo(pool *pgxpool.Pool, rdb *redis.Client) *AdminRepo {
-	repo := &AdminRepo{pool: pool, redis: rdb, executableAdapters: map[string]bool{"browser.consumer": true}, browserSlotsLimit: 3}
+	repo := &AdminRepo{pool: pool, redis: rdb, executableAdapters: map[string]bool{"browser.consumer": true}, browserSlotsLimit: 3, browserConcurrency: 3}
 	if rdb != nil {
 		repo.inspector = asynq.NewInspectorFromRedisClient(rdb)
 	}
@@ -36,6 +37,16 @@ func NewAdminRepo(pool *pgxpool.Pool, rdb *redis.Client) *AdminRepo {
 func (r *AdminRepo) SetBrowserSlotsLimit(limit int) *AdminRepo {
 	if limit > 0 {
 		r.browserSlotsLimit = limit
+	}
+	return r
+}
+
+// SetBrowserConcurrency keeps the Browser pool projection aligned with
+// WORKER_BROWSER_CONCURRENCY while leaving the interactive/light pools at
+// their fixed deployment defaults.
+func (r *AdminRepo) SetBrowserConcurrency(concurrency int) *AdminRepo {
+	if concurrency > 0 {
+		r.browserConcurrency = concurrency
 	}
 	return r
 }
@@ -717,8 +728,12 @@ func (r *AdminRepo) GetRuntimeSummary(ctx context.Context) (admin.RuntimeSummary
 	summary.BrowserSlotsLimit = r.browserSlotsLimit
 	summary.Pools = make([]admin.WorkerPoolSummary, 0, len(runtimePools))
 	for _, pool := range runtimePools {
+		concurrency := pool.concurrency
+		if pool.name == "browser" && r.browserConcurrency > 0 {
+			concurrency = r.browserConcurrency
+		}
 		summary.Pools = append(summary.Pools, admin.WorkerPoolSummary{
-			Name: pool.name, Concurrency: pool.concurrency,
+			Name: pool.name, Concurrency: concurrency,
 		})
 	}
 	summary.Queues = make([]admin.QueueSummary, 0, len(runtimePools))

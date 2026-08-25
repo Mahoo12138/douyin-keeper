@@ -269,8 +269,9 @@ Protocol 发送在明确收到 `outcome=not_sent`（或 `platform_write_accepted
 `semaphore:browser` 共享全局容量，配置 `WORKER_BROWSER_CONCURRENCY` 与
 `MAX_GLOBAL_BROWSERS` 分离，Sidecar 调用持有可续租的 TTL lease；Protocol/interactive
 Worker 不占用该浏览器容量。真正的平台 selector 与 Sidecar SDK 仍需外部环境联调。
-Admin Runtime 的 Browser slots limit 现复用 `MAX_GLOBAL_BROWSERS`，不再在 API 投影中硬编码为 3，
-避免运营页面的容量提示与 Browser Worker 实际全局信号量不一致。
+Admin Runtime 的 Browser slots limit 与 pool concurrency 分别复用 `MAX_GLOBAL_BROWSERS` 和
+`WORKER_BROWSER_CONCURRENCY`，不再在 API 投影中硬编码为 3，避免运营页面的容量提示与 Browser
+Worker 实际配置不一致。
 
 权益层已完成多档 Plan 的升级/降级迁移：Plan 暴露非价格性的 `migration_weight`（默认 1），
 Redeem 与管理员 Grant 在已有有效/排程授权时，会在 User 锁与同一数据库事务内撤销旧 Grant，

@@ -95,7 +95,9 @@ func main() {
 	taskRepo := postgres.NewTaskRepo(pool)
 	sendRepo := postgres.NewSendRepo(pool)
 	capRepo := postgres.NewCapabilityRepo(pool)
-	adminRepo := postgres.NewAdminRepo(pool, rdb).SetBrowserSlotsLimit(cfg.MaxGlobalBrowsers)
+	adminRepo := postgres.NewAdminRepo(pool, rdb).
+		SetBrowserSlotsLimit(cfg.MaxGlobalBrowsers).
+		SetBrowserConcurrency(cfg.BrowserConcurrency)
 	if bundleDir := strings.TrimSpace(cfg.ProtocolBundleDir); bundleDir != "" {
 		if _, verifyErr := sidecar.VerifyBundle(bundleDir, capability.AdapterProtocolIM); verifyErr != nil {
 			log.Warn("protocol sidecar bundle is not executable in admin catalog", "err", verifyErr)
