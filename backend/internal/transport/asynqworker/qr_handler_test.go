@@ -140,6 +140,23 @@ func TestQRResultDecoders(t *testing.T) {
 		t.Fatalf("unexpected QR result: %+v", result)
 	}
 
+	challengeResponse := &sidecar.Response{
+		ProtocolVersion: sidecar.ProtocolVersion,
+		OK:              true,
+		Result: map[string]any{
+			"state":        "challenge_required",
+			"login_handle": "qr_challenge",
+			"qr":           map[string]any{"format": "none", "value": "", "expires_at": "2026-08-25T13:00:00Z"},
+		},
+	}
+	var challenge qrStartResult
+	if err := decodeResult(challengeResponse, &challenge); err != nil {
+		t.Fatal(err)
+	}
+	if challenge.State != "challenge_required" || challenge.LoginHandle != "qr_challenge" {
+		t.Fatalf("unexpected challenge result: %+v", challenge)
+	}
+
 	bad := &sidecar.Response{OK: false, Error: &sidecar.Error{Code: sidecar.ErrQRExpired}}
 	if got := sidecarErrorCode(bad); got != sidecar.ErrQRExpired {
 		t.Fatalf("error code = %q", got)

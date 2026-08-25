@@ -20,3 +20,11 @@ test('explains re-login identity mismatch without implying the old session was r
   assert.match(bindingErrorMessage('challenge_required'), /完成平台安全验证/)
   assert.match(bindingErrorMessage('error', 'CHALLENGE_REQUIRED'), /完成平台安全验证/)
 })
+
+test('describes platform verification as a recoverable user action', () => {
+  assert.match(bindingErrorMessage('platform_challenge'), /打开的抖音窗口完成安全验证/)
+})
+
+test('describes platform verification as a recoverable user action', () => {
+  assert.match(bindingErrorMessage('platform_challenge'), /打开的抖音窗口完成安全验证/)
+})

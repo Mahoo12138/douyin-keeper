@@ -49,6 +49,7 @@ type QRBindDeps struct {
 }
 
 type qrStartResult struct {
+	State       string `json:"state"`
 	LoginHandle string `json:"login_handle"`
 	QR          struct {
 		Format    string    `json:"format"`
@@ -170,7 +171,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			return finishBindRiskFailure(ctx, deps, claimed, acct.ID, mapped)
 		}
 		var started qrStartResult
-		if err := decodeResult(startResponse, &started); err != nil || started.LoginHandle == "" || started.QR.Value == "" {
+		if err := decodeResult(startResponse, &started); err != nil || started.LoginHandle == "" || (started.State != "challenge_required" && started.QR.Value == "") {
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
 			return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
 		}
@@ -180,7 +181,17 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		if err := deps.Jobs.MarkWaiting(ctx, claimed.ID, deps.LockTTL); err != nil {
 			return err
 		}
-		if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{
+		lastState := "waiting"
+		if started.State == "challenge_required" {
+			lastState = "challenge_required"
+			if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{
+				EventType: "platform_challenge", Payload: mustJSON(map[string]any{
+					"code": apperr.CodeChallengeRequired, "recoverable": true,
+				}), CreatedAt: deps.Now(),
+			}); err != nil {
+				return err
+			}
+		} else if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{
 			EventType: "qr_ready", Payload: mustJSON(map[string]any{
 				"format": started.QR.Format, "value": started.QR.Value, "expires_at": started.QR.ExpiresAt,
 			}), CreatedAt: deps.Now(),
@@ -192,7 +203,6 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		if deadline.IsZero() {
 			deadline = deps.Now().Add(3 * time.Minute)
 		}
-		lastState := "waiting"
 		for deps.Now().Before(deadline) {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -227,9 +237,20 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 				return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
 			}
 			if polled.State == "challenge_required" {
-				return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeChallengeRequired, job.JobEvent{
-					EventType: "challenge_required", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now(),
-				})
+				if lastState != "challenge_required" {
+					if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{
+						EventType: "platform_challenge", Payload: mustJSON(map[string]any{
+							"code": apperr.CodeChallengeRequired, "recoverable": true,
+						}), CreatedAt: deps.Now(),
+					}); err != nil {
+						return err
+					}
+					lastState = "challenge_required"
+				}
+				if err := sleepContext(ctx, deps.PollEvery); err != nil {
+					return err
+				}
+				continue
 			}
 			if polled.State == "scanned" && lastState != "scanned" {
 				if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "scanned", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()}); err != nil {

@@ -5,7 +5,7 @@ export type Capability = components['schemas']['Capability']
 
 export type BindingState = {
   method: 'qr' | 'sms'
-  status: 'queued' | 'running' | 'waiting_user' | 'scanned' | 'confirming' | 'error'
+  status: 'queued' | 'running' | 'waiting_user' | 'challenge_required' | 'scanned' | 'confirming' | 'error'
   jobId: string | null
   qr: string | null
   expiresAt: string | null

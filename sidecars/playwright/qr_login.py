@@ -127,6 +127,10 @@ def _verification_interstitial_visible(page):
     return False
 
 
+def _platform_challenge_visible(page):
+    return _verification_interstitial_visible(page) or _challenge_visible(page)
+
+
 def _login_success_visible(page):
     """Require a page-level signal in addition to session cookies."""
     try:
@@ -256,23 +260,19 @@ def start(input_data):
         _pw, _browser, context, page = manager.__enter__()
         entered = True
         page.goto(HOME_URL, wait_until="domcontentloaded", timeout=30000)
-        if _verification_interstitial_visible(page) or _challenge_visible(page):
-            manager.__exit__(None, None, None)
-            entered = False
-            raise _error("CHALLENGE_REQUIRED", "platform verification is required")
-        if not _cookies_have_session(context):
+        challenge_required = _platform_challenge_visible(page)
+        if not challenge_required and not _cookies_have_session(context):
             _click_login(page)
         qr = ""
         for _ in range(20):
-            if _verification_interstitial_visible(page) or _challenge_visible(page):
-                manager.__exit__(None, None, None)
-                entered = False
-                raise _error("CHALLENGE_REQUIRED", "platform verification is required")
+            if _platform_challenge_visible(page):
+                challenge_required = True
+                break
             qr = _qr_data_url(page)
             if qr:
                 break
             page.wait_for_timeout(250)
-        if not qr:
+        if not qr and not challenge_required:
             manager.__exit__(None, None, None)
             entered = False
             raise _error("QR_NOT_READY", "login QR code is not available", retryable=True)
@@ -283,7 +283,8 @@ def start(input_data):
             _sessions[handle] = item
         return {
             "login_handle": handle,
-            "qr": {"format": "data_url", "value": qr, "expires_at": expires_at.isoformat()},
+            "state": "challenge_required" if challenge_required else "waiting",
+            "qr": {"format": "none" if challenge_required else "data_url", "value": qr, "expires_at": expires_at.isoformat()},
         }
     except Exception:
         if entered:
@@ -321,10 +322,7 @@ def poll(input_data):
             _sessions.pop(handle, None)
         item.close()
         raise _error("QR_EXPIRED", "login QR session expired")
-    if _challenge_visible(item.page):
-        with _lock:
-            _sessions.pop(handle, None)
-        item.close()
+    if _platform_challenge_visible(item.page):
         return {"state": "challenge_required"}
     if _cookies_have_session(item.context) and _login_success_visible(item.page):
         export_path = _export_file(input_data)
@@ -335,5 +333,6 @@ def poll(input_data):
         item.close()
         return {"state": "authenticated", "identity": identity, "session_exported": True}
     if not _qr_visible(item.page):
-        return {"state": "scanned"}
+        _click_login(item.page)
+        return {"state": "waiting"}
     return {"state": "waiting"}

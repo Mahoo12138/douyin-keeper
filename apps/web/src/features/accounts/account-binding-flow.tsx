@@ -191,6 +191,10 @@ function useAccountBinding(accountId?: string, onSuccess?: () => void) {
       setBinding((current) => current?.jobId === jobId ? { ...current, status: 'waiting_user', qr: null, expiresAt: typeof expiresAt === 'string' ? expiresAt : null } : current)
       return
     }
+    if (event.event_type === 'platform_challenge') {
+      setBinding((current) => current?.jobId === jobId ? { ...current, status: 'challenge_required', qr: null } : current)
+      return
+    }
     if (event.event_type === 'scanned' || event.event_type === 'confirming') {
       const status: BindingState['status'] = event.event_type === 'scanned' ? 'scanned' : 'confirming'
       setBinding((current) => current?.jobId === jobId ? { ...current, status } : current)

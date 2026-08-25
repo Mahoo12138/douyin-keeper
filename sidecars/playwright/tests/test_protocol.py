@@ -704,6 +704,47 @@ def test_qr_poll_rejects_unknown_handle():
         assert exc.code == protocol.ERR_LOGIN_HANDLE_NOT_FOUND
 
 
+def test_qr_poll_keeps_platform_verification_session_open():
+    import qr_login
+
+    class Locator:
+        def count(self):
+            return 0
+
+        def is_visible(self):
+            return False
+
+    class ChallengePage:
+        def title(self):
+            return "验证码中间页"
+
+        def get_by_text(self, _text, exact=False):
+            return Locator()
+
+        def locator(self, _selector):
+            return Locator()
+
+    class Item:
+        def __init__(self):
+            self.page = ChallengePage()
+            self.context = object()
+            self.expires_at = datetime.now(timezone.utc) + timedelta(minutes=2)
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    item = Item()
+    qr_login._sessions["qr-challenge"] = item
+    try:
+        result = qr_login.poll({"login_handle": "qr-challenge"})
+        assert result == {"state": "challenge_required"}
+        assert "qr-challenge" in qr_login._sessions
+        assert item.closed is False
+    finally:
+        qr_login._sessions.pop("qr-challenge", None)
+
+
 def test_sms_start_rejects_relative_profile_dir():
     import sms_login
 

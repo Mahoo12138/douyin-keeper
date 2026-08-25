@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Button, Card, CardContent, Input, Label } from '@douyin-keeper/ui-web'
-import { Ban, Check, MessageSquareText, RefreshCw } from 'lucide-react'
+import { Ban, Check, MessageSquareText, RefreshCw, ShieldAlert } from 'lucide-react'
 
 import type { BindingState } from './account-types'
 
@@ -11,6 +11,7 @@ export function AccountBindingPanel({ binding, relogin = false, onCancel, onSubm
     queued: '正在排队…',
     running: '正在打开短信登录…',
     waiting_user: '验证码已发送，请输入验证码',
+    challenge_required: '请在打开的抖音窗口完成安全验证，完成后会自动继续…',
     scanned: '已提交验证码，等待平台确认…',
     confirming: '正在验证登录状态…',
     error: `${relogin ? '重新登录' : '绑定'}失败，请重新尝试`,
@@ -18,6 +19,7 @@ export function AccountBindingPanel({ binding, relogin = false, onCancel, onSubm
     queued: '正在排队…',
     running: '正在打开登录窗口…',
     waiting_user: '请使用抖音 App 扫描二维码',
+    challenge_required: '请在打开的抖音窗口完成安全验证，完成后会自动继续…',
     scanned: '已扫码，等待平台确认…',
     confirming: '正在验证登录状态…',
     error: `${relogin ? '重新登录' : '绑定'}失败，请重新尝试`,
@@ -32,12 +34,13 @@ export function AccountBindingPanel({ binding, relogin = false, onCancel, onSubm
             </div>
           ) : (
             <div className="flex size-44 shrink-0 items-center justify-center rounded-xl bg-muted">
-              {isSMS && binding.status === 'waiting_user' ? <MessageSquareText className="size-10 text-primary" /> : <RefreshCw className="size-6 animate-spin text-muted-foreground" />}
+              {isSMS && binding.status === 'waiting_user' ? <MessageSquareText className="size-10 text-primary" /> : binding.status === 'challenge_required' ? <ShieldAlert className="size-10 text-amber-600" /> : <RefreshCw className="size-6 animate-spin text-muted-foreground" />}
             </div>
           )}
           <div className="space-y-2">
             <div className="text-base font-semibold">{relogin ? (isSMS ? '短信验证码重新登录' : '扫码重新登录') : (isSMS ? '短信验证码绑定' : '扫码绑定')}</div>
             <p className="text-sm text-muted-foreground">{statusText}</p>
+            {binding.status === 'challenge_required' && <p className="max-w-md rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs leading-5 text-amber-800 dark:text-amber-200">这是抖音官方安全验证，不需要在本页面输入账号密码。请完成新打开窗口中的验证，不要关闭窗口，验证通过后绑定会自动继续。</p>}
             {binding.expiresAt && binding.status === 'waiting_user' && (
               <p className="text-xs text-muted-foreground">{isSMS ? '验证码' : '二维码'}有效期至 {new Date(binding.expiresAt).toLocaleTimeString('zh-CN')}</p>
             )}
