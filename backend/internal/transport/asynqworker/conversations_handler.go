@@ -158,6 +158,14 @@ func conversationsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, code, now)
 			return finishFriendsFailure(ctx, deps, claimed, acct.ID, code, now)
 		}
+		// An empty conversation snapshot is not a successful sync. It usually
+		// means the message panel rendered but its virtualized rows or identity
+		// fields were not actually read. Keep the previous snapshot intact and
+		// surface an adapter failure for diagnosis/retry.
+		if len(items) == 0 {
+			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, now)
+			return finishFriendsFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible, now)
+		}
 		if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "fetched", Payload: mustJSON(map[string]int{"count": len(items)}), CreatedAt: now()}); err != nil {
 			return err
 		}

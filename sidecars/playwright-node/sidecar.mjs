@@ -20,6 +20,7 @@ const PROTOCOL_VERSION = 1;
 const ADAPTER = "browser.consumer";
 const ADAPTER_VERSION = "node-0.1.0";
 const HOME_URL = "https://www.douyin.com/";
+const CHAT_URL = "https://www.douyin.com/chat?isPopup=1";
 const CREATOR_HOME_URL = "https://creator.douyin.com/";
 const SELF_URL = "https://www.douyin.com/user/self";
 const SESSION_COOKIE_NAMES = new Set(["sessionid", "sessionid_ss", "sid_tt"]);
@@ -719,15 +720,247 @@ async function openMessagePanel(page) {
       const count = Math.min(await locator.count(), 5);
       for (let index = count - 1; index >= 0; index -= 1) {
         const item = locator.nth(index);
-        if (await item.isVisible()) {
+        if (await item.isVisible().catch(() => false)) {
           await item.click({ timeout: 5000, force: true });
           await page.waitForTimeout(1000);
+          debugLog("conversations_message_entry_clicked", { candidate_count: count, candidate_index: index, url: safeURL(page) });
           return true;
         }
       }
     } catch {}
   }
+  debugLog("conversations_message_entry_unavailable", { url: safeURL(page) });
   return false;
+}
+
+function conversationIdentityFromRecords(records, conversationHint = "") {
+  const conversationKeys = [
+    "conversation_id", "conversationid", "conv_id", "convid",
+    "conversation_short_id", "conversationshortid",
+  ];
+  const userKeys = ["uid", "user_id", "userid"];
+  const secUserKeys = ["sec_uid", "secuid", "sec_user_id", "secuserid"];
+  const identities = (records || []).map((record) => record?.identity).filter((value) => value && typeof value === "object");
+  const uidToSec = new Map();
+  for (const identity of identities) {
+    const uid = userKeys.map((key) => String(identity[key] ?? "").trim()).find(Boolean);
+    const secUID = secUserKeys.map((key) => String(identity[key] ?? "").trim()).find(Boolean);
+    if (uid && secUID) uidToSec.set(uid, secUID);
+  }
+  const exact = identities.filter((identity) => conversationKeys.some((key) => String(identity[key] ?? "").trim() === conversationHint));
+  const source = exact.length ? exact : identities.filter((identity) => conversationKeys.some((key) => String(identity[key] ?? "").trim()));
+  const identity = source.at(-1) || {};
+  const conversationID = conversationKeys.map((key) => String(identity[key] ?? "").trim()).find(Boolean) || "";
+  let peerID = secUserKeys.map((key) => String(identity[key] ?? "").trim()).find(Boolean) || "";
+  if (!peerID) {
+    const uid = userKeys.map((key) => String(identity[key] ?? "").trim()).find(Boolean) || "";
+    peerID = uidToSec.get(uid) || uid;
+  }
+  return { conversationID, peerID };
+}
+
+function collectConversationIdentityRecords(value, records, depth = 0) {
+  if (depth > 6 || records.length >= 500 || value === null || value === undefined) return;
+  const identityKeys = new Set([
+    "conversation_id", "conversationid", "conv_id", "convid",
+    "conversation_short_id", "conversationshortid", "user_id", "userid",
+    "uid", "sec_uid", "secuid", "sec_user_id", "secuserid",
+  ]);
+  const labelKeys = new Set(["nickname", "display_name", "username", "user_name", "name", "title"]);
+  if (Array.isArray(value)) {
+    for (const item of value.slice(0, 100)) collectConversationIdentityRecords(item, records, depth + 1);
+    return;
+  }
+  if (typeof value !== "object") return;
+  const identity = {};
+  const labels = {};
+  for (const [key, item] of Object.entries(value)) {
+    const normalizedKey = key.toLowerCase().replaceAll("-", "_");
+    if (identityKeys.has(normalizedKey) && (typeof item === "string" || typeof item === "number")) {
+      const text = String(item).trim();
+      if (text && text.length <= 512) identity[normalizedKey] = text;
+    }
+    if (labelKeys.has(normalizedKey) && typeof item === "string") {
+      const text = item.trim();
+      if (text && text.length <= 128) labels[normalizedKey] = text;
+    }
+  }
+  if (Object.keys(identity).length) records.push({ identity, labels });
+  for (const item of Object.values(value)) collectConversationIdentityRecords(item, records, depth + 1);
+}
+
+function attachConversationCollector(page) {
+  const collector = { records: [], responseSeen: false, relevantResponses: 0, pending: new Set() };
+  const consume = async (response) => {
+    try {
+      const resourceType = response.request().resourceType();
+      if (resourceType !== "xhr" && resourceType !== "fetch") return;
+      const url = response.url().split("?", 1)[0];
+      if (!/(conversation|message|chat|\/im(?:\/|$))/i.test(url)) return;
+      collector.relevantResponses += 1;
+      const payload = await response.json();
+      const records = [];
+      collectConversationIdentityRecords(payload, records);
+      if (records.length) collector.records.push(...records);
+      collector.responseSeen = true;
+      debugLog("conversations_response", {
+        path: (() => { try { return new URL(url).pathname; } catch { return ""; } })(),
+        status: response.status(),
+        identity_record_count: records.length,
+      });
+    } catch {
+      // A response may disappear before its body is readable. DOM extraction
+      // remains authoritative when the platform exposes stable row IDs.
+    }
+  };
+  page.on("response", (response) => {
+    const pending = consume(response).finally(() => collector.pending.delete(pending));
+    collector.pending.add(pending);
+  });
+  return collector;
+}
+
+async function flushConversationCollector(collector) {
+  if (collector.pending.size) await Promise.allSettled([...collector.pending]);
+}
+
+async function extractConversationRows(page) {
+  try {
+    return await page.evaluate(() => {
+      const attr = (node, names) => {
+        for (const name of names) {
+          const value = node?.getAttribute?.(name);
+          if (value && value.trim()) return value.trim();
+        }
+        return "";
+      };
+      const decode = (value) => {
+        try { return decodeURIComponent(String(value || "")).trim(); } catch { return String(value || "").trim(); }
+      };
+      const text = (node) => (node?.textContent || "").replace(/\s+/g, " ").trim();
+      const titles = [...document.querySelectorAll(".conversationConversationItemtitle")];
+      const fallbackRows = [...document.querySelectorAll("[class*='conversationConversationItem'], [data-conversation-id], [data-conversationid], [data-conv-id], [data-conversation], [data-conversation-key]")];
+      const source = titles.length ? titles : fallbackRows;
+      const hrefs = (nodes) => nodes.flatMap((node) => {
+        const own = node?.matches?.("a[href]") ? [node.getAttribute("href") || ""] : [];
+        return own.concat([...node?.querySelectorAll?.("a[href]") || []].map((link) => link.getAttribute("href") || ""));
+      }).filter(Boolean);
+      const queryValue = (href, names) => {
+        try {
+          const url = new URL(href, location.origin || "https://www.douyin.com");
+          for (const name of names) {
+            const value = url.searchParams.get(name);
+            if (value) return decode(value);
+          }
+        } catch {}
+        return "";
+      };
+      const pathValue = (href) => decode(href.match(/\/(?:user|profile)\/([^/?#]+)/i)?.[1] || "");
+      const rows = [];
+      for (let sourceIndex = 0; sourceIndex < source.length; sourceIndex += 1) {
+        const title = source[sourceIndex];
+        let row = title;
+        for (let depth = 0; depth < 6 && row?.parentElement; depth += 1) row = row.parentElement;
+        const nodes = [title, row, ...[...row?.querySelectorAll?.("*") || []]];
+        let parent = title?.parentElement;
+        for (let depth = 0; depth < 5 && parent; depth += 1, parent = parent.parentElement) nodes.push(parent);
+        const uniqueNodes = [...new Set(nodes.filter(Boolean))];
+        const firstAttr = (names) => {
+          for (const node of uniqueNodes) {
+            const value = attr(node, names);
+            if (value) return decode(value);
+          }
+          return "";
+        };
+        const conversation = firstAttr(["data-conversation-id", "data-conversationid", "data-conv-id", "data-conversation", "data-conversation-key", "data-id"])
+          || hrefs(uniqueNodes).map((href) => queryValue(href, ["conversation_id", "conversationId", "conversation-id", "conv_id", "convId"])).find(Boolean) || "";
+        const peer = firstAttr(["data-sec-uid", "data-sec_uid", "data-secuid", "data-user-id", "data-uid", "data-userid", "data-peer-id", "data-peer-uid"])
+          || hrefs(uniqueNodes).map((href) => queryValue(href, ["sec_uid", "secUid", "sec-uid", "uid", "user_id", "userId"]) || pathValue(href)).find(Boolean) || "";
+        const displayName = text(title || row).slice(0, 128);
+        if (!displayName || displayName.length > 128) continue;
+        const timeNode = row?.querySelector?.("time[datetime], [data-last-message-at]");
+        rows.push({
+          platform_conversation_id: conversation || null,
+          peer_platform_user_id: peer || null,
+          peer_display_name: displayName,
+          channel: attr(row, ["data-channel"]) || "consumer",
+          last_message_at: attr(timeNode, ["datetime", "data-last-message-at"]) || attr(row, ["data-last-message-at"]) || null,
+          _row_key: firstAttr(["data-index", "data-key"]) || `${displayName}:${sourceIndex}`,
+          _source_index: sourceIndex,
+        });
+      }
+      const idCount = rows.filter((row) => row.platform_conversation_id).length;
+      const peerCount = rows.filter((row) => row.peer_platform_user_id).length;
+      const accepted = rows.filter((row) => row.platform_conversation_id && row.peer_platform_user_id).length;
+      return {
+        rows,
+        candidate_count: rows.length,
+        conversation_id_count: idCount,
+        peer_id_count: peerCount,
+        accepted_count: accepted,
+        title_count: titles.length,
+        fallback_count: fallbackRows.length,
+      };
+    });
+  } catch {
+    return { rows: [], candidate_count: 0, conversation_id_count: 0, peer_id_count: 0, accepted_count: 0, title_count: 0, fallback_count: 0 };
+  }
+}
+
+async function scrollConversationPanel(page) {
+  try {
+    return await page.evaluate(() => {
+      const visible = (node) => {
+        if (!node) return false;
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+      };
+      const scrollable = (node) => {
+        const style = getComputedStyle(node);
+        return /(auto|scroll)/.test(style.overflowY || "") && node.scrollHeight > node.clientHeight + 20;
+      };
+      const documentScroller = document.scrollingElement;
+      const viewportWidth = innerWidth || document.documentElement.clientWidth;
+      const viewportHeight = innerHeight || document.documentElement.clientHeight;
+      const roots = [...document.querySelectorAll("*")].filter((node) => {
+        if (!visible(node)) return false;
+        const style = getComputedStyle(node);
+        const role = node.getAttribute("role") || "";
+        const className = typeof node.className === "string" ? node.className : "";
+        const named = role === "dialog" || /modal|drawer|dialog|conversation|message|chat/i.test(className);
+        const zIndex = Number.parseInt(style.zIndex, 10);
+        const positioned = ["fixed", "absolute"].includes(style.position) && Number.isFinite(zIndex) && zIndex >= 10
+          && node.getBoundingClientRect().width >= Math.min(360, viewportWidth * 0.3)
+          && node.getBoundingClientRect().height >= Math.min(180, viewportHeight * 0.25);
+        return named || positioned;
+      });
+      const scoped = roots.flatMap((root) => [root, ...root.querySelectorAll("*")]);
+      const all = [...new Set(scoped)].filter((node) => node !== documentScroller && visible(node) && scrollable(node));
+      const marker = (node) => /conversation|message|chat/i.test(typeof node.className === "string" ? node.className : "")
+        || Boolean(node.querySelector?.(".conversationConversationItemtitle, [class*='conversationConversationItem']"));
+      const candidates = all.filter(marker);
+      const target = (candidates.length ? candidates : all).sort((left, right) =>
+        (right.scrollHeight - right.clientHeight) - (left.scrollHeight - left.clientHeight)).at(0);
+      if (!target) return { moved: false, at_bottom: false, target_found: false, scope_found: roots.length > 0, candidate_count: all.length };
+      const before = target.scrollTop;
+      target.scrollTop = Math.min(target.scrollHeight, before + Math.max(700, Math.floor(target.clientHeight * 0.9)));
+      target.dispatchEvent(new Event("scroll", { bubbles: true }));
+      return {
+        moved: target.scrollTop > before,
+        at_bottom: target.scrollTop + target.clientHeight >= target.scrollHeight - 8,
+        target_found: true,
+        scope_found: roots.length > 0,
+        candidate_count: all.length,
+        before,
+        after: target.scrollTop,
+        scroll_height: target.scrollHeight,
+        client_height: target.clientHeight,
+      };
+    });
+  } catch {
+    return { moved: false, at_bottom: false, target_found: false, scope_found: false, candidate_count: 0 };
+  }
 }
 
 function relationFriend(row) {
@@ -920,30 +1153,110 @@ async function listConversations(input) {
   const limit = Number.isInteger(input?.limit) ? Math.min(Math.max(input.limit, 1), 100) : 100;
   const cursor = input?.cursor || null;
   return withSession(input, async (page) => {
-    await page.goto("https://www.douyin.com/chat?isPopup=1", { waitUntil: "domcontentloaded", timeout: 60000 });
+    const collector = attachConversationCollector(page);
+    await page.goto(HOME_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
+    debugLog("conversations_home_loaded", { url: safeURL(page) });
+    await page.waitForTimeout(1800);
+    let opened = await openMessagePanel(page);
+    if (!opened) {
+      debugLog("conversations_chat_route_fallback", { url: safeURL(page) });
+      await page.goto(CHAT_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForTimeout(1500);
+      opened = await openMessagePanel(page);
+    }
+    debugLog("conversations_panel_opened", { opened, url: safeURL(page) });
+    if (!opened) throw protocolError("BROWSER_SELECTOR_CHANGED", "message panel entry is unavailable");
     await page.waitForTimeout(1500);
-    await openMessagePanel(page);
     const seen = new Map();
     let stable = 0;
+    let lastScan = { candidate_count: 0, conversation_id_count: 0, peer_id_count: 0, accepted_count: 0 };
+    let lastScroll = { moved: false, at_bottom: false, target_found: false };
+    let stuck = 0;
     for (let round = 0; round < 24 && stable < 3; round += 1) {
-      const rows = await page.evaluate(() => [...document.querySelectorAll("[class*='conversationConversationItem'], [data-conversation-id]")].map((row) => {
-        const link = row.querySelector?.("a[href]");
-        const conversation = row.getAttribute?.("data-conversation-id") || row.getAttribute?.("data-conversationid") || row.getAttribute?.("data-id") || link?.getAttribute?.("href")?.match(/conversation[_-]?id=([^&#]+)/)?.[1] || "";
-        const peer = row.getAttribute?.("data-user-id") || row.getAttribute?.("data-uid") || link?.getAttribute?.("href")?.match(/(?:uid|user_id)=([^&#]+)/)?.[1] || "";
-        const title = row.querySelector?.("[class*='title'], [class*='Title'], .conversationConversationItemtitle")?.textContent || row.textContent || "";
-        return { platform_conversation_id: conversation, peer_platform_user_id: peer, peer_display_name: title.replace(/\s+/g, " ").trim().slice(0, 128), channel: "consumer", last_message_at: null };
-      }).filter((row) => row.platform_conversation_id));
-      const before = seen.size;
-      for (const row of rows) seen.set(row.platform_conversation_id, row);
-      stable = seen.size === before ? stable + 1 : 0;
-      await page.mouse.wheel(0, 900).catch(() => {});
+      const previousSeenCount = seen.size;
+      await flushConversationCollector(collector);
+      const scan = await extractConversationRows(page);
+      const rows = scan.rows || [];
+      lastScan = scan;
+      for (const row of rows) {
+        if (!row.platform_conversation_id || !row.peer_platform_user_id) {
+          if (!Number.isInteger(row._source_index)) continue;
+          try {
+            const before = collector.records.length;
+            const title = page.locator(".conversationConversationItemtitle").nth(row._source_index);
+            if (await title.isVisible().catch(() => false)) {
+              await title.click({ timeout: 5000, force: true });
+              await page.waitForTimeout(1200);
+              await flushConversationCollector(collector);
+              const identity = conversationIdentityFromRecords(collector.records.slice(before), row.platform_conversation_id || "");
+              if (identity.conversationID) row.platform_conversation_id = identity.conversationID;
+              if (identity.peerID) row.peer_platform_user_id = identity.peerID;
+              debugLog("conversations_row_identity_resolved", {
+                source_index: row._source_index,
+                conversation_id_found: Boolean(row.platform_conversation_id),
+                peer_id_found: Boolean(row.peer_platform_user_id),
+                response_record_count: collector.records.length - before,
+              });
+            }
+          } catch {}
+        }
+        if (row.platform_conversation_id && row.peer_platform_user_id) {
+          const clean = {
+            platform_conversation_id: String(row.platform_conversation_id).trim().slice(0, 512),
+            peer_platform_user_id: String(row.peer_platform_user_id).trim().slice(0, 256),
+            peer_display_name: String(row.peer_display_name || "").trim().slice(0, 128),
+            channel: String(row.channel || "consumer").trim().slice(0, 32) || "consumer",
+            last_message_at: row.last_message_at ? String(row.last_message_at).trim().slice(0, 128) : null,
+          };
+          if (clean.platform_conversation_id && clean.peer_platform_user_id) seen.set(clean.platform_conversation_id, clean);
+        }
+      }
+      stable = seen.size === previousSeenCount ? stable + 1 : 0;
+      lastScroll = await scrollConversationPanel(page);
+      if (lastScroll.moved) stuck = 0;
+      else stuck += 1;
+      debugLog("conversations_dom_scan", {
+        round: round + 1,
+        candidate_count: scan.candidate_count,
+        conversation_id_count: scan.conversation_id_count,
+        peer_id_count: scan.peer_id_count,
+        accepted_count: scan.accepted_count,
+        seen_count: seen.size,
+        network_identity_count: collector.records.length,
+        response_seen: collector.responseSeen,
+        relevant_response_count: collector.relevantResponses,
+        stable_rounds: stable,
+        stuck_rounds: stuck,
+        ...lastScroll,
+      });
       await page.waitForTimeout(700);
     }
+    await flushConversationCollector(collector);
     const values = [...seen.values()];
-    const start = cursor ? Math.max(values.findIndex((item) => item.platform_conversation_id === cursor) + 1, 0) : 0;
+    const cursorIndex = cursor ? values.findIndex((item) => item.platform_conversation_id === cursor) : -1;
+    if (cursor && cursorIndex < 0) throw protocolError("INVALID_REQUEST", "conversation cursor is no longer available", false, { operation: "conversations.list", reason: "cursor_not_found" });
+    if (!values.length) {
+      debugLog("conversations_scan_failed_empty", {
+        candidate_count: lastScan.candidate_count,
+        conversation_id_count: lastScan.conversation_id_count,
+        peer_id_count: lastScan.peer_id_count,
+        network_identity_count: collector.records.length,
+        response_seen: collector.responseSeen,
+        relevant_response_count: collector.relevantResponses,
+        last_scroll: lastScroll,
+      });
+      throw protocolError("BROWSER_SELECTOR_CHANGED", "conversation panel returned no stable conversation records", false, {
+        candidate_count: lastScan.candidate_count,
+        conversation_id_count: lastScan.conversation_id_count,
+        peer_id_count: lastScan.peer_id_count,
+        network_identity_count: collector.records.length,
+        response_seen: collector.responseSeen,
+      });
+    }
+    const start = cursor ? cursorIndex + 1 : 0;
     const items = values.slice(start, start + limit);
-    const next = values[start + limit]?.platform_conversation_id || null;
-    if (!items.length && cursor) throw protocolError("INVALID_REQUEST", "conversation cursor is no longer available", false, { operation: "conversations.list", reason: "cursor_not_found" });
+    const next = start + items.length < values.length ? items.at(-1)?.platform_conversation_id || null : null;
+    debugLog("conversations_scan_finished", { item_count: items.length, total_count: values.length, has_next: Boolean(next) });
     return { items, next_cursor: next };
   });
 }
