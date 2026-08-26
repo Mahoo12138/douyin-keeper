@@ -2505,7 +2505,9 @@ export interface operations {
     createAccountBinding: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };

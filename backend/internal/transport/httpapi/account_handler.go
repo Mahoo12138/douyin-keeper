@@ -99,13 +99,13 @@ func (s *Server) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid account id"))
 			return
 		}
-		jobID, err = s.accounts.Rebind(r.Context(), p.UserID, accountID, req.Method, phone)
+		jobID, err = s.accounts.RebindWithKey(r.Context(), p.UserID, accountID, req.Method, phone, r.Header.Get("Idempotency-Key"))
 		if err != nil {
 			writeError(w, r, err)
 			return
 		}
 	} else {
-		jobID, err = s.accounts.CreateBinding(r.Context(), p.UserID, req.Method, phone)
+		jobID, err = s.accounts.CreateBindingWithKey(r.Context(), p.UserID, req.Method, phone, r.Header.Get("Idempotency-Key"))
 		if err != nil {
 			writeError(w, r, err)
 			return

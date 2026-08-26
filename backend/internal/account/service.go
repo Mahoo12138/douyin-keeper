@@ -143,6 +143,28 @@ func (s *Service) GetOwned(ctx context.Context, userID int64, publicID uuid.UUID
 // message are written in the same tx (docs/14 §5). SMS phone input is carried
 // only in the short-lived outbox handoff; it is never emitted as a job event.
 func (s *Service) CreateBinding(ctx context.Context, userID int64, method, phone string) (uuid.UUID, error) {
+	return s.createBinding(ctx, userID, method, phone, "")
+}
+
+func (s *Service) CreateBindingWithKey(ctx context.Context, userID int64, method, phone, idempotencyKey string) (uuid.UUID, error) {
+	return s.createBinding(ctx, userID, method, phone, idempotencyKey)
+}
+
+func (s *Service) createBinding(ctx context.Context, userID int64, method, phone, idempotencyKey string) (uuid.UUID, error) {
+	idempotent, idempotencyKey, err := s.idempotentJobs(userID, idempotencyKey)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	scope := "account.binding:" + method
+	if idempotent != nil {
+		existing, lookupErr := idempotent.GetByIdempotency(ctx, userID, idempotencyKey)
+		if lookupErr != nil {
+			return uuid.Nil, lookupErr
+		}
+		if existing != nil {
+			return resolveIdempotentJob(existing, scope)
+		}
+	}
 	dec, err := s.gate.Authorize(ctx, entitlement.AuthorizationRequest{
 		UserID: userID, Action: entitlement.ActionAccountBind,
 	})
@@ -172,10 +194,17 @@ func (s *Service) CreateBinding(ctx context.Context, userID int64, method, phone
 		if err := s.repo.Create(tctx, acct); err != nil {
 			return err
 		}
-		jobPublicID, err = s.createBindingJob(tctx, acct, method, phone, false, "account.binding:"+acct.PublicID.String())
+		jobPublicID, err = s.createBindingJob(tctx, acct, method, phone, false, "account.binding:"+acct.PublicID.String(), idempotencyKey, scope)
 		return err
 	})
 	if err != nil {
+		if idempotent != nil && errors.Is(err, job.ErrIdempotencyConflict) {
+			existing, lookupErr := idempotent.GetByIdempotency(ctx, userID, idempotencyKey)
+			if lookupErr != nil {
+				return uuid.Nil, lookupErr
+			}
+			return resolveIdempotentJob(existing, scope)
+		}
 		return uuid.Nil, err
 	}
 	return jobPublicID, nil
@@ -186,9 +215,31 @@ func (s *Service) CreateBinding(ctx context.Context, userID int64, method, phone
 // another quota-consuming account. A failed re-login leaves the current
 // session and account identity untouched.
 func (s *Service) Rebind(ctx context.Context, userID int64, publicID uuid.UUID, method, phone string) (uuid.UUID, error) {
+	return s.rebind(ctx, userID, publicID, method, phone, "")
+}
+
+func (s *Service) RebindWithKey(ctx context.Context, userID int64, publicID uuid.UUID, method, phone, idempotencyKey string) (uuid.UUID, error) {
+	return s.rebind(ctx, userID, publicID, method, phone, idempotencyKey)
+}
+
+func (s *Service) rebind(ctx context.Context, userID int64, publicID uuid.UUID, method, phone, idempotencyKey string) (uuid.UUID, error) {
+	idempotent, idempotencyKey, err := s.idempotentJobs(userID, idempotencyKey)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	scope := fmt.Sprintf("account.relogin:%s:%s", publicID, method)
+	if idempotent != nil {
+		existing, lookupErr := idempotent.GetByIdempotency(ctx, userID, idempotencyKey)
+		if lookupErr != nil {
+			return uuid.Nil, lookupErr
+		}
+		if existing != nil {
+			return resolveIdempotentJob(existing, scope)
+		}
+	}
 	var acct *Account
 	var jobPublicID uuid.UUID
-	err := s.tx.WithinTx(ctx, func(tctx context.Context) error {
+	err = s.tx.WithinTx(ctx, func(tctx context.Context) error {
 		if s.userLock != nil {
 			if err := s.userLock.LockUserForUpdate(tctx, userID); err != nil {
 				return err
@@ -203,16 +254,23 @@ func (s *Service) Rebind(ctx context.Context, userID int64, publicID uuid.UUID, 
 			return apperr.Conflict(apperr.CodeConflict, "account is not bound")
 		}
 		jobPublicID, err = s.createBindingJob(tctx, acct, method, phone, true,
-			"account.rebinding:"+acct.PublicID.String()+":"+uuid.New().String())
+			"account.rebinding:"+acct.PublicID.String()+":"+uuid.New().String(), idempotencyKey, scope)
 		return err
 	})
 	if err != nil {
+		if idempotent != nil && errors.Is(err, job.ErrIdempotencyConflict) {
+			existing, lookupErr := idempotent.GetByIdempotency(ctx, userID, idempotencyKey)
+			if lookupErr != nil {
+				return uuid.Nil, lookupErr
+			}
+			return resolveIdempotentJob(existing, scope)
+		}
 		return uuid.Nil, err
 	}
 	return jobPublicID, nil
 }
 
-func (s *Service) createBindingJob(ctx context.Context, acct *Account, method, phone string, rebind bool, dedupeKey string) (uuid.UUID, error) {
+func (s *Service) createBindingJob(ctx context.Context, acct *Account, method, phone string, rebind bool, dedupeKey, idempotencyKey, idempotencyScope string) (uuid.UUID, error) {
 	typ := "account.bind.qr"
 	kind := outbox.KindAccountBindQR
 	if rebind {
@@ -226,6 +284,10 @@ func (s *Service) createBindingJob(ctx context.Context, acct *Account, method, p
 		}
 	}
 	j := newPlatformJob(acct, typ, true, s.now())
+	if idempotencyKey != "" {
+		j.IdempotencyKey = &idempotencyKey
+		j.IdempotencyScope = &idempotencyScope
+	}
 	if err := s.jobs.CreateJob(ctx, j); err != nil {
 		return uuid.Nil, err
 	}
@@ -240,6 +302,31 @@ func (s *Service) createBindingJob(ctx context.Context, acct *Account, method, p
 		return uuid.Nil, err
 	}
 	return j.PublicID, nil
+}
+
+func (s *Service) idempotentJobs(userID int64, idempotencyKey string) (IdempotentJobCreator, string, error) {
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if idempotencyKey == "" {
+		return nil, "", nil
+	}
+	if _, err := uuid.Parse(idempotencyKey); err != nil {
+		return nil, "", apperr.Validation(apperr.CodeConflict, "a valid Idempotency-Key is required")
+	}
+	idempotent, ok := s.jobs.(IdempotentJobCreator)
+	if !ok {
+		return nil, "", apperr.New(apperr.CodeInternal, apperr.KindInternal, "idempotent job storage is not configured")
+	}
+	return idempotent, idempotencyKey, nil
+}
+
+func resolveIdempotentJob(existing *job.Job, scope string) (uuid.UUID, error) {
+	if existing == nil {
+		return uuid.Nil, nil
+	}
+	if existing.IdempotencyScope == nil || *existing.IdempotencyScope != scope {
+		return uuid.Nil, apperr.Conflict(apperr.CodeConflict, "Idempotency-Key was already used for another account operation")
+	}
+	return existing.PublicID, nil
 }
 
 // RequestSessionCheck creates a generic job + outbox for worker-browser.

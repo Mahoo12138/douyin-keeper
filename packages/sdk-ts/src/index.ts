@@ -322,9 +322,10 @@ export async function listAccounts(accessToken: string, options?: { limit?: numb
   return data
 }
 
-export async function createAccountBinding(accessToken: string, method: 'qr' | 'sms' = 'qr', phone?: string, accountId?: string) {
+export async function createAccountBinding(accessToken: string, method: 'qr' | 'sms' = 'qr', phone?: string, accountId?: string, idempotencyKey = crypto.randomUUID()) {
   const { data, error } = await api.POST('/accounts/bindings', {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: { Authorization: `Bearer ${accessToken}`, 'Idempotency-Key': idempotencyKey },
+    params: { header: { 'Idempotency-Key': idempotencyKey } },
     body: { method, ...(phone ? { phone } : {}), ...(accountId ? { account_id: accountId } : {}) },
   })
   if (error) throwApiError(error, 'binding failed')

@@ -66,6 +66,24 @@ func TestSessionCheckIdempotencyReplaysTheOriginalJob(t *testing.T) {
 	}
 }
 
+func TestRebindIdempotencyReplaysWithoutTouchingTheAccount(t *testing.T) {
+	publicID := uuid.New()
+	scope := "account.relogin:" + publicID.String() + ":qr"
+	existing := &job.Job{PublicID: uuid.New(), IdempotencyScope: &scope}
+	repo := &releaseRepo{account: &Account{ID: 42, PublicID: publicID, UserID: 7, BindingStatus: BindingBound}}
+	jobs := &captureIdempotentJobCreator{existing: existing}
+	outboxRepo := &captureBindingOutbox{}
+	service := NewService(repo, inlineReleaseTx{}, nil, nil, jobs, outboxRepo)
+
+	got, err := service.RebindWithKey(context.Background(), 7, publicID, "qr", "", uuid.New().String())
+	if err != nil || got != existing.PublicID {
+		t.Fatalf("same rebind key should replay the original job: got=%s err=%v", got, err)
+	}
+	if jobs.created != nil || len(outboxRepo.messages) != 0 {
+		t.Fatalf("replay should not create another job or outbox message: job=%+v outbox=%d", jobs.created, len(outboxRepo.messages))
+	}
+}
+
 type captureBindingOutbox struct{ messages []outbox.Message }
 
 func (c *captureBindingOutbox) Add(_ context.Context, message outbox.Message) error {

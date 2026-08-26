@@ -678,6 +678,13 @@ paths:
   /accounts/bindings:
     post:
       operationId: createAccountBinding
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
       requestBody:
         required: true
         content:
