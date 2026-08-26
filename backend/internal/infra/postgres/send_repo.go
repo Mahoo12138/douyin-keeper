@@ -2,10 +2,13 @@ package postgres
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -45,13 +48,20 @@ func scanIntent(row rowScanner) (*send.SendIntent, error) {
 }
 
 func (r *SendRepo) CreateIntent(ctx context.Context, in *send.SendIntent) error {
-	return From(ctx, r.pool).QueryRow(ctx, `
+	err := From(ctx, r.pool).QueryRow(ctx, `
 		INSERT INTO send_intents (public_id, intent_type, request_id, task_id, account_id, friend_id,
 			local_date, scheduled_at, status, created_at, updated_at, message_kind, message_body)
 		VALUES ($1,$2,$3,$4,$5,$6,$7::date,$8,$9,$10,$11,$12,$13)
 		RETURNING id
 	`, in.PublicID, in.IntentType, in.RequestID, in.TaskID, in.AccountID, in.FriendID,
 		in.LocalDate, in.ScheduledAt, in.Status, in.CreatedAt, in.UpdatedAt, in.MessageKind, in.MessageBody).Scan(&in.ID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.ConstraintName == "ux_send_intent_manual_request" {
+			return fmt.Errorf("%w: %v", send.ErrIntentIdempotencyConflict, err)
+		}
+	}
+	return err
 }
 
 // CreateScheduledIntent inserts one daily scheduled intent. The partial
@@ -70,6 +80,36 @@ func (r *SendRepo) CreateScheduledIntent(ctx context.Context, in *send.SendInten
 		return false, nil
 	}
 	return err == nil, err
+}
+
+// GetManualIntentByRequestIDOwned returns the durable response for a replayed
+// client request. The latest job is joined in the same read so a retry never
+// needs to guess which attempt belongs to the original intent.
+func (r *SendRepo) GetManualIntentByRequestIDOwned(ctx context.Context, userID int64, requestID uuid.UUID) (*send.SendIntent, *send.SendJob, error) {
+	row := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT `+intentCols+`, j.public_id, j.status, j.attempt
+		FROM send_intents si
+		JOIN douyin_accounts a ON a.id = si.account_id
+		LEFT JOIN send_jobs j ON j.id = si.last_job_id
+		WHERE a.user_id=$1 AND si.intent_type='manual' AND si.request_id=$2
+	`, userID, requestID)
+	var in send.SendIntent
+	var jobPublicID pgtype.UUID
+	var jobStatus pgtype.Text
+	var jobAttempt pgtype.Int4
+	args := append(intentScanArgs(&in), &jobPublicID, &jobStatus, &jobAttempt)
+	if err := row.Scan(args...); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, nil
+		}
+		return nil, nil, err
+	}
+	if !jobPublicID.Valid {
+		return &in, nil, nil
+	}
+	return &in, &send.SendJob{
+		PublicID: uuid.UUID(jobPublicID.Bytes), Status: send.JobStatus(jobStatus.String), Attempt: int(jobAttempt.Int32),
+	}, nil
 }
 
 func (r *SendRepo) GetIntentOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*send.SendIntent, error) {

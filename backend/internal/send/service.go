@@ -3,6 +3,8 @@ package send
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -50,9 +52,35 @@ func NewService(repo Repository, tasks TaskLookup, gate Gate, quota QuotaBox,
 		outbox: outbox, tx: tx, now: time.Now}
 }
 
-// RunNow creates a manual intent + first job + outbox relay (docs/15 §4). The
-// unique request_id dedupes repeated user clicks.
-func (s *Service) RunNow(ctx context.Context, userID int64, taskPublicID uuid.UUID) (*SendIntent, *SendJob, error) {
+// RunNow creates a manual intent + first job + outbox relay (docs/15 §4).
+// requestID is supplied by the client and is the durable replay key for the
+// whole request. It must be resolved before entitlement/quota work so a
+// retried request can return its original result without reserving another
+// daily send.
+func (s *Service) RunNow(ctx context.Context, userID int64, taskPublicID uuid.UUID, requestID string) (*SendIntent, *SendJob, error) {
+	requestID = strings.TrimSpace(requestID)
+	parsedRequestID, err := uuid.Parse(requestID)
+	if err != nil {
+		return nil, nil, apperr.Validation(apperr.CodeConflict, "a valid Idempotency-Key is required")
+	}
+	existing, existingJob, err := s.repo.GetManualIntentByRequestIDOwned(ctx, userID, parsedRequestID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if existing != nil {
+		if existing.TaskID == nil {
+			return nil, nil, apperr.Conflict(apperr.CodeConflict, "Idempotency-Key was already used for another send request")
+		}
+		tk, taskErr := s.tasks.GetOwned(ctx, userID, taskPublicID)
+		if taskErr != nil {
+			return nil, nil, taskErr
+		}
+		if *existing.TaskID != tk.ID || existingJob == nil || existingJob.PublicID == uuid.Nil {
+			return nil, nil, apperr.Conflict(apperr.CodeConflict, "Idempotency-Key was already used for another send request")
+		}
+		return existing, existingJob, nil
+	}
+
 	dec, err := s.gate.Authorize(ctx, entitlement.AuthorizationRequest{
 		UserID: userID, Action: entitlement.ActionSendExecute,
 	})
@@ -63,8 +91,6 @@ func (s *Service) RunNow(ctx context.Context, userID int64, taskPublicID uuid.UU
 		return nil, nil, sendGateErr(dec.ReasonCode)
 	}
 	now := s.now()
-	requestID := uuid.New()
-
 	var intent *SendIntent
 	var job *SendJob
 	err = s.tx.WithinTx(ctx, func(tctx context.Context) error {
@@ -79,7 +105,7 @@ func (s *Service) RunNow(ctx context.Context, userID int64, taskPublicID uuid.UU
 		}
 
 		in := &SendIntent{
-			PublicID: uuid.New(), IntentType: IntentManual, RequestID: &requestID,
+			PublicID: uuid.New(), IntentType: IntentManual, RequestID: &parsedRequestID,
 			TaskID: &tk.ID, AccountID: tk.AccountID, FriendID: tk.FriendID,
 			LocalDate: &date, ScheduledAt: now, Status: IntentQueued, CreatedAt: now, UpdatedAt: now,
 			MessageKind: snapshotStringPtr(tk.MessageKind), MessageBody: tk.MessageBody,
@@ -109,6 +135,20 @@ func (s *Service) RunNow(ctx context.Context, userID int64, taskPublicID uuid.UU
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, ErrIntentIdempotencyConflict) {
+			existing, existingJob, lookupErr := s.repo.GetManualIntentByRequestIDOwned(ctx, userID, parsedRequestID)
+			if lookupErr != nil {
+				return nil, nil, lookupErr
+			}
+			tk, taskErr := s.tasks.GetOwned(ctx, userID, taskPublicID)
+			if taskErr != nil {
+				return nil, nil, taskErr
+			}
+			if existing != nil && existing.TaskID != nil && *existing.TaskID == tk.ID && existingJob != nil && existingJob.PublicID != uuid.Nil {
+				return existing, existingJob, nil
+			}
+			return nil, nil, apperr.Conflict(apperr.CodeConflict, "Idempotency-Key was already used for another send request")
+		}
 		return nil, nil, err
 	}
 	return intent, job, nil

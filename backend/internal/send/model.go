@@ -5,10 +5,16 @@ package send
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// ErrIntentIdempotencyConflict means another transaction already created a
+// manual intent for the same client request key. The service resolves this by
+// reading and replaying the existing intent instead of creating another send.
+var ErrIntentIdempotencyConflict = errors.New("send intent idempotency key already exists")
 
 type IntentType string
 
@@ -135,6 +141,7 @@ type RetryDueIntent struct {
 type Repository interface {
 	CreateIntent(ctx context.Context, in *SendIntent) error
 	CreateScheduledIntent(ctx context.Context, in *SendIntent) (bool, error)
+	GetManualIntentByRequestIDOwned(ctx context.Context, userID int64, requestID uuid.UUID) (*SendIntent, *SendJob, error)
 	GetIntentByID(ctx context.Context, intentID int64) (*SendIntent, error)
 	GetIntentByPublicID(ctx context.Context, publicID uuid.UUID) (*SendIntent, error)
 	GetIntentOwned(ctx context.Context, userID int64, publicID uuid.UUID) (*SendIntent, error)

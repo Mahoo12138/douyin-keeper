@@ -176,7 +176,7 @@ func (s *Server) handleTaskRunNow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid task id"))
 		return
 	}
-	intent, job, err := s.sends.RunNow(r.Context(), p.UserID, id)
+	intent, job, err := s.sends.RunNow(r.Context(), p.UserID, id, r.Header.Get("Idempotency-Key"))
 	if err != nil {
 		writeError(w, r, err)
 		return
