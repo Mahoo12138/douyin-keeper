@@ -42,6 +42,12 @@ func TestNormalizeFriendItemsRejectsDuplicateOrInvalidData(t *testing.T) {
 	if _, _, _, err := normalizeFriendItems([]friendsListItem{{StreakDays: -1}}); err == nil {
 		t.Fatal("expected negative streak to fail")
 	}
+	if _, _, _, err := normalizeFriendItems(nil); err == nil {
+		t.Fatal("expected an empty friend list to fail closed")
+	}
+	if _, _, _, err := normalizeFriendItems([]friendsListItem{{IdentityStatus: "pending", DisplayName: "Unknown"}}); err == nil {
+		t.Fatal("expected a friend list without stable platform ids to fail closed")
+	}
 }
 
 func TestMapFriendsSidecarErrors(t *testing.T) {

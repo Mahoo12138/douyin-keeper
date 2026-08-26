@@ -12,6 +12,8 @@ import { createInterface } from "node:readline";
 import { dirname, isAbsolute } from "node:path";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright";
+import { isAuthenticatedPage } from "./auth-state.mjs";
+import { canCommitFriendSync } from "./friend-scan.mjs";
 
 const PROTOCOL_VERSION = 1;
 const ADAPTER = "browser.consumer";
@@ -158,9 +160,11 @@ function hasSessionCookie(cookies) {
 
 async function seedProfile(context, statePath) {
   if (!statePath) return;
-  const current = await context.cookies();
-  if (hasSessionCookie(current)) return;
   const state = await sessionState(statePath);
+  // The encrypted DB session is authoritative. A persistent profile may hold
+  // an older/invalid cookie, so only seeding when the profile is empty would
+  // reproduce the exact false-authentication failure this adapter must avoid.
+  await context.clearCookies();
   if (state.cookies.length) await context.addCookies(state.cookies);
 }
 
@@ -355,6 +359,12 @@ async function pollQr(input) {
   if (await challengeVisible(item.page)) return { state: "challenge_required" };
   const cookies = await sessionCookies(item.page);
   if (hasSessionCookie(cookies) && !(await challengeVisible(item.page))) {
+    try {
+      await ensureAuthenticatedPage(item.page);
+    } catch (error) {
+      if (error.code === "CHALLENGE_REQUIRED") return { state: "challenge_required" };
+      throw error;
+    }
     if (input?.export_session_file) await exportState(item.context, input.export_session_file);
     const result = await identity(item.page);
     loginSessions.delete(handle);
@@ -449,6 +459,12 @@ async function verifySms(input) {
     return { state: "challenge_required" };
   }
   if (hasSessionCookie(await sessionCookies(item.page))) {
+    try {
+      await ensureAuthenticatedPage(item.page);
+    } catch (error) {
+      if (error.code === "CHALLENGE_REQUIRED") return { state: "challenge_required" };
+      throw error;
+    }
     if (input.export_session_file) await exportState(item.context, input.export_session_file);
     const result = await identity(item.page);
     loginSessions.delete(handle);
@@ -460,17 +476,18 @@ async function verifySms(input) {
 
 async function validateSession(input) {
   const session = sessionInput(input);
-  if (session.profile_dir) {
-    const { context, page } = await launchProfile(session.profile_dir, session.path);
-    try {
-      const cookies = await sessionCookies(page);
-      return { valid: hasSessionCookie(cookies), state: hasSessionCookie(cookies) ? "valid" : "expired" };
-    } finally {
-      await context.close();
-    }
+  if (!session.profile_dir) {
+    const state = await sessionState(session.path);
+    if (!hasSessionCookie(state.cookies)) return { valid: false, state: "expired" };
   }
-  const state = await sessionState(session.path);
-  return { valid: hasSessionCookie(state.cookies), state: hasSessionCookie(state.cookies) ? "valid" : "expired" };
+  const runtime = await launchSession(session);
+  try {
+    await ensureAuthenticatedPage(runtime.page);
+    return { valid: true, state: "valid" };
+  } finally {
+    await runtime.context.close();
+    if (runtime.browser) await runtime.browser.close().catch(() => {});
+  }
 }
 
 async function launchSession(session) {
@@ -491,9 +508,7 @@ async function withSession(input, operation) {
   const session = sessionInput(input);
   const runtime = await launchSession(session);
   try {
-    const cookies = await sessionCookies(runtime.page);
-    if (!hasSessionCookie(cookies)) throw protocolError("SESSION_EXPIRED", "session is no longer valid");
-    if (await challengeVisible(runtime.page)) throw protocolError("CHALLENGE_REQUIRED", "platform challenge is required");
+    await ensureAuthenticatedPage(runtime.page);
     return await operation(runtime.page, runtime.context);
   } finally {
     await runtime.context.close().catch(() => {});
@@ -508,6 +523,59 @@ async function visibleText(page, values) {
   } catch {
     return false;
   }
+}
+
+async function readAuthSnapshot(page) {
+  let url = "";
+  try { url = page.url(); } catch {}
+  try {
+    const dom = await page.evaluate(() => {
+      const visible = (node) => {
+        if (!node) return false;
+        const rect = node.getBoundingClientRect();
+        const style = window.getComputedStyle(node);
+        return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+      };
+      const text = (node) => (node?.innerText || node?.textContent || "").replace(/\s+/g, " ").trim();
+      const profileSelectors = [
+        '[data-e2e="user-avatar"]',
+        '[data-e2e="user-title"]',
+        '[class*="avatar" i] img',
+        '[class*="userName" i]',
+      ];
+      const hasProfileSignal = profileSelectors.some((selector) =>
+        [...document.querySelectorAll(selector)].some(visible),
+      ) || [...document.querySelectorAll("button, [role=button], a")].some((node) =>
+        visible(node) && /退出登录/.test(text(node)),
+      );
+      const hasLoginSignal = [...document.querySelectorAll("button, [role=button], a, input")].some((node) =>
+        visible(node) && /^(登录|登录\s*\/\s*注册|登录注册)$/.test(text(node)),
+      );
+      return { hasProfileSignal, hasLoginSignal, bodyText: text(document.body).slice(0, 4000) };
+    });
+    return { url, ...dom };
+  } catch {
+    return { url, hasProfileSignal: false, hasLoginSignal: false, bodyText: "" };
+  }
+}
+
+async function ensureAuthenticatedPage(page) {
+  if (!hasSessionCookie(await sessionCookies(page))) {
+    throw protocolError("SESSION_EXPIRED", "session is no longer valid");
+  }
+  await page.goto(SELF_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForTimeout(1500);
+  if (await challengeVisible(page)) {
+    throw protocolError("CHALLENGE_REQUIRED", "platform challenge is required");
+  }
+  const snapshot = await readAuthSnapshot(page);
+  if (!isAuthenticatedPage(snapshot)) {
+    throw protocolError("SESSION_EXPIRED", "session page is not authenticated", false, {
+      reason: "logged_out_page",
+      url: snapshot.url,
+    });
+  }
+  return snapshot;
 }
 
 async function openMessagePanel(page) {
@@ -531,43 +599,163 @@ async function openMessagePanel(page) {
   return false;
 }
 
+function relationFriend(row) {
+  if (!row || typeof row !== "object") return null;
+  if (String(row.follow_status ?? "") !== "2") return null;
+  const platformUserID = String(row.sec_uid || row.uid || "").trim();
+  const displayName = String(row.remark_name || row.nickname || "").trim();
+  if (!platformUserID || !displayName || displayName.length > 128) return null;
+  const avatar = row.avatar_thumb || row.avatar_medium || row.avatar_larger;
+  const avatarURL = typeof avatar === "string" ? avatar.trim() : avatar?.url_list?.[0]?.trim?.() || null;
+  return {
+    platform_user_id: platformUserID.slice(0, 256),
+    identity_status: "resolved",
+    display_name: displayName,
+    nickname: String(row.nickname || displayName).trim().slice(0, 128),
+    short_id: String(row.short_id || "").trim().slice(0, 128) || null,
+    avatar_url: avatarURL || null,
+    streak_days: 0,
+    has_conversation: false,
+    conversation: null,
+  };
+}
+
+function attachFollowerCollector(page) {
+  const collector = { friends: new Map(), hasMore: null, responseSeen: false, pending: new Set() };
+  const consume = async (response) => {
+    try {
+      if (response.request().resourceType() !== "xhr" && response.request().resourceType() !== "fetch") return;
+      const url = response.url().split("?", 1)[0];
+      if (!url.endsWith("/aweme/v1/web/user/follower/list/")) return;
+      const payload = await response.json();
+      if (!payload || typeof payload !== "object") return;
+      collector.responseSeen = true;
+      const hasMore = payload.has_more ?? payload.data?.has_more;
+      if (hasMore !== undefined && hasMore !== null) collector.hasMore = [1, "1", true, "true", "yes"].includes(hasMore);
+      const walk = (value, depth = 0) => {
+        if (depth > 6 || value === null || value === undefined) return;
+        if (Array.isArray(value)) {
+          for (const item of value.slice(0, 100)) walk(item, depth + 1);
+          return;
+        }
+        if (typeof value !== "object") return;
+        const friend = relationFriend(value);
+        if (friend) collector.friends.set(friend.platform_user_id, friend);
+        for (const child of Object.values(value)) walk(child, depth + 1);
+      };
+      walk(payload);
+    } catch {
+      // A response may disappear before its body is readable; the scan below
+      // still requires a complete, non-empty collector before succeeding.
+    }
+  };
+  page.on("response", (response) => {
+    const pending = consume(response).finally(() => collector.pending.delete(pending));
+    collector.pending.add(pending);
+  });
+  return collector;
+}
+
+async function flushFollowerCollector(collector) {
+  if (collector.pending.size) await Promise.allSettled([...collector.pending]);
+}
+
+async function scrollFollowerList(page) {
+  try {
+    return await page.evaluate(() => {
+      const visible = (node) => {
+        if (!node) return false;
+        const rect = node.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      };
+      const scrollable = (node) => {
+        const style = window.getComputedStyle(node);
+        return /(auto|scroll)/.test(style.overflowY || "") && node.scrollHeight > node.clientHeight + 20;
+      };
+      const dialogs = [...document.querySelectorAll('[role="dialog"], [class*="modal" i], [class*="drawer" i]')].filter(visible);
+      const scope = dialogs.at(-1) || document;
+      const documentScroller = document.scrollingElement;
+      const candidates = [
+        ...(scope === document ? [] : [scope]),
+        ...(scope.querySelectorAll ? [...scope.querySelectorAll("*")] : []),
+        documentScroller,
+      ].filter((node, index, all) => node && all.indexOf(node) === index && visible(node) && scrollable(node));
+      const target = candidates.sort((left, right) =>
+        (right.scrollHeight - right.clientHeight) - (left.scrollHeight - left.clientHeight),
+      ).at(0);
+      if (!target) {
+        window.scrollTo(0, documentScroller?.scrollHeight || 0);
+        return { moved: false, atBottom: true };
+      }
+      const before = target.scrollTop;
+      const next = Math.min(target.scrollHeight, before + Math.max(900, Math.floor(target.clientHeight * 0.9)));
+      target.scrollTop = next;
+      target.dispatchEvent(new Event("scroll", { bubbles: true }));
+      return { moved: target.scrollTop > before, atBottom: target.scrollTop + target.clientHeight >= target.scrollHeight - 8 };
+    });
+  } catch {
+    await page.mouse.wheel(0, 1200).catch(() => {});
+    return { moved: true, atBottom: false };
+  }
+}
+
 async function listFriends(input) {
   return withSession(input, async (page) => {
     await page.goto(SELF_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
-    await page.waitForTimeout(1500);
-    const followers = page.getByText("粉丝", { exact: true });
+    await page.waitForTimeout(1800);
+    const collector = attachFollowerCollector(page);
+    const followers = page.locator("a").filter({ hasText: "粉丝" });
+    let opened = false;
     for (let index = Math.min(await followers.count(), 8) - 1; index >= 0; index -= 1) {
       const item = followers.nth(index);
       if (await item.isVisible().catch(() => false)) {
-        await item.click({ timeout: 5000, force: true }).catch(() => {});
-        break;
+        opened = await item.click({ timeout: 5000, force: true }).then(() => true).catch(() => false);
+        if (opened) break;
       }
     }
-    await page.waitForTimeout(1500);
-    const seen = new Map();
-    let stable = 0;
-    for (let round = 0; round < 120 && stable < 8; round += 1) {
-      const rows = await page.evaluate(() => {
-        const nodes = [...document.querySelectorAll("[data-e2e*='user'], [class*='UserInfo'], [class*='user-info'], a[href*='/user/']")];
-        return nodes.map((node) => {
-          const root = node.closest("li, [class*='item'], [class*='Item']") || node;
-          const links = [root, ...root.querySelectorAll?.("a[href]") || []];
-          const href = links.map((item) => item.getAttribute?.("href") || "").find((value) => /\/user\//.test(value)) || "";
-          const id = root.getAttribute?.("data-user-id") || root.getAttribute?.("data-uid") || href.match(/\/user\/([^/?#]+)/)?.[1] || "";
-          const text = (node.innerText || root.innerText || "").replace(/\s+/g, " ").trim();
-          const avatar = root.querySelector?.("img")?.currentSrc || root.querySelector?.("img")?.src || "";
-          return { platform_user_id: id, nickname: text.slice(0, 128), display_name: text.slice(0, 128), avatar_url: avatar || null };
-        });
-      });
-      const before = seen.size;
-      for (const row of rows) if (row.platform_user_id && row.nickname) seen.set(row.platform_user_id, row);
-      stable = seen.size === before ? stable + 1 : 0;
-      await page.mouse.wheel(0, 900).catch(() => {});
-      await page.waitForTimeout(700);
+    if (!opened) {
+      const fallback = page.getByText("粉丝", { exact: true });
+      for (let index = Math.min(await fallback.count(), 8) - 1; index >= 0; index -= 1) {
+        const item = fallback.nth(index);
+        if (await item.isVisible().catch(() => false)) {
+          opened = await item.click({ timeout: 5000, force: true }).then(() => true).catch(() => false);
+          if (opened) break;
+        }
+      }
     }
+    if (!opened) throw protocolError("BROWSER_SELECTOR_CHANGED", "friend follower entry is unavailable");
+    await page.waitForTimeout(4000);
+    let stable = 0;
+    let stuck = 0;
+    let atBottom = false;
+    let complete = false;
+    let previousCount = 0;
+    for (let round = 0; round < 120; round += 1) {
+      await flushFollowerCollector(collector);
+      if (collector.friends.size === previousCount) stable += 1;
+      else stable = 0;
+      previousCount = collector.friends.size;
+      if (collector.responseSeen && collector.hasMore === false && stable >= 4) { complete = true; break; }
+      if (collector.responseSeen && collector.hasMore === null && atBottom && stable >= 4) { complete = true; break; }
+      if (collector.responseSeen && atBottom && stable >= 8) { complete = true; break; }
+      const state = await scrollFollowerList(page);
+      atBottom = Boolean(state?.atBottom);
+      if (state?.moved) stuck = 0; else stuck += 1;
+      if (!collector.responseSeen && stuck >= 8) break;
+      if (stuck >= 8) atBottom = true;
+      await page.waitForTimeout(900);
+    }
+    await flushFollowerCollector(collector);
     if (await visibleText(page, ["操作频繁", "请求过于频繁", "访问受限"])) throw protocolError("PLATFORM_RATE_LIMITED", "platform rate limit was detected");
-    if (!seen.size) throw protocolError("BROWSER_SELECTOR_CHANGED", "friend list data is unavailable");
-    return { friends: [...seen.values()].map((item) => ({ ...item, identity_status: "resolved", short_id: null, streak_days: 0, has_conversation: false, conversation: null })), complete: true };
+    if (!canCommitFriendSync({ responseSeen: collector.responseSeen, friendCount: collector.friends.size, complete })) {
+      throw protocolError("BROWSER_SELECTOR_CHANGED", "friend follower data was not completely loaded", false, {
+        response_seen: collector.responseSeen,
+        friend_count: collector.friends.size,
+        has_more: collector.hasMore,
+        at_bottom: atBottom,
+      });
+    }
+    return { friends: [...collector.friends.values()], complete: true };
   });
 }
 

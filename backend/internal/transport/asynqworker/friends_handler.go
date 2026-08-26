@@ -228,6 +228,9 @@ func commitFriendsSyncSuccess(
 }
 
 func normalizeFriendItems(items []friendsListItem) ([]friend.SyncItem, []string, []string, error) {
+	if len(items) == 0 {
+		return nil, nil, nil, fmt.Errorf("friend list is empty")
+	}
 	out := make([]friend.SyncItem, 0, len(items))
 	seen := make([]string, 0, len(items))
 	seenConversations := make([]string, 0, len(items))
@@ -272,6 +275,9 @@ func normalizeFriendItems(items []friendsListItem) ([]friend.SyncItem, []string,
 			AvatarURL: item.AvatarURL, StreakDays: item.StreakDays,
 			HasConversation: item.HasConversation, Conversation: conversation,
 		})
+	}
+	if len(seen) == 0 {
+		return nil, nil, nil, fmt.Errorf("friend list has no stable platform ids")
 	}
 	return out, seen, seenConversations, nil
 }

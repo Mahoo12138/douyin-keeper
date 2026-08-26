@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { isAuthenticatedPage } from "../auth-state.mjs";
+import { canCommitFriendSync } from "../friend-scan.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -49,12 +51,12 @@ test("unknown request fields fail closed with the v1 envelope", async () => {
   assert.equal(response.error.code, "INVALID_REQUEST");
 });
 
-test("session.validate reads the encrypted-session export contract without opening a browser", async () => {
+test("session.validate returns expired without opening a browser when the export has no session cookie", async () => {
   const directory = await mkdtemp(join(tmpdir(), "douyin-keeper-sidecar-test-"));
   const statePath = join(directory, "state.json");
   try {
     await writeFile(statePath, JSON.stringify({
-      cookies: [{ name: "sessionid", value: "test-session", domain: ".douyin.com", path: "/" }],
+      cookies: [],
       origins: [],
     }), { mode: 0o600 });
     const response = await callSidecar({
@@ -65,7 +67,7 @@ test("session.validate reads the encrypted-session export contract without openi
       input: { session: { kind: "playwright_storage_state_file", path: statePath } },
     });
     assert.equal(response.ok, true);
-    assert.deepEqual(response.result, { valid: true, state: "valid" });
+    assert.deepEqual(response.result, { valid: false, state: "expired" });
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -84,9 +86,25 @@ test("session.validate can open a persistent profile when a local browser is con
       deadline_ms: 30000,
       input: { session: { kind: "playwright_storage_state_file", path: statePath, profile_dir: profilePath } },
     });
-    assert.equal(response.ok, true);
-    assert.deepEqual(response.result, { valid: false, state: "expired" });
+    assert.equal(response.ok, false);
+    assert.equal(response.error.code, "SESSION_EXPIRED");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("stale session cookies do not authenticate a page that is actually logged out", () => {
+  assert.equal(isAuthenticatedPage({
+    url: "https://www.douyin.com/user/self",
+    bodyText: "登录 / 注册",
+    hasProfileSignal: true,
+    hasLoginSignal: true,
+  }), false);
+});
+
+test("friend sync cannot commit without the follower response and non-empty relation data", () => {
+  assert.equal(canCommitFriendSync({ responseSeen: false, friendCount: 1, complete: true }), false);
+  assert.equal(canCommitFriendSync({ responseSeen: true, friendCount: 0, complete: true }), false);
+  assert.equal(canCommitFriendSync({ responseSeen: true, friendCount: 2, complete: false }), false);
+  assert.equal(canCommitFriendSync({ responseSeen: true, friendCount: 2, complete: true }), true);
 });
