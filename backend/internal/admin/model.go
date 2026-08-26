@@ -191,6 +191,10 @@ type RuntimeSummary struct {
 	FailedJobs24h          int
 	BrowserSlotsUsed       int
 	BrowserSlotsLimit      int
+	OutboxPending          int
+	OutboxPublishing       int
+	OutboxDead             int
+	OutboxOldestDeadAt     *time.Time
 	SchedulerOnline        bool
 	SchedulerLeaderExpires *time.Time
 }

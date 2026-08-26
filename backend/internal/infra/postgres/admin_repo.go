@@ -803,6 +803,16 @@ func (r *AdminRepo) GetRuntimeSummary(ctx context.Context) (admin.RuntimeSummary
 	`).Scan(&summary.RunningJobs, &summary.FailedJobs24h); err != nil {
 		return admin.RuntimeSummary{}, err
 	}
+	if err := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE status = 'pending')::int,
+			COUNT(*) FILTER (WHERE status = 'publishing')::int,
+			COUNT(*) FILTER (WHERE status = 'dead')::int,
+			MIN(created_at) FILTER (WHERE status = 'dead')
+		FROM queue_outbox
+	`).Scan(&summary.OutboxPending, &summary.OutboxPublishing, &summary.OutboxDead, &summary.OutboxOldestDeadAt); err != nil {
+		return admin.RuntimeSummary{}, err
+	}
 
 	if r.redis != nil {
 		exists, err := r.redis.Exists(ctx, schedulerLeaderKey).Result()

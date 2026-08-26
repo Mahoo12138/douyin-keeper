@@ -1370,6 +1370,11 @@ export interface components {
             failed_jobs_24h: number;
             browser_slots_used: number;
             browser_slots_limit: number;
+            outbox_pending: number;
+            outbox_publishing: number;
+            outbox_dead: number;
+            /** Format: date-time */
+            outbox_oldest_dead_at?: string | null;
             scheduler_online: boolean;
             /** Format: date-time */
             scheduler_leader_expires_at?: string | null;

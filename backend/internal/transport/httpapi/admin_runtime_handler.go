@@ -43,6 +43,10 @@ type adminRuntimeView struct {
 	FailedJobs24h          int                   `json:"failed_jobs_24h"`
 	BrowserSlotsUsed       int                   `json:"browser_slots_used"`
 	BrowserSlotsLimit      int                   `json:"browser_slots_limit"`
+	OutboxPending          int                   `json:"outbox_pending"`
+	OutboxPublishing       int                   `json:"outbox_publishing"`
+	OutboxDead             int                   `json:"outbox_dead"`
+	OutboxOldestDeadAt     *string               `json:"outbox_oldest_dead_at"`
 	SchedulerOnline        bool                  `json:"scheduler_online"`
 	SchedulerLeaderExpires *string               `json:"scheduler_leader_expires_at"`
 }
@@ -62,7 +66,9 @@ func adminRuntimeViewFrom(summary admin.RuntimeSummary) adminRuntimeView {
 		WorkerVersion: summary.WorkerVersion, PlaywrightSidecar: summary.PlaywrightSidecar,
 		ProtocolSidecar: summary.ProtocolSidecar, RunningJobs: summary.RunningJobs,
 		FailedJobs24h: summary.FailedJobs24h, BrowserSlotsUsed: summary.BrowserSlotsUsed,
-		BrowserSlotsLimit: summary.BrowserSlotsLimit, SchedulerOnline: summary.SchedulerOnline,
+		BrowserSlotsLimit: summary.BrowserSlotsLimit, OutboxPending: summary.OutboxPending,
+		OutboxPublishing: summary.OutboxPublishing, OutboxDead: summary.OutboxDead,
+		OutboxOldestDeadAt: formatOptionalAdminTime(summary.OutboxOldestDeadAt), SchedulerOnline: summary.SchedulerOnline,
 		SchedulerLeaderExpires: formatOptionalAdminTime(summary.SchedulerLeaderExpires),
 		Pools:                  make([]adminWorkerPoolView, 0, len(summary.Pools)), Queues: make([]adminQueueView, 0, len(summary.Queues)),
 	}

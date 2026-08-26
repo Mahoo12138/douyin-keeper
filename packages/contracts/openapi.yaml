@@ -2535,6 +2535,9 @@ components:
       - failed_jobs_24h
       - browser_slots_used
       - browser_slots_limit
+      - outbox_pending
+      - outbox_publishing
+      - outbox_dead
       - scheduler_online
       properties:
         observed_at:
@@ -2576,6 +2579,20 @@ components:
         browser_slots_limit:
           type: integer
           minimum: 0
+        outbox_pending:
+          type: integer
+          minimum: 0
+        outbox_publishing:
+          type: integer
+          minimum: 0
+        outbox_dead:
+          type: integer
+          minimum: 0
+        outbox_oldest_dead_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
         scheduler_online:
           type: boolean
         scheduler_leader_expires_at:
