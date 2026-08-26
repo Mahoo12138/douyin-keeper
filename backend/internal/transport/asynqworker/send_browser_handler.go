@@ -504,6 +504,11 @@ func shouldRetrySend(response *sidecar.Response) bool {
 	if response == nil || response.OK || response.Error == nil || !response.Error.Retryable {
 		return false
 	}
+	evidence := failureEvidenceFromResponse(response)
+	if evidence.Outcome == send.OutcomeUnknown || evidence.Outcome == send.OutcomeConfirmed ||
+		(evidence.PlatformWriteAccepted != nil && *evidence.PlatformWriteAccepted) {
+		return false
+	}
 	switch response.Error.Code {
 	case sidecar.ErrAdapterUnavailable, sidecar.ErrNetworkTimeout:
 		return true

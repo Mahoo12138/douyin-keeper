@@ -37,6 +37,19 @@ func TestShouldRetrySendRequiresSidecarProofAndAllowlist(t *testing.T) {
 	if shouldRetrySend(&sidecar.Response{OK: false, Error: &sidecar.Error{Code: sidecar.ErrAdapterIncompatible, Retryable: true}}) {
 		t.Fatal("adapter incompatibility must not retry")
 	}
+	if shouldRetrySend(&sidecar.Response{OK: false, Error: &sidecar.Error{
+		Code: sidecar.ErrNetworkTimeout, Retryable: true,
+		Detail: map[string]any{"outcome": "unknown"},
+	}}) {
+		t.Fatal("unknown platform outcome must override a contradictory retryable flag")
+	}
+	accepted := true
+	if shouldRetrySend(&sidecar.Response{OK: false, Error: &sidecar.Error{
+		Code: sidecar.ErrAdapterUnavailable, Retryable: true,
+		Detail: map[string]any{"platform_write_accepted": accepted},
+	}}) {
+		t.Fatal("accepted platform write must never retry")
+	}
 }
 
 func TestObserveSendMetricUsesTerminalStatus(t *testing.T) {
