@@ -249,9 +249,9 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 		if err := json.Unmarshal(t.Payload(), &envelope); err != nil || envelope.OutboxID == "" {
 			return fmt.Errorf("session check: invalid outbox payload")
 		}
-		message, err := loader.FetchByPublicID(ctx, envelope.OutboxID)
+		message, err := loadPendingMessage(ctx, loader, envelope.OutboxID, "session check: load outbox")
 		if err != nil {
-			return fmt.Errorf("session check: load outbox: %w", err)
+			return err
 		}
 		var ref struct {
 			JobID string `json:"job_id"`
@@ -270,8 +270,11 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 			deps.LockTTL = 2 * time.Minute
 		}
 		claimed, err := deps.Jobs.Claim(ctx, jobID, deps.WorkerID, deps.LockTTL)
-		if err != nil || claimed == nil {
+		if err != nil {
 			return err
+		}
+		if claimed == nil {
+			return fmt.Errorf("session check: claim job returned nil")
 		}
 		stopHeartbeat := startLeaseHeartbeat(ctx, deps.LockTTL, func(heartbeatCtx context.Context) error {
 			return deps.Jobs.Heartbeat(heartbeatCtx, claimed.ID, deps.WorkerID, deps.LockTTL)
@@ -293,7 +296,7 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 			return finishSessionCheckFailure(ctx, deps, claimed, *claimed.AccountID, adapterGateCode(err))
 		}
 		acct, err := deps.Accounts.GetByID(ctx, *claimed.AccountID)
-		if err != nil || acct.UserID != *claimed.UserID {
+		if err != nil || !accountMatchesUser(acct, *claimed.UserID) {
 			return fail(apperr.CodeNotFound)
 		}
 		lock, err := redislock.Acquire(ctx, deps.Redis, "lock:account:"+fmt.Sprint(acct.ID), claimed.PublicID.String(), deps.LockTTL)

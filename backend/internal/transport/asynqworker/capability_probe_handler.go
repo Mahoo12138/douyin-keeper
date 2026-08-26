@@ -22,9 +22,9 @@ func capabilityProbeHandler(loader PayloadLoader, deps CapabilityProbeDeps) func
 		if err := json.Unmarshal(t.Payload(), &envelope); err != nil || envelope.OutboxID == "" {
 			return fmt.Errorf("capability probe: invalid outbox payload")
 		}
-		message, err := loader.FetchByPublicID(ctx, envelope.OutboxID)
+		message, err := loadPendingMessage(ctx, loader, envelope.OutboxID, "capability probe: load outbox")
 		if err != nil {
-			return fmt.Errorf("capability probe: load outbox: %w", err)
+			return err
 		}
 		var ref struct {
 			AccountID int64 `json:"account_id"`

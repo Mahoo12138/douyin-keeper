@@ -23,9 +23,9 @@ func wechatNotificationHandler(loader PayloadLoader, deps WechatNotificationDeps
 		if err := json.Unmarshal(task.Payload(), &envelope); err != nil || envelope.OutboxID == "" {
 			return fmt.Errorf("wechat notification: invalid outbox payload")
 		}
-		message, err := loader.FetchByPublicID(ctx, envelope.OutboxID)
+		message, err := loadPendingMessage(ctx, loader, envelope.OutboxID, "wechat notification: load outbox")
 		if err != nil {
-			return fmt.Errorf("wechat notification: load outbox: %w", err)
+			return err
 		}
 		var ref struct {
 			NotificationID string `json:"notification_id"`
@@ -40,6 +40,9 @@ func wechatNotificationHandler(loader PayloadLoader, deps WechatNotificationDeps
 		delivery, err := deps.Deliveries.GetWechatDelivery(ctx, publicID)
 		if err != nil {
 			return err
+		}
+		if delivery == nil {
+			return fmt.Errorf("wechat notification: load delivery returned nil")
 		}
 		if delivery.Status == notification.DeliverySent || delivery.Status == notification.DeliverySkipped {
 			return nil

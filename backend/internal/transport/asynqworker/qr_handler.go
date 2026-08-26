@@ -120,9 +120,9 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		if err := json.Unmarshal(t.Payload(), &envelope); err != nil || envelope.OutboxID == "" {
 			return fmt.Errorf("qr bind: invalid outbox payload")
 		}
-		message, err := loader.FetchByPublicID(ctx, envelope.OutboxID)
+		message, err := loadPendingMessage(ctx, loader, envelope.OutboxID, "qr bind: load outbox")
 		if err != nil {
-			return fmt.Errorf("qr bind: load outbox: %w", err)
+			return err
 		}
 		var ref struct {
 			JobID string `json:"job_id"`
@@ -144,8 +144,11 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			deps.PollEvery = 2 * time.Second
 		}
 		claimed, err := deps.Jobs.Claim(ctx, jobID, deps.WorkerID, deps.LockTTL)
-		if err != nil || claimed == nil {
+		if err != nil {
 			return err
+		}
+		if claimed == nil {
+			return fmt.Errorf("qr bind: claim job returned nil")
 		}
 		stopHeartbeat := startLeaseHeartbeat(ctx, deps.LockTTL, func(heartbeatCtx context.Context) error {
 			return deps.Jobs.Heartbeat(heartbeatCtx, claimed.ID, deps.WorkerID, deps.LockTTL)
@@ -164,7 +167,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			return fail(apperr.CodeInternal)
 		}
 		acct, err := deps.Accounts.GetByID(ctx, *claimed.AccountID)
-		if err != nil || acct.UserID != *claimed.UserID {
+		if err != nil || !accountMatchesUser(acct, *claimed.UserID) {
 			return fail(apperr.CodeNotFound)
 		}
 		lock, err := redislock.Acquire(ctx, deps.Redis, "lock:account:"+fmt.Sprint(acct.ID), claimed.PublicID.String(), deps.LockTTL)

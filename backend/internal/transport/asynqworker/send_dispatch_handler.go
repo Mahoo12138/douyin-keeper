@@ -24,9 +24,9 @@ func sendDispatchHandler(loader PayloadLoader, deps SendDispatchDeps) func(conte
 		if err := json.Unmarshal(t.Payload(), &envelope); err != nil || envelope.OutboxID == "" {
 			return fmt.Errorf("send dispatch: invalid outbox payload")
 		}
-		message, err := loader.FetchByPublicID(ctx, envelope.OutboxID)
+		message, err := loadPendingMessage(ctx, loader, envelope.OutboxID, "send dispatch: load outbox")
 		if err != nil {
-			return fmt.Errorf("send dispatch: load outbox: %w", err)
+			return err
 		}
 		var ref struct {
 			IntentID string `json:"intent_id"`
@@ -46,6 +46,9 @@ func sendDispatchHandler(loader PayloadLoader, deps SendDispatchDeps) func(conte
 		if err != nil {
 			return err
 		}
+		if j == nil {
+			return fmt.Errorf("send dispatch: load job returned nil")
+		}
 		if j.Status != send.JobQueued {
 			return nil
 		}
@@ -57,6 +60,9 @@ func sendDispatchHandler(loader PayloadLoader, deps SendDispatchDeps) func(conte
 			intent, intentErr := deps.Sends.GetIntentByPublicID(ctx, intentID)
 			if intentErr != nil {
 				return intentErr
+			}
+			if intent == nil {
+				return fmt.Errorf("send dispatch: load intent returned nil")
 			}
 			if intent.Status.Terminal() {
 				now := deps.Now
@@ -78,10 +84,16 @@ func sendDispatchHandler(loader PayloadLoader, deps SendDispatchDeps) func(conte
 			if intentErr != nil {
 				return intentErr
 			}
+			if intent == nil {
+				return fmt.Errorf("send dispatch: load intent returned nil")
+			}
 			if intent.TaskID != nil {
 				tk, taskErr := deps.Tasks.GetByID(ctx, *intent.TaskID)
 				if taskErr != nil {
 					return taskErr
+				}
+				if tk == nil {
+					return fmt.Errorf("send dispatch: load task returned nil")
 				}
 				hasConversation := true
 				if deps.Friends != nil {

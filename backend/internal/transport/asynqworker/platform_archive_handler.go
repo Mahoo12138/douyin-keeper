@@ -41,9 +41,9 @@ func platformArchiveHandler(loader PayloadLoader, deps SessionCheckDeps) func(co
 		if err := json.Unmarshal(t.Payload(), &envelope); err != nil || envelope.OutboxID == "" {
 			return fmt.Errorf("platform archive: invalid outbox payload")
 		}
-		message, err := loader.FetchByPublicID(ctx, envelope.OutboxID)
+		message, err := loadPendingMessage(ctx, loader, envelope.OutboxID, "platform archive: load outbox")
 		if err != nil {
-			return fmt.Errorf("platform archive: load outbox: %w", err)
+			return err
 		}
 		var payload conversation.PlatformArchiveJobPayload
 		if err := json.Unmarshal(message.Payload, &payload); err != nil {
@@ -69,8 +69,11 @@ func platformArchiveHandler(loader PayloadLoader, deps SessionCheckDeps) func(co
 			return fmt.Errorf("platform archive: jobs repository is not configured")
 		}
 		claimed, err := deps.Jobs.Claim(ctx, jobID, deps.WorkerID, lockTTL)
-		if err != nil || claimed == nil {
+		if err != nil {
 			return err
+		}
+		if claimed == nil {
+			return fmt.Errorf("platform archive: claim job returned nil")
 		}
 		stopHeartbeat := startLeaseHeartbeat(ctx, lockTTL, func(heartbeatCtx context.Context) error {
 			return deps.Jobs.Heartbeat(heartbeatCtx, claimed.ID, deps.WorkerID, lockTTL)

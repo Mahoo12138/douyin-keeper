@@ -104,9 +104,9 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		if err := json.Unmarshal(t.Payload(), &envelope); err != nil || envelope.OutboxID == "" {
 			return fmt.Errorf("%s: invalid outbox payload", adapterConfig.name)
 		}
-		message, err := loader.FetchByPublicID(ctx, envelope.OutboxID)
+		message, err := loadPendingMessage(ctx, loader, envelope.OutboxID, adapterConfig.name+": load outbox")
 		if err != nil {
-			return fmt.Errorf("%s: load outbox: %w", adapterConfig.name, err)
+			return err
 		}
 		var ref struct {
 			JobID string `json:"job_id"`
@@ -132,8 +132,11 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 			return fmt.Errorf("%s: %w", adapterConfig.name, err)
 		}
 		claimed, err := deps.Sends.ClaimJob(ctx, jobPublicID, deps.WorkerID, deps.LockTTL)
-		if err != nil || claimed == nil {
+		if err != nil {
 			return err
+		}
+		if claimed == nil {
+			return fmt.Errorf("%s: claim job returned nil", adapterConfig.name)
 		}
 		stopHeartbeat := startLeaseHeartbeat(ctx, deps.LockTTL, func(heartbeatCtx context.Context) error {
 			return deps.Sends.HeartbeatJob(heartbeatCtx, claimed.ID, deps.WorkerID, deps.LockTTL)
@@ -159,7 +162,10 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		if err != nil {
 			return fmt.Errorf("%s: load account: %w", adapterConfig.name, err)
 		}
-		if acct == nil || intent.AccountID != claimed.AccountID {
+		if acct == nil {
+			return fmt.Errorf("%s: load account returned nil", adapterConfig.name)
+		}
+		if intent.AccountID != claimed.AccountID {
 			return fmt.Errorf("%s: account does not match send intent", adapterConfig.name)
 		}
 		if deps.Quota == nil {
@@ -176,7 +182,7 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 			return failWithQuota(apperr.CodeAdapterIncompatible)
 		}
 		tk, err := deps.Tasks.GetByID(ctx, *intent.TaskID)
-		if err != nil || tk.AccountID != claimed.AccountID || tk.FriendID != claimed.FriendID {
+		if err != nil || tk == nil || tk.AccountID != claimed.AccountID || tk.FriendID != claimed.FriendID {
 			return failWithQuota(apperr.CodeAdapterIncompatible)
 		}
 		spec, err := messageSendSpecForAdapter(tk.MessageKind, valueOrEmpty(tk.MessageBody), adapterConfig.adapter, tk.AllowFirstMessage)
@@ -224,7 +230,7 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 			return failWithQuota(code)
 		}
 		target, err := deps.Targets.GetSendTarget(ctx, claimed.AccountID, claimed.FriendID)
-		if err != nil {
+		if err != nil || target == nil {
 			code := apperr.CodeAdapterIncompatible
 			if app, ok := apperr.As(err); ok {
 				code = app.Code
