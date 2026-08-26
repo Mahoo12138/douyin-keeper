@@ -100,7 +100,8 @@
       "required": ["profile_dir"],
       "properties": {
         "profile_dir": {"$ref": "#/$defs/absolutePath"},
-        "locale": {"type": "string", "minLength": 1, "maxLength": 32, "default": "zh-CN"}
+        "locale": {"type": "string", "minLength": 1, "maxLength": 32, "default": "zh-CN"},
+        "force_login": {"type": "boolean", "default": false}
       }
     },
     "loginQRPollInput": {
@@ -119,7 +120,8 @@
       "properties": {
         "profile_dir": {"$ref": "#/$defs/absolutePath"},
         "phone": {"type": "string", "minLength": 5, "maxLength": 32},
-        "locale": {"type": "string", "minLength": 1, "maxLength": 32, "default": "zh-CN"}
+        "locale": {"type": "string", "minLength": 1, "maxLength": 32, "default": "zh-CN"},
+        "force_login": {"type": "boolean", "default": false}
       }
     },
     "loginSMSVerifyInput": {

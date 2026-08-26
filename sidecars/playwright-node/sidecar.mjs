@@ -364,6 +364,7 @@ async function pollQr(input) {
       await ensureAuthenticatedPage(item.page);
     } catch (error) {
       if (error.code === "CHALLENGE_REQUIRED") return { state: "challenge_required" };
+      if (error.code === "SESSION_EXPIRED") return { state: "scanned" };
       throw error;
     }
     if (input?.export_session_file) await exportState(item.context, input.export_session_file);
@@ -565,18 +566,20 @@ async function ensureAuthenticatedPage(page) {
     throw protocolError("SESSION_EXPIRED", "session is no longer valid");
   }
   await page.goto(SELF_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
-  await page.waitForTimeout(1500);
-  if (await challengeVisible(page)) {
-    throw protocolError("CHALLENGE_REQUIRED", "platform challenge is required");
+  const deadline = nowMs() + 12000;
+  let snapshot = { url: page.url(), hasProfileSignal: false, hasLoginSignal: false, bodyText: "" };
+  while (nowMs() < deadline) {
+    if (await challengeVisible(page)) {
+      throw protocolError("CHALLENGE_REQUIRED", "platform challenge is required");
+    }
+    snapshot = await readAuthSnapshot(page);
+    if (isAuthenticatedPage(snapshot)) return snapshot;
+    await page.waitForTimeout(500);
   }
-  const snapshot = await readAuthSnapshot(page);
-  if (!isAuthenticatedPage(snapshot)) {
-    throw protocolError("SESSION_EXPIRED", "session page is not authenticated", false, {
-      reason: "logged_out_page",
-      url: snapshot.url,
-    });
-  }
-  return snapshot;
+  throw protocolError("SESSION_EXPIRED", "session page is not authenticated", false, {
+    reason: "logged_out_page",
+    url: snapshot.url,
+  });
 }
 
 async function openMessagePanel(page) {

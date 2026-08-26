@@ -12,6 +12,7 @@ export function bindingMethodLabel(method: BindingMethod) {
 
 export function bindingErrorMessage(eventType: string, code?: string) {
   if (code === 'ACCOUNT_IDENTITY_MISMATCH') return '登录的抖音账号与当前账号不一致，原有登录态未改变。'
+  if (code === 'SESSION_EXPIRED') return '未确认到抖音登录成功，请保持抖音窗口打开并重新扫码，原有登录态未改变。'
   if (eventType === 'platform_challenge') return '请在打开的抖音窗口完成安全验证，完成后会自动继续。'
   if (code === 'CHALLENGE_REQUIRED' || eventType === 'challenge_required') return '需要完成平台安全验证，请在抖音端完成验证后再重试。'
   return '账号登录未完成，请稍后重试。'
