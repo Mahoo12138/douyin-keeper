@@ -41,7 +41,10 @@ export function AccountBindingFlow({ mode = 'embedded', accountId, onSuccess }: 
 
       {binding.entitlementDialogOpen && <EntitlementRequiredDialog onClose={binding.closeEntitlementDialog} />}
 
-      {binding.binding && <AccountBindingPanel binding={binding.binding} relogin={binding.isRebinding} submittingCode={binding.submittingCode} onSubmitSMSCode={binding.binding.method === 'sms' ? binding.submitSMSCode : undefined} onCancel={() => void binding.cancelBinding()} />}
+      {binding.binding && <>
+        <AccountBindingPanel binding={binding.binding} relogin={binding.isRebinding} submittingCode={binding.submittingCode} onSubmitSMSCode={binding.binding.method === 'sms' ? binding.submitSMSCode : undefined} onCancel={() => void binding.cancelBinding()} />
+        <BindingChallengeDialog binding={binding.binding} relogin={binding.isRebinding} onCancel={() => void binding.cancelBinding()} />
+      </>}
     </>
   )
 }
@@ -64,6 +67,35 @@ function BindingChoiceDialog({ binding }: { binding: BindingController }) {
 
 function EntitlementRequiredDialog({ onClose }: { onClose: () => void }) {
   return <Dialog open onOpenChange={(open) => { if (!open) onClose() }}><DialogContent><DialogHeader><div className="mb-2 flex size-11 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600"><ShieldAlert className="size-5" /></div><DialogTitle>先激活权益，再添加账号</DialogTitle><DialogDescription>当前权益没有可用的账号配额。兑换卡密或由管理员授权后，就可以继续绑定抖音账号。</DialogDescription></DialogHeader><div className="px-6 py-1"><div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 text-sm leading-6 text-muted-foreground">已绑定账号不会受影响；前往权益页可以查看当前使用量、有效期并兑换卡密。</div></div><DialogFooter><Button variant="outline" onClick={onClose}>稍后处理</Button><Button asChild onClick={onClose}><Link to="/entitlement">去权益页<ArrowRight /></Link></Button></DialogFooter></DialogContent></Dialog>
+}
+
+function BindingChallengeDialog({ binding, relogin, onCancel }: { binding: BindingState; relogin: boolean; onCancel: () => void }) {
+  const open = binding.status === 'challenge_required'
+  const action = relogin ? '重新登录' : '绑定'
+
+  return <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onCancel() }}>
+    <DialogContent className="max-w-md">
+      <DialogHeader className="border-amber-500/20 bg-amber-500/[0.06]">
+        <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-300">
+          <ShieldAlert className="size-6" />
+        </div>
+        <DialogTitle>{action}需要安全验证</DialogTitle>
+        <DialogDescription>请在打开的抖音窗口完成官方安全验证，验证通过后{action}会自动继续。</DialogDescription>
+      </DialogHeader>
+      <div className="space-y-3 px-6 py-5 text-sm leading-6">
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3 text-amber-900 dark:text-amber-100">
+          <p className="font-medium">这是抖音官方验证</p>
+          <p className="mt-1 text-amber-900/75 dark:text-amber-100/75">不需要在本页面输入账号密码。请不要关闭抖音窗口，完成验证后保持当前页面打开。</p>
+        </div>
+        <p className="text-xs text-muted-foreground">当前流程会等待验证结果；验证成功后无需额外点击确认。</p>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel}>
+          取消{relogin ? '重新登录' : '绑定'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 }
 
 function BindingPage({ binding }: { binding: BindingController }) {
@@ -90,7 +122,10 @@ function BindingPage({ binding }: { binding: BindingController }) {
         </Card>
       )}
 
-      {binding.binding && <AccountBindingPanel binding={binding.binding} relogin={binding.isRebinding} submittingCode={binding.submittingCode} onSubmitSMSCode={binding.binding.method === 'sms' ? binding.submitSMSCode : undefined} onCancel={() => void binding.cancelBinding()} />}
+      {binding.binding && <>
+        <AccountBindingPanel binding={binding.binding} relogin={binding.isRebinding} submittingCode={binding.submittingCode} onSubmitSMSCode={binding.binding.method === 'sms' ? binding.submitSMSCode : undefined} onCancel={() => void binding.cancelBinding()} />
+        <BindingChallengeDialog binding={binding.binding} relogin={binding.isRebinding} onCancel={() => void binding.cancelBinding()} />
+      </>}
     </div>
   )
 }

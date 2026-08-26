@@ -40,7 +40,6 @@ export function AccountBindingPanel({ binding, relogin = false, onCancel, onSubm
           <div className="space-y-2">
             <div className="text-base font-semibold">{relogin ? (isSMS ? '短信验证码重新登录' : '扫码重新登录') : (isSMS ? '短信验证码绑定' : '扫码绑定')}</div>
             <p className="text-sm text-muted-foreground">{statusText}</p>
-            {binding.status === 'challenge_required' && <p className="max-w-md rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs leading-5 text-amber-800 dark:text-amber-200">这是抖音官方安全验证，不需要在本页面输入账号密码。请完成新打开窗口中的验证，不要关闭窗口，验证通过后绑定会自动继续。</p>}
             {binding.expiresAt && binding.status === 'waiting_user' && (
               <p className="text-xs text-muted-foreground">{isSMS ? '验证码' : '二维码'}有效期至 {new Date(binding.expiresAt).toLocaleTimeString('zh-CN')}</p>
             )}
