@@ -25,7 +25,7 @@ export function AccountBindingPanel({ binding, relogin = false, onCancel, onSubm
     error: `${relogin ? '重新登录' : '绑定'}失败，请重新尝试`,
   }[binding.status]
   return (
-    <Card className="overflow-hidden border-primary/20 bg-primary/[0.03]">
+    <Card className="mx-6 my-6 overflow-hidden border-primary/20 bg-primary/[0.03]">
       <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
           {binding.qr ? (
@@ -38,8 +38,8 @@ export function AccountBindingPanel({ binding, relogin = false, onCancel, onSubm
             </div>
           )}
           <div className="space-y-2">
-            <div className="text-base font-semibold">{relogin ? (isSMS ? '短信验证码重新登录' : '扫码重新登录') : (isSMS ? '短信验证码绑定' : '扫码绑定')}</div>
             <p className="text-sm text-muted-foreground">{statusText}</p>
+            {binding.status === 'challenge_required' && <div className="max-w-md rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs leading-5 text-amber-900 dark:text-amber-100"><p className="font-medium">这是抖音官方安全验证</p><p className="mt-1 text-amber-900/75 dark:text-amber-100/75">不需要在本页面输入账号密码。请完成新打开窗口中的验证，不要关闭窗口，验证通过后会自动继续。</p></div>}
             {binding.expiresAt && binding.status === 'waiting_user' && (
               <p className="text-xs text-muted-foreground">{isSMS ? '验证码' : '二维码'}有效期至 {new Date(binding.expiresAt).toLocaleTimeString('zh-CN')}</p>
             )}

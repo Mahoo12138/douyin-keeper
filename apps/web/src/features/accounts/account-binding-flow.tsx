@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import {
   cancelJob,
@@ -11,7 +11,7 @@ import {
   type JobEventEnvelope,
 } from '@douyin-keeper/sdk-ts'
 import { ArrowLeft, ArrowRight, ShieldAlert, Smartphone } from 'lucide-react'
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, Label } from '@douyin-keeper/ui-web'
+import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Input, Label } from '@douyin-keeper/ui-web'
 
 import { getToken } from '@/auth/session'
 import { AccountBindingPanel } from './account-binding-panel'
@@ -35,70 +35,63 @@ export function AccountBindingFlow({ mode = 'embedded', accountId, onSuccess }: 
         {binding.binding ? '登录进行中…' : accountId ? '重新登录' : '绑定抖音账号'}
       </Button>
 
-      {binding.bindingChoice && !binding.binding && (
-        <BindingChoiceDialog binding={binding} />
-      )}
+      {(binding.bindingChoice || binding.binding) && <BindingDialog binding={binding} onClose={() => {
+        if (binding.binding) void binding.cancelBinding()
+        else binding.closeChoice()
+      }} />}
 
       {binding.entitlementDialogOpen && <EntitlementRequiredDialog onClose={binding.closeEntitlementDialog} />}
-
-      {binding.binding && <>
-        <AccountBindingPanel binding={binding.binding} relogin={binding.isRebinding} submittingCode={binding.submittingCode} onSubmitSMSCode={binding.binding.method === 'sms' ? binding.submitSMSCode : undefined} onCancel={() => void binding.cancelBinding()} />
-        <BindingChallengeDialog binding={binding.binding} relogin={binding.isRebinding} onCancel={() => void binding.cancelBinding()} />
-      </>}
     </>
   )
 }
 
 type BindingController = ReturnType<typeof useAccountBinding>
 
-function BindingChoiceDialog({ binding }: { binding: BindingController }) {
-  return (
-    <Dialog open onOpenChange={(open) => { if (!open) binding.closeChoice() }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{binding.isRebinding ? '选择重新登录方式' : '选择绑定方式'}</DialogTitle>
-          <DialogDescription>{binding.isRebinding ? '重新登录会替换当前账号 Session，验证失败时不会改变原有登录态。' : '扫码适合快速绑定；短信方式需要输入抖音账号手机号和验证码。'}</DialogDescription>
-        </DialogHeader>
-        <BindingMethodForm binding={binding} embedded />
-      </DialogContent>
-    </Dialog>
-  )
+function BindingDialog({ binding, pageMode = false, onClose }: { binding: BindingController; pageMode?: boolean; onClose: () => void }) {
+  const activeBinding = binding.binding
+  const action = binding.isRebinding ? '重新登录' : '绑定抖音账号'
+  const challenge = activeBinding?.status === 'challenge_required'
+  const title = activeBinding ? (challenge ? `${action}需要安全验证` : `${bindingMethodLabel(activeBinding.method)}${binding.isRebinding ? '重新登录' : '绑定'}`) : (binding.isRebinding ? '选择重新登录方式' : '选择绑定方式')
+  const description = challenge
+    ? '请在打开的抖音窗口完成官方安全验证，验证通过后会自动继续。'
+    : activeBinding?.status === 'waiting_user' && activeBinding.method === 'sms'
+      ? '验证码已发送，请在当前窗口输入验证码完成登录。'
+      : activeBinding?.status === 'waiting_user'
+        ? '请使用抖音 App 扫描二维码，完成后会自动继续。'
+        : activeBinding
+          ? '当前登录流程正在安全执行，手机号和验证码只用于本次绑定。'
+          : binding.isRebinding
+            ? '重新登录会替换当前账号 Session，验证失败时不会改变原有登录态。'
+            : '扫码适合快速绑定；短信方式需要输入抖音账号手机号和验证码。'
+
+  return <Dialog open={pageMode || !!binding.bindingChoice || !!activeBinding} onOpenChange={(open) => { if (!open) onClose() }}>
+    <DialogContent className="max-w-2xl">
+      <DialogHeader className={challenge ? 'border-amber-500/20 bg-amber-500/[0.06]' : undefined}>
+        <div className={`mb-3 flex size-11 items-center justify-center rounded-2xl ${challenge ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300' : 'bg-primary/10 text-primary'}`}>
+          {challenge ? <ShieldAlert className="size-5" /> : <Smartphone className="size-5" />}
+        </div>
+        <DialogTitle>{title}</DialogTitle>
+        <DialogDescription>{description}</DialogDescription>
+      </DialogHeader>
+      {activeBinding ? <AccountBindingPanel binding={activeBinding} relogin={binding.isRebinding} submittingCode={binding.submittingCode} onSubmitSMSCode={activeBinding.method === 'sms' ? binding.submitSMSCode : undefined} onCancel={onClose} /> : <BindingMethodForm binding={binding} embedded onCancel={onClose} />}
+    </DialogContent>
+  </Dialog>
 }
 
 function EntitlementRequiredDialog({ onClose }: { onClose: () => void }) {
   return <Dialog open onOpenChange={(open) => { if (!open) onClose() }}><DialogContent><DialogHeader><div className="mb-2 flex size-11 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600"><ShieldAlert className="size-5" /></div><DialogTitle>先激活权益，再添加账号</DialogTitle><DialogDescription>当前权益没有可用的账号配额。兑换卡密或由管理员授权后，就可以继续绑定抖音账号。</DialogDescription></DialogHeader><div className="px-6 py-1"><div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 text-sm leading-6 text-muted-foreground">已绑定账号不会受影响；前往权益页可以查看当前使用量、有效期并兑换卡密。</div></div><DialogFooter><Button variant="outline" onClick={onClose}>稍后处理</Button><Button asChild onClick={onClose}><Link to="/entitlement">去权益页<ArrowRight /></Link></Button></DialogFooter></DialogContent></Dialog>
 }
 
-function BindingChallengeDialog({ binding, relogin, onCancel }: { binding: BindingState; relogin: boolean; onCancel: () => void }) {
-  const open = binding.status === 'challenge_required'
-  const action = relogin ? '重新登录' : '绑定'
-
-  return <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onCancel() }}>
-    <DialogContent className="max-w-md">
-      <DialogHeader className="border-amber-500/20 bg-amber-500/[0.06]">
-        <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-300">
-          <ShieldAlert className="size-6" />
-        </div>
-        <DialogTitle>{action}需要安全验证</DialogTitle>
-        <DialogDescription>请在打开的抖音窗口完成官方安全验证，验证通过后{action}会自动继续。</DialogDescription>
-      </DialogHeader>
-      <div className="space-y-3 px-6 py-5 text-sm leading-6">
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3 text-amber-900 dark:text-amber-100">
-          <p className="font-medium">这是抖音官方验证</p>
-          <p className="mt-1 text-amber-900/75 dark:text-amber-100/75">不需要在本页面输入账号密码。请不要关闭抖音窗口，完成验证后保持当前页面打开。</p>
-        </div>
-        <p className="text-xs text-muted-foreground">当前流程会等待验证结果；验证成功后无需额外点击确认。</p>
-      </div>
-      <DialogFooter>
-        <Button variant="outline" onClick={onCancel}>
-          取消{relogin ? '重新登录' : '绑定'}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-}
-
 function BindingPage({ binding }: { binding: BindingController }) {
+  const navigate = useNavigate()
+  function close() {
+    if (binding.binding) {
+      void binding.cancelBinding().finally(() => void navigate({ to: '/accounts' }))
+      return
+    }
+    void navigate({ to: '/accounts' })
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-3">
@@ -112,25 +105,12 @@ function BindingPage({ binding }: { binding: BindingController }) {
         </div>
       </div>
 
-      {!binding.binding && (
-        <Card>
-          <CardHeader>
-            <CardTitle>选择登录方式</CardTitle>
-            <CardDescription>二维码和短信验证码都只用于本次绑定，不会保存你的手机号。</CardDescription>
-          </CardHeader>
-          <BindingMethodForm binding={binding} />
-        </Card>
-      )}
-
-      {binding.binding && <>
-        <AccountBindingPanel binding={binding.binding} relogin={binding.isRebinding} submittingCode={binding.submittingCode} onSubmitSMSCode={binding.binding.method === 'sms' ? binding.submitSMSCode : undefined} onCancel={() => void binding.cancelBinding()} />
-        <BindingChallengeDialog binding={binding.binding} relogin={binding.isRebinding} onCancel={() => void binding.cancelBinding()} />
-      </>}
+      <BindingDialog binding={binding} pageMode onClose={close} />
     </div>
   )
 }
 
-function BindingMethodForm({ binding, embedded = false }: { binding: BindingController; embedded?: boolean }) {
+function BindingMethodForm({ binding, embedded = false, onCancel }: { binding: BindingController; embedded?: boolean; onCancel?: () => void }) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     void binding.startBinding()
@@ -138,7 +118,7 @@ function BindingMethodForm({ binding, embedded = false }: { binding: BindingCont
 
   return (
     <form className="space-y-4" onSubmit={submit}>
-      <CardContent className="space-y-4">
+      <div className="space-y-4 px-6 py-6">
         <SelectField id={embedded ? 'binding-method' : 'binding-page-method'} label={binding.isRebinding ? '登录方式' : '绑定方式'} value={binding.bindingMethod} onChange={(value) => binding.setBindingMethod(value as BindingMethod)} options={[{ value: 'qr', label: bindingMethodLabel('qr') }, { value: 'sms', label: bindingMethodLabel('sms') }]} />
         {binding.bindingMethod === 'sms' && (
           <div className="space-y-1.5">
@@ -147,11 +127,13 @@ function BindingMethodForm({ binding, embedded = false }: { binding: BindingCont
             <p className="text-xs text-muted-foreground">手机号只用于本次登录流程，不写入账号资料。</p>
           </div>
         )}
-        <div className="flex justify-end gap-2">
-          {embedded && <Button type="button" variant="outline" onClick={binding.closeChoice}>取消</Button>}
+      </div>
+      <DialogFooter className="-mt-4">
+        <div className="flex w-full justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onCancel ?? binding.closeChoice}>取消</Button>
           <Button type="submit">{binding.isRebinding ? '开始重新登录' : '开始绑定'}</Button>
         </div>
-      </CardContent>
+      </DialogFooter>
     </form>
   )
 }
