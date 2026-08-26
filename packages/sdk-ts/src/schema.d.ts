@@ -2538,7 +2538,9 @@ export interface operations {
     checkAccountSession: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 accountId: components["parameters"]["AccountId"];
             };
@@ -2620,7 +2622,9 @@ export interface operations {
     syncAccountFriends: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 accountId: components["parameters"]["AccountId"];
             };
@@ -2642,7 +2646,9 @@ export interface operations {
     syncAccountConversations: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 accountId: components["parameters"]["AccountId"];
             };

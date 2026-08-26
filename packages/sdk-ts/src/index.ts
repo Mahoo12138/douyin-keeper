@@ -331,28 +331,28 @@ export async function createAccountBinding(accessToken: string, method: 'qr' | '
   return data
 }
 
-export async function checkAccountSession(accessToken: string, accountId: string) {
+export async function checkAccountSession(accessToken: string, accountId: string, idempotencyKey = crypto.randomUUID()) {
   const { data, error } = await api.POST('/accounts/{accountId}/session-check', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    params: { path: { accountId } },
+    headers: { Authorization: `Bearer ${accessToken}`, 'Idempotency-Key': idempotencyKey },
+    params: { path: { accountId }, header: { 'Idempotency-Key': idempotencyKey } },
   })
   if (error) throwApiError(error, 'session check failed')
   return data
 }
 
-export async function syncAccountFriends(accessToken: string, accountId: string) {
+export async function syncAccountFriends(accessToken: string, accountId: string, idempotencyKey = crypto.randomUUID()) {
   const { data, error } = await api.POST('/accounts/{accountId}/friends-sync', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    params: { path: { accountId } },
+    headers: { Authorization: `Bearer ${accessToken}`, 'Idempotency-Key': idempotencyKey },
+    params: { path: { accountId }, header: { 'Idempotency-Key': idempotencyKey } },
   })
   if (error) throwApiError(error, 'friend sync failed')
   return data
 }
 
-export async function syncAccountConversations(accessToken: string, accountId: string) {
+export async function syncAccountConversations(accessToken: string, accountId: string, idempotencyKey = crypto.randomUUID()) {
   const { data, error } = await api.POST('/accounts/{accountId}/conversations-sync', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    params: { path: { accountId } },
+    headers: { Authorization: `Bearer ${accessToken}`, 'Idempotency-Key': idempotencyKey },
+    params: { path: { accountId }, header: { 'Idempotency-Key': idempotencyKey } },
   })
   if (error) throwApiError(error, 'conversation sync failed')
   return data

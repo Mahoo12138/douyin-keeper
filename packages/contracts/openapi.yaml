@@ -712,6 +712,12 @@ paths:
       operationId: checkAccountSession
       parameters:
       - $ref: '#/components/parameters/AccountId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '202':
           description: Job created
@@ -748,6 +754,12 @@ paths:
       operationId: syncAccountFriends
       parameters:
       - $ref: '#/components/parameters/AccountId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '202':
           description: Job created
@@ -760,6 +772,12 @@ paths:
       operationId: syncAccountConversations
       parameters:
       - $ref: '#/components/parameters/AccountId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '202':
           description: Job created

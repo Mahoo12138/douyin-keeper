@@ -121,7 +121,7 @@ func (s *Server) handleAccountSessionCheck(w http.ResponseWriter, r *http.Reques
 		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid account id"))
 		return
 	}
-	jobID, err := s.accounts.RequestSessionCheck(r.Context(), p.UserID, accountID)
+	jobID, err := s.accounts.RequestSessionCheckWithKey(r.Context(), p.UserID, accountID, r.Header.Get("Idempotency-Key"))
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -136,7 +136,7 @@ func (s *Server) handleAccountFriendsSync(w http.ResponseWriter, r *http.Request
 		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid account id"))
 		return
 	}
-	jobID, err := s.accounts.RequestFriendsSync(r.Context(), p.UserID, accountID)
+	jobID, err := s.accounts.RequestFriendsSyncWithKey(r.Context(), p.UserID, accountID, r.Header.Get("Idempotency-Key"))
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -151,7 +151,7 @@ func (s *Server) handleAccountConversationsSync(w http.ResponseWriter, r *http.R
 		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid account id"))
 		return
 	}
-	jobID, err := s.accounts.RequestConversationsSync(r.Context(), p.UserID, accountID)
+	jobID, err := s.accounts.RequestConversationsSyncWithKey(r.Context(), p.UserID, accountID, r.Header.Get("Idempotency-Key"))
 	if err != nil {
 		writeError(w, r, err)
 		return

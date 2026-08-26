@@ -33,6 +33,39 @@ func (c *captureBindingJobCreator) CreateJob(_ context.Context, created *job.Job
 	return nil
 }
 
+type captureIdempotentJobCreator struct {
+	created  *job.Job
+	existing *job.Job
+}
+
+func (c *captureIdempotentJobCreator) CreateJob(_ context.Context, created *job.Job) error {
+	copy := *created
+	c.created = &copy
+	return nil
+}
+
+func (c *captureIdempotentJobCreator) GetByIdempotency(context.Context, int64, string) (*job.Job, error) {
+	return c.existing, nil
+}
+
+func TestSessionCheckIdempotencyReplaysTheOriginalJob(t *testing.T) {
+	publicID := uuid.New()
+	scope := "account.session_check.browser:" + publicID.String()
+	existing := &job.Job{PublicID: uuid.New(), IdempotencyScope: &scope}
+	repo := &releaseRepo{account: &Account{ID: 42, PublicID: publicID, UserID: 7, BindingStatus: BindingBound}}
+	jobs := &captureIdempotentJobCreator{existing: existing}
+	outboxRepo := &captureBindingOutbox{}
+	service := NewService(repo, inlineReleaseTx{}, nil, nil, jobs, outboxRepo)
+
+	got, err := service.RequestSessionCheckWithKey(context.Background(), 7, publicID, uuid.New().String())
+	if err != nil || got != existing.PublicID {
+		t.Fatalf("same account operation key should replay the original job: got=%s err=%v", got, err)
+	}
+	if jobs.created != nil || len(outboxRepo.messages) != 0 {
+		t.Fatalf("replay should not create another job or outbox message: job=%+v outbox=%d", jobs.created, len(outboxRepo.messages))
+	}
+}
+
 type captureBindingOutbox struct{ messages []outbox.Message }
 
 func (c *captureBindingOutbox) Add(_ context.Context, message outbox.Message) error {

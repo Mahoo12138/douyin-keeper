@@ -3,6 +3,9 @@ package account
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,6 +29,11 @@ type UserLocker interface {
 // JobCreator appends a generic job row; implemented by infra/postgres.
 type JobCreator interface {
 	CreateJob(ctx context.Context, j *job.Job) error
+}
+
+type IdempotentJobCreator interface {
+	JobCreator
+	GetByIdempotency(ctx context.Context, userID int64, key string) (*job.Job, error)
 }
 
 // TxManager mirrors infra/postgres slice.
@@ -236,6 +244,14 @@ func (s *Service) createBindingJob(ctx context.Context, acct *Account, method, p
 
 // RequestSessionCheck creates a generic job + outbox for worker-browser.
 func (s *Service) RequestSessionCheck(ctx context.Context, userID int64, publicID uuid.UUID) (uuid.UUID, error) {
+	return s.requestSessionCheck(ctx, userID, publicID, "")
+}
+
+func (s *Service) RequestSessionCheckWithKey(ctx context.Context, userID int64, publicID uuid.UUID, idempotencyKey string) (uuid.UUID, error) {
+	return s.requestSessionCheck(ctx, userID, publicID, idempotencyKey)
+}
+
+func (s *Service) requestSessionCheck(ctx context.Context, userID int64, publicID uuid.UUID, idempotencyKey string) (uuid.UUID, error) {
 	acct, err := s.repo.GetOwned(ctx, userID, publicID)
 	if err != nil {
 		return uuid.Nil, err
@@ -244,12 +260,20 @@ func (s *Service) RequestSessionCheck(ctx context.Context, userID int64, publicI
 		return uuid.Nil, apperr.Conflict(apperr.CodeConflict, "account is not bound")
 	}
 	return s.createPlatformJob(ctx, acct, "account.session_check.browser",
-		outbox.KindSessionCheckBrowser, false)
+		outbox.KindSessionCheckBrowser, false, idempotencyKey)
 }
 
 // RequestFriendsSync is entitlement-gated (docs/06: friends sync is a gated
 // entry point).
 func (s *Service) RequestFriendsSync(ctx context.Context, userID int64, publicID uuid.UUID) (uuid.UUID, error) {
+	return s.requestFriendsSync(ctx, userID, publicID, "")
+}
+
+func (s *Service) RequestFriendsSyncWithKey(ctx context.Context, userID int64, publicID uuid.UUID, idempotencyKey string) (uuid.UUID, error) {
+	return s.requestFriendsSync(ctx, userID, publicID, idempotencyKey)
+}
+
+func (s *Service) requestFriendsSync(ctx context.Context, userID int64, publicID uuid.UUID, idempotencyKey string) (uuid.UUID, error) {
 	acct, err := s.repo.GetOwned(ctx, userID, publicID)
 	if err != nil {
 		return uuid.Nil, err
@@ -267,13 +291,21 @@ func (s *Service) RequestFriendsSync(ctx context.Context, userID int64, publicID
 		return uuid.Nil, gateErr(dec.ReasonCode)
 	}
 	return s.createPlatformJob(ctx, acct, "account.friends_sync.browser",
-		outbox.KindFriendsSyncBrowser, false)
+		outbox.KindFriendsSyncBrowser, false, idempotencyKey)
 }
 
 // RequestConversationsSync starts an account-scoped conversation crawl. It
 // uses the same entitlement gate as friend sync because both are read-only
 // platform indexing operations for the bound account.
 func (s *Service) RequestConversationsSync(ctx context.Context, userID int64, publicID uuid.UUID) (uuid.UUID, error) {
+	return s.requestConversationsSync(ctx, userID, publicID, "")
+}
+
+func (s *Service) RequestConversationsSyncWithKey(ctx context.Context, userID int64, publicID uuid.UUID, idempotencyKey string) (uuid.UUID, error) {
+	return s.requestConversationsSync(ctx, userID, publicID, idempotencyKey)
+}
+
+func (s *Service) requestConversationsSync(ctx context.Context, userID int64, publicID uuid.UUID, idempotencyKey string) (uuid.UUID, error) {
 	acct, err := s.repo.GetOwned(ctx, userID, publicID)
 	if err != nil {
 		return uuid.Nil, err
@@ -291,7 +323,7 @@ func (s *Service) RequestConversationsSync(ctx context.Context, userID int64, pu
 		return uuid.Nil, gateErr(dec.ReasonCode)
 	}
 	return s.createPlatformJob(ctx, acct, "account.conversations_sync.browser",
-		outbox.KindConversationsSyncBrowser, false)
+		outbox.KindConversationsSyncBrowser, false, idempotencyKey)
 }
 
 // Pause defers all future automated work for the account (risk / user choice).
@@ -332,10 +364,45 @@ func (s *Service) Release(ctx context.Context, userID int64, publicID uuid.UUID)
 }
 
 // createPlatformJob writes a generic job + outbox relay inside one tx.
-func (s *Service) createPlatformJob(ctx context.Context, acct *Account, typ string, kind string, cancelable bool) (uuid.UUID, error) {
+func (s *Service) createPlatformJob(ctx context.Context, acct *Account, typ string, kind string, cancelable bool, idempotencyKey string) (uuid.UUID, error) {
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	var idempotent IdempotentJobCreator
+	if idempotencyKey != "" {
+		if _, err := uuid.Parse(idempotencyKey); err != nil {
+			return uuid.Nil, apperr.Validation(apperr.CodeConflict, "a valid Idempotency-Key is required")
+		}
+		var ok bool
+		idempotent, ok = s.jobs.(IdempotentJobCreator)
+		if !ok {
+			return uuid.Nil, apperr.New(apperr.CodeInternal, apperr.KindInternal, "idempotent job storage is not configured")
+		}
+	}
+	scope := fmt.Sprintf("%s:%s", typ, acct.PublicID)
+	resolveExisting := func(existing *job.Job) (uuid.UUID, error) {
+		if existing == nil {
+			return uuid.Nil, nil
+		}
+		if existing.IdempotencyScope == nil || *existing.IdempotencyScope != scope {
+			return uuid.Nil, apperr.Conflict(apperr.CodeConflict, "Idempotency-Key was already used for another account operation")
+		}
+		return existing.PublicID, nil
+	}
+	if idempotent != nil {
+		existing, err := idempotent.GetByIdempotency(ctx, acct.UserID, idempotencyKey)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		if existing != nil {
+			return resolveExisting(existing)
+		}
+	}
 	var jobPublicID uuid.UUID
 	err := s.tx.WithinTx(ctx, func(tctx context.Context) error {
 		j := newPlatformJob(acct, typ, cancelable, s.now())
+		if idempotencyKey != "" {
+			j.IdempotencyKey = &idempotencyKey
+			j.IdempotencyScope = &scope
+		}
 		if err := s.jobs.CreateJob(tctx, j); err != nil {
 			return err
 		}
@@ -349,6 +416,13 @@ func (s *Service) createPlatformJob(ctx context.Context, acct *Account, typ stri
 		return nil
 	})
 	if err != nil {
+		if idempotent != nil && errors.Is(err, job.ErrIdempotencyConflict) {
+			existing, lookupErr := idempotent.GetByIdempotency(ctx, acct.UserID, idempotencyKey)
+			if lookupErr != nil {
+				return uuid.Nil, lookupErr
+			}
+			return resolveExisting(existing)
+		}
 		return uuid.Nil, err
 	}
 	return jobPublicID, nil
