@@ -469,6 +469,7 @@ page {
 .me-primary-button::after, .me-secondary-button::after { display: none; }
 .me-primary-button[disabled], .me-secondary-button[disabled] { opacity: .6; }
 .me-code-input { box-sizing: border-box; width: 100%; height: 78rpx; margin-top: 16rpx; padding: 0 18rpx; border: 1rpx solid #dbe7e1; border-radius: 13rpx; background: #fbfdfc; font-size: 25rpx; }
+.me-auth-alternative { margin-top: 14rpx; }
 .me-auth-card .me-secondary-button { margin-top: 14rpx; }
 .entitlement-hero { margin-top: 22rpx; min-height: 244rpx; padding: 24rpx; color: #fff; background: linear-gradient(135deg, #17c88b 0%, #47c883 100%); }
 .entitlement-hero-label, .entitlement-hero-date { display: block; color: rgba(255,255,255,.8); font-size: 21rpx; }

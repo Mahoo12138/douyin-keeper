@@ -106,6 +106,7 @@ func (s *Server) Router() http.Handler {
 		api.Group(func(public chi.Router) {
 			public.With(RateLimit(30, time.Minute)).Post("/auth/register", s.handleRegister)
 			public.With(RateLimit(30, time.Minute)).Post("/auth/login", s.handleLogin)
+			public.With(RateLimit(30, time.Minute)).Post("/auth/mini/login", s.handleMiniLogin)
 			public.With(RateLimit(30, time.Minute)).Post("/auth/refresh", s.handleRefresh)
 			public.With(RateLimit(30, time.Minute)).Post("/auth/wechat-mini/link", s.handleWechatLink)
 			public.With(RateLimit(30, time.Minute)).Post("/auth/wechat-mini/login", s.handleWechatLogin)

@@ -121,6 +121,14 @@ func TestAuthRegisterLoginMe(t *testing.T) {
 		t.Fatalf("login returned different user")
 	}
 
+	miniResult, err := svc.Login(ctx, username, "password123", auth.ClientMini)
+	if err != nil {
+		t.Fatalf("mini login: %v", err)
+	}
+	if miniResult.User.PublicID != res.User.PublicID || miniResult.RefreshToken == "" {
+		t.Fatalf("unexpected mini login session: %+v", miniResult)
+	}
+
 	// wrong password → INVALID_CREDENTIALS
 	if _, err := svc.Login(ctx, username, "wrongpass", auth.ClientWeb); err == nil {
 		t.Fatalf("expected invalid credentials error")

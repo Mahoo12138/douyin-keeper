@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, getMe, listMyEntitlementGrants, listNotifications, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, getMe, listMyEntitlementGrants, listNotifications, loginPassword, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -47,6 +47,26 @@ describe('mini API auth recovery', () => {
     await expect(getMe('expired-access')).rejects.toMatchObject({ code: 'UNAUTHENTICATED', statusCode: 401 })
     expect(getAccessToken()).toBeNull()
     expect(getRefreshToken()).toBeNull()
+  })
+
+  it('logs a mini client in with local account credentials', async () => {
+    requestMock.mockResolvedValueOnce({
+      statusCode: 200,
+      data: {
+        access_token: 'access-mini',
+        refresh_token: 'refresh-mini',
+        user: { id: 'user-1', display_name: '用户' },
+      },
+    })
+
+    const session = await loginPassword('User-1', 'password123')
+
+    expect(session.refresh_token).toBe('refresh-mini')
+    expect(requestMock.mock.calls[0]?.[0]).toMatchObject({
+      url: '/api/v1/auth/mini/login',
+      method: 'POST',
+      data: { username: 'User-1', password: 'password123' },
+    })
   })
 
   it('loads entitlement and submits a redeem code through the shared API client', async () => {

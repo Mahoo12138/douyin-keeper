@@ -55,18 +55,28 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	s.handlePasswordLogin(w, r, auth.ClientWeb)
+}
+
+func (s *Server) handleMiniLogin(w http.ResponseWriter, r *http.Request) {
+	s.handlePasswordLogin(w, r, auth.ClientMini)
+}
+
+func (s *Server) handlePasswordLogin(w http.ResponseWriter, r *http.Request, client auth.ClientType) {
 	var req loginReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid body"))
 		return
 	}
-	res, err := s.auth.Login(r.Context(), req.Username, req.Password, auth.ClientWeb)
+	res, err := s.auth.Login(r.Context(), req.Username, req.Password, client)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	s.setRefreshCookie(w, r, res)
-	writeOK(w, authResponse(res, false))
+	if client == auth.ClientWeb {
+		s.setRefreshCookie(w, r, res)
+	}
+	writeOK(w, authResponse(res, client == auth.ClientMini))
 }
 
 // handleRefresh rotates the refresh token. Web clients send the HttpOnly
