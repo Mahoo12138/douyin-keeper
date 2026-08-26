@@ -88,11 +88,12 @@ type SessionCheckDeps struct {
 		IncrSucceeded(context.Context, int64, string) error
 		IncrFailed(context.Context, int64, string) error
 	}
-	Tx       job.TxManager
-	WorkerID string
-	LockTTL  time.Duration
-	Now      func() time.Time
-	Metrics  *telemetry.Metrics
+	Tx          job.TxManager
+	WorkerID    string
+	ProfileRoot string
+	LockTTL     time.Duration
+	Now         func() time.Time
+	Metrics     *telemetry.Metrics
 }
 
 func NewBrowserMux(loader PayloadLoader, deps SessionCheckDeps, log *slog.Logger) *asynq.ServeMux {
@@ -307,13 +308,17 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, deps.Now); cancelled || err != nil {
 			return err
 		}
+		profileDir, err := accountProfileDir(deps.ProfileRoot, acct.PublicID)
+		if err != nil {
+			return finishSessionCheckFailure(ctx, deps, claimed, acct.ID, apperr.CodeInternal)
+		}
 		var response *sidecar.Response
 		err = deps.Sessions.WithTempFile(ctx, acct.ID, acct.UserPublicID, acct.PublicID, func(path string) error {
 			requestID := uuid.New().String()
 			response, err = deps.Sidecar.Call(ctx, sidecar.Request{
 				ProtocolVersion: sidecar.ProtocolVersion, RequestID: requestID,
 				Op: sidecar.OpsSessionValidate, DeadlineMS: 60_000,
-				Input: map[string]any{"session": map[string]any{"kind": "playwright_storage_state_file", "path": path}},
+				Input: sessionInput(path, profileDir),
 			})
 			return err
 		})

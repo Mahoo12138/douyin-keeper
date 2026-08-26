@@ -229,6 +229,10 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		if code := sendAccountStateError(acct, now()); code != "" {
 			return failWithQuota(code)
 		}
+		profileDir, err := accountProfileDir(deps.ProfileRoot, acct.PublicID)
+		if err != nil {
+			return failWithQuota(apperr.CodeInternal)
+		}
 		target, err := deps.Targets.GetSendTarget(ctx, claimed.AccountID, claimed.FriendID)
 		if err != nil || target == nil {
 			code := apperr.CodeAdapterIncompatible
@@ -247,7 +251,7 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
 				Op: spec.Operation, DeadlineMS: 30_000,
 				Input: map[string]any{
-					"session": map[string]any{"kind": "playwright_storage_state_file", "path": path},
+					"session": map[string]any{"kind": "playwright_storage_state_file", "path": path, "profile_dir": profileDir},
 					"target":  targetInput,
 					"message": spec.Message,
 				},

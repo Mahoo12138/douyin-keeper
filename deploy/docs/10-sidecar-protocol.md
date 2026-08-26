@@ -109,12 +109,20 @@ MVP：
 {
   "session": {
     "kind": "playwright_storage_state_file",
-    "path": "/run/douyin-keeper/session/abc.json"
+    "path": "/run/douyin-keeper/session/abc.json",
+    "profile_dir": "/var/lib/douyin-keeper/profiles/account-<account-public-id>"
   }
 }
 ```
 
-长期可换成匿名 pipe / memfd，而不改变业务协议。
+`profile_dir` 是账号隔离边界，不是 API 用户输入。Go Worker 只使用账号公共 UUID
+生成目录名，并确保目录权限为 `0700`；Node.js Playwright Sidecar 以 persistent context
+打开该目录。若 Profile 已有有效 session cookie，Sidecar 直接复用；若为空，则从本次
+`storage_state` 临时文件补种 Cookie。任务完成后关闭 context，但不删除账号 Profile。
+
+Profile 中可能包含平台登录态，部署必须使用专用运行用户、受限挂载目录和备份排除规则；
+数据库中的加密 `account_sessions` 仍是恢复与审计真源，Profile 不是业务数据库。长期可
+换成匿名 pipe / memfd，而不改变业务协议。
 
 ## 4. Operation 命名
 
@@ -223,9 +231,10 @@ Result：
 }
 ```
 
-`login_handle` 只在该 Sidecar 实例/临时 profile 生命周期内有效。Sidecar 会周期清理
-已过期且未再次 poll/verify 的 handle 并关闭对应 Playwright context；Worker 仍负责在
-Job 完成、取消或 lease 回收时删除临时 Profile。
+`login_handle` 只在该 Sidecar 实例和本次登录 context 生命周期内有效。Sidecar 会周期清理
+已过期且未再次 poll/verify 的 handle 并关闭对应 Playwright context；绑定成功后账号 Profile
+保留，供后续 session-check、好友同步和发送任务复用。临时 session 导出文件仍由 Worker
+在 Job 完成、取消或 lease 回收时删除。
 
 ### `login.qr.poll`
 

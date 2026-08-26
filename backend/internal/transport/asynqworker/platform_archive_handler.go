@@ -107,6 +107,10 @@ func platformArchiveHandler(loader PayloadLoader, deps SessionCheckDeps) func(co
 		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, now); cancelled || err != nil {
 			return err
 		}
+		profileDir, err := accountProfileDir(deps.ProfileRoot, acct.PublicID)
+		if err != nil {
+			return fail(apperr.CodeInternal)
+		}
 
 		var result platformArchiveResult
 		err = deps.Sessions.WithTempFile(ctx, acct.ID, acct.UserPublicID, acct.PublicID, func(path string) error {
@@ -116,7 +120,7 @@ func platformArchiveHandler(loader PayloadLoader, deps SessionCheckDeps) func(co
 				Op:              sidecar.OpsConversationsArchive,
 				DeadlineMS:      120_000,
 				Input: map[string]any{
-					"session": map[string]any{"kind": "playwright_storage_state_file", "path": path},
+					"session": map[string]any{"kind": "playwright_storage_state_file", "path": path, "profile_dir": profileDir},
 					"target": map[string]any{
 						"platform_conversation_id": payload.PlatformConversationID,
 						"platform_user_id":         payload.PlatformUserID,

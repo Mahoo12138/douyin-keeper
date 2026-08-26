@@ -16,7 +16,7 @@
     "deployment:check": "node scripts/validate-deployment.mjs",
     "test:contracts": "pnpm contracts:check",
     "test:backend": "go -C backend test ./...",
-    "test:sidecar": "python3 -m pytest sidecars/playwright/tests -q",
+    "test:sidecar": "npm --prefix sidecars/playwright-node test",
     "test:web": "pnpm --filter @douyin-keeper/sdk-ts test && pnpm --filter @douyin-keeper/web test",
     "test": "pnpm test:contracts && pnpm test:backend && pnpm test:sidecar && pnpm test:web"
   }

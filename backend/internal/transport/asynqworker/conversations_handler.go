@@ -97,6 +97,10 @@ func conversationsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(
 			return fail(apperr.CodeAccountBusy)
 		}
 		defer releaseWorkerLock(ctx, lock, "account")
+		profileDir, err := accountProfileDir(deps.ProfileRoot, acct.PublicID)
+		if err != nil {
+			return fail(apperr.CodeInternal)
+		}
 
 		var items []conversation.SyncItem
 		seen := make(map[string]struct{})
@@ -111,7 +115,7 @@ func conversationsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(
 					ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
 					Op: sidecar.OpsConversationsList, DeadlineMS: 120_000,
 					Input: map[string]any{
-						"session": map[string]any{"kind": "playwright_storage_state_file", "path": path},
+						"session": map[string]any{"kind": "playwright_storage_state_file", "path": path, "profile_dir": profileDir},
 						"cursor":  cursor, "limit": 100,
 					},
 				})

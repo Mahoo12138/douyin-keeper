@@ -127,7 +127,7 @@ func main() {
 		Friends: friendRepo, Conversations: conversationRepo, Targets: friendRepo, Tasks: taskRepo, Sends: sendRepo, Capabilities: capabilityRepo,
 		Outbox: outboxRepo,
 		Health: healthService, Risk: riskService, Entitlement: entitlementSvc, Quota: entitlementSvc,
-		Tx: workerTx, WorkerID: protocolWorkerID, LockTTL: 2 * time.Minute, Metrics: metrics,
+		Tx: workerTx, WorkerID: protocolWorkerID, ProfileRoot: cfg.LoginProfileDir, LockTTL: 2 * time.Minute, Metrics: metrics,
 	}
 	var wechatSender *wechatinfra.Client
 	if cfg.WechatAppID != "" && cfg.WechatAppSecret != "" {

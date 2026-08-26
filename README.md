@@ -16,7 +16,7 @@ apps/mini             # WeChat mini program (Taro + React) skeleton
 packages/contracts    # OpenAPI 3.1 + sidecar JSON Schema (single source of truth)
 packages/sdk-ts       # generated TypeScript API client
 packages/ui-web       # shared shadcn/ui primitives, reference themes, color schemes, and theme provider
-sidecars/playwright   # Python NDJSON sidecar (Douyin automation runtime, skeleton at M0)
+sidecars/playwright-node # Node.js + Playwright NDJSON sidecar (Douyin automation runtime)
 db/migrations         # see note below
 deploy/               # compose + Dockerfiles (production + dev)
 docs/                 # authoritative design documents
@@ -65,7 +65,7 @@ require `TEST_DATABASE_URL` and skip cleanly without it):
 
 ```bash
 docker compose -f deploy/compose/docker-compose.dev.yml up -d
-python3 -m pip install -r sidecars/playwright/requirements.txt
+pnpm --filter ./sidecars/playwright-node install --ignore-scripts
 export TEST_DATABASE_URL='postgres://keeper:change-me@localhost:5432/douyin_keeper_test?sslmode=disable'
 pnpm test
 ```

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -183,12 +182,15 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		if err != nil {
 			return fail(apperr.CodeInternal)
 		}
-		profileDir, err := os.MkdirTemp(profileRoot, "bind-")
+		profileDir, err := accountProfileDir(profileRoot, acct.PublicID)
 		if err != nil {
 			return fail(apperr.CodeInternal)
 		}
-		defer cleanupWorkerResource(ctx, "login_profile", func() error { return os.RemoveAll(profileDir) })
-		exportPath := filepath.Join(profileDir, "session-state.json")
+		exportPath, cleanupExport, err := createSessionExportFile(profileRoot)
+		if err != nil {
+			return fail(apperr.CodeInternal)
+		}
+		defer cleanupExport()
 
 		var startResponse *sidecar.Response
 		cancelled, callErr := callIfNotCancelledWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed), func() error {
@@ -340,6 +342,10 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 	if err != nil {
 		return finishBindFailure(ctx, deps, claimed, apperr.CodeAdapterIncompatible)
 	}
+	profileDir, err := accountProfileDir(deps.ProfileRoot, acct.PublicID)
+	if err != nil {
+		return finishBindFailure(ctx, deps, claimed, apperr.CodeInternal)
+	}
 	if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 		return err
 	}
@@ -349,7 +355,7 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 			response, err := deps.Sidecar.Call(ctx, sidecar.Request{
 				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
 				Op: sidecar.OpsSessionValidate, DeadlineMS: 60_000,
-				Input: map[string]any{"session": map[string]any{"kind": "playwright_storage_state_file", "path": exportPath}},
+				Input: sessionInput(exportPath, profileDir),
 			})
 			if err != nil {
 				return err

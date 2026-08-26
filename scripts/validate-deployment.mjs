@@ -92,12 +92,13 @@ export function assertDockerfileContract(backendDockerfile, workerDockerfile) {
     'USER keeper',
   ]
   const workerRequirements = [
-    'COPY sidecars/playwright ./sidecars/playwright',
-    'python -m playwright install --with-deps chromium',
+    'COPY sidecars/playwright-node ./sidecars/playwright-node',
+    'npx playwright install --with-deps chromium',
     '/app/scheduler',
     '/app/worker-interactive',
     '/app/worker-browser',
     '/app/worker-light',
+    'USER node',
   ]
   for (const requirement of backendRequirements) {
     if (!backendDockerfile.includes(requirement)) throw new Error(`backend Dockerfile missing: ${requirement}`)

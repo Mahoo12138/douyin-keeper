@@ -66,7 +66,7 @@ PC web  +  Admin (go:embed into backend)  +  WeChat mini (independent)
                     │                                                        │            │
                     └──────► worker-interactive / worker-browser / worker-light ──────┘
                                           │
-                             Playwright Sidecar (Python) / Protocol Sidecar (Node, optional)
+                             Node.js Playwright Sidecar / Protocol Sidecar (Node, optional)
                                           │
                                         Douyin
 ```

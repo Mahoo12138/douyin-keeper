@@ -106,13 +106,17 @@ func friendsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, now); cancelled || err != nil {
 			return err
 		}
+		profileDir, err := accountProfileDir(deps.ProfileRoot, acct.PublicID)
+		if err != nil {
+			return finishFriendsFailure(ctx, deps, claimed, acct.ID, apperr.CodeInternal, now)
+		}
 
 		var result friendsListResult
 		err = deps.Sessions.WithTempFile(ctx, acct.ID, acct.UserPublicID, acct.PublicID, func(path string) error {
 			response, callErr := deps.Sidecar.Call(ctx, sidecar.Request{
 				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
 				Op: sidecar.OpsFriendsList, DeadlineMS: 120_000,
-				Input: map[string]any{"session": map[string]any{"kind": "playwright_storage_state_file", "path": path}},
+				Input: sessionInput(path, profileDir),
 			})
 			if callErr != nil {
 				return callErr

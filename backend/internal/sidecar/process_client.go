@@ -307,7 +307,7 @@ func validateOperationInput(op string, input any) error {
 	if err != nil {
 		return fmt.Errorf("sidecar: message.send_first %w", err)
 	}
-	if err := rejectUnknownFields(session, "kind", "path"); err != nil {
+	if err := rejectUnknownFields(session, "kind", "path", "profile_dir"); err != nil {
 		return fmt.Errorf("sidecar: message.send_first session %w", err)
 	}
 	kind, kindErr := stringField(session, "kind")

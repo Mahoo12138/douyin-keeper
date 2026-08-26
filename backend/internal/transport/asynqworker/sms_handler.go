@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -115,12 +113,15 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 		if err != nil {
 			return fail(apperr.CodeInternal)
 		}
-		profileDir, err := os.MkdirTemp(profileRoot, "sms-bind-")
+		profileDir, err := accountProfileDir(profileRoot, acct.PublicID)
 		if err != nil {
 			return fail(apperr.CodeInternal)
 		}
-		defer cleanupWorkerResource(ctx, "login_profile", func() error { return os.RemoveAll(profileDir) })
-		exportPath := filepath.Join(profileDir, "session-state.json")
+		exportPath, cleanupExport, err := createSessionExportFile(profileRoot)
+		if err != nil {
+			return fail(apperr.CodeInternal)
+		}
+		defer cleanupExport()
 
 		var startResponse *sidecar.Response
 		cancelled, callErr := callIfNotCancelledWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed), func() error {

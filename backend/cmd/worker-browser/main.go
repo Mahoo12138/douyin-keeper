@@ -107,7 +107,7 @@ func main() {
 		Health:       healthService,
 		Risk:         riskService,
 		Entitlement:  entitlementSvc, Quota: entitlementSvc, Tx: workerTx,
-		WorkerID: workerID, LockTTL: 2 * time.Minute, Metrics: metrics,
+		WorkerID: workerID, ProfileRoot: cfg.LoginProfileDir, LockTTL: 2 * time.Minute, Metrics: metrics,
 	}, log)
 	srv := asynqqueue.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr}, asynqworker.ServerConfig("browser", cfg.BrowserConcurrency))
 	log.Info("worker-browser starting")
