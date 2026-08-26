@@ -69,6 +69,10 @@ type bindIdentity struct {
 	AvatarURL      *string `json:"avatar_url"`
 }
 
+func qrStartInput(profileDir string, forceLogin bool) map[string]any {
+	return map[string]any{"profile_dir": profileDir, "locale": "zh-CN", "force_login": forceLogin}
+}
+
 func cancelQRSession(ctx context.Context, client sidecar.Client, loginHandle string) {
 	if client == nil || loginHandle == "" {
 		return
@@ -198,7 +202,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			startResponse, callErr = startQRWithRecovery(ctx, deps.Sidecar, sidecar.Request{
 				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
 				Op: sidecar.OpsLoginQRStart, DeadlineMS: 60_000,
-				Input: map[string]any{"profile_dir": profileDir, "locale": "zh-CN"},
+				Input: qrStartInput(profileDir, isRebindJob(claimed)),
 			})
 			return callErr
 		})

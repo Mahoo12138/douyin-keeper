@@ -9,6 +9,10 @@ export function tasksForAccount(tasks: AccountDetailTask[], accountId: string) {
 	return tasks.filter((task) => task.account_id === accountId)
 }
 
+export function canSyncFriends(account: Pick<components['schemas']['Account'], 'binding_status' | 'session_status'> | null | undefined) {
+	return account?.binding_status === 'bound' && account.session_status === 'valid'
+}
+
 export function accountTodayIntentFilters(accountId: string, range: { from: string; to: string }) {
 	return { account_id: accountId, from: range.from, to: range.to }
 }

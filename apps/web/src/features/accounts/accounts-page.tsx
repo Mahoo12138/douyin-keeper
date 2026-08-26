@@ -19,6 +19,7 @@ import { AccountList, EmptyAccounts } from './account-list'
 import type { Account } from './account-types'
 import { CapabilityPanel } from './capability-panel'
 import { useAccountsQuery } from './use-accounts-query'
+import { canSyncFriends } from './account-detail-utils'
 
 export function AccountsPage() {
   const token = getToken()
@@ -37,6 +38,10 @@ export function AccountsPage() {
 
   async function runAccountAction(account: Account, action: 'session' | 'friends' | 'pause' | 'resume') {
     if (!token) return
+    if (action === 'friends' && !canSyncFriends(account)) {
+      toast.error('当前账号会话已过期，请重新登录后再同步好友')
+      return
+    }
     const key = `${account.id}:${action}`
     setBusyAction(key)
     try {

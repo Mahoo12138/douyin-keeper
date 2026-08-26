@@ -326,8 +326,9 @@ async function startQr(input) {
   const profile = await profileDirectory(input);
   const { context, page } = await launchProfile(profile);
   try {
+    if (input?.force_login === true) await context.clearCookies();
     await page.goto(HOME_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
-    if (!(await hasSessionCookie(await sessionCookies(page)))) await clickLogin(page);
+    if (input?.force_login === true || !(await hasSessionCookie(await sessionCookies(page)))) await clickLogin(page);
     const result = await waitForQrOrChallenge(page);
     if (!result.qr && !result.challenge) {
       await context.close();

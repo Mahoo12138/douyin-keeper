@@ -29,8 +29,9 @@ type smsVerifyResult struct {
 	Identity        bindIdentity `json:"identity"`
 }
 
-func smsStartInput(profileDir, phone string) map[string]any {
-	return map[string]any{"profile_dir": profileDir, "phone": strings.TrimSpace(phone), "locale": "zh-CN"}
+func smsStartInput(profileDir, phone string, forceLogin ...bool) map[string]any {
+	force := len(forceLogin) > 0 && forceLogin[0]
+	return map[string]any{"profile_dir": profileDir, "phone": strings.TrimSpace(phone), "locale": "zh-CN", "force_login": force}
 }
 
 func smsVerifyInput(loginHandle, code, exportPath string) map[string]any {
@@ -129,7 +130,7 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 			startResponse, callErr = deps.Sidecar.Call(ctx, sidecar.Request{
 				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
 				Op: sidecar.OpsLoginSMSStart, DeadlineMS: 60_000,
-				Input: smsStartInput(profileDir, ref.Phone),
+				Input: smsStartInput(profileDir, ref.Phone, isRebindJob(claimed)),
 			})
 			return callErr
 		})

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { accountTodayIntentFilters, friendsById, summarizeAccountIntents, tasksForAccount } from '../src/features/accounts/account-detail-utils.ts'
+import { accountTodayIntentFilters, canSyncFriends, friendsById, summarizeAccountIntents, tasksForAccount } from '../src/features/accounts/account-detail-utils.ts'
 
 test('account today filters preserve account and product day boundaries', () => {
 	assert.deepEqual(accountTodayIntentFilters('account-a', { from: '2026-08-24T16:00:00.000Z', to: '2026-08-25T16:00:00.000Z' }), {
@@ -38,4 +38,11 @@ test('friendsById provides stable lookup for task rows', () => {
 	const friends = [{ id: 'f1', display_name: '小甲' }, { id: 'f2', display_name: '小乙' }]
 
 	assert.equal(friendsById(friends).get('f2')?.display_name, '小乙')
+})
+
+test('canSyncFriends only allows a bound account with a valid session', () => {
+	assert.equal(canSyncFriends({ binding_status: 'bound', session_status: 'valid' }), true)
+	assert.equal(canSyncFriends({ binding_status: 'bound', session_status: 'expired' }), false)
+	assert.equal(canSyncFriends({ binding_status: 'bound', session_status: 'challenge_required' }), false)
+	assert.equal(canSyncFriends({ binding_status: 'unbound', session_status: 'valid' }), false)
 })

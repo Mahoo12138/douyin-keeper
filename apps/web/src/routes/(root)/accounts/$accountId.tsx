@@ -12,7 +12,7 @@ import { CapabilityPanel } from '@/features/accounts/capability-panel'
 import { bindingLabel, formatDate, riskLabel, sessionLabel, StatusBadge } from '@/features/accounts/account-status'
 import { type Account, type Capability } from '@/features/accounts/account-types'
 import { useAccountsQuery } from '@/features/accounts/use-accounts-query'
-import { accountTodayIntentFilters, friendsById, summarizeAccountIntents, tasksForAccount } from '@/features/accounts/account-detail-utils'
+import { accountTodayIntentFilters, canSyncFriends, friendsById, summarizeAccountIntents, tasksForAccount } from '@/features/accounts/account-detail-utils'
 import { todayRange } from '@/features/dashboard/dashboard-utils'
 import { flattenPageItems } from '@/lib/query-utils'
 import { FriendTable } from '@/features/friends/friend-table'
@@ -55,6 +55,10 @@ function AccountDetailPage() {
 
 	async function runAccountAction(action: 'session' | 'friends') {
 		if (!token) return
+		if (action === 'friends' && !canSyncFriends(account)) {
+			toast.error('当前账号会话已过期，请重新登录后再同步好友')
+			return
+		}
 		setBusyAction(action)
 		try {
 			const job = action === 'session' ? await checkAccountSession(token, accountId) : await syncAccountFriends(token, accountId)
@@ -97,7 +101,7 @@ function AccountDetailPage() {
 					<Avatar className="size-14"><AvatarImage src={account.avatar_url ?? undefined} alt={`${account.nickname || '抖音账号'}头像`} /><AvatarFallback><Smartphone className="size-5" /></AvatarFallback></Avatar>
 					<div className="min-w-0"><p className="text-sm font-medium text-primary">账号详情</p><h1 className="mt-1 truncate text-2xl font-semibold tracking-tight">{account.nickname || '未命名账号'}</h1><div className="mt-2 flex flex-wrap gap-1.5"><StatusBadge label={bindingLabel(account.binding_status)} variant={account.binding_status === 'bound' ? 'success' : 'muted'} /><StatusBadge label={sessionLabel(account.session_status)} variant={account.session_status === 'valid' ? 'success' : account.session_status === 'expired' ? 'destructive' : 'warning'} /><StatusBadge label={riskLabel(account.risk_status)} variant={account.risk_status === 'normal' ? 'success' : account.risk_status === 'paused' ? 'destructive' : 'warning'} /></div></div>
 				</div>
-				<div className="flex flex-wrap gap-2 sm:justify-end"><Button variant="outline" onClick={() => void runAccountAction('session')} disabled={busyAction !== null}><RefreshCw className={busyAction === 'session' ? 'animate-spin' : ''} />检查登录态</Button><Button onClick={() => void runAccountAction('friends')} disabled={busyAction !== null}><UsersRound />同步好友</Button></div>
+				<div className="flex flex-wrap gap-2 sm:justify-end"><Button variant="outline" onClick={() => void runAccountAction('session')} disabled={busyAction !== null}><RefreshCw className={busyAction === 'session' ? 'animate-spin' : ''} />检查登录态</Button><Button onClick={() => void runAccountAction('friends')} disabled={busyAction !== null || !canSyncFriends(account)} title={!canSyncFriends(account) ? '请重新登录后再同步好友' : undefined}><UsersRound />同步好友</Button></div>
 			</div>
 
 			<Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} id="account-detail-tabs">

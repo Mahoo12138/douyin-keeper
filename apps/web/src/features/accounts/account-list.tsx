@@ -4,6 +4,7 @@ import { ArrowRight, Pause, Play, RefreshCw, Smartphone, Trash2, UsersRound } fr
 
 import type { Account } from './account-types'
 import { bindingLabel, formatDate, riskLabel, sessionLabel, StatusBadge } from './account-status'
+import { canSyncFriends } from './account-detail-utils'
 import { AccountBindingFlow } from './account-binding-flow'
 
 export function AccountList({ accounts, selectedAccountId, busyAction, onSelect, onSession, onFriends, onPause, onRelease }: {
@@ -76,7 +77,7 @@ function AccountRow({ account, selected, busyAction, onSelect, onSession, onFrie
             <RefreshCw />
             会话检查
           </Button>
-          <Button variant="outline" size="sm" onClick={onFriends} disabled={busyAction !== null}>
+          <Button variant="outline" size="sm" onClick={onFriends} disabled={busyAction !== null || !canSyncFriends(account)} title={!canSyncFriends(account) ? '请重新登录后再同步好友' : undefined}>
             <UsersRound />
             同步好友
           </Button>

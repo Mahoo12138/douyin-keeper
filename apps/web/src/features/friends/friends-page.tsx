@@ -13,6 +13,7 @@ import type { Friend, SparkFilter, TaskFilter } from './friend-types'
 import { FriendTable } from './friend-table'
 import { isValidBulkWindow, normalizeTimeInput, selectAllResolvedFriends, tasksForSelectedFriends, toggleSelectedFriend } from './friend-bulk-utils'
 import { useAccountsQuery } from '../accounts/use-accounts-query'
+import { canSyncFriends } from '../accounts/account-detail-utils'
 import { SelectField } from '@/components/select-field'
 
 export function FriendsPage() {
@@ -89,6 +90,10 @@ export function FriendsPage() {
 
   async function handleSync() {
     if (!token || !accountId) return
+    if (!canSyncFriends(selectedAccount)) {
+      toast.error('当前账号会话已过期，请重新登录后再同步好友')
+      return
+    }
     setIsSyncing(true)
     try {
       const job = await syncAccountFriends(token, accountId)
@@ -169,7 +174,7 @@ export function FriendsPage() {
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">好友与火花</h1>
           <p className="mt-1 text-sm text-muted-foreground">按账号管理稳定好友身份、会话状态和火花维护开关。</p>
         </div>
-        <Button variant="outline" onClick={() => void handleSync()} disabled={isSyncing || !accountId}>
+        <Button variant="outline" onClick={() => void handleSync()} disabled={isSyncing || !accountId || !canSyncFriends(selectedAccount)} title={!canSyncFriends(selectedAccount) ? '请重新登录后再同步好友' : undefined}>
           <RefreshCw className={isSyncing ? 'animate-spin' : undefined} />
           {isSyncing ? '同步中…' : '同步好友'}
         </Button>

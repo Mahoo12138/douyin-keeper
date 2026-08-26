@@ -213,6 +213,17 @@ func TestQRStartRecoversFromStaleSidecarRuntime(t *testing.T) {
 	}
 }
 
+func TestQRStartInputForcesFreshLoginOnlyForRebinds(t *testing.T) {
+	newBinding := qrStartInput("/tmp/qr-profile", false)
+	if newBinding["force_login"] != false || newBinding["profile_dir"] != "/tmp/qr-profile" {
+		t.Fatalf("new binding input = %+v", newBinding)
+	}
+	relogin := qrStartInput("/tmp/qr-profile", true)
+	if relogin["force_login"] != true {
+		t.Fatalf("re-login input did not force a fresh login: %+v", relogin)
+	}
+}
+
 func TestQRStartRecoveryReportsResetCloseErrors(t *testing.T) {
 	var logs bytes.Buffer
 	ctx := telemetry.WithContext(context.Background(), slog.New(slog.NewTextHandler(&logs, nil)))
