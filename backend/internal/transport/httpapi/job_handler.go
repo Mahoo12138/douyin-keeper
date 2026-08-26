@@ -49,6 +49,15 @@ func (s *Server) handleJobEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Load the initial replay before committing the SSE response. Once the
+	// headers are flushed, a database failure can no longer be represented as
+	// an API error and the client would be left with a silent, empty stream.
+	events, err := s.jobs.Events(r.Context(), j.ID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeError(w, r, apperr.New(apperr.CodeInternal, apperr.KindInternal, "streaming unsupported"))
@@ -72,16 +81,13 @@ func (s *Server) handleJobEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Replay first.
-	events, err := s.jobs.Events(r.Context(), j.ID)
 	last := lastEventID(r)
-	if err == nil {
-		for _, e := range events {
-			if e.Seq <= last {
-				continue
-			}
-			send(event{Seq: e.Seq, EventType: e.EventType, Payload: e.Payload})
-			last = e.Seq
+	for _, e := range events {
+		if e.Seq <= last {
+			continue
 		}
+		send(event{Seq: e.Seq, EventType: e.EventType, Payload: e.Payload})
+		last = e.Seq
 	}
 
 	// Poll loop ~2s; emit only rows newer than last.
