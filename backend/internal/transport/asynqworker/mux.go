@@ -281,10 +281,11 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 			return err
 		}
 		fail := func(code string) error {
-			_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "error", Payload: json.RawMessage(fmt.Sprintf(`{"code":%q}`, code)), CreatedAt: deps.Now()})
-			return deps.Jobs.Finish(ctx, claimed.ID, job.StatusFailed, &code, deps.Now())
+			return finishGenericJobFailure(ctx, deps.Jobs, claimed, code, deps.Now)
 		}
-		_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "started", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()})
+		if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "started", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()}); err != nil {
+			return err
+		}
 		if claimed.AccountID == nil || claimed.UserID == nil || deps.Sidecar == nil || deps.Redis == nil || deps.Tx == nil {
 			return fail(apperr.CodeInternal)
 		}

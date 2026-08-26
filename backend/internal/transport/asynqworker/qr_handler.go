@@ -458,14 +458,11 @@ func enqueueInitialFriendsSync(ctx context.Context, deps QRBindDeps, acct *accou
 func finishBindFailure(ctx context.Context, deps QRBindDeps, claimed *job.Job, code string) error {
 	cleanup := releaseInitialBinding(deps, claimed)
 	if deps.Tx == nil {
-		_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "error", Payload: mustJSON(map[string]string{"code": code}), CreatedAt: deps.Now()})
-		if err := deps.Jobs.Finish(ctx, claimed.ID, job.StatusFailed, &code, deps.Now()); err != nil {
-			return err
-		}
+		failureErr := finishGenericJobFailure(ctx, deps.Jobs, claimed, code, deps.Now)
 		if cleanup != nil {
-			return cleanup(ctx)
+			return errors.Join(failureErr, cleanup(ctx))
 		}
-		return nil
+		return failureErr
 	}
 	return commitWorkerFailure(ctx, deps.Tx, deps.Jobs, nil, claimed, 0, code, "", "", nil, deps.Now, cleanup)
 }

@@ -80,8 +80,7 @@ func friendsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 			return err
 		}
 		fail := func(code string) error {
-			_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "error", Payload: mustJSON(map[string]string{"code": code}), CreatedAt: now()})
-			return deps.Jobs.Finish(ctx, claimed.ID, job.StatusFailed, &code, now())
+			return finishGenericJobFailure(ctx, deps.Jobs, claimed, code, now)
 		}
 		if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "started", Payload: json.RawMessage(`{}`), CreatedAt: now()}); err != nil {
 			return err
