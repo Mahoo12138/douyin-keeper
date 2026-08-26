@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, getMe, listMyEntitlementGrants, listNotifications, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, resumeAccount, runTaskNow, syncAccountFriends, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, getMe, listMyEntitlementGrants, listNotifications, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -161,5 +161,35 @@ describe('mini API auth recovery', () => {
       ['/api/v1/accounts/account-1', 'DELETE'],
       ['/api/v1/accounts/account-1/capabilities', 'GET'],
     ])
+  })
+
+  it('streams account binding events and submits SMS verification', async () => {
+    const chunks: Array<(result: { data: ArrayBuffer }) => void> = []
+    const abort = vi.fn()
+    requestMock.mockReturnValueOnce({
+      onChunkReceived: (callback: (result: { data: ArrayBuffer }) => void) => chunks.push(callback),
+      abort,
+    })
+    const events: Array<{ eventType: string; eventId: number; payload: Record<string, unknown> }> = []
+    const stream = streamJobEvents('access-1', 'job-qr', (event) => events.push(event))
+    const frame = 'event: qr_ready\nid: 7\ndata: {"format":"data_url","value":"data:image/png;base64,abc"}\n\n'
+    chunks[0]?.({ data: new TextEncoder().encode(frame).buffer })
+    stream.abort()
+
+    expect(events).toEqual([{ eventType: 'qr_ready', eventId: 7, payload: { format: 'data_url', value: 'data:image/png;base64,abc' } }])
+    expect(abort).toHaveBeenCalledTimes(1)
+    expect(requestMock.mock.calls[0]?.[0]).toMatchObject({
+      url: '/api/v1/jobs/job-qr/events',
+      enableChunked: true,
+      header: { Accept: 'text/event-stream', Authorization: 'Bearer access-1' },
+    })
+
+    requestMock.mockResolvedValueOnce({ statusCode: 202, data: { status: 'verification_submitted' } })
+    await submitSMSVerification('access-1', 'job-sms', '123456')
+    expect(requestMock.mock.calls[1]?.[0]).toMatchObject({
+      url: '/api/v1/jobs/job-sms/sms-verify',
+      method: 'POST',
+      data: { code: '123456' },
+    })
   })
 })

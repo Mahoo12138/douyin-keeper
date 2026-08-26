@@ -2,15 +2,18 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button, Image, Input, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, listAccounts, MiniApiError, myEntitlement, pauseAccount, resumeAccount, syncAccountFriends } from '@/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, listAccounts, MiniApiError, myEntitlement, pauseAccount, resumeAccount, streamJobEvents, submitSMSVerification, syncAccountFriends } from '@/lib/api'
+import type { JobEvent } from '@/lib/api'
 import { getAccessToken } from '@/lib/session'
 import avatarChen from '@/assets/home/avatar-chen.png'
 import avatarJasper from '@/assets/home/avatar-jasper.png'
 import avatarMiles from '@/assets/home/avatar-miles.png'
 import emptyGiftBox from '@/assets/home/empty-gift-box.png'
+import accountAddHero from '@/assets/accounts/account-add-hero.png'
+import accountSuccess from '@/assets/accounts/account-success.png'
 
 type Account = Awaited<ReturnType<typeof listAccounts>>['items'][number]
-type Screen = 'list' | 'detail' | 'bind'
+type Screen = 'list' | 'detail' | 'intro' | 'method' | 'qr' | 'progress' | 'success'
 type BindingMethod = 'qr' | 'sms'
 
 export default function Accounts() {
@@ -27,6 +30,11 @@ export default function Accounts() {
   const [bindingJobId, setBindingJobId] = useState('')
   const [bindingStatus, setBindingStatus] = useState('')
   const [bindingAccountId, setBindingAccountId] = useState('')
+  const [bindingStep, setBindingStep] = useState(1)
+  const [qrValue, setQrValue] = useState('')
+  const [qrExpiresAt, setQrExpiresAt] = useState('')
+  const [smsCode, setSmsCode] = useState('')
+  const [successAccount, setSuccessAccount] = useState<Account | null>(null)
 
   const load = useCallback(async () => {
     const token = getAccessToken()
@@ -44,6 +52,7 @@ export default function Accounts() {
       setAccounts(accountResponse.items)
       setAccountQuota(entitlementResponse?.account_quota ?? null)
       setState('ready')
+      return accountResponse.items
     } catch (cause) {
       if (cause instanceof MiniApiError && cause.statusCode === 401) {
         setState('guest')
@@ -69,11 +78,18 @@ export default function Accounts() {
         if (job.status === 'succeeded') {
           setBindingJobId('')
           setBindingStatus('绑定成功，正在刷新账号')
-          await load()
-          if (active) setScreen('list')
+          const freshAccounts = await load()
+          if (active) {
+            const account = bindingAccountId ? freshAccounts?.find((item) => item.id === bindingAccountId) : freshAccounts?.[freshAccounts.length - 1]
+            setSuccessAccount(account ?? null)
+            setBindingAccountId('')
+            setBindingStep(5)
+            setScreen('success')
+          }
         } else if (job.status === 'failed' || job.status === 'cancelled') {
           setBindingJobId('')
           setError(job.error_code || '绑定任务未完成，请重试。')
+          if (active) setScreen('progress')
         }
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : '绑定状态查询失败')
@@ -84,13 +100,29 @@ export default function Accounts() {
     return () => { active = false; clearInterval(timer) }
   }, [bindingJobId, load])
 
+  useEffect(() => {
+    if (!bindingJobId || !['qr', 'progress'].includes(screen)) return
+    const token = getAccessToken()
+    if (!token) return
+    let active = true
+    const stream = streamJobEvents(token, bindingJobId, (event: JobEvent) => {
+      if (!active) return
+      handleBindingEvent(event)
+    })
+    return () => { active = false; stream.abort() }
+  }, [bindingJobId, screen])
+
   if (state === 'loading') return <LoadingAccounts />
   if (state === 'guest') return <GuestAccounts />
   if (state === 'error') return <View className="mini-page account-page"><View className="account-error"><Text className="account-error-icon">!</Text><Text className="account-empty-title">账号列表暂时不可用</Text><Text className="muted">{error || '请检查网络连接后重试。'}</Text><Button className="account-secondary-button" onClick={() => void load()}>重新加载</Button></View></View>
 
   const selectedAccount = accounts.find((account) => account.id === selectedAccountId)
-  if (screen === 'detail' && selectedAccount) return <AccountDetail account={selectedAccount} menuOpen={menuOpen} busy={busy} error={error} onBack={() => { setMenuOpen(false); setScreen('list') }} onMenu={() => setMenuOpen((current) => !current)} onAction={(action) => void runAccountAction(selectedAccount, action)} onDelete={() => void releaseAccount(selectedAccount)} onBind={() => { setMenuOpen(false); setBindingAccountId(selectedAccount.id); setBindingMethod('qr'); setScreen('bind') }} />
-  if (screen === 'bind') return <BindingScreen method={bindingMethod} phone={bindingPhone} jobId={bindingJobId} status={bindingStatus} busy={busy} error={error} onBack={() => { setBindingJobId(''); setBindingAccountId(''); setScreen('list') }} onMethodChange={setBindingMethod} onPhoneChange={setBindingPhone} onStart={() => void startBinding()} onCancel={() => void cancelBinding()} />
+  if (screen === 'detail' && selectedAccount) return <AccountDetail account={selectedAccount} menuOpen={menuOpen} busy={busy} error={error} onBack={() => { setMenuOpen(false); setScreen('list') }} onMenu={() => setMenuOpen((current) => !current)} onAction={(action) => void runAccountAction(selectedAccount, action)} onDelete={() => void releaseAccount(selectedAccount)} onBind={() => openBindingFlow(selectedAccount.id)} />
+  if (screen === 'intro') return <BindingIntro onBack={() => setScreen('list')} onStart={() => setScreen('method')} />
+  if (screen === 'method') return <BindingMethodScreen method={bindingMethod} phone={bindingPhone} error={error} busy={busy} onBack={() => setScreen('intro')} onMethodChange={setBindingMethod} onPhoneChange={setBindingPhone} onStart={() => void startBinding()} />
+  if (screen === 'qr') return <QRBindingScreen qrValue={qrValue} expiresAt={qrExpiresAt} status={bindingStatus} step={bindingStep} onBack={() => void cancelBinding()} onRefresh={() => void restartBinding()} />
+  if (screen === 'progress') return <BindingProgressScreen method={bindingMethod} status={bindingStatus} step={bindingStep} jobId={bindingJobId} smsCode={smsCode} busy={busy} error={error} onBack={() => void cancelBinding()} onCodeChange={setSmsCode} onSubmitCode={() => void submitVerification()} />
+  if (screen === 'success') return <BindingSuccessScreen account={successAccount} onDone={() => { setSuccessAccount(null); setScreen('list') }} onViewFriends={() => { setSuccessAccount(null); setScreen('list'); Taro.switchTab({ url: '/pages/spark/index' }) }} />
 
   async function runAccountAction(account: Account, action: 'session' | 'friends' | 'pause' | 'resume') {
     const token = getAccessToken()
@@ -140,12 +172,73 @@ export default function Accounts() {
     }
     setBusy('bind')
     setError('')
+    setQrValue('')
+    setQrExpiresAt('')
+    setBindingStep(3)
     try {
       const job = await createAccountBinding(token, bindingMethod, { phone: bindingMethod === 'sms' ? bindingPhone.trim() : undefined, accountId: bindingAccountId || undefined })
       setBindingJobId(job.job_id)
       setBindingStatus('绑定任务已创建，等待后端进度')
+      setScreen(bindingMethod === 'qr' ? 'qr' : 'progress')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '创建绑定任务失败')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  function openBindingFlow(accountId = '') {
+    setError('')
+    setBindingAccountId(accountId)
+    setBindingMethod('qr')
+    setBindingStep(1)
+    setScreen(accountId ? 'method' : 'intro')
+  }
+
+  function handleBindingEvent(event: JobEvent) {
+    if (event.eventType === 'qr_ready') {
+      setQrValue(typeof event.payload.value === 'string' ? event.payload.value : '')
+      setQrExpiresAt(typeof event.payload.expires_at === 'string' ? event.payload.expires_at : '')
+      setBindingStatus('请使用抖音 App 扫描二维码')
+      setBindingStep(3)
+    } else if (event.eventType === 'scanned') {
+      setBindingStatus('二维码已扫描，正在确认登录')
+      setBindingStep(4)
+      setScreen('progress')
+    } else if (event.eventType === 'confirming') {
+      setBindingStatus('正在获取账号信息')
+      setBindingStep(4)
+      setScreen('progress')
+    } else if (event.eventType === 'platform_challenge') {
+      setBindingStatus('需要完成抖音安全验证后继续')
+      setBindingStep(4)
+    } else if (event.eventType === 'error') {
+      setError(typeof event.payload.code === 'string' ? event.payload.code : '绑定失败，请重试')
+    }
+  }
+
+  async function restartBinding() {
+    await cancelBinding()
+    setBindingStep(2)
+    setScreen('method')
+  }
+
+  async function submitVerification() {
+    const token = getAccessToken()
+    if (!token || !bindingJobId || busy) return
+    if (!/^\d{4,8}$/.test(smsCode.trim())) {
+      setError('请输入 4-8 位短信验证码')
+      return
+    }
+    setBusy('verify')
+    setError('')
+    try {
+      await submitSMSVerification(token, bindingJobId, smsCode.trim())
+      setSmsCode('')
+      setBindingStatus('验证码已提交，等待登录确认')
+      setBindingStep(4)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '验证码提交失败')
     } finally {
       setBusy('')
     }
@@ -159,7 +252,7 @@ export default function Accounts() {
       await cancelJob(token, bindingJobId)
       setBindingJobId('')
       setBindingStatus('')
-      setBindingAccountId('')
+      setScreen('method')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '取消绑定失败')
     } finally {
@@ -168,10 +261,10 @@ export default function Accounts() {
   }
 
   return <View className="mini-page account-page">
-    <View className="account-page-header"><View><Text className="account-page-kicker">Douyin Keeper</Text><Text className="account-page-title">我的账号</Text></View><Button className="account-add-button" onClick={() => { setError(''); setBindingAccountId(''); setScreen('bind') }}>+</Button></View>
-    <View className="account-quota"><View><Text className="account-quota-label">账号概览</Text><Text className="account-quota-value">{accounts.length} <Text className="account-quota-total">/ {accountQuota ?? '∞'}</Text></Text><Text className="account-quota-caption">已绑定 / 可绑定上限</Text></View><Button className="account-quota-action" onClick={() => { setError(''); setScreen('bind') }}>升级配额</Button><View className="account-quota-line"><View style={{ width: `${accountQuota ? Math.min(100, accounts.length / accountQuota * 100) : accounts.length ? 24 : 0}%` }} /></View></View>
+    <View className="account-page-header"><View><Text className="account-page-kicker">Douyin Keeper</Text><Text className="account-page-title">我的账号</Text></View><Button className="account-add-button" onClick={() => openBindingFlow()}>+</Button></View>
+    <View className="account-quota"><View><Text className="account-quota-label">账号概览</Text><Text className="account-quota-value">{accounts.length} <Text className="account-quota-total">/ {accountQuota ?? '∞'}</Text></Text><Text className="account-quota-caption">已绑定 / 可绑定上限</Text></View><Button className="account-quota-action" onClick={() => openBindingFlow()}>升级配额</Button><View className="account-quota-line"><View style={{ width: `${accountQuota ? Math.min(100, accounts.length / accountQuota * 100) : accounts.length ? 24 : 0}%` }} /></View></View>
     {error && <View className="account-inline-error"><Text>{error}</Text></View>}
-    {accounts.length === 0 ? <EmptyAccounts onBind={() => { setBindingAccountId(''); setScreen('bind') }} /> : <View>{accounts.map((account) => <AccountCard account={account} key={account.id} onSelect={() => { setSelectedAccountId(account.id); setScreen('detail') }} />)}<Button className="account-add-card" onClick={() => { setBindingAccountId(''); setScreen('bind') }}><Text className="account-add-card-plus">+</Text><View><Text>添加新账号</Text><Text className="muted">最多可绑定 {accountQuota ?? '多个'} 个账号</Text></View></Button></View>}
+    {accounts.length === 0 ? <EmptyAccounts onBind={() => openBindingFlow()} /> : <View>{accounts.map((account) => <AccountCard account={account} key={account.id} onSelect={() => { setSelectedAccountId(account.id); setScreen('detail') }} />)}<Button className="account-add-card" onClick={() => openBindingFlow()}><Text className="account-add-card-plus">+</Text><View><Text>添加新账号</Text><Text className="muted">最多可绑定 {accountQuota ?? '多个'} 个账号</Text></View></Button></View>}
   </View>
 }
 
@@ -190,6 +283,31 @@ function AccountDetail({ account, menuOpen, busy, error, onBack, onMenu, onActio
   const paused = account.risk_status === 'paused' || !!account.paused_at
   return <View className="mini-page account-page"><View className="account-detail-topbar"><Button className="account-back-button" onClick={onBack}>‹</Button><Text>账号详情</Text><Button className="account-more-button" onClick={onMenu}>•••</Button></View><View className="account-detail-hero"><Avatar src={account.avatar_url} name={account.nickname || '未命名'} size="large" /><Text className="account-detail-name">{account.nickname || '未命名账号'}</Text><Text className="account-detail-status"><StatusDot tone={account.session_status === 'valid' ? 'green' : 'amber'} />{bindingLabel(account.binding_status)} · {sessionLabel(account.session_status)}</Text></View>{menuOpen && <View className="account-menu"><Button onClick={() => onAction('session')}>重新登录态检查 <Text>›</Text></Button><Button onClick={() => onAction('friends')}>同步好友 <Text>›</Text></Button><Button onClick={() => onAction(paused ? 'resume' : 'pause')}>{paused ? '恢复任务' : '暂停任务'} <Text>›</Text></Button><Button className="account-menu-danger" onClick={onDelete}>解除绑定 <Text>›</Text></Button></View>}{error && <View className="account-inline-error"><Text>{error}</Text></View>}<View className="account-detail-card"><Text className="account-section-title">账号状态</Text><DetailRow label="登录状态" value={sessionLabel(account.session_status)} tone={account.session_status === 'valid' ? 'green' : 'amber'} /><DetailRow label="账号健康度" value={riskLabel(account.risk_status)} tone={account.risk_status === 'normal' ? 'green' : 'amber'} /><DetailRow label="好友总数" value={`${account.friend_count} 位`} /><DetailRow label="活跃任务数" value={`${account.enabled_task_count} 个`} /><DetailRow label="最近检查" value={formatDate(account.last_session_check_at)} /></View><View className="account-detail-card"><Text className="account-section-title">今日数据</Text><View className="detail-stat-grid"><DetailStat label="互动成功" value={account.today_send_succeeded} tone="green" /><DetailStat label="互动失败" value={account.today_send_failed} tone={account.today_send_failed ? 'red' : 'green'} /><DetailStat label="完成率" value={`${account.today_send_succeeded + account.today_send_failed ? Math.round(account.today_send_succeeded / (account.today_send_succeeded + account.today_send_failed) * 100) : 0}%`} tone="green" /></View></View><View className="account-detail-card"><Text className="account-section-title">能力状态</Text>{capabilities.length === 0 ? <Text className="muted">暂无能力快照，稍后可重新检查。</Text> : capabilities.map((item) => <DetailRow key={item.capability} label={item.capability} value={capabilityLabel(item.status)} tone={item.status === 'available' ? 'green' : 'amber'} />)}</View><View className="account-detail-actions"><Button className="account-primary-button" disabled={busy !== ''} onClick={() => onAction('friends')}>{busy === 'friends' ? '同步中…' : '同步好友'}</Button><Button className="account-secondary-button" disabled={busy !== ''} onClick={onBind}>重新登录</Button></View></View>
 }
+
+function BindingIntro({ onBack, onStart }: { onBack: () => void; onStart: () => void }) {
+  return <View className="mini-page account-page account-binding-page"><BindingTopbar title="添加抖音账号" onBack={onBack} /><View className="binding-intro-hero"><Image className="binding-intro-image" src={accountAddHero} mode="aspectFit" /></View><Text className="binding-intro-title">添加你的抖音账号</Text><Text className="muted binding-intro-copy">添加后即可管理好友与火花任务</Text><View className="binding-benefits"><Benefit title="管理好友列表" copy="添加后即可管理好友互动状态" tone="green" /><Benefit title="点亮火花" copy="添加好友后可互动并维护关系" tone="mint" /><Benefit title="安全加密" copy="多重加密保护账号安全" tone="blue" /></View><Button className="account-primary-button binding-start-button" onClick={onStart}>开始添加</Button></View>
+}
+
+function BindingMethodScreen({ method, phone, error, busy, onBack, onMethodChange, onPhoneChange, onStart }: { method: BindingMethod; phone: string; error: string; busy: string; onBack: () => void; onMethodChange: (method: BindingMethod) => void; onPhoneChange: (phone: string) => void; onStart: () => void }) {
+  return <View className="mini-page account-page account-binding-page"><BindingTopbar title="选择添加方式" onBack={onBack} /><FlowSteps current={2} /><View className="binding-method-card"><Button className={`binding-method-option ${method === 'qr' ? 'binding-method-option-active' : ''}`} onClick={() => onMethodChange('qr')}><View className="binding-method-icon binding-method-icon-qr">QR</View><View className="binding-method-copy"><Text className="binding-method-title">二维码登录</Text><Text className="muted">使用抖音 App 扫码登录</Text></View><Text className="binding-recommended">推荐</Text></Button><Button className={`binding-method-option ${method === 'sms' ? 'binding-method-option-active' : ''}`} onClick={() => onMethodChange('sms')}><View className="binding-method-icon binding-method-icon-phone">SMS</View><View className="binding-method-copy"><Text className="binding-method-title">短信登录</Text><Text className="muted">通过手机号验证登录</Text></View><Text className="binding-fallback">备用方案</Text></Button>{method === 'sms' && <Input className="account-input binding-phone-input" value={phone} maxlength={32} placeholder="请输入手机号" onInput={(event) => onPhoneChange(event.detail.value)} />}{error && <View className="account-inline-error"><Text>{error}</Text></View>}<Button className="account-primary-button" disabled={busy === 'bind'} onClick={onStart}>{busy === 'bind' ? '创建中…' : method === 'qr' ? '继续扫码登录' : '继续短信登录'}</Button></View><View className="binding-notice"><Text className="binding-notice-title">添加须知</Text><Text>• 仅用于账号管理，不会获取你的密码</Text><Text>• 使用官方登录方式，安全有保障</Text><Text>• 绑定后可随时解除</Text></View></View>
+}
+
+function QRBindingScreen({ qrValue, expiresAt, status, step, onBack, onRefresh }: { qrValue: string; expiresAt: string; status: string; step: number; onBack: () => void; onRefresh: () => void }) {
+  return <View className="mini-page account-page account-binding-page"><BindingTopbar title="扫码登录" onBack={onBack} /><FlowSteps current={3} /><Text className="binding-qr-title">请使用抖音 App 扫描二维码</Text><View className="binding-qr-box">{qrValue ? <Image className="binding-qr-image" src={qrValue} mode="aspectFit" /> : <View className="binding-qr-loading"><Image className="binding-qr-loading-image" src={accountAddHero} mode="aspectFit" /><Text>正在获取二维码</Text></View>}</View><Text className="binding-qr-status">{status || '二维码准备中，请稍候'}</Text>{expiresAt && <Text className="binding-qr-expiry">二维码有效期至 {formatDate(expiresAt)}</Text>}<Button className="account-secondary-button binding-refresh-button" onClick={onRefresh}>刷新二维码</Button><Text className="binding-qr-help">无法扫码？请确认抖音 App 已更新到最新版本。</Text><Text className="binding-flow-step-note">当前进度：{step < 4 ? '等待扫码' : step === 4 ? '确认登录' : '添加账号'}</Text></View>
+}
+
+function BindingProgressScreen({ method, status, step, jobId, smsCode, busy, error, onBack, onCodeChange, onSubmitCode }: { method: BindingMethod; status: string; step: number; jobId: string; smsCode: string; busy: string; error: string; onBack: () => void; onCodeChange: (code: string) => void; onSubmitCode: () => void }) {
+  return <View className="mini-page account-page account-binding-page"><BindingTopbar title="添加中" onBack={onBack} /><FlowSteps current={4} /><View className="binding-progress-visual"><Image className="binding-progress-image" src={accountAddHero} mode="aspectFit" /></View><Text className="binding-progress-title-large">正在添加抖音账号</Text><Text className="muted binding-progress-copy">请保持抖音 App 已登录状态</Text><View className="binding-checklist"><ProgressItem done={step >= 3} active={step === 3} label={method === 'sms' ? '短信验证' : '二维码已扫描'} /><ProgressItem done={step >= 4} active={step === 4} label="确认登录中" /><ProgressItem done={step >= 4} active={false} label="获取账号信息" /><ProgressItem done={step >= 5} active={false} label="添加账号" /></View>{method === 'sms' && jobId && step === 3 && <View className="binding-sms-entry"><Text className="binding-sms-title">请输入抖音短信验证码</Text><Input className="account-input" value={smsCode} maxlength={8} type="number" placeholder="4-8 位验证码" onInput={(event) => onCodeChange(event.detail.value)} /><Button className="account-primary-button" disabled={busy === 'verify'} onClick={onSubmitCode}>{busy === 'verify' ? '提交中…' : '确认验证码'}</Button></View>}{error && <View className="account-inline-error"><Text>{error}</Text></View>}<View className="binding-progress-note">{status || '绑定任务执行中，请不要关闭页面'}</View></View>
+}
+
+function BindingSuccessScreen({ account, onDone, onViewFriends }: { account: Account | null; onDone: () => void; onViewFriends: () => void }) {
+  return <View className="mini-page account-page account-binding-page"><BindingTopbar title="添加成功" onBack={onDone} /><FlowSteps current={5} /><View className="binding-success-visual"><Image className="binding-success-image" src={accountSuccess} mode="aspectFit" /></View><Text className="binding-success-title">添加成功！</Text><Text className="muted binding-success-copy">你已成功添加抖音账号</Text>{account && <View className="binding-success-account"><Avatar src={account.avatar_url} name={account.nickname || '未命名'} size="large" /><View><Text className="binding-success-name">{account.nickname || '未命名账号'}</Text><Text className="muted">账号已安全绑定</Text></View></View>}<Button className="account-primary-button" onClick={onDone}>完成</Button><Button className="binding-friends-link" onClick={onViewFriends}>去查看好友</Button></View>
+}
+
+function BindingTopbar({ title, onBack }: { title: string; onBack: () => void }) { return <View className="account-detail-topbar"><Button className="account-back-button" onClick={onBack}>‹</Button><Text>{title}</Text><View className="account-topbar-spacer" /></View> }
+function FlowSteps({ current }: { current: number }) { return <View className="binding-flow-steps">{['进入添加页', '选择添加方式', '扫码登录', '添加中', '添加成功'].map((label, index) => <View className={`binding-flow-step ${index + 1 <= current ? 'binding-flow-step-done' : ''} ${index + 1 === current ? 'binding-flow-step-current' : ''}`} key={label}><Text className="binding-flow-number">{index + 1}</Text><Text className="binding-flow-label">{label}</Text></View>)}</View> }
+function Benefit({ title, copy, tone }: { title: string; copy: string; tone: string }) { return <View className="binding-benefit"><View className={`binding-benefit-icon binding-benefit-${tone}`} /><View><Text className="binding-benefit-title">{title}</Text><Text className="muted">{copy}</Text></View></View> }
+function ProgressItem({ done, active, label }: { done: boolean; active: boolean; label: string }) { return <View className={`binding-progress-item ${done ? 'binding-progress-item-done' : ''} ${active ? 'binding-progress-item-active' : ''}`}><Text className="binding-progress-dot">{done ? '✓' : ''}</Text><Text>{label}</Text></View> }
 
 function BindingScreen({ method, phone, jobId, status, busy, error, onBack, onMethodChange, onPhoneChange, onStart, onCancel }: { method: BindingMethod; phone: string; jobId: string; status: string; busy: string; error: string; onBack: () => void; onMethodChange: (method: BindingMethod) => void; onPhoneChange: (phone: string) => void; onStart: () => void; onCancel: () => void }) {
   return <View className="mini-page account-page"><View className="account-detail-topbar"><Button className="account-back-button" onClick={onBack}>‹</Button><Text>绑定新抖音账号</Text><View className="account-topbar-spacer" /></View><View className="binding-steps"><Step active={1} label="选择方式" /><Step active={2} label="等待登录" /><Step active={3} label="绑定完成" /></View><View className="binding-card"><Text className="account-section-title">选择登录方式</Text><Text className="muted">扫码登录适合快速绑定；短信方式需要手机号和验证码。</Text><View className="binding-methods"><Button className={method === 'qr' ? 'binding-method-active' : ''} onClick={() => onMethodChange('qr')}>扫码登录</Button><Button className={method === 'sms' ? 'binding-method-active' : ''} onClick={() => onMethodChange('sms')}>短信登录</Button></View>{method === 'sms' && <Input className="account-input" value={phone} maxlength={32} placeholder="请输入手机号" onInput={(event) => onPhoneChange(event.detail.value)} />}{jobId ? <View className="binding-progress"><Text className="binding-progress-mark">{method === 'qr' ? '⌁' : '✉'}</Text><Text className="binding-progress-title">{method === 'qr' ? '等待抖音扫码登录' : '等待短信验证'}</Text><Text className="muted">{status || '绑定任务执行中'} · 请保持页面打开</Text><Button className="account-secondary-button" disabled={busy === 'cancel'} onClick={onCancel}>{busy === 'cancel' ? '取消中…' : '取消绑定'}</Button></View> : <><Text className="binding-hint">{method === 'qr' ? '点击开始后，后端会创建二维码登录任务。' : '手机号只用于本次登录流程，不会写入账号资料。'}</Text><Button className="account-primary-button" disabled={busy === 'bind'} onClick={onStart}>{busy === 'bind' ? '创建中…' : '开始绑定'}</Button></>}</View>{error && <View className="account-inline-error"><Text>{error}</Text></View>}<View className="binding-safe-note"><Text className="binding-safe-mark">✓</Text><Text>登录态只由后端安全保存；安全验证由抖音官方页面完成。</Text></View></View>

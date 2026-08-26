@@ -338,6 +338,78 @@ page {
 .account-skeleton-quota { height: 190rpx; margin-top: 28rpx; }
 .account-skeleton-card { height: 240rpx; margin-top: 18rpx; }
 
+/* Account binding flow */
+.account-binding-page { padding-top: 26rpx; text-align: center; }
+.account-binding-page .account-detail-topbar { text-align: left; }
+.binding-flow-steps { display: flex; gap: 4rpx; margin-top: 24rpx; padding: 0 2rpx; }
+.binding-flow-step { position: relative; flex: 1; min-width: 0; color: #a0aaa5; font-size: 16rpx; }
+.binding-flow-step:not(:last-child)::after { position: absolute; top: 17rpx; left: calc(50% + 18rpx); width: calc(100% - 36rpx); border-top: 2rpx solid #e2eee8; content: ''; }
+.binding-flow-step-done { color: #159e69; }
+.binding-flow-step-done:not(:last-child)::after { border-color: #9ce2be; }
+.binding-flow-number { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: 34rpx; height: 34rpx; margin: 0 auto 8rpx; border-radius: 50%; color: #87948d; background: #edf2ef; font-size: 17rpx; }
+.binding-flow-step-done .binding-flow-number { color: #fff; background: #19bd7c; }
+.binding-flow-step-current .binding-flow-number { box-shadow: 0 0 0 6rpx #dff8eb; }
+.binding-flow-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.binding-intro-hero { display: flex; align-items: center; justify-content: center; width: 300rpx; height: 250rpx; margin: 52rpx auto 24rpx; border-radius: 50%; background: #eefbf5; box-shadow: 0 0 0 24rpx #f7fcf9; }
+.binding-intro-image { display: block; width: 300rpx; height: 300rpx; }
+.binding-intro-title { display: block; color: #17271e; font-size: 34rpx; font-weight: 700; }
+.binding-intro-copy { display: block; margin-top: 10rpx; }
+.binding-benefits { margin-top: 34rpx; text-align: left; }
+.binding-benefit { display: flex; align-items: center; gap: 18rpx; margin-top: 12rpx; padding: 18rpx 20rpx; border-radius: 16rpx; background: #f4f8f6; }
+.binding-benefit-icon { width: 44rpx; height: 44rpx; flex: 0 0 auto; border-radius: 50%; background: #c6f1da; box-shadow: inset 0 0 0 10rpx #e5faed; }
+.binding-benefit-mint { background: #bdeedc; }
+.binding-benefit-blue { background: #c9e2fa; }
+.binding-benefit-title { display: block; color: #26372c; font-size: 24rpx; font-weight: 650; }
+.binding-benefit .muted { display: block; margin-top: 4rpx; font-size: 20rpx; }
+.binding-start-button { margin-top: 28rpx; }
+.binding-method-card { margin-top: 28rpx; padding: 18rpx; border: 1rpx solid #e4ece8; border-radius: 22rpx; background: #fff; box-shadow: 0 10rpx 24rpx rgba(35, 86, 65, .045); text-align: left; }
+.binding-method-option { display: flex; align-items: center; gap: 16rpx; width: 100%; min-height: 116rpx; margin: 0 0 12rpx; padding: 18rpx; border: 1rpx solid #e2ebe7; border-radius: 17rpx; color: #26362d; background: #fff; text-align: left; }
+.binding-method-option::after { display: none; }
+.binding-method-option-active { border-color: #24c486; background: #f0fcf6; box-shadow: 0 0 0 2rpx #d8f7e7; }
+.binding-method-icon { display: flex; align-items: center; justify-content: center; width: 58rpx; height: 58rpx; flex: 0 0 auto; border-radius: 16rpx; color: #11ad70; background: #ddf8e9; font-size: 18rpx; font-weight: 700; }
+.binding-method-icon-phone { color: #4e9add; background: #e7f3ff; font-size: 15rpx; }
+.binding-method-copy { min-width: 0; flex: 1; }
+.binding-method-title { display: block; font-size: 26rpx; font-weight: 650; }
+.binding-method-copy .muted { display: block; margin-top: 5rpx; font-size: 20rpx; }
+.binding-recommended, .binding-fallback { flex: 0 0 auto; padding: 5rpx 9rpx; border-radius: 999rpx; color: #fff; background: #1abc7b; font-size: 17rpx; }
+.binding-fallback { color: #8a948e; background: #eef1ef; }
+.binding-phone-input { margin: 6rpx 0 16rpx; }
+.binding-notice { margin-top: 24rpx; padding: 20rpx; border-radius: 18rpx; color: #738078; background: #f7faf8; text-align: left; font-size: 21rpx; line-height: 1.8; }
+.binding-notice-title { display: block; margin-bottom: 5rpx; color: #3a4d40; font-size: 23rpx; font-weight: 650; }
+.binding-qr-title { display: block; margin-top: 58rpx; color: #1e2d24; font-size: 27rpx; font-weight: 650; }
+.binding-qr-box { display: flex; align-items: center; justify-content: center; width: 420rpx; height: 420rpx; margin: 26rpx auto 20rpx; border: 1rpx solid #edf1ef; border-radius: 28rpx; background: #fff; box-shadow: 0 12rpx 30rpx rgba(35, 86, 65, .07); }
+.binding-qr-image { display: block; width: 370rpx; height: 370rpx; }
+.binding-qr-loading { display: flex; align-items: center; justify-content: center; flex-direction: column; color: #5d7165; font-size: 22rpx; }
+.binding-qr-loading-image { display: block; width: 180rpx; height: 180rpx; margin-bottom: 10rpx; }
+.binding-qr-status { display: block; color: #169d68; font-size: 23rpx; }
+.binding-qr-expiry, .binding-qr-help { display: block; margin-top: 8rpx; color: #89958f; font-size: 20rpx; }
+.binding-refresh-button { width: 360rpx; margin: 30rpx auto 0; }
+.binding-flow-step-note { display: block; margin-top: 28rpx; color: #9aa59f; font-size: 20rpx; }
+.binding-progress-visual { display: flex; align-items: center; justify-content: center; width: 220rpx; height: 190rpx; margin: 48rpx auto 16rpx; border-radius: 50%; background: #eefbf5; }
+.binding-progress-image { display: block; width: 220rpx; height: 220rpx; }
+.binding-progress-title-large { display: block; color: #1e3025; font-size: 29rpx; font-weight: 650; }
+.binding-progress-copy { display: block; margin-top: 7rpx; }
+.binding-checklist { margin: 34rpx 24rpx 0; text-align: left; }
+.binding-progress-item { display: flex; align-items: center; gap: 16rpx; min-height: 62rpx; color: #a2ada6; font-size: 23rpx; }
+.binding-progress-dot { display: flex; align-items: center; justify-content: center; width: 28rpx; height: 28rpx; flex: 0 0 auto; border-radius: 50%; background: #e6ece8; font-size: 17rpx; }
+.binding-progress-item-done { color: #405e4c; }
+.binding-progress-item-done .binding-progress-dot { color: #fff; background: #19bd7c; }
+.binding-progress-item-active { color: #179b67; font-weight: 600; }
+.binding-sms-entry { margin-top: 20rpx; padding: 20rpx; border-radius: 18rpx; background: #f4fbf7; text-align: left; }
+.binding-sms-title { display: block; color: #304538; font-size: 23rpx; font-weight: 650; }
+.binding-sms-entry .account-primary-button { margin-top: 16rpx; }
+.binding-progress-note { margin-top: 20rpx; padding: 16rpx; border-radius: 14rpx; color: #937242; background: #fff8ea; font-size: 21rpx; line-height: 1.5; }
+.binding-success-visual { display: flex; align-items: center; justify-content: center; height: 260rpx; margin-top: 38rpx; }
+.binding-success-image { display: block; width: 280rpx; height: 260rpx; }
+.binding-success-title { display: block; color: #1c2e23; font-size: 34rpx; font-weight: 700; }
+.binding-success-copy { display: block; margin-top: 8rpx; }
+.binding-success-account { display: flex; align-items: center; gap: 18rpx; margin-top: 28rpx; padding: 20rpx; border: 1rpx solid #e4ece8; border-radius: 20rpx; background: #fff; text-align: left; }
+.binding-success-name { display: block; color: #22352a; font-size: 27rpx; font-weight: 650; }
+.binding-success-account .muted { display: block; margin-top: 6rpx; font-size: 20rpx; }
+.binding-success-account + .account-primary-button { margin-top: 28rpx; }
+.binding-friends-link { display: block; margin: 16rpx auto 0; padding: 0; border: 0; color: #159e69; background: transparent; font-size: 24rpx; line-height: 1.5; }
+.binding-friends-link::after { display: none; }
+
 /* Me module */
 .me-page { min-height: 100vh; padding: 34rpx 24rpx 54rpx; background: #f8fbfa; box-sizing: border-box; }
 .me-topbar, .me-detail-topbar, .me-panel-heading, .me-feature-heading { display: flex; align-items: center; justify-content: space-between; gap: 18rpx; }

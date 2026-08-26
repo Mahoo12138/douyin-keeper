@@ -125,8 +125,54 @@ export function getJob(token: string, jobId: string) {
   return request<components['schemas']['Job']>(`/jobs/${jobId}`, { token })
 }
 
+export type JobEvent = {
+  eventType: string
+  eventId: number
+  payload: Record<string, unknown>
+}
+
+export function streamJobEvents(token: string, jobId: string, onEvent: (event: JobEvent) => void) {
+  const task = Taro.request<string>({
+    url: `${API_BASE_URL}/jobs/${jobId}/events`,
+    method: 'GET',
+    dataType: 'text',
+    timeout: 305000,
+    enableChunked: true,
+    header: {
+      Accept: 'text/event-stream',
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  let buffer = ''
+  const decoder = new TextDecoder()
+  const consume = (chunk: ArrayBuffer) => {
+    buffer += decoder.decode(chunk, { stream: true })
+    const frames = buffer.split(/\r?\n\r?\n/)
+    buffer = frames.pop() ?? ''
+    frames.forEach((frame) => {
+      const eventType = frame.match(/^event:\s*(.+)$/m)?.[1]?.trim()
+      const eventId = Number(frame.match(/^id:\s*(\d+)$/m)?.[1] ?? 0)
+      const data = frame.match(/^data:\s*(.+)$/m)?.[1]
+      if (!eventType || !data) return
+      try {
+        onEvent({ eventType, eventId, payload: JSON.parse(data) as Record<string, unknown> })
+      } catch {
+        // Ignore malformed frames; the polling fallback still observes job state.
+      }
+    })
+  }
+  task.onChunkReceived(({ data }) => consume(data))
+  return { abort: () => task.abort() }
+}
+
 export function cancelJob(token: string, jobId: string) {
   return request<void>(`/jobs/${jobId}/cancel`, { method: 'POST', token })
+}
+
+export function submitSMSVerification(token: string, jobId: string, code: string) {
+  return request<{ status: 'verification_submitted' }>(`/jobs/${jobId}/sms-verify`, {
+    method: 'POST', token, data: { code },
+  })
 }
 
 export function pauseAccount(token: string, accountId: string) {
