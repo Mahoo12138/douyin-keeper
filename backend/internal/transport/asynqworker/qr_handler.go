@@ -175,7 +175,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		if err != nil {
 			return fail(apperr.CodeInternal)
 		}
-		defer os.RemoveAll(profileDir)
+		defer cleanupWorkerResource(ctx, "login_profile", func() error { return os.RemoveAll(profileDir) })
 		exportPath := filepath.Join(profileDir, "session-state.json")
 
 		var startResponse *sidecar.Response

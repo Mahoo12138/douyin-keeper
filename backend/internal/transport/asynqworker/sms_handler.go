@@ -91,7 +91,10 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 		if claimed.AccountID == nil || claimed.UserID == nil || deps.Accounts == nil || deps.Sessions == nil || deps.Sidecar == nil || deps.Redis == nil {
 			return fail(apperr.CodeInternal)
 		}
-		defer func() { _ = deps.Redis.Del(context.Background(), job.SMSVerificationKey(claimed.PublicID)).Err() }()
+		verificationKey := job.SMSVerificationKey(claimed.PublicID)
+		defer cleanupWorkerResource(ctx, "sms_verification", func() error {
+			return deps.Redis.Del(context.Background(), verificationKey).Err()
+		})
 		acct, err := deps.Accounts.GetByID(ctx, *claimed.AccountID)
 		if err != nil || acct.UserID != *claimed.UserID {
 			return fail(apperr.CodeNotFound)
@@ -113,7 +116,7 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 		if err != nil {
 			return fail(apperr.CodeInternal)
 		}
-		defer os.RemoveAll(profileDir)
+		defer cleanupWorkerResource(ctx, "login_profile", func() error { return os.RemoveAll(profileDir) })
 		exportPath := filepath.Join(profileDir, "session-state.json")
 
 		var startResponse *sidecar.Response
