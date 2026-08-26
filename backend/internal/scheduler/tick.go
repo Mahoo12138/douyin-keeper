@@ -111,6 +111,7 @@ func (r *TickRunner) createIntent(ctx context.Context, t *task.SparkTask, now ti
 			TaskID: &t.ID, AccountID: t.AccountID, FriendID: t.FriendID,
 			LocalDate: &localDate, ScheduledAt: now, Status: send.IntentPending,
 			CreatedAt: now, UpdatedAt: now,
+			MessageKind: snapshotStringPtr(t.MessageKind), MessageBody: t.MessageBody,
 		}
 		inserted, err := r.sends.CreateScheduledIntent(tctx, in)
 		if err != nil || !inserted {
@@ -168,6 +169,8 @@ func (r *TickRunner) createIntent(ctx context.Context, t *task.SparkTask, now ti
 	})
 	return created, skipped, err
 }
+
+func snapshotStringPtr(value string) *string { return &value }
 
 func (r *TickRunner) markSkipped(ctx context.Context, intentID int64, code string, now time.Time) error {
 	return r.sends.SetIntentStatus(ctx, intentID, send.IntentSkipped, &code, nil, now)

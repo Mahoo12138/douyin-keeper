@@ -57,6 +57,21 @@ func TestIntentViewIncludesTaskSummary(t *testing.T) {
 	}
 }
 
+func TestIntentViewPrefersImmutableMessageSnapshot(t *testing.T) {
+	taskID := uuid.New()
+	snapshot := "发送时保存的正文"
+	currentTask := "后来编辑的正文"
+	kind := "text"
+	view := intentView(&send.SendIntent{
+		PublicID: uuid.New(), TaskPublicID: &taskID,
+		MessageKind: &kind, MessageBody: &snapshot,
+		TaskMessageKind: &kind, TaskMessageBody: &currentTask,
+	})
+	if view.Task == nil || view.Task.Body == nil || *view.Task.Body != snapshot {
+		t.Fatalf("history body = %+v, want immutable snapshot %q", view.Task, snapshot)
+	}
+}
+
 func TestParseIntentFilterRejectsInvalidInput(t *testing.T) {
 	tests := []struct {
 		name string

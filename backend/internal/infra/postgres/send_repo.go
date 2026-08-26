@@ -27,12 +27,12 @@ type rowScanner interface {
 
 const intentCols = `si.id, si.public_id, si.intent_type, si.request_id, si.task_id, si.account_id,
 	si.friend_id, si.local_date::text, si.scheduled_at, si.status, si.error_code, si.next_attempt_at,
-	si.last_job_id, si.created_at, si.updated_at`
+	si.last_job_id, si.created_at, si.updated_at, si.message_kind, si.message_body`
 
 func intentScanArgs(in *send.SendIntent) []any {
 	return []any{&in.ID, &in.PublicID, &in.IntentType, &in.RequestID, &in.TaskID, &in.AccountID,
 		&in.FriendID, &in.LocalDate, &in.ScheduledAt, &in.Status, &in.ErrorCode, &in.NextAttemptAt,
-		&in.LastJobID, &in.CreatedAt, &in.UpdatedAt}
+		&in.LastJobID, &in.CreatedAt, &in.UpdatedAt, &in.MessageKind, &in.MessageBody}
 }
 
 func scanIntent(row rowScanner) (*send.SendIntent, error) {
@@ -47,11 +47,11 @@ func scanIntent(row rowScanner) (*send.SendIntent, error) {
 func (r *SendRepo) CreateIntent(ctx context.Context, in *send.SendIntent) error {
 	return From(ctx, r.pool).QueryRow(ctx, `
 		INSERT INTO send_intents (public_id, intent_type, request_id, task_id, account_id, friend_id,
-			local_date, scheduled_at, status, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7::date,$8,$9,$10,$11)
+			local_date, scheduled_at, status, created_at, updated_at, message_kind, message_body)
+		VALUES ($1,$2,$3,$4,$5,$6,$7::date,$8,$9,$10,$11,$12,$13)
 		RETURNING id
 	`, in.PublicID, in.IntentType, in.RequestID, in.TaskID, in.AccountID, in.FriendID,
-		in.LocalDate, in.ScheduledAt, in.Status, in.CreatedAt, in.UpdatedAt).Scan(&in.ID)
+		in.LocalDate, in.ScheduledAt, in.Status, in.CreatedAt, in.UpdatedAt, in.MessageKind, in.MessageBody).Scan(&in.ID)
 }
 
 // CreateScheduledIntent inserts one daily scheduled intent. The partial
@@ -60,12 +60,12 @@ func (r *SendRepo) CreateIntent(ctx context.Context, in *send.SendIntent) error 
 func (r *SendRepo) CreateScheduledIntent(ctx context.Context, in *send.SendIntent) (bool, error) {
 	err := From(ctx, r.pool).QueryRow(ctx, `
 		INSERT INTO send_intents (public_id, intent_type, task_id, account_id, friend_id,
-			local_date, scheduled_at, status, created_at, updated_at)
-		VALUES ($1,'scheduled',$2,$3,$4,$5::date,$6,$7,$8,$9)
+			local_date, scheduled_at, status, created_at, updated_at, message_kind, message_body)
+		VALUES ($1,'scheduled',$2,$3,$4,$5::date,$6,$7,$8,$9,$10,$11)
 		ON CONFLICT DO NOTHING
 		RETURNING id
 	`, in.PublicID, in.TaskID, in.AccountID, in.FriendID, in.LocalDate,
-		in.ScheduledAt, in.Status, in.CreatedAt, in.UpdatedAt).Scan(&in.ID)
+		in.ScheduledAt, in.Status, in.CreatedAt, in.UpdatedAt, in.MessageKind, in.MessageBody).Scan(&in.ID)
 	if err == pgx.ErrNoRows {
 		return false, nil
 	}
@@ -113,7 +113,9 @@ func (r *SendRepo) ListIntentsByUserPage(ctx context.Context, userID int64, filt
 
 func (r *SendRepo) listIntentsByUser(ctx context.Context, userID int64, filter send.IntentListFilter, limit int, afterID int64) ([]*send.SendIntent, error) {
 	rows, err := From(ctx, r.pool).Query(ctx, `
-		SELECT `+intentCols+`, t.public_id AS task_public_id, t.message_kind, t.message_body,
+		SELECT `+intentCols+`, t.public_id AS task_public_id,
+			COALESCE(si.message_kind, t.message_kind) AS message_kind,
+			COALESCE(si.message_body, t.message_body) AS message_body,
 			a.public_id AS account_public_id, a.nickname,
 			f.public_id AS friend_public_id, f.display_name,
 			j.public_id, j.selected_adapter, j.attempt, j.status, j.error_code
@@ -140,8 +142,8 @@ func (r *SendRepo) listIntentsByUser(ctx context.Context, userID int64, filter s
 	for rows.Next() {
 		var in send.SendIntent
 		var taskID pgtype.UUID
-		var taskKind pgtype.Text
-		var taskBody pgtype.Text
+		var messageKind pgtype.Text
+		var messageBody pgtype.Text
 		var jobID pgtype.UUID
 		var adapter pgtype.Text
 		var attempt pgtype.Int4
@@ -149,7 +151,8 @@ func (r *SendRepo) listIntentsByUser(ctx context.Context, userID int64, filter s
 		var jobError pgtype.Text
 		if err := rows.Scan(&in.ID, &in.PublicID, &in.IntentType, &in.RequestID, &in.TaskID, &in.AccountID,
 			&in.FriendID, &in.LocalDate, &in.ScheduledAt, &in.Status, &in.ErrorCode, &in.NextAttemptAt,
-			&in.LastJobID, &in.CreatedAt, &in.UpdatedAt, &taskID, &taskKind, &taskBody, &in.AccountPublicID, &in.AccountNickname,
+			&in.LastJobID, &in.CreatedAt, &in.UpdatedAt, &in.MessageKind, &in.MessageBody,
+			&taskID, &messageKind, &messageBody, &in.AccountPublicID, &in.AccountNickname,
 			&in.FriendPublicID, &in.FriendDisplayName, &jobID, &adapter, &attempt, &jobStatus, &jobError); err != nil {
 			return nil, err
 		}
@@ -157,11 +160,11 @@ func (r *SendRepo) listIntentsByUser(ctx context.Context, userID int64, filter s
 			id := uuid.UUID(taskID.Bytes)
 			in.TaskPublicID = &id
 		}
-		if taskKind.Valid {
-			in.TaskMessageKind = &taskKind.String
+		if messageKind.Valid {
+			in.TaskMessageKind = &messageKind.String
 		}
-		if taskBody.Valid {
-			in.TaskMessageBody = &taskBody.String
+		if messageBody.Valid {
+			in.TaskMessageBody = &messageBody.String
 		}
 		if jobID.Valid {
 			in.LatestJob = &send.SendJob{

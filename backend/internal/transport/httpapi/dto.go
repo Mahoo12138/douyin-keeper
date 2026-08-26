@@ -222,10 +222,21 @@ func intentView(i *send.SendIntent) IntentView {
 }
 
 func historyTaskView(i *send.SendIntent) *HistoryTaskView {
-	if i.TaskPublicID == nil || i.TaskMessageKind == nil {
+	if i.TaskPublicID == nil {
 		return nil
 	}
-	return &HistoryTaskView{ID: *i.TaskPublicID, MessageKind: *i.TaskMessageKind, Body: i.TaskMessageBody}
+	kind := i.MessageKind
+	body := i.MessageBody
+	if kind == nil {
+		kind = i.TaskMessageKind
+	}
+	if body == nil {
+		body = i.TaskMessageBody
+	}
+	if kind == nil {
+		return nil
+	}
+	return &HistoryTaskView{ID: *i.TaskPublicID, MessageKind: *kind, Body: body}
 }
 
 type SendJobView struct {

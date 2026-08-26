@@ -64,6 +64,13 @@ type SendIntent struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 
+	// MessageKind and MessageBody are immutable snapshots captured when the
+	// intent is created. TaskMessage* remain the joined task projection used by
+	// older callers and as a fallback for intents created before this snapshot
+	// was introduced.
+	MessageKind *string
+	MessageBody *string
+
 	// Joined for API responses (repo fills them).
 	AccountPublicID   uuid.UUID
 	AccountNickname   string

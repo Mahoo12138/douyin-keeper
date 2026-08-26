@@ -82,6 +82,7 @@ func (s *Service) RunNow(ctx context.Context, userID int64, taskPublicID uuid.UU
 			PublicID: uuid.New(), IntentType: IntentManual, RequestID: &requestID,
 			TaskID: &tk.ID, AccountID: tk.AccountID, FriendID: tk.FriendID,
 			LocalDate: &date, ScheduledAt: now, Status: IntentQueued, CreatedAt: now, UpdatedAt: now,
+			MessageKind: snapshotStringPtr(tk.MessageKind), MessageBody: tk.MessageBody,
 		}
 		if err := s.repo.CreateIntent(tctx, in); err != nil {
 			return err
@@ -112,6 +113,8 @@ func (s *Service) RunNow(ctx context.Context, userID int64, taskPublicID uuid.UU
 	}
 	return intent, job, nil
 }
+
+func snapshotStringPtr(value string) *string { return &value }
 
 // ListIntents returns the user's send history (newest first).
 func (s *Service) ListIntents(ctx context.Context, userID int64, filter IntentListFilter) ([]*SendIntent, error) {

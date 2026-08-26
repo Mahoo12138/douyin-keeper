@@ -56,13 +56,25 @@ func TestSendJobClaimAndFinishPreserveTargetState(t *testing.T) {
 	}
 	sends := postgres.NewSendRepo(pool)
 	requestID := uuid.New()
+	snapshotKind := tk.MessageKind
 	in := &send.SendIntent{
 		PublicID: uuid.New(), IntentType: send.IntentManual, RequestID: &requestID,
 		TaskID: &tk.ID, AccountID: acct.ID, FriendID: list[0].ID,
 		ScheduledAt: when, Status: send.IntentQueued, CreatedAt: when, UpdatedAt: when,
+		MessageKind: &snapshotKind, MessageBody: &body,
 	}
 	if err := sends.CreateIntent(ctx, in); err != nil {
 		t.Fatal(err)
+	}
+	updatedBody := "edited after intent creation"
+	tk.MessageBody = &updatedBody
+	tk.UpdatedAt = when.Add(time.Second)
+	if err := tasks.Update(ctx, tk); err != nil {
+		t.Fatal(err)
+	}
+	history, err := sends.ListIntentsByUserPage(ctx, userID, send.IntentListFilter{Limit: 10})
+	if err != nil || len(history) == 0 || history[0].MessageBody == nil || *history[0].MessageBody != body {
+		t.Fatalf("intent message snapshot mismatch: err=%v history=%+v", err, history)
 	}
 	adapter := capability.AdapterBrowserConsumer
 	j := &send.SendJob{PublicID: uuid.New(), IntentID: in.ID, AccountID: acct.ID, FriendID: list[0].ID, Attempt: 1,
