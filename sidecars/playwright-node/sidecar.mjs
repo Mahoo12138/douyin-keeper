@@ -40,6 +40,22 @@ const QR_SELECTORS = [
 const SMS_PHONE_SELECTORS = ["input[type='tel']", "input[placeholder*='手机号']", "input[placeholder*='手机']"];
 const SMS_CODE_SELECTORS = ["input[autocomplete='one-time-code']", "input[placeholder*='验证码']", "input[inputmode='numeric']"];
 const loginSessions = new Map();
+const DEBUG_LOG_ENABLED = ["1", "true", "yes", "on"].includes(String(process.env.PLAYWRIGHT_SIDECAR_DEBUG ?? "").toLowerCase());
+
+function safeURL(page) {
+  try {
+    const url = new URL(page.url());
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return "";
+  }
+}
+
+function debugLog(event, fields = {}) {
+  if (!DEBUG_LOG_ENABLED) return;
+  const entry = { time: new Date().toISOString(), level: "DEBUG", component: "playwright-sidecar", event, ...fields };
+  console.error(JSON.stringify(entry));
+}
 
 function nowMs() {
   return Date.now();
@@ -174,6 +190,7 @@ async function seedProfile(context, statePath) {
 async function launchProfile(directory, statePath) {
   const profile = await privateDirectory(directory);
   const executablePath = process.env.PLAYWRIGHT_EXECUTABLE_PATH?.trim() || undefined;
+  debugLog("browser_launch_start", { headless: headless(), executable_configured: Boolean(executablePath) });
   const context = await chromium.launchPersistentContext(profile, {
     headless: headless(),
     ...(executablePath ? { executablePath } : {}),
@@ -189,6 +206,7 @@ async function launchProfile(directory, statePath) {
     throw error;
   }
   const page = context.pages()[0] || await context.newPage();
+  debugLog("browser_launch_ready", { pages: context.pages().length, url: safeURL(page) });
   return { context, page };
 }
 
@@ -262,10 +280,15 @@ async function waitForQrOrChallenge(page) {
   let challenge = false;
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const qr = await qrDataUrl(page);
-    if (qr) return { qr, challenge: false };
+    if (qr) {
+      debugLog("qr_visible", { attempt: attempt + 1, qr_length: qr.length, url: safeURL(page) });
+      return { qr, challenge: false };
+    }
     challenge ||= await challengeVisible(page);
+    if (challenge) debugLog("platform_challenge_visible", { attempt: attempt + 1, url: safeURL(page) });
     await page.waitForTimeout(250);
   }
+  debugLog("qr_wait_finished_without_qr", { challenge, url: safeURL(page) });
   return { qr: "", challenge };
 }
 
@@ -370,15 +393,25 @@ async function exportState(context, exportPath) {
   await mkdir(dirname(exportPath), { recursive: true, mode: 0o700 });
   await context.storageState({ path: exportPath });
   await chmod(exportPath, 0o600);
+  debugLog("session_state_exported", { path_configured: true });
 }
 
 async function startQr(input) {
+  const startedAt = nowMs();
   const profile = await profileDirectory(input);
   const { context, page } = await launchProfile(profile);
   try {
-    if (input?.force_login === true) await context.clearCookies();
+    debugLog("qr_start_begin", { force_login: input?.force_login === true, url: safeURL(page) });
+    if (input?.force_login === true) {
+      await context.clearCookies();
+      debugLog("qr_start_cookies_cleared");
+    }
     await page.goto(CREATOR_HOME_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
-    if (input?.force_login === true || !(await hasSessionCookie(await sessionCookies(page)))) await clickLogin(page);
+    debugLog("qr_start_creator_loaded", { url: safeURL(page), session_cookie: hasSessionCookie(await sessionCookies(page)) });
+    if (input?.force_login === true || !(await hasSessionCookie(await sessionCookies(page)))) {
+      const clicked = await clickLogin(page);
+      debugLog("qr_start_login_clicked", { clicked, url: safeURL(page) });
+    }
     const result = await waitForQrOrChallenge(page);
     if (!result.qr && !result.challenge) {
       await context.close();
@@ -387,27 +420,37 @@ async function startQr(input) {
     const handle = `qr_${randomUUID().replaceAll("-", "")}`;
     const expiresAt = new Date(nowMs() + 180000).toISOString();
     loginSessions.set(handle, { context, page, profile, expiresAt, qrSeen: Boolean(result.qr) });
+    debugLog("qr_start_ready", { handle: handle.slice(0, 16), state: result.challenge ? "challenge_required" : "waiting", qr_available: Boolean(result.qr), elapsed_ms: nowMs() - startedAt, url: safeURL(page) });
     return {
       login_handle: handle,
       state: result.challenge ? "challenge_required" : "waiting",
       qr: { format: result.qr ? "data_url" : "none", value: result.qr, expires_at: expiresAt },
     };
   } catch (error) {
+    debugLog("qr_start_failed", { code: error.code || "SIDECAR_INTERNAL_ERROR", message: error.code ? error.message : "internal error", elapsed_ms: nowMs() - startedAt, url: safeURL(page) });
     if (!loginSessions.values().some((item) => item.context === context)) await context.close().catch(() => {});
     throw error;
   }
 }
 
 async function pollQr(input) {
+  const startedAt = nowMs();
   const handle = input?.login_handle;
   const item = loginSessions.get(handle);
-  if (!item) throw protocolError("LOGIN_HANDLE_NOT_FOUND", "login handle is unavailable");
+  if (!item) {
+    debugLog("qr_poll_handle_missing", { handle: String(handle || "").slice(0, 16) });
+    throw protocolError("LOGIN_HANDLE_NOT_FOUND", "login handle is unavailable");
+  }
   if (Date.now() >= Date.parse(item.expiresAt)) {
+    debugLog("qr_poll_expired", { handle: String(handle).slice(0, 16) });
     loginSessions.delete(handle);
     await item.context.close().catch(() => {});
     throw protocolError("QR_EXPIRED", "login QR session expired");
   }
-  if (await challengeVisible(item.page)) return { state: "challenge_required" };
+  if (await challengeVisible(item.page)) {
+    debugLog("qr_poll_challenge_required", { handle: String(handle).slice(0, 16), elapsed_ms: nowMs() - startedAt, url: safeURL(item.page) });
+    return { state: "challenge_required" };
+  }
   const creatorState = await readCreatorLoginState(item.page);
   const cookies = await sessionCookies(item.page);
   const sessionCookie = hasSessionCookie(cookies);
@@ -422,18 +465,34 @@ async function pollQr(input) {
   });
   if (state === "authenticated") {
     const result = await identity(item.page, { allowSelfFallback: false });
-    if (!result.platform_user_id || !result.nickname) return { state: "scanned" };
+    if (!result.platform_user_id || !result.nickname) {
+      debugLog("qr_poll_identity_incomplete", { handle: String(handle).slice(0, 16), platform_user_id: Boolean(result.platform_user_id), nickname: Boolean(result.nickname), url: safeURL(item.page) });
+      return { state: "scanned" };
+    }
     if (input?.export_session_file) await exportState(item.context, input.export_session_file);
     loginSessions.delete(handle);
     await item.context.close().catch(() => {});
+    debugLog("qr_poll_authenticated", { handle: String(handle).slice(0, 16), elapsed_ms: nowMs() - startedAt });
     return { state: "authenticated", identity: result, session_exported: Boolean(input?.export_session_file) };
   }
+  debugLog("qr_poll_state", {
+    handle: String(handle).slice(0, 16),
+    state,
+    qr_visible: Boolean(qr),
+    qr_seen: Boolean(item.qrSeen),
+    creator_authenticated: Boolean(creatorState.authenticated),
+    identity_ready: Boolean(creatorState.identityReady),
+    session_cookie: sessionCookie,
+    elapsed_ms: nowMs() - startedAt,
+    url: safeURL(item.page),
+  });
   return { state };
 }
 
 async function cancelLogin(input) {
   const item = loginSessions.get(input?.login_handle);
   if (item) {
+    debugLog("qr_cancel", { handle: String(input.login_handle).slice(0, 16) });
     loginSessions.delete(input.login_handle);
     await item.context.close().catch(() => {});
   }
@@ -615,20 +674,29 @@ async function readAuthSnapshot(page) {
 }
 
 async function ensureAuthenticatedPage(page) {
+  const startedAt = nowMs();
+  debugLog("session_validate_begin", { url: safeURL(page), session_cookie: hasSessionCookie(await sessionCookies(page)) });
   if (!hasSessionCookie(await sessionCookies(page))) {
+    debugLog("session_validate_no_cookie");
     throw protocolError("SESSION_EXPIRED", "session is no longer valid");
   }
   await page.goto(SELF_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
+  debugLog("session_validate_self_loaded", { url: safeURL(page) });
   const deadline = nowMs() + 12000;
   let snapshot = { url: page.url(), hasProfileSignal: false, hasLoginSignal: false, bodyText: "" };
   while (nowMs() < deadline) {
     if (await challengeVisible(page)) {
+      debugLog("session_validate_challenge", { elapsed_ms: nowMs() - startedAt, url: safeURL(page) });
       throw protocolError("CHALLENGE_REQUIRED", "platform challenge is required");
     }
     snapshot = await readAuthSnapshot(page);
-    if (isAuthenticatedPage(snapshot)) return snapshot;
+    if (isAuthenticatedPage(snapshot)) {
+      debugLog("session_validate_success", { elapsed_ms: nowMs() - startedAt, url: safeURL(page) });
+      return snapshot;
+    }
     await page.waitForTimeout(500);
   }
+  debugLog("session_validate_failed", { elapsed_ms: nowMs() - startedAt, url: safeURL(page), has_profile_signal: snapshot.hasProfileSignal, has_login_signal: snapshot.hasLoginSignal });
   throw protocolError("SESSION_EXPIRED", "session page is not authenticated", false, {
     reason: "logged_out_page",
     url: snapshot.url,
@@ -984,9 +1052,12 @@ for await (const line of readline) {
   let request;
   try {
     request = parseRequest(line);
+    debugLog("request_received", { request_id: request.request_id, op: request.op });
     const result = await handle(request);
+    debugLog("request_succeeded", { request_id: request.request_id, op: request.op, duration_ms: nowMs() - started });
     process.stdout.write(`${JSON.stringify(success(request, result, started))}\n`);
   } catch (error) {
+    debugLog("request_failed", { request_id: request?.request_id || "invalid-request", op: request?.op || "", code: error.code || "SIDECAR_INTERNAL_ERROR", message: error.code ? error.message : "internal error", duration_ms: nowMs() - started });
     process.stdout.write(`${JSON.stringify(failure(request, error, started))}\n`);
   }
 }

@@ -166,6 +166,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "started", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()}); err != nil {
 			return err
 		}
+		telemetry.L(ctx).Info("qr_bind_started", "job_id", claimed.PublicID.String(), "relogin", isRebindJob(claimed))
 		if claimed.AccountID == nil || claimed.UserID == nil || deps.Accounts == nil || deps.Sessions == nil || deps.Sidecar == nil || deps.Redis == nil {
 			return fail(apperr.CodeInternal)
 		}
@@ -210,7 +211,9 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			return callErr
 		}
 		err = callErr
+		telemetry.L(ctx).Info("qr_bind_start_response", "job_id", claimed.PublicID.String(), "ok", startResponse != nil && startResponse.OK, "error_code", sidecarErrorCode(startResponse))
 		if err != nil {
+			telemetry.L(ctx).Warn("qr_bind_start_transport_failed", "job_id", claimed.PublicID.String(), "error_type", fmt.Sprintf("%T", err))
 			return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterUnavailable)
 		}
 		if code := sidecarErrorCode(startResponse); code != "" {
@@ -230,6 +233,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		if err := deps.Jobs.MarkWaiting(ctx, claimed.ID, deps.LockTTL); err != nil {
 			return err
 		}
+		telemetry.L(ctx).Info("qr_bind_waiting_for_user", "job_id", claimed.PublicID.String(), "qr_ready", started.QR.Value != "", "expires_at", started.QR.ExpiresAt)
 		lastState := "waiting"
 		if started.State == "challenge_required" {
 			lastState = "challenge_required"
@@ -273,8 +277,10 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 				return callErr
 			}
 			if callErr != nil {
+				telemetry.L(ctx).Warn("qr_bind_poll_transport_failed", "job_id", claimed.PublicID.String(), "error_type", fmt.Sprintf("%T", callErr))
 				return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterUnavailable)
 			}
+			telemetry.L(ctx).Info("qr_bind_poll_response", "job_id", claimed.PublicID.String(), "ok", response != nil && response.OK, "error_code", sidecarErrorCode(response))
 			if code := sidecarErrorCode(response); code != "" {
 				mapped := mapSidecarError(code)
 				observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, mapped, deps.Now)
@@ -285,6 +291,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 				observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
 				return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
 			}
+			telemetry.L(ctx).Info("qr_bind_poll_state", "job_id", claimed.PublicID.String(), "state", polled.State, "session_exported", polled.SessionExported, "identity_present", polled.Identity.PlatformUserID != "" || polled.Identity.Nickname != "")
 			if polled.State == "challenge_required" {
 				if lastState != "challenge_required" {
 					if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{
@@ -308,6 +315,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 				lastState = "scanned"
 			}
 			if polled.State == "authenticated" && polled.SessionExported {
+				telemetry.L(ctx).Info("qr_bind_platform_authenticated", "job_id", claimed.PublicID.String())
 				if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 					return err
 				}
@@ -334,6 +342,7 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 		return err
 	}
 	if identity.PlatformUserID == "" {
+		telemetry.L(ctx).Warn("qr_bind_identity_missing", "job_id", claimed.PublicID.String(), "nickname_present", identity.Nickname != "")
 		return finishBindFailure(ctx, deps, claimed, apperr.CodeAccountIdentityUnresolved)
 	}
 	if isRebindJob(claimed) && !rebindIdentityMatches(acct, identity) {
@@ -355,6 +364,7 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 	}
 	var validationCancelled bool
 	validationErr := func() error {
+		telemetry.L(ctx).Info("qr_bind_session_validation_started", "job_id", claimed.PublicID.String())
 		cancelled, callErr := callIfNotCancelledWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed), func() error {
 			response, err := deps.Sidecar.Call(ctx, sidecar.Request{
 				ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
@@ -388,6 +398,12 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 		return validationErr
 	}
 	if validationErr != nil {
+		telemetry.L(ctx).Warn("qr_bind_session_validation_failed", "job_id", claimed.PublicID.String(), "error_type", fmt.Sprintf("%T", validationErr), "sidecar_code", func() string {
+			if code, ok := sidecarResponseCode(validationErr); ok {
+				return code
+			}
+			return ""
+		}())
 		err := validationErr
 		code := apperr.CodeAdapterUnavailable
 		if _, ok := err.(qrValidationError); ok {
@@ -402,6 +418,7 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 		observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, code, deps.Now)
 		return finishBindRiskFailure(ctx, deps, claimed, acct.ID, code)
 	}
+	telemetry.L(ctx).Info("qr_bind_session_validation_succeeded", "job_id", claimed.PublicID.String())
 	if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 		return err
 	}
@@ -487,6 +504,7 @@ func finishBindFailure(ctx context.Context, deps QRBindDeps, claimed *job.Job, c
 }
 
 func finishBindRiskFailure(ctx context.Context, deps QRBindDeps, claimed *job.Job, acctID int64, code string, events ...job.JobEvent) error {
+	telemetry.L(ctx).Warn("qr_bind_terminal_failure", "job_id", claimed.PublicID.String(), "account_id", acctID, "code", code, "relogin", isRebindJob(claimed))
 	if deps.Tx == nil {
 		return finishBindFailure(ctx, deps, claimed, code)
 	}
