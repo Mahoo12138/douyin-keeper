@@ -24,7 +24,9 @@ def _playwright_factory():
 
 
 def _headed():
-    return os.environ.get("PLAYWRIGHT_HEADLESS", "1").lower() not in ("1", "true", "yes")
+    # Local/manual runs should show the browser unless a deployment explicitly
+    # opts into headless mode through PLAYWRIGHT_HEADLESS=1.
+    return os.environ.get("PLAYWRIGHT_HEADLESS", "0").lower() not in ("1", "true", "yes")
 
 
 def _prepare_page(context, page):

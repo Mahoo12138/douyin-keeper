@@ -50,6 +50,40 @@ def test_qr_cancel_releases_session():
         assert handle not in qr_login._sessions
 
 
+def test_identity_reads_user_title_candidate():
+    import qr_login
+
+    class _Page:
+        def evaluate(self, script):
+            assert '[data-e2e="user-title"]' in script
+            return {
+                "candidates": [{"text": "真实昵称", "source": "data-e2e=user-title"}],
+                "avatar_url": "https://example.invalid/avatar.png",
+            }
+
+    class _Context:
+        def cookies(self):
+            return [{"name": "uid_tt", "value": "platform-user-1"}]
+
+    identity = qr_login._identity(_Page(), _Context())
+
+    assert identity == {
+        "platform_user_id": "platform-user-1",
+        "nickname": "真实昵称",
+        "avatar_url": "https://example.invalid/avatar.png",
+    }
+
+
+def test_browser_defaults_to_headed_for_local_manual_runs(monkeypatch):
+    import browser
+
+    monkeypatch.delenv("PLAYWRIGHT_HEADLESS", raising=False)
+    assert browser._headed() is True
+
+    monkeypatch.setenv("PLAYWRIGHT_HEADLESS", "1")
+    assert browser._headed() is False
+
+
 def test_parse_rejects_wrong_version():
     bad = make_req()
     bad["protocol_version"] = 2

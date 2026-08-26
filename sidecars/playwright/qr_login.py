@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 import browser
 
 HOME_URL = "https://www.douyin.com/"
+SELF_URL = "https://www.douyin.com/user/self"
 LOGIN_BUTTONS = (
     "button.semi-button-primary:has-text('登录')",
     ".header-ui button:has-text('登录')",
@@ -34,6 +35,17 @@ AUTHENTICATED_SELECTORS = (
     '[class*="userName"]',
 )
 GENERIC_IDENTITY_TEXT = {"我的", "抖音", "登录", "登录 / 注册", "登录注册"}
+IDENTITY_REJECT_TOKENS = (
+    "登录",
+    "注册",
+    "关注",
+    "粉丝",
+    "获赞",
+    "作品",
+    "喜欢",
+    "收藏",
+    "观看历史",
+)
 
 _lock = threading.Lock()
 _sessions = {}
@@ -261,6 +273,70 @@ def _wait_for_qr_or_challenge(page, attempts=20, wait_ms=250):
     return "", challenge_seen
 
 
+def _clean_identity_text(value):
+    text = str(value or "").replace("\u200b", "").replace("\ufeff", "")
+    text = " ".join(text.split()).strip(" -_｜|·•")
+    if not text or text in GENERIC_IDENTITY_TEXT or len(text) > 64:
+        return ""
+    if any(token in text for token in IDENTITY_REJECT_TOKENS):
+        return ""
+    return text
+
+
+def _read_identity_candidates(page):
+    """Read profile identity from the page without logging page contents."""
+    try:
+        payload = page.evaluate(
+            """() => {
+              const normalize = (value) => String(value || '')
+                .replace(/[\\u200b\\u200c\\u200d\\ufeff]/g, '')
+                .replace(/\\s+/g, ' ')
+                .trim();
+              const candidates = [];
+              const add = (value, source) => {
+                const text = normalize(value).replace(/^@+/, '').trim();
+                if (text) candidates.push({ text, source });
+              };
+              add(document.querySelector('[data-e2e="user-title"]')?.innerText, 'data-e2e=user-title');
+              add(document.querySelector(
+                '[class*="userName"], [class*="UserName"], [class*="nickname"], [class*="Nickname"], h1'
+              )?.innerText, 'profile-name-selector');
+              add(document.title.split(/[｜|\\-]/)[0], 'document-title');
+              add(document.querySelector('meta[property="og:title"]')?.content?.split(/[｜|\\-]/)[0], 'og:title');
+
+              const selfLink = document.querySelector('a[href*="/user/self"]');
+              if (selfLink) {
+                const root = selfLink.closest('div')?.parentElement?.parentElement || selfLink;
+                const lines = normalize(root.innerText).split(
+                  /关注|粉丝|获赞|我的喜欢|我的收藏|观看历史|稍后再看|我的作品|我的预约|我的订单|退出登录/
+                );
+                add(lines[0], 'self-link-root');
+              }
+              if (location.pathname.includes('/user/')) {
+                add(document.querySelector('meta[name="description"]')?.content?.split(/[，,。|｜-]/)[0], 'description');
+              }
+
+              const avatar = document.querySelector(
+                '[data-e2e="user-avatar"] img, [class*="avatar" i] img, meta[property="og:image"]'
+              );
+              return {
+                candidates,
+                avatar_url: avatar?.content || avatar?.currentSrc || avatar?.src || '',
+              };
+            }"""
+        )
+    except Exception:
+        return {"candidates": [], "avatar_url": ""}
+
+    if isinstance(payload, dict):
+        candidates = payload.get("candidates") or []
+        avatar_url = str(payload.get("avatar_url") or "").strip()
+        return {"candidates": candidates if isinstance(candidates, list) else [], "avatar_url": avatar_url}
+    if isinstance(payload, str):
+        return {"candidates": [{"text": payload, "source": "legacy"}], "avatar_url": ""}
+    return {"candidates": [], "avatar_url": ""}
+
+
 def _identity(page, context):
     platform_user_id = ""
     try:
@@ -271,21 +347,42 @@ def _identity(page, context):
                     break
     except Exception:
         pass
+
+    identity = _read_identity_candidates(page)
     nickname = ""
-    try:
-        nickname = page.evaluate(
-            """() => {
-              for (const selector of ['[class*="userName"]','[class*="nickname"]','[data-e2e="user-info"]']) {
-                const node = document.querySelector(selector);
-                const text = (node?.textContent || '').trim();
-                if (text && text.length < 64 && text !== '我的' && text !== '抖音') return text;
-              }
-              return '';
-            }"""
-        ) or ""
-    except Exception:
-        pass
-    return {"platform_user_id": platform_user_id[:128], "nickname": str(nickname).strip()[:64], "avatar_url": None}
+    for candidate in identity["candidates"]:
+        value = candidate.get("text") if isinstance(candidate, dict) else candidate
+        nickname = _clean_identity_text(value)
+        if nickname:
+            break
+
+    # The post-login page is not guaranteed to render the account header. The
+    # reference flow resolves this by opening the authenticated self page,
+    # which exposes the stable user-title element used below.
+    if not nickname:
+        try:
+            page.goto(SELF_URL, wait_until="domcontentloaded", timeout=30000)
+            try:
+                page.wait_for_load_state("networkidle", timeout=10000)
+            except Exception:
+                pass
+        except Exception:
+            pass
+        identity = _read_identity_candidates(page)
+        for candidate in identity["candidates"]:
+            value = candidate.get("text") if isinstance(candidate, dict) else candidate
+            nickname = _clean_identity_text(value)
+            if nickname:
+                break
+
+    avatar_url = identity.get("avatar_url") or ""
+    if not (avatar_url.startswith("https://") or avatar_url.startswith("http://")):
+        avatar_url = None
+    return {
+        "platform_user_id": platform_user_id[:128],
+        "nickname": nickname[:64],
+        "avatar_url": avatar_url,
+    }
 
 
 def start(input_data):
