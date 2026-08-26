@@ -191,7 +191,7 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 			}
 			if code := sidecarErrorCode(response); code != "" {
 				if code == sidecar.ErrSMSCodeInvalid {
-					if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "sms_code_invalid", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()}); err != nil {
+					if err := appendSMSCodeInvalidEvent(ctx, deps.Jobs, claimed.ID, deps.Now); err != nil {
 						return err
 					}
 					continue
@@ -217,7 +217,9 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 			if verified.State == "authenticated" && verified.SessionExported {
 				return completeBind(ctx, deps, claimed, acct, exportPath, verified.Identity)
 			}
-			_ = deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "sms_code_invalid", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()})
+			if err := appendSMSCodeInvalidEvent(ctx, deps.Jobs, claimed.ID, deps.Now); err != nil {
+				return err
+			}
 		}
 		return fail(apperr.CodeSMSExpired)
 	}
