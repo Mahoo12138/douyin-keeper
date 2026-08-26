@@ -7,6 +7,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAuthenticatedPage } from "../auth-state.mjs";
 import { canCommitFriendSync } from "../friend-scan.mjs";
+import { qrLoginState } from "../login-state.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -107,4 +108,13 @@ test("friend sync cannot commit without the follower response and non-empty rela
   assert.equal(canCommitFriendSync({ responseSeen: true, friendCount: 0, complete: true }), false);
   assert.equal(canCommitFriendSync({ responseSeen: true, friendCount: 2, complete: false }), false);
   assert.equal(canCommitFriendSync({ responseSeen: true, friendCount: 2, complete: true }), true);
+});
+
+test("QR login reports scan only after a visible QR has disappeared or a session is observed", () => {
+  assert.equal(qrLoginState({ qrSeen: false, qrVisible: false }), "waiting");
+  assert.equal(qrLoginState({ qrSeen: true, qrVisible: true }), "waiting");
+  assert.equal(qrLoginState({ qrSeen: true, qrVisible: false }), "scanned");
+  assert.equal(qrLoginState({ sessionCookie: true }), "scanned");
+  assert.equal(qrLoginState({ creatorAuthenticated: true, identityReady: true, sessionCookie: true }), "authenticated");
+  assert.equal(qrLoginState({ challenge: true, qrSeen: true }), "challenge_required");
 });

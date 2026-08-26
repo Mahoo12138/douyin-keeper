@@ -14,11 +14,13 @@ import { randomUUID } from "node:crypto";
 import { chromium } from "playwright";
 import { isAuthenticatedPage } from "./auth-state.mjs";
 import { canCommitFriendSync } from "./friend-scan.mjs";
+import { qrLoginState } from "./login-state.mjs";
 
 const PROTOCOL_VERSION = 1;
 const ADAPTER = "browser.consumer";
 const ADAPTER_VERSION = "node-0.1.0";
 const HOME_URL = "https://www.douyin.com/";
+const CREATOR_HOME_URL = "https://creator.douyin.com/";
 const SELF_URL = "https://www.douyin.com/user/self";
 const SESSION_COOKIE_NAMES = new Set(["sessionid", "sessionid_ss", "sid_tt"]);
 const CHALLENGE_TEXTS = ["安全验证", "滑动验证", "人机验证", "身份验证"];
@@ -28,6 +30,7 @@ const LOGIN_BUTTONS = [
   "header button:has-text('登录')",
   "nav button:has-text('登录')",
   "div[role='button']:has-text('登录')",
+  "button:has-text('登录')",
 ];
 const QR_SELECTORS = [
   "#animate_qrcode_container img, #animate_qrcode_container canvas",
@@ -273,10 +276,10 @@ function cleanIdentity(value) {
   return text;
 }
 
-async function identity(page) {
+async function identity(page, { allowSelfFallback = true } = {}) {
   let result = await readIdentity(page);
   let nickname = result.candidates.map((candidate) => cleanIdentity(candidate.text)).find(Boolean) || "";
-  if (!nickname) {
+  if (!nickname && allowSelfFallback) {
     try {
       await page.goto(SELF_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
       await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
@@ -287,7 +290,7 @@ async function identity(page) {
   const avatar = /^https?:\/\//.test(result.avatar_url || "") ? result.avatar_url : null;
   const cookies = await sessionCookies(page);
   const uid = cookies.find((cookie) => ["uid_tt", "uid_tt_ss", "sid_uid"].includes(cookie.name) && cookie.value)?.value || "";
-  return { platform_user_id: String(uid).slice(0, 128), nickname: nickname.slice(0, 64), avatar_url: avatar };
+  return { platform_user_id: String(uid || result.platform_user_id || "").slice(0, 128), nickname: nickname.slice(0, 64), avatar_url: avatar };
 }
 
 async function readIdentity(page) {
@@ -296,6 +299,12 @@ async function readIdentity(page) {
       const normalize = (value) => String(value || "").replace(/[\u200b\u200c\u200d\ufeff]/g, "").replace(/\s+/g, " ").trim();
       const candidates = [];
       const add = (value, source) => { const text = normalize(value); if (text) candidates.push({ text, source }); };
+      const xpathText = (path) => {
+        const node = document.evaluate(path, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+        return node?.textContent || "";
+      };
+      const creatorUserID = xpathText('//*[contains(@id, "garfish_app_for_douyin_creator_pc_home")]/div/div[2]/div/div[2]/div[1]/div[2]/div[1]/div[3]');
+      add(xpathText('//*[contains(@id, "garfish_app_for_douyin_creator_pc_home")]/div/div[2]/div/div[2]/div[1]/div[2]/div[1]/div[1]/div[1]'), "creator-user-name");
       add(document.querySelector('[data-e2e="user-title"]')?.innerText, "data-e2e=user-title");
       add(document.querySelector('[class*="userName"], [class*="UserName"], [class*="nickname"], [class*="Nickname"], h1')?.innerText, "profile-name-selector");
       add(document.title.split(/[｜|\-]/)[0], "document-title");
@@ -306,10 +315,51 @@ async function readIdentity(page) {
         add(normalize(root.innerText).split(/关注|粉丝|获赞|我的喜欢|我的收藏|观看历史|稍后再看|我的作品|我的预约|我的订单|退出登录/)[0], "self-link-root");
       }
       const avatar = document.querySelector('[data-e2e="user-avatar"] img, [class*="avatar" i] img, meta[property="og:image"]');
-      return { candidates, avatar_url: avatar?.content || avatar?.currentSrc || avatar?.src || "" };
+      return { candidates, platform_user_id: normalize(creatorUserID), avatar_url: avatar?.content || avatar?.currentSrc || avatar?.src || "" };
     });
   } catch {
-    return { candidates: [], avatar_url: "" };
+    return { candidates: [], platform_user_id: "", avatar_url: "" };
+  }
+}
+
+async function readCreatorLoginState(page) {
+  try {
+    return await page.evaluate(() => {
+      const visible = (node) => {
+        if (!node) return false;
+        const rect = node.getBoundingClientRect();
+        const style = window.getComputedStyle(node);
+        return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+      };
+      const ready = document.evaluate(
+        '//*[contains(@id, "garfish_app_for_douyin_creator_pc_home")]/div/div[2]/div/div[2]/div[1]',
+        document,
+        null,
+        XPathResult.FIRST_ORDERED_NODE_TYPE,
+        null,
+      ).singleNodeValue;
+      const uniqueId = document.evaluate(
+        '//*[contains(@id, "garfish_app_for_douyin_creator_pc_home")]/div/div[2]/div/div[2]/div[1]/div[2]/div[1]/div[3]',
+        document,
+        null,
+        XPathResult.FIRST_ORDERED_NODE_TYPE,
+        null,
+      ).singleNodeValue;
+      const name = document.evaluate(
+        '//*[contains(@id, "garfish_app_for_douyin_creator_pc_home")]/div/div[2]/div/div[2]/div[1]/div[2]/div[1]/div[1]/div[1]',
+        document,
+        null,
+        XPathResult.FIRST_ORDERED_NODE_TYPE,
+        null,
+      ).singleNodeValue;
+      return {
+        authenticated: /\/creator-micro\//.test(location.href) || visible(ready),
+        identityReady: Boolean(uniqueId?.textContent?.trim()) && Boolean(name?.textContent?.trim()),
+        url: location.href,
+      };
+    });
+  } catch {
+    return { authenticated: false, identityReady: false, url: "" };
   }
 }
 
@@ -327,7 +377,7 @@ async function startQr(input) {
   const { context, page } = await launchProfile(profile);
   try {
     if (input?.force_login === true) await context.clearCookies();
-    await page.goto(HOME_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.goto(CREATOR_HOME_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     if (input?.force_login === true || !(await hasSessionCookie(await sessionCookies(page)))) await clickLogin(page);
     const result = await waitForQrOrChallenge(page);
     if (!result.qr && !result.challenge) {
@@ -336,7 +386,7 @@ async function startQr(input) {
     }
     const handle = `qr_${randomUUID().replaceAll("-", "")}`;
     const expiresAt = new Date(nowMs() + 180000).toISOString();
-    loginSessions.set(handle, { context, page, profile, expiresAt });
+    loginSessions.set(handle, { context, page, profile, expiresAt, qrSeen: Boolean(result.qr) });
     return {
       login_handle: handle,
       state: result.challenge ? "challenge_required" : "waiting",
@@ -358,24 +408,27 @@ async function pollQr(input) {
     throw protocolError("QR_EXPIRED", "login QR session expired");
   }
   if (await challengeVisible(item.page)) return { state: "challenge_required" };
+  const creatorState = await readCreatorLoginState(item.page);
   const cookies = await sessionCookies(item.page);
-  if (hasSessionCookie(cookies) && !(await challengeVisible(item.page))) {
-    try {
-      await ensureAuthenticatedPage(item.page);
-    } catch (error) {
-      if (error.code === "CHALLENGE_REQUIRED") return { state: "challenge_required" };
-      if (error.code === "SESSION_EXPIRED") return { state: "scanned" };
-      throw error;
-    }
+  const sessionCookie = hasSessionCookie(cookies);
+  const qr = await qrDataUrl(item.page);
+  if (qr) item.qrSeen = true;
+  const state = qrLoginState({
+    creatorAuthenticated: creatorState.authenticated,
+    identityReady: creatorState.identityReady,
+    sessionCookie,
+    qrSeen: item.qrSeen,
+    qrVisible: Boolean(qr),
+  });
+  if (state === "authenticated") {
+    const result = await identity(item.page, { allowSelfFallback: false });
+    if (!result.platform_user_id || !result.nickname) return { state: "scanned" };
     if (input?.export_session_file) await exportState(item.context, input.export_session_file);
-    const result = await identity(item.page);
     loginSessions.delete(handle);
     await item.context.close().catch(() => {});
     return { state: "authenticated", identity: result, session_exported: Boolean(input?.export_session_file) };
   }
-  const qr = await qrDataUrl(item.page);
-  if (!qr) await clickLogin(item.page);
-  return { state: "waiting" };
+  return { state };
 }
 
 async function cancelLogin(input) {
@@ -421,7 +474,7 @@ async function startSms(input) {
   const profile = await profileDirectory(input);
   const { context, page } = await launchProfile(profile);
   try {
-    await page.goto(HOME_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.goto(CREATOR_HOME_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
     await clickLogin(page);
     await clickText(page, ["短信登录", "验证码登录", "手机登录"]);
     const phone = await firstVisible(page, SMS_PHONE_SELECTORS);
