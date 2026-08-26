@@ -70,19 +70,26 @@ type bindIdentity struct {
 	AvatarURL      *string `json:"avatar_url"`
 }
 
-func cancelQRSession(client sidecar.Client, loginHandle string) {
+func cancelQRSession(ctx context.Context, client sidecar.Client, loginHandle string) {
 	if client == nil || loginHandle == "" {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	callCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, _ = client.Call(ctx, sidecar.Request{
+	response, err := client.Call(callCtx, sidecar.Request{
 		ProtocolVersion: sidecar.ProtocolVersion,
 		RequestID:       uuid.New().String(),
 		Op:              sidecar.OpsLoginQRCancel,
 		DeadlineMS:      5_000,
 		Input:           map[string]any{"login_handle": loginHandle},
 	})
+	if err != nil {
+		telemetry.L(ctx).Warn("QR session cancellation failed", "error_type", fmt.Sprintf("%T", err))
+		return
+	}
+	if code := sidecarErrorCode(response); code != "" {
+		telemetry.L(ctx).Warn("QR session cancellation rejected", "code", code)
+	}
 }
 
 type resettableSidecar interface {
@@ -99,7 +106,9 @@ func startQRWithRecovery(ctx context.Context, client sidecar.Client, request sid
 	if !ok {
 		return response, err
 	}
-	_ = resetter.Close()
+	if err := resetter.Close(); err != nil {
+		telemetry.L(ctx).Warn("QR sidecar reset close failed", "error_type", fmt.Sprintf("%T", err))
+	}
 	return client.Call(ctx, request)
 }
 
@@ -205,7 +214,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, deps.Now)
 			return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
 		}
-		defer cancelQRSession(deps.Sidecar, started.LoginHandle)
+		defer cancelQRSession(ctx, deps.Sidecar, started.LoginHandle)
 		if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 			return err
 		}

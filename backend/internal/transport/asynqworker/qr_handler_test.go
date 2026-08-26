@@ -1,8 +1,12 @@
 package asynqworker
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +14,7 @@ import (
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/account"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/outbox"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/sidecar"
@@ -105,8 +110,9 @@ type bindSessionStub struct {
 }
 
 type qrStartRecoveryStub struct {
-	closed bool
-	calls  int
+	closed   bool
+	calls    int
+	closeErr error
 }
 
 func (s *qrStartRecoveryStub) Call(context.Context, sidecar.Request) (*sidecar.Response, error) {
@@ -122,7 +128,7 @@ func (s *qrStartRecoveryStub) Call(context.Context, sidecar.Request) (*sidecar.R
 
 func (s *qrStartRecoveryStub) Close() error {
 	s.closed = true
-	return nil
+	return s.closeErr
 }
 
 func (r *bindSessionStub) Store(ctx context.Context, _ int64, _, _ uuid.UUID, _ []byte) error {
@@ -204,6 +210,25 @@ func TestQRStartRecoversFromStaleSidecarRuntime(t *testing.T) {
 	}
 	if response == nil || !response.OK || stub.calls != 2 || !stub.closed {
 		t.Fatalf("response = %#v, calls = %d, closed = %t", response, stub.calls, stub.closed)
+	}
+}
+
+func TestQRStartRecoveryReportsResetCloseErrors(t *testing.T) {
+	var logs bytes.Buffer
+	ctx := telemetry.WithContext(context.Background(), slog.New(slog.NewTextHandler(&logs, nil)))
+	stub := &qrStartRecoveryStub{closeErr: errors.New("sidecar close failed")}
+
+	response, err := startQRWithRecovery(ctx, stub, sidecar.Request{
+		ProtocolVersion: sidecar.ProtocolVersion,
+		RequestID:       uuid.New().String(),
+		Op:              sidecar.OpsLoginQRStart,
+		DeadlineMS:      60_000,
+	})
+	if err != nil || response == nil || !response.OK {
+		t.Fatalf("startQRWithRecovery() response=%#v err=%v", response, err)
+	}
+	if !strings.Contains(logs.String(), "QR sidecar reset close failed") {
+		t.Fatalf("reset close failure was not logged: %s", logs.String())
 	}
 }
 
