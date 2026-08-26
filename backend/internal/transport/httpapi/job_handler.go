@@ -19,6 +19,8 @@ import (
 
 var smsVerificationCodePattern = regexp.MustCompile(`^[0-9]{4,8}$`)
 
+var jobEventPollInterval = 2 * time.Second
+
 func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
 	p := auth.MustPrincipal(r.Context())
 	id, err := uuid.Parse(pathParam(r, "jobId"))
@@ -91,7 +93,7 @@ func (s *Server) handleJobEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Poll loop ~2s; emit only rows newer than last.
-	tick := time.NewTicker(2 * time.Second)
+	tick := time.NewTicker(jobEventPollInterval)
 	defer tick.Stop()
 	idle := time.NewTimer(5 * time.Minute)
 	defer idle.Stop()
@@ -104,7 +106,10 @@ func (s *Server) handleJobEvents(w http.ResponseWriter, r *http.Request) {
 		case <-tick.C:
 			events, err := s.jobs.Events(r.Context(), j.ID)
 			if err != nil {
-				continue
+				// The stream has already committed its 200 response, so an API
+				// error is no longer possible. Close instead; the SDK reconnects
+				// with Last-Event-ID and the web layer reconciles the job state.
+				return
 			}
 			for _, e := range events {
 				if e.Seq > last {

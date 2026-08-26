@@ -91,12 +91,55 @@ func TestHandleJobEventsReturnsErrorBeforeStartingStreamWhenReplayFails(t *testi
 	}
 }
 
+func TestHandleJobEventsClosesStreamWhenPollingFails(t *testing.T) {
+	previousInterval := jobEventPollInterval
+	jobEventPollInterval = time.Millisecond
+	defer func() { jobEventPollInterval = previousInterval }()
+
+	publicID := uuid.New()
+	repo := &jobHandlerRepo{
+		item:          &job.Job{ID: 42, PublicID: publicID, UserID: int64Ptr(7)},
+		events:        []job.JobEvent{{Seq: 1, EventType: "started", Payload: json.RawMessage(`{}`)}},
+		pollEventsErr: errors.New("database unavailable during poll"),
+	}
+	server := &Server{jobs: job.NewService(repo)}
+
+	req := httptest.NewRequest("GET", "/api/v1/jobs/"+publicID.String()+"/events", nil)
+	ctx := chi.NewRouteContext()
+	ctx.URLParams.Add("jobId", publicID.String())
+	ctxWithRoute := context.WithValue(req.Context(), chi.RouteCtxKey, ctx)
+	req = req.WithContext(auth.WithPrincipal(ctxWithRoute, auth.Principal{UserID: 7}))
+	res := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		server.handleJobEvents(res, req)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("job event stream did not close after polling failure")
+	}
+	if res.Code != 200 {
+		t.Fatalf("status = %d, want 200 after stream started", res.Code)
+	}
+	if repo.eventsCalls < 2 {
+		t.Fatalf("ListEvents calls = %d, want initial replay and at least one poll", repo.eventsCalls)
+	}
+	if got := res.Body.String(); !strings.Contains(got, "event: started\nid: 1") {
+		t.Fatalf("stream body did not contain initial replay: %q", got)
+	}
+}
+
 func int64Ptr(value int64) *int64 { return &value }
 
 type jobHandlerRepo struct {
-	item        *job.Job
-	eventsErr   error
-	eventsCalls int
+	item          *job.Job
+	events        []job.JobEvent
+	eventsErr     error
+	pollEventsErr error
+	eventsCalls   int
 }
 
 func (r *jobHandlerRepo) CreateJob(context.Context, *job.Job) error { return nil }
@@ -117,6 +160,12 @@ func (r *jobHandlerRepo) Finish(context.Context, int64, job.Status, *string, tim
 func (r *jobHandlerRepo) IsCancelRequested(context.Context, int64) (bool, error) { return false, nil }
 func (r *jobHandlerRepo) ListEvents(context.Context, int64) ([]job.JobEvent, error) {
 	r.eventsCalls++
+	if r.eventsCalls > 1 && r.pollEventsErr != nil {
+		return nil, r.pollEventsErr
+	}
+	if r.events != nil {
+		return r.events, r.eventsErr
+	}
 	return nil, r.eventsErr
 }
 func (r *jobHandlerRepo) AppendEvent(context.Context, int64, job.JobEvent) error { return nil }
