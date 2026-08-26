@@ -3,6 +3,8 @@ package asynqworker
 import (
 	"context"
 	"time"
+
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 )
 
 const workerHeartbeatInterval = 20 * time.Second
@@ -40,7 +42,12 @@ func runLeaseHeartbeat(ctx context.Context, lease time.Duration, renew func(cont
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			_ = renew(ctx)
+			if err := renew(ctx); err != nil {
+				// A heartbeat failure must not turn an in-flight platform result
+				// into an automatic retry. The lease/reaper boundary still decides
+				// the final state, but the failure must be visible to operators.
+				telemetry.L(ctx).Warn("worker lease heartbeat failed", "err", err, "lease", lease)
+			}
 		}
 	}
 }
