@@ -775,6 +775,7 @@ function attachFollowerCollector(page) {
         for (const child of Object.values(value)) walk(child, depth + 1);
       };
       walk(payload);
+      debugLog("friends_follower_response", { has_more: collector.hasMore, friend_count: collector.friends.size });
     } catch {
       // A response may disappear before its body is readable; the scan below
       // still requires a complete, non-empty collector before succeeding.
@@ -803,35 +804,57 @@ async function scrollFollowerList(page) {
         const style = window.getComputedStyle(node);
         return /(auto|scroll)/.test(style.overflowY || "") && node.scrollHeight > node.clientHeight + 20;
       };
-      const dialogs = [...document.querySelectorAll('[role="dialog"], [class*="modal" i], [class*="drawer" i]')].filter(visible);
-      const scope = dialogs.at(-1) || document;
       const documentScroller = document.scrollingElement;
-      const candidates = [
-        ...(scope === document ? [] : [scope]),
-        ...(scope.querySelectorAll ? [...scope.querySelectorAll("*")] : []),
-        documentScroller,
-      ].filter((node, index, all) => node && all.indexOf(node) === index && visible(node) && scrollable(node));
+      const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      const layerRoots = [...document.querySelectorAll("*")].filter((node) => {
+        if (!visible(node)) return false;
+        const style = window.getComputedStyle(node);
+        const role = node.getAttribute("role") || "";
+        const className = typeof node.className === "string" ? node.className : "";
+        const namedLayer = role === "dialog" || /modal|drawer|dialog/i.test(className);
+        const zIndex = Number.parseInt(style.zIndex, 10);
+        const positionedLayer = ["fixed", "absolute"].includes(style.position)
+          && Number.isFinite(zIndex)
+          && zIndex >= 10
+          && node.getBoundingClientRect().width >= Math.min(420, viewportWidth * 0.35)
+          && node.getBoundingClientRect().height >= Math.min(240, viewportHeight * 0.35);
+        return namedLayer || positionedLayer;
+      });
+      const scopedNodes = layerRoots.flatMap((root) => [root, ...root.querySelectorAll("*")]);
+      const candidates = scopedNodes.filter((node, index, all) =>
+        node && all.indexOf(node) === index && node !== documentScroller && visible(node) && scrollable(node),
+      );
       const target = candidates.sort((left, right) =>
         (right.scrollHeight - right.clientHeight) - (left.scrollHeight - left.clientHeight),
       ).at(0);
       if (!target) {
-        window.scrollTo(0, documentScroller?.scrollHeight || 0);
-        return { moved: false, atBottom: true };
+        return { moved: false, atBottom: false, targetFound: false, scopeFound: layerRoots.length > 0, candidateCount: candidates.length };
       }
       const before = target.scrollTop;
       const next = Math.min(target.scrollHeight, before + Math.max(900, Math.floor(target.clientHeight * 0.9)));
       target.scrollTop = next;
       target.dispatchEvent(new Event("scroll", { bubbles: true }));
-      return { moved: target.scrollTop > before, atBottom: target.scrollTop + target.clientHeight >= target.scrollHeight - 8 };
+      return {
+        moved: target.scrollTop > before,
+        atBottom: target.scrollTop + target.clientHeight >= target.scrollHeight - 8,
+        targetFound: true,
+        scopeFound: layerRoots.length > 0,
+        candidateCount: candidates.length,
+        before,
+        after: target.scrollTop,
+        scrollHeight: target.scrollHeight,
+        clientHeight: target.clientHeight,
+      };
     });
   } catch {
-    await page.mouse.wheel(0, 1200).catch(() => {});
-    return { moved: true, atBottom: false };
+    return { moved: false, atBottom: false, targetFound: false, scopeFound: false, candidateCount: 0 };
   }
 }
 
 async function listFriends(input) {
   return withSession(input, async (page) => {
+    debugLog("friends_list_start", { url: safeURL(page) });
     await page.goto(SELF_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForTimeout(1800);
     const collector = attachFollowerCollector(page);
@@ -855,6 +878,7 @@ async function listFriends(input) {
       }
     }
     if (!opened) throw protocolError("BROWSER_SELECTOR_CHANGED", "friend follower entry is unavailable");
+    debugLog("friends_follower_panel_opened", { url: safeURL(page) });
     await page.waitForTimeout(4000);
     let stable = 0;
     let stuck = 0;
@@ -870,6 +894,7 @@ async function listFriends(input) {
       if (collector.responseSeen && collector.hasMore === null && atBottom && stable >= 4) { complete = true; break; }
       if (collector.responseSeen && atBottom && stable >= 8) { complete = true; break; }
       const state = await scrollFollowerList(page);
+      debugLog("friends_scroll", { round: round + 1, ...state, friend_count: collector.friends.size, has_more: collector.hasMore });
       atBottom = Boolean(state?.atBottom);
       if (state?.moved) stuck = 0; else stuck += 1;
       if (!collector.responseSeen && stuck >= 8) break;
@@ -877,6 +902,7 @@ async function listFriends(input) {
       await page.waitForTimeout(900);
     }
     await flushFollowerCollector(collector);
+    debugLog("friends_list_scan_finished", { friend_count: collector.friends.size, response_seen: collector.responseSeen, has_more: collector.hasMore, at_bottom: atBottom, complete });
     if (await visibleText(page, ["操作频繁", "请求过于频繁", "访问受限"])) throw protocolError("PLATFORM_RATE_LIMITED", "platform rate limit was detected");
     if (!canCommitFriendSync({ responseSeen: collector.responseSeen, friendCount: collector.friends.size, complete })) {
       throw protocolError("BROWSER_SELECTOR_CHANGED", "friend follower data was not completely loaded", false, {
