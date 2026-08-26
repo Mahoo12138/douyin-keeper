@@ -162,7 +162,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		if err != nil {
 			return fail(apperr.CodeAccountBusy)
 		}
-		defer func() { _ = lock.Release(context.Background()) }()
+		defer releaseWorkerLock(ctx, lock, "account")
 		if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
 			return err
 		}

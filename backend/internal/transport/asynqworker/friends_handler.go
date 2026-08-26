@@ -99,7 +99,7 @@ func friendsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(contex
 		if err != nil {
 			return fail(apperr.CodeAccountBusy)
 		}
-		defer func() { _ = lock.Release(context.Background()) }()
+		defer releaseWorkerLock(ctx, lock, "account")
 		if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, now); cancelled || err != nil {
 			return err
 		}

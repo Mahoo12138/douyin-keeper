@@ -93,7 +93,7 @@ func conversationsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(
 		if err != nil {
 			return fail(apperr.CodeAccountBusy)
 		}
-		defer func() { _ = lock.Release(context.Background()) }()
+		defer releaseWorkerLock(ctx, lock, "account")
 
 		var items []conversation.SyncItem
 		seen := make(map[string]struct{})

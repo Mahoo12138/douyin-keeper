@@ -214,7 +214,7 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		if err != nil {
 			return failWithQuota(apperr.CodeAccountBusy)
 		}
-		defer func() { _ = lock.Release(context.Background()) }()
+		defer releaseWorkerLock(ctx, lock, "account")
 		latest, err := deps.Accounts.GetByID(ctx, claimed.AccountID)
 		if err != nil || latest == nil || latest.UserID != acct.UserID {
 			return failWithQuota(apperr.CodeNotFound)
