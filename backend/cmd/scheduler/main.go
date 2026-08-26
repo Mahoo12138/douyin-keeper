@@ -133,7 +133,9 @@ func main() {
 				return
 			case <-t.C:
 				// Reconciler: return expired publish locks to pending (docs/15 §20).
-				if n, err := outboxRepo.ReconcileExpiredLocks(ctx); err == nil && n > 0 {
+				if n, err := outboxRepo.ReconcileExpiredLocks(ctx); err != nil {
+					log.Error("outbox expired lock reconciliation failed", "err", err)
+				} else if n > 0 {
 					log.Info("outbox expired locks reconciled", "count", n)
 				}
 				if n, err := sendReaper.RunOnce(ctx); err != nil {
