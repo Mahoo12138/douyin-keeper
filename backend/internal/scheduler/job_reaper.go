@@ -94,6 +94,10 @@ func (r *JobLeaseReaper) RunOnce(ctx context.Context) (int, error) {
 		}
 		return nil
 	})
+	if err != nil {
+		// Job closure, event append and binding cleanup share one transaction.
+		return 0, err
+	}
 	return count, err
 }
 

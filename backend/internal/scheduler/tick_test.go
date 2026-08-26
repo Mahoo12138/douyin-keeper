@@ -91,6 +91,12 @@ func (f *fakeOutbox) Add(_ context.Context, m outbox.Message) error {
 	return nil
 }
 
+type failingOutbox struct{ err error }
+
+func (failingOutbox) Add(context.Context, outbox.Message) error {
+	return errors.New("outbox unavailable")
+}
+
 type fakeTx struct{}
 
 func (fakeTx) WithinTx(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) }
@@ -159,6 +165,17 @@ func TestTickRunnerSkipsWhenDailyQuotaIsUnavailable(t *testing.T) {
 	}
 	if len(store.jobs) != 0 || len(store.statuses) != 1 || store.statuses[0].code != apperr.CodeDailySendQuotaExceeded {
 		t.Fatalf("jobs=%d statuses=%+v", len(store.jobs), store.statuses)
+	}
+}
+
+func TestTickRunnerDoesNotReportRolledBackMutationCounts(t *testing.T) {
+	store := &fakeIntentStore{seen: map[string]bool{}}
+	runner := NewTickRunner(fakeDueTasks{items: []*task.SparkTask{testTask()}}, store,
+		fakeGate{decision: entitlement.AuthorizationDecision{Allowed: true}}, &fakeQuota{}, failingOutbox{}, fakeTx{}, 10)
+
+	stats, err := runner.RunOnce(context.Background())
+	if err == nil || stats.Created != 0 || stats.Skipped != 0 {
+		t.Fatalf("stats=%+v err=%v, want zero committed mutations", stats, err)
 	}
 }
 

@@ -79,5 +79,10 @@ func (r *SendLeaseReaper) RunOnce(ctx context.Context) (int, error) {
 		}
 		return nil
 	})
+	if err != nil {
+		// The batch is transactional; none of the closed attempts or quota
+		// adjustments are committed when any item fails.
+		return 0, err
+	}
 	return count, err
 }

@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -51,16 +52,20 @@ func (f *fakeExpiredStore) SetIntentStatus(_ context.Context, id int64, _ send.I
 	return nil
 }
 
-type fakeQuotaAccounting struct{ releases, failures int }
+type fakeQuotaAccounting struct {
+	releases, failures int
+	releaseErr         error
+	failureErr         error
+}
 
 func (f *fakeQuotaAccounting) ReleaseDaily(context.Context, int64, string) error {
 	f.releases++
-	return nil
+	return f.releaseErr
 }
 
 func (f *fakeQuotaAccounting) IncrFailed(context.Context, int64, string) error {
 	f.failures++
-	return nil
+	return f.failureErr
 }
 
 func TestSendLeaseReaperFailsClosedWithoutRetry(t *testing.T) {
@@ -89,5 +94,18 @@ func TestSendLeaseReaperFailsClosedWithoutRetry(t *testing.T) {
 	}
 	if count, err := reaper.RunOnce(context.Background()); err != nil || count != 0 {
 		t.Fatalf("reaper repeated count=%d err=%v", count, err)
+	}
+}
+
+func TestSendLeaseReaperDoesNotReportRolledBackCount(t *testing.T) {
+	date := "2026-08-24"
+	store := &fakeExpiredStore{items: []send.ExpiredSendJob{{
+		Job: &send.SendJob{ID: 11, Status: send.JobRunning}, Intent: &send.SendIntent{ID: 21, LocalDate: &date}, UserID: 31,
+	}}}
+	reaper := NewSendLeaseReaper(store, &fakeQuotaAccounting{releaseErr: errors.New("quota unavailable")}, fakeTx{}, 10)
+
+	count, err := reaper.RunOnce(context.Background())
+	if err == nil || count != 0 {
+		t.Fatalf("count=%d err=%v, want zero committed count", count, err)
 	}
 }

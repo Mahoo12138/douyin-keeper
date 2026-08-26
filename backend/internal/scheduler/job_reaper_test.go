@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -20,7 +21,8 @@ type fakeExpiredJobStore struct {
 		status job.Status
 		code   string
 	}
-	events []job.JobEvent
+	events   []job.JobEvent
+	eventErr error
 }
 
 func (f *fakeExpiredJobStore) FindExpiredLeases(context.Context, time.Time, int) ([]*job.Job, error) {
@@ -41,6 +43,9 @@ func (f *fakeExpiredJobStore) FinishExpired(_ context.Context, id int64, status 
 }
 
 func (f *fakeExpiredJobStore) AppendEvent(_ context.Context, _ int64, event job.JobEvent) error {
+	if f.eventErr != nil {
+		return f.eventErr
+	}
 	f.events = append(f.events, event)
 	return nil
 }
@@ -104,6 +109,18 @@ func TestJobLeaseReaperHonorsCancellationRequest(t *testing.T) {
 	}
 	if len(store.events) != 1 || store.events[0].EventType != "cancelled" {
 		t.Fatalf("events=%+v", store.events)
+	}
+}
+
+func TestJobLeaseReaperDoesNotReportRolledBackCount(t *testing.T) {
+	store := &fakeExpiredJobStore{eventErr: errors.New("event store unavailable"), items: []*job.Job{{
+		ID: 12, Type: "account.session_check.browser", Status: job.StatusRunning,
+	}}}
+	reaper := NewJobLeaseReaper(store, nil, fakeTx{}, 10)
+
+	count, err := reaper.RunOnce(context.Background())
+	if err == nil || count != 0 {
+		t.Fatalf("count=%d err=%v, want zero committed count", count, err)
 	}
 }
 

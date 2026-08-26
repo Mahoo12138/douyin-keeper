@@ -118,6 +118,12 @@ func (r *RetryRunner) RunOnce(ctx context.Context) (RetryStats, error) {
 		}
 		return nil
 	})
+	if err != nil {
+		// RetryRunner processes the whole bounded batch in one transaction.
+		// Mutation counters must describe committed state, not rolled-back work.
+		stats.Requeued = 0
+		stats.Exhausted = 0
+	}
 	return stats, err
 }
 

@@ -167,6 +167,11 @@ func (r *TickRunner) createIntent(ctx context.Context, t *task.SparkTask, now ti
 			AvailableAt: now, DedupeKey: "send.dispatch:" + in.PublicID.String(),
 		})
 	})
+	if err != nil {
+		// The intent and all of its side effects are in one transaction. Do not
+		// report a creation/skip count for work that was rolled back.
+		return false, false, err
+	}
 	return created, skipped, err
 }
 

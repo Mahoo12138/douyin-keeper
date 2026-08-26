@@ -101,3 +101,13 @@ func TestRetryRunnerExhaustionClosesIntentAndReleasesQuota(t *testing.T) {
 		t.Fatalf("statuses=%+v", store.statuses)
 	}
 }
+
+func TestRetryRunnerDoesNotReportRolledBackMutationCounts(t *testing.T) {
+	store := &fakeRetryStore{due: []send.RetryDueIntent{retryDueIntent()}, counts: map[int64]int{9: 1}}
+	runner := NewRetryRunner(store, &fakeQuotaAccounting{}, failingOutbox{}, fakeTx{}, 10)
+
+	stats, err := runner.RunOnce(context.Background())
+	if err == nil || stats.Requeued != 0 || stats.Exhausted != 0 || stats.Scanned != 1 {
+		t.Fatalf("stats=%+v err=%v, want scanned=1 and zero committed mutations", stats, err)
+	}
+}
