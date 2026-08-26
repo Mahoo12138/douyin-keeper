@@ -100,18 +100,10 @@ func main() {
 
 	// Leader renewal in the background.
 	go func() {
-		t := time.NewTicker(20 * time.Second)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-				if err := lock.Renew(ctx); err != nil {
-					log.Error("leader renewal failed", "err", err)
-				}
-			}
-		}
+		renewLeaderLoop(ctx, 20*time.Second, func() error { return lock.Renew(ctx) }, func(err error) {
+			log.Error("leader renewal failed; stopping scheduler", "err", err)
+			stop()
+		})
 	}()
 
 	go func() {
@@ -203,5 +195,35 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 		return false
 	case <-t.C:
 		return true
+	}
+}
+
+// renewLeaderLoop keeps the scheduler's single-writer lease alive. Losing the
+// lease is terminal for this process: continuing to run after another
+// scheduler acquires the key would violate the leader-only boundary around
+// periodic scans and outbox publishing.
+func renewLeaderLoop(ctx context.Context, interval time.Duration, renew func() error, onLost func(error)) {
+	if interval <= 0 {
+		interval = 20 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			err := renew()
+			if err == nil {
+				continue
+			}
+			if ctx.Err() != nil {
+				return
+			}
+			if onLost != nil {
+				onLost(err)
+			}
+			return
+		}
 	}
 }
