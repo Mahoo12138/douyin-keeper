@@ -262,9 +262,7 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		}
 		if code := sendSidecarErrorCode(response); code != "" {
 			mapped := mapSendSidecarError(code)
-			if deps.Health != nil && capability.IsCircuitFailureCode(code) {
-				_ = deps.Health.ObserveFailure(ctx, adapterConfig.adapter, "", code, now())
-			}
+			observeWorkerHealthFailure(ctx, deps.Health, adapterConfig.adapter, code, now)
 			if shouldRetrySend(response) {
 				nextAttemptAt := now().Add(sendRetryDelay(claimed.Attempt))
 				return finishSendRetryWithRisk(ctx, deps, claimed, mapped, nextAttemptAt, now, adapterConfig.adapter, mapped)
@@ -284,15 +282,11 @@ func sendAdapterHandler(loader PayloadLoader, deps SessionCheckDeps, adapterConf
 		}
 		var result sendMessageResult
 		if err := decodeResult(response, &result); err != nil || !result.Confirmed || !validMessageConfirmationSource(result.ConfirmationSource) {
-			if deps.Health != nil {
-				_ = deps.Health.ObserveFailure(ctx, adapterConfig.adapter, "", sidecar.ErrAdapterIncompatible, now())
-			}
+			observeWorkerHealthFailure(ctx, deps.Health, adapterConfig.adapter, sidecar.ErrAdapterIncompatible, now)
 			return finishSendWithRiskAndQuota(ctx, deps, claimed, send.JobFailed, apperr.CodeAdapterIncompatible, false, nil, send.IntentFailed,
 				acct.UserID, intent.LocalDate, now, adapterConfig.adapter, apperr.CodeAdapterIncompatible, nil)
 		}
-		if deps.Health != nil {
-			_ = deps.Health.ObserveSuccess(ctx, adapterConfig.adapter, "", now())
-		}
+		observeWorkerHealthSuccess(ctx, deps.Health, adapterConfig.adapter, now)
 		var messageID *string
 		if strings.TrimSpace(result.PlatformMessageID) != "" {
 			value := strings.TrimSpace(result.PlatformMessageID)

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
 )
 
@@ -125,5 +126,16 @@ func observeWorkerHealthFailure(ctx context.Context, health capability.HealthObs
 	if health == nil || !capability.IsCircuitFailureCode(code) {
 		return
 	}
-	_ = health.ObserveFailure(ctx, adapter, "", code, now())
+	if err := health.ObserveFailure(ctx, adapter, "", code, now()); err != nil {
+		telemetry.L(ctx).Warn("worker adapter health observation failed", "operation", "failure", "adapter", adapter, "code", code, "err", err)
+	}
+}
+
+func observeWorkerHealthSuccess(ctx context.Context, health capability.HealthObserver, adapter string, now func() time.Time) {
+	if health == nil {
+		return
+	}
+	if err := health.ObserveSuccess(ctx, adapter, "", now()); err != nil {
+		telemetry.L(ctx).Warn("worker adapter health observation failed", "operation", "success", "adapter", adapter, "err", err)
+	}
 }
