@@ -76,8 +76,8 @@ func Load() *Config {
 		RedisAddr:         env("REDIS_ADDR", "localhost:6379"),
 		TrustedProxyCIDRs: env("TRUSTED_PROXY_CIDRS", ""),
 
-		AuthAccessTTL:     dur("AUTH_ACCESS_TTL", 15*time.Minute),
-		AuthRefreshTTL:    dur("AUTH_REFRESH_TTL", 30*24*time.Hour),
+		AuthAccessTTL:     positiveDur("AUTH_ACCESS_TTL", 15*time.Minute),
+		AuthRefreshTTL:    positiveDur("AUTH_REFRESH_TTL", 30*24*time.Hour),
 		AuthSigningKey:    os.Getenv("AUTH_SIGNING_KEY"),
 		AuthRefreshPepper: os.Getenv("AUTH_REFRESH_PEPPER"),
 
@@ -101,10 +101,10 @@ func Load() *Config {
 		WechatNotificationTitleField: env("WECHAT_NOTIFICATION_TITLE_FIELD", "thing1"),
 		WechatNotificationBodyField:  env("WECHAT_NOTIFICATION_BODY_FIELD", "thing2"),
 
-		OutboxBatchSize:    intEnv("OUTBOX_BATCH_SIZE", 100),
-		OutboxPollInterval: dur("OUTBOX_POLL_INTERVAL", 5*time.Second),
-		ScheduleBatchSize:  intEnv("SCHEDULE_BATCH_SIZE", 100),
-		ScheduleInterval:   dur("SCHEDULE_INTERVAL", 30*time.Second),
+		OutboxBatchSize:    positiveIntEnv("OUTBOX_BATCH_SIZE", 100),
+		OutboxPollInterval: positiveDur("OUTBOX_POLL_INTERVAL", 5*time.Second),
+		ScheduleBatchSize:  positiveIntEnv("SCHEDULE_BATCH_SIZE", 100),
+		ScheduleInterval:   positiveDur("SCHEDULE_INTERVAL", 30*time.Second),
 	}
 }
 

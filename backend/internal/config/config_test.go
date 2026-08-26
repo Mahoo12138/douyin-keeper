@@ -62,3 +62,47 @@ func TestLoadProtocolBundleConfig(t *testing.T) {
 		t.Fatalf("protocol bundle config = (%q, %q)", cfg.ProtocolSidecarCommand, cfg.ProtocolBundleDir)
 	}
 }
+
+func TestLoadRuntimeConfigFallsBackForNonPositiveValues(t *testing.T) {
+	for key, value := range map[string]string{
+		"AUTH_ACCESS_TTL":      "0s",
+		"AUTH_REFRESH_TTL":     "-1h",
+		"OUTBOX_BATCH_SIZE":    "0",
+		"OUTBOX_POLL_INTERVAL": "0s",
+		"SCHEDULE_BATCH_SIZE":  "-10",
+		"SCHEDULE_INTERVAL":    "-1s",
+	} {
+		t.Setenv(key, value)
+	}
+
+	cfg := Load()
+	if cfg.AuthAccessTTL != 15*time.Minute || cfg.AuthRefreshTTL != 30*24*time.Hour {
+		t.Fatalf("auth TTL config did not fall back to defaults: access=%s refresh=%s", cfg.AuthAccessTTL, cfg.AuthRefreshTTL)
+	}
+	if cfg.OutboxBatchSize != 100 || cfg.ScheduleBatchSize != 100 {
+		t.Fatalf("scheduler batch config did not fall back to defaults: outbox=%d schedule=%d", cfg.OutboxBatchSize, cfg.ScheduleBatchSize)
+	}
+	if cfg.OutboxPollInterval != 5*time.Second || cfg.ScheduleInterval != 30*time.Second {
+		t.Fatalf("scheduler interval config did not fall back to defaults: outbox=%s schedule=%s", cfg.OutboxPollInterval, cfg.ScheduleInterval)
+	}
+}
+
+func TestLoadRuntimeConfigKeepsPositiveValues(t *testing.T) {
+	t.Setenv("AUTH_ACCESS_TTL", "45s")
+	t.Setenv("AUTH_REFRESH_TTL", "12h")
+	t.Setenv("OUTBOX_BATCH_SIZE", "17")
+	t.Setenv("OUTBOX_POLL_INTERVAL", "750ms")
+	t.Setenv("SCHEDULE_BATCH_SIZE", "23")
+	t.Setenv("SCHEDULE_INTERVAL", "2m")
+
+	cfg := Load()
+	if cfg.AuthAccessTTL != 45*time.Second || cfg.AuthRefreshTTL != 12*time.Hour {
+		t.Fatalf("positive auth TTL config changed unexpectedly: access=%s refresh=%s", cfg.AuthAccessTTL, cfg.AuthRefreshTTL)
+	}
+	if cfg.OutboxBatchSize != 17 || cfg.ScheduleBatchSize != 23 {
+		t.Fatalf("positive scheduler batch config changed unexpectedly: outbox=%d schedule=%d", cfg.OutboxBatchSize, cfg.ScheduleBatchSize)
+	}
+	if cfg.OutboxPollInterval != 750*time.Millisecond || cfg.ScheduleInterval != 2*time.Minute {
+		t.Fatalf("positive scheduler interval config changed unexpectedly: outbox=%s schedule=%s", cfg.OutboxPollInterval, cfg.ScheduleInterval)
+	}
+}
