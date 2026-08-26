@@ -40,6 +40,11 @@ type publisherProducer interface {
 	Enqueue(context.Context, asynqqueue.Message) error
 }
 
+const (
+	defaultPublisherBatchSize = 100
+	defaultPublisherInterval  = 5 * time.Second
+)
+
 func (p *Publisher) WithMetrics(metrics *telemetry.Metrics) *Publisher {
 	p.metrics = metrics
 	return p
@@ -47,6 +52,12 @@ func (p *Publisher) WithMetrics(metrics *telemetry.Metrics) *Publisher {
 
 func NewPublisher(outbox publisherOutbox, producer publisherProducer,
 	batchSize int, interval time.Duration, log *slog.Logger) *Publisher {
+	if batchSize <= 0 {
+		batchSize = defaultPublisherBatchSize
+	}
+	if interval <= 0 {
+		interval = defaultPublisherInterval
+	}
 	return &Publisher{
 		outbox: outbox, producer: producer, batchSize: batchSize, interval: interval,
 		instanceID: "scheduler-" + uuid.NewString()[:8], log: log,
@@ -75,12 +86,18 @@ func (p *Publisher) Pump(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	var firstErr error
 	for _, m := range msgs {
-		if err := p.relay(ctx, m); err != nil && p.log != nil {
-			p.log.Error("outbox relay failed", "outbox_public_id", m.PublicID, "err", err)
+		if err := p.relay(ctx, m); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			if p.log != nil {
+				p.log.Error("outbox relay failed", "outbox_public_id", m.PublicID, "err", err)
+			}
 		}
 	}
-	return nil
+	return firstErr
 }
 
 func (p *Publisher) relay(ctx context.Context, m postgres.PendingMessage) error {
@@ -105,7 +122,10 @@ func (p *Publisher) relay(ctx context.Context, m postgres.PendingMessage) error 
 		// Backoff + dead-letter after MaxOutboxAttempts (docs/15 §2.2).
 		attempts := m.Attempts + 1
 		backoff := time.Duration(1<<min(attempts-1, 5)) * time.Second
-		_ = p.outbox.MarkFailed(ctx, m.ID, attempts, time.Now().Add(backoff), "enqueue_failed", p.instanceID)
+		markErr := p.outbox.MarkFailed(ctx, m.ID, attempts, time.Now().Add(backoff), "enqueue_failed", p.instanceID)
+		if markErr != nil {
+			return fmt.Errorf("relay %s: %w", m.Kind, errors.Join(err, fmt.Errorf("record failure state: %w", markErr)))
+		}
 		return fmt.Errorf("relay %s: %w", m.Kind, err)
 	}
 	return p.outbox.MarkPublished(ctx, m.ID, p.instanceID)
