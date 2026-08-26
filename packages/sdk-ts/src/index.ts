@@ -10,7 +10,20 @@ export { ApiError, JobEventStreamParser, streamJobEvents } from './sse.js'
 export type { JobEventEnvelope, StreamJobEventsOptions } from './sse.js'
 
 /** apiClient points at the Go backend under the same origin (/api/v1). */
-export const api = createClient<paths>({ baseUrl: '/api/v1' })
+// Resolve fetch at call time so browser auth state and test doubles are not
+// captured when the module is initialized. Node's Request rejects relative
+// URLs, so the test/runtime shim gives it a harmless absolute base.
+class NodeCompatibleRequest extends globalThis.Request {
+  constructor(input: RequestInfo | URL, init?: RequestInit) {
+    super(new URL(input instanceof globalThis.Request ? input.url : String(input), 'http://localhost'), init)
+  }
+}
+const sdkRequest = typeof window === 'undefined' ? NodeCompatibleRequest : undefined
+export const api = createClient<paths>({
+  baseUrl: '/api/v1',
+  fetch: (input) => globalThis.fetch(input),
+  ...(sdkRequest ? { Request: sdkRequest } : {}),
+})
 
 /** Typed helper for the frozen MVP auth call (docs/11 §16). */
 export async function login(username: string, password: string) {

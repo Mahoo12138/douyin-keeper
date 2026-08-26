@@ -31,3 +31,25 @@ test('settles from replayed SSE success and aborts the stream', async () => {
     globalThis.fetch = originalFetch
   }
 })
+
+test('reconciles a terminal job when the event stream closes before its final event', async () => {
+  const originalFetch = globalThis.fetch
+  const requests: string[] = []
+  globalThis.fetch = async (input) => {
+    const url = String(input)
+    requests.push(url)
+    if (url.includes('/events')) {
+      return new Response('', { headers: { 'content-type': 'text/event-stream' } })
+    }
+    return new Response(JSON.stringify({
+      id: 'job-1', type: 'account.friends_sync.browser', status: 'succeeded', cancelable: false,
+      error_code: null, created_at: '2026-08-26T00:00:00Z', started_at: null, finished_at: '2026-08-26T00:00:01Z', cancel_requested_at: null,
+    }), { headers: { 'content-type': 'application/json' } })
+  }
+  try {
+    await waitForJobEvents('token', 'job-1', 1)
+    assert.equal(requests.some((url) => url.includes('/jobs/job-1')), true)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
