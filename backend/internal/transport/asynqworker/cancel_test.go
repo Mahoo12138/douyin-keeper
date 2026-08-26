@@ -16,6 +16,12 @@ type fakeCancellationStore struct {
 	status    job.Status
 }
 
+type fakeCancellationTx struct{}
+
+func (fakeCancellationTx) WithinTx(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
 func (f *fakeCancellationStore) IsCancelRequested(context.Context, int64) (bool, error) {
 	return f.requested, nil
 }
@@ -49,6 +55,18 @@ func TestCancelIfRequestedLeavesActiveJobAlone(t *testing.T) {
 	done, err := cancelIfRequested(context.Background(), store, claimed, time.Now)
 	if err != nil || done || store.status != "" || len(store.events) != 0 {
 		t.Fatalf("done=%t err=%v status=%s events=%d", done, err, store.status, len(store.events))
+	}
+}
+
+func TestCancelIfRequestedWithCleanupDoesNotPanicWithoutCleanup(t *testing.T) {
+	store := &fakeCancellationStore{requested: true}
+	claimed := &job.Job{ID: 11, PublicID: uuid.New(), Status: job.StatusWaiting}
+	cancelled, err := cancelIfRequestedWithCleanup(context.Background(), store, fakeCancellationTx{}, claimed, time.Now, nil)
+	if err != nil || !cancelled {
+		t.Fatalf("cancelled=%t err=%v", cancelled, err)
+	}
+	if store.status != job.StatusCancelled || len(store.events) != 1 || store.events[0].EventType != "cancelled" {
+		t.Fatalf("status=%s events=%+v", store.status, store.events)
 	}
 }
 

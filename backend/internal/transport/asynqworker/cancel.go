@@ -63,6 +63,12 @@ func cancelIfRequestedWithCleanup(
 		if !cancelled || err != nil {
 			return cancelled, err
 		}
+		// Re-login jobs do not reserve quota, so cleanup is intentionally nil.
+		// Cancellation still needs to finish the Job, but must not call a nil
+		// release callback and panic the Asynq worker.
+		if cleanup == nil {
+			return true, nil
+		}
 		return true, cleanup(ctx)
 	}
 	err := tx.WithinTx(ctx, func(tctx context.Context) error {

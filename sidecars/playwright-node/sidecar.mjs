@@ -45,6 +45,7 @@ const DEBUG_LOG_ENABLED = ["1", "true", "yes", "on"].includes(String(process.env
 function safeURL(page) {
   try {
     const url = new URL(page.url());
+    if (url.origin === "null") return url.href;
     return `${url.origin}${url.pathname}`;
   } catch {
     return "";
@@ -244,45 +245,46 @@ async function clickLogin(page) {
   return false;
 }
 
-async function qrDataUrl(page) {
+async function qrData(page) {
   try {
     const value = await page.evaluate(() => {
       const selectors = [
         "#animate_qrcode_container img, #animate_qrcode_container canvas",
         "#douyin_login_comp_scan_code img, #douyin_login_comp_scan_code canvas",
         "img[class*='qrcode' i], img[id*='qrcode' i], canvas[class*='qrcode' i], canvas[id*='qrcode' i]",
+        "img[src^='data:image/png;base64']",
       ];
-      const specific = selectors.flatMap((selector) => [...document.querySelectorAll(selector)]);
-      const fallback = [...document.querySelectorAll("img, canvas")].filter((node) => !specific.includes(node));
-      for (const node of [...specific, ...fallback]) {
-        const rect = node.getBoundingClientRect();
-        const width = Math.max(rect.width || 0, node.naturalWidth || 0, node.width || 0);
-        const height = Math.max(rect.height || 0, node.naturalHeight || 0, node.height || 0);
-        if (width < 100 || height < 100 || width / height < 0.75 || width / height > 1.33) continue;
-        if (node.tagName === "CANVAS" && node.toDataURL) {
-          try {
-            const data = node.toDataURL("image/png");
-            if (data.length > 200) return data;
-          } catch {}
+      for (const [selectorIndex, selector] of selectors.entries()) {
+        for (const node of document.querySelectorAll(selector)) {
+          const rect = node.getBoundingClientRect();
+          const width = Math.max(rect.width || 0, node.naturalWidth || 0, node.width || 0);
+          const height = Math.max(rect.height || 0, node.naturalHeight || 0, node.height || 0);
+          if (width < 100 || height < 100 || width / height < 0.75 || width / height > 1.33) continue;
+          if (node.tagName === "CANVAS" && node.toDataURL) {
+            try {
+              const data = node.toDataURL("image/png");
+              if (data.length > 200) return { value: data, source: `selector_${selectorIndex + 1}`, tag: "canvas", width, height };
+            } catch {}
+          }
+          const src = node.currentSrc || node.src || "";
+          if (src.startsWith("data:image") && src.length > 200) return { value: src, source: `selector_${selectorIndex + 1}`, tag: "img", width, height };
         }
-        const src = node.currentSrc || node.src || "";
-        if (src.startsWith("data:image") && src.length > 200) return src;
       }
-      return "";
+      return { value: "", source: "", tag: "", width: 0, height: 0 };
     });
-    return value || "";
+    return value || { value: "", source: "", tag: "", width: 0, height: 0 };
   } catch {
-    return "";
+    return { value: "", source: "", tag: "", width: 0, height: 0 };
   }
 }
 
 async function waitForQrOrChallenge(page) {
   let challenge = false;
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const qr = await qrDataUrl(page);
-    if (qr) {
-      debugLog("qr_visible", { attempt: attempt + 1, qr_length: qr.length, url: safeURL(page) });
-      return { qr, challenge: false };
+    const qr = await qrData(page);
+    if (qr.value) {
+      debugLog("qr_visible", { attempt: attempt + 1, qr_length: qr.value.length, qr_source: qr.source, qr_tag: qr.tag, qr_width: qr.width, qr_height: qr.height, url: safeURL(page) });
+      return { qr: qr.value, challenge: false };
     }
     challenge ||= await challengeVisible(page);
     if (challenge) debugLog("platform_challenge_visible", { attempt: attempt + 1, url: safeURL(page) });
@@ -454,14 +456,14 @@ async function pollQr(input) {
   const creatorState = await readCreatorLoginState(item.page);
   const cookies = await sessionCookies(item.page);
   const sessionCookie = hasSessionCookie(cookies);
-  const qr = await qrDataUrl(item.page);
-  if (qr) item.qrSeen = true;
+  const qr = await qrData(item.page);
+  if (qr.value) item.qrSeen = true;
   const state = qrLoginState({
     creatorAuthenticated: creatorState.authenticated,
     identityReady: creatorState.identityReady,
     sessionCookie,
     qrSeen: item.qrSeen,
-    qrVisible: Boolean(qr),
+    qrVisible: Boolean(qr.value),
   });
   if (state === "authenticated") {
     const result = await identity(item.page, { allowSelfFallback: false });
@@ -478,7 +480,11 @@ async function pollQr(input) {
   debugLog("qr_poll_state", {
     handle: String(handle).slice(0, 16),
     state,
-    qr_visible: Boolean(qr),
+    qr_visible: Boolean(qr.value),
+    qr_source: qr.source,
+    qr_tag: qr.tag,
+    qr_width: qr.width,
+    qr_height: qr.height,
     qr_seen: Boolean(item.qrSeen),
     creator_authenticated: Boolean(creatorState.authenticated),
     identity_ready: Boolean(creatorState.identityReady),

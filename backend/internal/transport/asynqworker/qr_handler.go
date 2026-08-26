@@ -261,6 +261,9 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 				return err
 			}
 			if cancelled, err := cancelIfRequestedWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed)); cancelled || err != nil {
+				if cancelled {
+					telemetry.L(ctx).Info("qr_bind_cancelled", "job_id", claimed.PublicID.String(), "phase", "poll")
+				}
 				return err
 			}
 			var response *sidecar.Response

@@ -14,6 +14,7 @@ import (
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/auth"
+	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/job"
 )
 
@@ -148,6 +149,7 @@ func (s *Server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+	telemetry.L(r.Context()).Info("job_cancel_requested", "job_id", id.String())
 	writeAccepted(w, map[string]any{"status": "cancel_requested"})
 }
 

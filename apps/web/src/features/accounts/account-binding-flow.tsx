@@ -65,7 +65,11 @@ function BindingDialog({ binding, pageMode = false, onClose }: { binding: Bindin
             : '扫码适合快速绑定；短信方式需要输入抖音账号手机号和验证码。'
 
   return <Dialog open={pageMode || !!binding.bindingChoice || !!activeBinding} onOpenChange={(open) => { if (!open) onClose() }}>
-    <DialogContent className="max-w-2xl">
+    <DialogContent
+      className="max-w-2xl"
+      onPointerDownOutside={(event) => { if (activeBinding) event.preventDefault() }}
+      onEscapeKeyDown={(event) => { if (activeBinding) event.preventDefault() }}
+    >
       <DialogHeader className={challenge ? 'border-amber-500/20 bg-amber-500/[0.06]' : undefined}>
         <div className={`mb-3 flex size-11 items-center justify-center rounded-2xl ${challenge ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300' : 'bg-primary/10 text-primary'}`}>
           {challenge ? <ShieldAlert className="size-5" /> : <Smartphone className="size-5" />}
