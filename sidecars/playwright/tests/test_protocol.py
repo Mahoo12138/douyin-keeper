@@ -542,6 +542,8 @@ class _StickerPage:
         return None
 
     def get_by_text(self, *_args, **_kwargs):
+        if _args and _args[0] == "消息":
+            return _StickerLocator(count=1, visible=True)
         return _StickerLocator()
 
     def locator(self, selector):
@@ -592,6 +594,12 @@ def test_sticker_sender_requires_identity_and_receipt(monkeypatch):
             assert exc.detail == {"outcome": "unknown"}
 
 
+def test_sticker_sender_uses_the_shared_message_panel_navigation():
+    import sticker_send
+
+    assert "消息" in sticker_send.message_send._open_message_panel.__doc__
+
+
 def test_sticker_sender_returns_only_a_new_platform_message_id(monkeypatch):
     import sticker_send
 
@@ -609,6 +617,14 @@ def test_sticker_sender_returns_only_a_new_platform_message_id(monkeypatch):
             return super().evaluate(script, *args)
 
     page = ReceiptPage()
+    selected = []
+    original_click = sticker_send.message_send._click_conversation
+
+    def capture_click(target_page, conversation_id, platform_user_id=None):
+        selected.append((conversation_id, platform_user_id))
+        return original_click(target_page, conversation_id, platform_user_id)
+
+    monkeypatch.setattr(sticker_send.message_send, "_click_conversation", capture_click)
 
     @contextmanager
     def fake_launch(**_kwargs):
@@ -624,6 +640,7 @@ def test_sticker_sender_returns_only_a_new_platform_message_id(monkeypatch):
             "message": {"sticker_id": "sticker-001"},
         })
     assert result == {"confirmed": True, "platform_message_id": "message-new"}
+    assert selected == [("conversation-1", "user-1")]
 
 
 def test_sticker_send_rejects_unstable_or_incomplete_target_before_adapter_call():

@@ -156,10 +156,12 @@ def send_sticker(input_data):
             raise _error(protocol.ERR_SESSION_EXPIRED, "session is no longer valid")
         if message_send._visible_text(page, message_send.RATE_LIMIT_TEXTS):
             raise _error(protocol.ERR_PLATFORM_RATE_LIMITED, "platform rate limit was detected")
-        if not message_send._click_conversation(page, conversation_id):
+        if not message_send._open_message_panel(page):
+            raise _error(protocol.ERR_BROWSER_SELECTOR_CHANGED, "message panel is unavailable")
+        if not message_send._click_conversation(page, conversation_id, platform_user_id):
             raise _error(protocol.ERR_CONVERSATION_NOT_FOUND, "conversation is unavailable")
         page.wait_for_timeout(800)
-        peer_id = message_send._current_peer_id(page)
+        peer_id = message_send._current_peer_id(page, conversation_id)
         if peer_id != platform_user_id:
             raise _error(protocol.ERR_TARGET_IDENTITY_MISMATCH, "conversation peer does not match target")
         if not _open_panel(page):
