@@ -144,7 +144,7 @@ class _ArchivePage:
         return None
 
     def get_by_text(self, value, **_kwargs):
-        return _ArchiveLocator(count=1, visible=value in {"归档", "确定"})
+        return _ArchiveLocator(count=1, visible=value in {"消息", "归档", "确定"})
 
     def evaluate(self, script, *_args):
         if "data-user-id" in script:
@@ -160,6 +160,14 @@ def test_platform_conversation_archive_requires_platform_receipt(monkeypatch):
     import conversation_archive
 
     page = _ArchivePage(archived=True)
+    selected = []
+    original_click = conversation_archive.message_send._click_conversation
+
+    def capture_click(target_page, conversation_id, platform_user_id=None):
+        selected.append((conversation_id, platform_user_id))
+        return original_click(target_page, conversation_id, platform_user_id)
+
+    monkeypatch.setattr(conversation_archive.message_send, "_click_conversation", capture_click)
 
     @contextmanager
     def fake_launch(**_kwargs):
@@ -182,6 +190,7 @@ def test_platform_conversation_archive_requires_platform_receipt(monkeypatch):
         "platform_conversation_id": "conversation-1",
         "archived": True,
     }
+    assert selected == [("conversation-1", "user-1")]
 
 
 def test_platform_conversation_archive_rejects_identity_mismatch(monkeypatch):
