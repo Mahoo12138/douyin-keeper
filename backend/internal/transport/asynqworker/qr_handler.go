@@ -167,14 +167,11 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 			return err
 		}
 
-		if deps.ProfileRoot == "" {
-			deps.ProfileRoot = "/tmp/douyin-keeper/login"
-		}
-		if err := os.MkdirAll(deps.ProfileRoot, 0o700); err != nil {
+		profileRoot, err := prepareProfileRoot(deps.ProfileRoot)
+		if err != nil {
 			return fail(apperr.CodeInternal)
 		}
-		_ = os.Chmod(deps.ProfileRoot, 0o700)
-		profileDir, err := os.MkdirTemp(deps.ProfileRoot, "bind-")
+		profileDir, err := os.MkdirTemp(profileRoot, "bind-")
 		if err != nil {
 			return fail(apperr.CodeInternal)
 		}
