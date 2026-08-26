@@ -116,7 +116,8 @@ func (s *Server) handleRequestPlatformArchive(w http.ResponseWriter, r *http.Req
 		writeError(w, r, apperr.New(apperr.CodeInternal, apperr.KindInternal, "platform archive is not configured"))
 		return
 	}
-	jobID, err := s.platformArchives.Request(r.Context(), p.UserID, accountID, conversationID, *req.Archived)
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	jobID, err := s.platformArchives.Request(r.Context(), p.UserID, accountID, conversationID, *req.Archived, idempotencyKey)
 	if err != nil {
 		writeError(w, r, err)
 		return

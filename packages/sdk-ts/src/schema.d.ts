@@ -2886,7 +2886,9 @@ export interface operations {
     requestPlatformConversationArchive: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
             path: {
                 accountId: components["parameters"]["AccountId"];
                 conversationId: string;

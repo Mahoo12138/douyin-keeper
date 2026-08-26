@@ -10,7 +10,7 @@ func TestLatestMigrationVersionMatchesEmbeddedSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != "000008_send_intent_message_snapshot.sql" {
+	if version != "000009_job_idempotency.sql" {
 		t.Fatalf("latest migration = %q", version)
 	}
 }

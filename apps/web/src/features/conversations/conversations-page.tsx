@@ -16,6 +16,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 type Conversation = components['schemas']['Conversation']
 type Channel = Conversation['channel'] | 'all'
 type ArchiveFilter = 'active' | 'archived' | 'all'
+type IdempotencyKey = ReturnType<typeof crypto.randomUUID>
 
 export function ConversationsPage() {
   const token = getToken()
@@ -23,7 +24,7 @@ export function ConversationsPage() {
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState<Channel>('all')
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('active')
-  const [platformArchiveTarget, setPlatformArchiveTarget] = useState<{ conversation: Conversation; archived: boolean; label: string; confirmLabel: string } | null>(null)
+  const [platformArchiveTarget, setPlatformArchiveTarget] = useState<{ conversation: Conversation; archived: boolean; label: string; confirmLabel: string; idempotencyKey: IdempotencyKey } | null>(null)
   const queryClient = useQueryClient()
 
   const accountsQ = useAccountsQuery(token, { loadAll: true })
@@ -47,8 +48,8 @@ export function ConversationsPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : '更新会话归档状态失败'),
   })
   const platformArchiveMutation = useMutation({
-    mutationFn: ({ conversationId, archived }: { conversationId: string; archived: boolean }) =>
-      requestPlatformConversationArchive(token as string, accountId as string, conversationId, archived),
+    mutationFn: ({ conversationId, archived, idempotencyKey }: { conversationId: string; archived: boolean; idempotencyKey: IdempotencyKey }) =>
+      requestPlatformConversationArchive(token as string, accountId as string, conversationId, archived, idempotencyKey),
     onSuccess: () => { setPlatformArchiveTarget(null); toast.success('平台归档任务已提交，等待后台与适配器确认') },
     onError: (error) => toast.error(error instanceof Error ? error.message : '提交平台归档任务失败；平台状态未改变'),
   })
@@ -122,12 +123,12 @@ export function ConversationsPage() {
             <ConversationSelect label="归档" value={archiveFilter} onChange={(value) => setArchiveFilter(value as ArchiveFilter)} options={[{ value: 'active', label: '未归档' }, { value: 'archived', label: '已归档' }, { value: 'all', label: '全部会话' }]} />
           </div>
 
-          {conversationsQ.isLoading ? <Skeleton className="h-64 w-full" /> : conversationsQ.isError ? <ErrorState onRetry={() => void conversationsQ.refetch()} /> : visibleConversations.length ? <ConversationContent items={visibleConversations} onArchive={(conversationId, archived) => archiveMutation.mutate({ conversationId, archived })} onPlatformArchive={(conversationId, archived) => { const conversation = conversations.find((item) => item.id === conversationId); if (!conversation) return; const action = getPlatformArchiveAction(conversation.archived); setPlatformArchiveTarget({ conversation, archived, label: action.label, confirmLabel: action.confirmLabel }) }} pendingConversationId={archiveMutation.isPending ? archiveMutation.variables?.conversationId : undefined} pendingPlatformConversationId={platformArchiveMutation.isPending ? platformArchiveMutation.variables?.conversationId : undefined} /> : <EmptyState hasFilters={!!search || channel !== 'all' || archiveFilter !== 'active'} onReset={() => { setSearch(''); setChannel('all'); setArchiveFilter('active') }} />}
+          {conversationsQ.isLoading ? <Skeleton className="h-64 w-full" /> : conversationsQ.isError ? <ErrorState onRetry={() => void conversationsQ.refetch()} /> : visibleConversations.length ? <ConversationContent items={visibleConversations} onArchive={(conversationId, archived) => archiveMutation.mutate({ conversationId, archived })} onPlatformArchive={(conversationId, archived) => { const conversation = conversations.find((item) => item.id === conversationId); if (!conversation) return; const action = getPlatformArchiveAction(conversation.archived); setPlatformArchiveTarget({ conversation, archived, label: action.label, confirmLabel: action.confirmLabel, idempotencyKey: crypto.randomUUID() }) }} pendingConversationId={archiveMutation.isPending ? archiveMutation.variables?.conversationId : undefined} pendingPlatformConversationId={platformArchiveMutation.isPending ? platformArchiveMutation.variables?.conversationId : undefined} /> : <EmptyState hasFilters={!!search || channel !== 'all' || archiveFilter !== 'active'} onReset={() => { setSearch(''); setChannel('all'); setArchiveFilter('active') }} />}
           {conversationsQ.hasNextPage ? <div className="flex justify-center"><Button variant="outline" onClick={() => void conversationsQ.fetchNextPage()} disabled={conversationsQ.isFetchingNextPage}>{conversationsQ.isFetchingNextPage ? '加载中…' : '加载更多会话'}</Button></div> : null}
           <p className="text-xs text-muted-foreground">会话昵称仅用于展示和诊断，不作为自动发送的唯一目标条件；“归档/恢复”只修改产品侧索引，“请求平台…”会创建后台任务，未联调时保持失败关闭。</p>
         </CardContent>
       </Card>
-      <ConfirmDialog open={!!platformArchiveTarget} onOpenChange={(open) => { if (!open && !platformArchiveMutation.isPending) setPlatformArchiveTarget(null) }} title={`${platformArchiveTarget?.label ?? '提交平台操作'}？`} description={platformArchiveTarget?.confirmLabel ?? '确认提交这个平台操作吗？'} impact="这会创建后台任务请求抖音平台变更状态，平台最终结果以适配器确认事件为准。" confirmLabel="提交请求" pending={platformArchiveMutation.isPending} onConfirm={() => { if (platformArchiveTarget) platformArchiveMutation.mutate({ conversationId: platformArchiveTarget.conversation.id, archived: platformArchiveTarget.archived }) }} />
+      <ConfirmDialog open={!!platformArchiveTarget} onOpenChange={(open) => { if (!open && !platformArchiveMutation.isPending) setPlatformArchiveTarget(null) }} title={`${platformArchiveTarget?.label ?? '提交平台操作'}？`} description={platformArchiveTarget?.confirmLabel ?? '确认提交这个平台操作吗？'} impact="这会创建后台任务请求抖音平台变更状态，平台最终结果以适配器确认事件为准。" confirmLabel="提交请求" pending={platformArchiveMutation.isPending} onConfirm={() => { if (platformArchiveTarget) platformArchiveMutation.mutate({ conversationId: platformArchiveTarget.conversation.id, archived: platformArchiveTarget.archived, idempotencyKey: platformArchiveTarget.idempotencyKey }) }} />
     </div>
   )
 }

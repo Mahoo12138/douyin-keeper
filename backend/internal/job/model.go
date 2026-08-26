@@ -6,10 +6,16 @@ package job
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// ErrIdempotencyConflict tells a durable request service that another
+// transaction won the unique idempotency-key race and the request can be
+// resolved by reading the existing job.
+var ErrIdempotencyConflict = errors.New("job idempotency key already exists")
 
 type Status string
 
@@ -29,6 +35,8 @@ type Job struct {
 	UserID            *int64
 	AccountID         *int64
 	Type              string // account.bind.qr | account.relogin.qr | account.session_check.browser | ...
+	IdempotencyKey    *string
+	IdempotencyScope  *string
 	Status            Status
 	ErrorCode         *string
 	Cancelable        bool

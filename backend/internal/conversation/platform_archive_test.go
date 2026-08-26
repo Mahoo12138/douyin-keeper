@@ -3,6 +3,7 @@ package conversation
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -32,13 +33,18 @@ func (s *platformArchiveTxStub) WithinTx(ctx context.Context, fn func(context.Co
 }
 
 type platformArchiveJobStub struct {
-	created *job.Job
+	created  *job.Job
+	existing *job.Job
 }
 
 func (s *platformArchiveJobStub) CreateJob(_ context.Context, item *job.Job) error {
 	copy := *item
 	s.created = &copy
 	return nil
+}
+
+func (s *platformArchiveJobStub) GetByIdempotency(context.Context, int64, string) (*job.Job, error) {
+	return s.existing, nil
 }
 
 type platformArchiveOutboxStub struct {
@@ -65,7 +71,8 @@ func TestPlatformArchiveRequestCreatesDurableJobAndOutbox(t *testing.T) {
 	svc := NewPlatformArchiveService(repo, tx, jobs, relay)
 	svc.now = func() time.Time { return time.Date(2026, 8, 25, 10, 0, 0, 0, time.UTC) }
 
-	jobID, err := svc.Request(context.Background(), 11, accountPublicID, conversationPublicID, true)
+	key := uuid.New().String()
+	jobID, err := svc.Request(context.Background(), 11, accountPublicID, conversationPublicID, true, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,6 +81,9 @@ func TestPlatformArchiveRequestCreatesDurableJobAndOutbox(t *testing.T) {
 	}
 	if jobs.created.PublicID != jobID || jobs.created.Type != outbox.KindConversationArchive || jobs.created.Status != job.StatusQueued || jobs.created.AccountID == nil || *jobs.created.AccountID != 7 {
 		t.Fatalf("unexpected job row: %+v", jobs.created)
+	}
+	if jobs.created.IdempotencyKey == nil || *jobs.created.IdempotencyKey != key || jobs.created.IdempotencyScope == nil {
+		t.Fatalf("idempotency metadata was not persisted: %+v", jobs.created)
 	}
 	message := relay.messages[0]
 	if message.Kind != outbox.KindConversationArchive || message.AggregateType != "job" || message.AggregateID != jobID.String() || message.DedupeKey != "job.platform:"+jobID.String() {
@@ -92,11 +102,28 @@ func TestPlatformArchiveRequestRejectsMissingPlatformTargetBeforeTransaction(t *
 	repo := &platformArchiveRepoStub{}
 	tx := &platformArchiveTxStub{}
 	svc := NewPlatformArchiveService(repo, tx, &platformArchiveJobStub{}, &platformArchiveOutboxStub{})
-	_, err := svc.Request(context.Background(), 11, uuid.New(), uuid.New(), true)
+	_, err := svc.Request(context.Background(), 11, uuid.New(), uuid.New(), true, uuid.New().String())
 	if err == nil {
 		t.Fatal("expected missing platform target to fail")
 	}
 	if tx.calls != 0 {
 		t.Fatalf("transaction should not start for a missing platform target: %d", tx.calls)
+	}
+}
+
+func TestPlatformArchiveRequestReplaysExistingJobForSameIdempotencyKey(t *testing.T) {
+	accountPublicID, conversationPublicID, key := uuid.New(), uuid.New(), uuid.New().String()
+	scope := fmt.Sprintf("conversation.archive.browser:%s:%s:%t", accountPublicID, conversationPublicID, true)
+	repo := &platformArchiveRepoStub{target: &PlatformArchiveTarget{ConversationID: 42, AccountID: 7, UserID: 11, PlatformConversationID: "conversation-1"}}
+	existing := &job.Job{PublicID: uuid.New(), IdempotencyScope: &scope}
+	jobs := &platformArchiveJobStub{existing: existing}
+	tx, relay := &platformArchiveTxStub{}, &platformArchiveOutboxStub{}
+	svc := NewPlatformArchiveService(repo, tx, jobs, relay)
+	got, err := svc.Request(context.Background(), 11, accountPublicID, conversationPublicID, true, key)
+	if err != nil || got != existing.PublicID {
+		t.Fatalf("same idempotency key should replay the original job: got=%s err=%v", got, err)
+	}
+	if repo.calls != 0 || tx.calls != 0 || jobs.created != nil || len(relay.messages) != 0 {
+		t.Fatalf("replay should not create a second durable handoff: repo=%d tx=%d job=%+v outbox=%d", repo.calls, tx.calls, jobs.created, len(relay.messages))
 	}
 }

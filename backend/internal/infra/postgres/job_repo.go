@@ -3,10 +3,12 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
@@ -20,12 +22,13 @@ type JobRepo struct {
 func NewJobRepo(pool *pgxpool.Pool) *JobRepo { return &JobRepo{pool: pool} }
 
 const jobCols = `id, public_id, user_id, account_id, type, status, error_code, cancelable,
-	cancel_requested_at, worker_id, heartbeat_at, lease_expires_at, created_at, started_at, finished_at`
+	idempotency_key, idempotency_scope, cancel_requested_at, worker_id, heartbeat_at,
+	lease_expires_at, created_at, started_at, finished_at`
 
 func scanJob(row pgx.Row) (*job.Job, error) {
 	var j job.Job
 	err := row.Scan(&j.ID, &j.PublicID, &j.UserID, &j.AccountID, &j.Type, &j.Status, &j.ErrorCode,
-		&j.Cancelable, &j.CancelRequestedAt, &j.WorkerID, &j.HeartbeatAt, &j.LeaseExpiresAt,
+		&j.Cancelable, &j.IdempotencyKey, &j.IdempotencyScope, &j.CancelRequestedAt, &j.WorkerID, &j.HeartbeatAt, &j.LeaseExpiresAt,
 		&j.CreatedAt, &j.StartedAt, &j.FinishedAt)
 	if err != nil {
 		return nil, err
@@ -34,11 +37,31 @@ func scanJob(row pgx.Row) (*job.Job, error) {
 }
 
 func (r *JobRepo) CreateJob(ctx context.Context, j *job.Job) error {
-	return From(ctx, r.pool).QueryRow(ctx, `
-		INSERT INTO jobs (public_id, user_id, account_id, type, status, cancelable, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
+	err := From(ctx, r.pool).QueryRow(ctx, `
+		INSERT INTO jobs (public_id, user_id, account_id, type, idempotency_key, idempotency_scope, status, cancelable, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 		RETURNING id
-	`, j.PublicID, j.UserID, j.AccountID, j.Type, j.Status, j.Cancelable, j.CreatedAt).Scan(&j.ID)
+	`, j.PublicID, j.UserID, j.AccountID, j.Type, j.IdempotencyKey, j.IdempotencyScope, j.Status, j.Cancelable, j.CreatedAt).Scan(&j.ID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.ConstraintName == "ux_jobs_user_idempotency_key" {
+			return fmt.Errorf("%w: %v", job.ErrIdempotencyConflict, err)
+		}
+	}
+	return err
+}
+
+// GetByIdempotency returns the user's previous durable job for a request key.
+// A missing key is deliberately represented as (nil, nil) so callers can
+// distinguish a first request from a database failure.
+func (r *JobRepo) GetByIdempotency(ctx context.Context, userID int64, key string) (*job.Job, error) {
+	j, err := scanJob(From(ctx, r.pool).QueryRow(ctx, `
+		SELECT `+jobCols+` FROM jobs
+		WHERE user_id=$1 AND idempotency_key=$2`, userID, key))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return j, err
 }
 
 func (r *JobRepo) GetOwned(ctx context.Context, userID *int64, publicID uuid.UUID) (*job.Job, error) {
@@ -177,7 +200,7 @@ func (r *JobRepo) FindExpiredLeases(ctx context.Context, at time.Time, limit int
 	for rows.Next() {
 		var item job.Job
 		if err := rows.Scan(&item.ID, &item.PublicID, &item.UserID, &item.AccountID, &item.Type,
-			&item.Status, &item.ErrorCode, &item.Cancelable, &item.CancelRequestedAt,
+			&item.Status, &item.ErrorCode, &item.Cancelable, &item.IdempotencyKey, &item.IdempotencyScope, &item.CancelRequestedAt,
 			&item.WorkerID, &item.HeartbeatAt, &item.LeaseExpiresAt, &item.CreatedAt,
 			&item.StartedAt, &item.FinishedAt); err != nil {
 			return nil, err

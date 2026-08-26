@@ -3,6 +3,9 @@ package conversation
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +17,7 @@ import (
 
 type platformArchiveJobCreator interface {
 	CreateJob(context.Context, *job.Job) error
+	GetByIdempotency(context.Context, int64, string) (*job.Job, error)
 }
 
 type platformArchiveTxManager interface {
@@ -45,12 +49,33 @@ func NewPlatformArchiveService(repo PlatformArchiveRepository, tx platformArchiv
 
 // Request creates only the durable Job and outbox handoff. It never calls a
 // Sidecar from the HTTP request and does not change the local archive index.
-func (s *PlatformArchiveService) Request(ctx context.Context, userID int64, accountPublicID, conversationPublicID uuid.UUID, archived bool) (uuid.UUID, error) {
+func (s *PlatformArchiveService) Request(ctx context.Context, userID int64, accountPublicID, conversationPublicID uuid.UUID, archived bool, idempotencyKey string) (uuid.UUID, error) {
 	if s == nil || s.repo == nil || s.tx == nil || s.jobs == nil || s.outbox == nil {
 		return uuid.Nil, apperr.New(apperr.CodeInternal, apperr.KindInternal, "platform archive service is not configured")
 	}
 	if userID <= 0 || accountPublicID == uuid.Nil || conversationPublicID == uuid.Nil {
 		return uuid.Nil, apperr.Validation(apperr.CodeConflict, "invalid platform archive scope")
+	}
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if _, err := uuid.Parse(idempotencyKey); err != nil {
+		return uuid.Nil, apperr.Validation(apperr.CodeConflict, "a valid Idempotency-Key is required")
+	}
+	scope := fmt.Sprintf("conversation.archive.browser:%s:%s:%t", accountPublicID, conversationPublicID, archived)
+	resolveExisting := func(existing *job.Job) (uuid.UUID, error) {
+		if existing == nil {
+			return uuid.Nil, nil
+		}
+		if existing.IdempotencyScope == nil || *existing.IdempotencyScope != scope {
+			return uuid.Nil, apperr.Conflict(apperr.CodeConflict, "Idempotency-Key was already used for another platform archive request")
+		}
+		return existing.PublicID, nil
+	}
+	existing, err := s.jobs.GetByIdempotency(ctx, userID, idempotencyKey)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if existing != nil {
+		return resolveExisting(existing)
 	}
 	target, err := s.repo.GetPlatformArchiveTargetOwned(ctx, userID, accountPublicID, conversationPublicID)
 	if err != nil {
@@ -66,6 +91,7 @@ func (s *PlatformArchiveService) Request(ctx context.Context, userID int64, acco
 	jobID := uuid.New()
 	jobRow := &job.Job{
 		PublicID: jobID, UserID: &target.UserID, AccountID: &target.AccountID,
+		IdempotencyKey: &idempotencyKey, IdempotencyScope: &scope,
 		Type: "conversation.archive.browser", Status: job.StatusQueued, Cancelable: true, CreatedAt: now,
 	}
 	payload, err := json.Marshal(PlatformArchiveJobPayload{
@@ -84,6 +110,13 @@ func (s *PlatformArchiveService) Request(ctx context.Context, userID int64, acco
 			Payload: payload, DedupeKey: "job.platform:" + jobID.String(),
 		})
 	}); err != nil {
+		if errors.Is(err, job.ErrIdempotencyConflict) {
+			existing, lookupErr := s.jobs.GetByIdempotency(ctx, userID, idempotencyKey)
+			if lookupErr != nil {
+				return uuid.Nil, lookupErr
+			}
+			return resolveExisting(existing)
+		}
 		return uuid.Nil, err
 	}
 	return jobID, nil

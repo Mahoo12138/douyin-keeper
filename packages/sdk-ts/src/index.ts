@@ -461,10 +461,10 @@ export async function setConversationArchived(accessToken: string, accountId: st
   return data
 }
 
-export async function requestPlatformConversationArchive(accessToken: string, accountId: string, conversationId: string, archived: boolean) {
+export async function requestPlatformConversationArchive(accessToken: string, accountId: string, conversationId: string, archived: boolean, idempotencyKey = crypto.randomUUID()) {
   const { data, error } = await api.POST('/accounts/{accountId}/conversations/{conversationId}/platform-archive', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    params: { path: { accountId, conversationId } },
+    headers: { Authorization: `Bearer ${accessToken}`, 'Idempotency-Key': idempotencyKey },
+    params: { path: { accountId, conversationId }, header: { 'Idempotency-Key': idempotencyKey } },
     body: { archived },
   })
   if (error) throwApiError(error, 'platform conversation archive request failed')
