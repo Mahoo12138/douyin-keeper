@@ -158,11 +158,37 @@ func (r *JobRepo) ListEvents(ctx context.Context, jobID int64) ([]job.JobEvent, 
 }
 
 func (r *JobRepo) AppendEvent(ctx context.Context, jobID int64, e job.JobEvent) error {
-	_, err := From(ctx, r.pool).Exec(ctx, `
-		INSERT INTO job_events (job_id, seq, event_type, payload_json)
-		SELECT $1, COALESCE(MAX(seq), 0) + 1, $2, $3 FROM job_events WHERE job_id = $1
-	`, jobID, e.EventType, e.Payload)
-	return err
+	// MAX(seq)+1 is intentionally retried with ON CONFLICT instead of relying
+	// on a process-local mutex: started/progress/error events may be appended
+	// by different workers, and the reaper can append a terminal event while a
+	// late worker is still finishing. The unique (job_id, seq) constraint is
+	// the cross-process arbiter; a losing writer recomputes MAX(seq) and tries
+	// the next slot without aborting its transaction.
+	for attempt := 0; attempt < 8; attempt++ {
+		tag, err := From(ctx, r.pool).Exec(ctx, `
+			INSERT INTO job_events (job_id, seq, event_type, payload_json)
+			SELECT $1, COALESCE(MAX(e.seq), 0) + 1, $2, $3
+			FROM jobs j
+			LEFT JOIN job_events e ON e.job_id = j.id
+			WHERE j.id = $1
+			ON CONFLICT (job_id, seq) DO NOTHING
+		`, jobID, e.EventType, e.Payload)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 1 {
+			return nil
+		}
+	}
+
+	var exists bool
+	if err := From(ctx, r.pool).QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM jobs WHERE id=$1)`, jobID).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return apperr.NotFound(apperr.CodeNotFound, "job not found")
+	}
+	return fmt.Errorf("job event sequence allocation exhausted for job %d", jobID)
 }
 
 func (r *JobRepo) RequestCancel(ctx context.Context, jobID int64, at time.Time) error {
