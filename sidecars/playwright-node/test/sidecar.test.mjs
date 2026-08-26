@@ -110,10 +110,10 @@ test("friend sync cannot commit without the follower response and non-empty rela
   assert.equal(canCommitFriendSync({ responseSeen: true, friendCount: 2, complete: true }), true);
 });
 
-test("QR login reports scan only after a visible QR has disappeared or a session is observed", () => {
+test("QR login accepts strong Creator Center auth even when the old QR node remains mounted", () => {
   assert.equal(qrLoginState({ qrSeen: false, qrVisible: false }), "waiting");
   assert.equal(qrLoginState({ qrSeen: true, qrVisible: true }), "waiting");
-  assert.equal(qrLoginState({ creatorAuthenticated: true, identityReady: true, sessionCookie: true, qrSeen: true, qrVisible: true }), "waiting");
+  assert.equal(qrLoginState({ creatorAuthenticated: true, identityReady: true, sessionCookie: true, qrSeen: true, qrVisible: true }), "authenticated");
   assert.equal(qrLoginState({ qrSeen: true, qrVisible: false }), "scanned");
   assert.equal(qrLoginState({ sessionCookie: true }), "scanned");
   assert.equal(qrLoginState({ creatorAuthenticated: true, identityReady: true, sessionCookie: true }), "authenticated");

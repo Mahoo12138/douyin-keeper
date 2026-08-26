@@ -11,10 +11,11 @@ export function qrLoginState({
   qrVisible = false,
 } = {}) {
   if (challenge) return "challenge_required";
-  // A Creator Center shell can contain cached identity nodes before the QR
-  // flow has completed. The QR is the user-facing source of truth here: while
-  // it is still visible, this attempt cannot be authenticated.
-  if (creatorAuthenticated && identityReady && sessionCookie && !qrVisible) return "authenticated";
+  // Creator Center can keep the old QR element mounted after a successful
+  // scan. Strong post-login signals must therefore take precedence over the
+  // visual QR node; requiring all three avoids treating a cached shell or a
+  // cookie alone as a completed login.
+  if (creatorAuthenticated && identityReady && sessionCookie) return "authenticated";
   if ((creatorAuthenticated || sessionCookie || (qrSeen && !qrVisible)) && !qrVisible) return "scanned";
   return "waiting";
 }
