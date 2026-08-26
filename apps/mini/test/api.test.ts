@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, getMe, listMyEntitlementGrants, listNotifications, loginPassword, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, getMe, listMyEntitlementGrants, listNotifications, loginPassword, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -66,6 +66,26 @@ describe('mini API auth recovery', () => {
       url: '/api/v1/auth/mini/login',
       method: 'POST',
       data: { username: 'User-1', password: 'password123' },
+    })
+  })
+
+  it('registers a mini client with local account credentials', async () => {
+    requestMock.mockResolvedValueOnce({
+      statusCode: 201,
+      data: {
+        access_token: 'access-new',
+        refresh_token: 'refresh-new',
+        user: { id: 'user-new', display_name: 'new-user' },
+      },
+    })
+
+    const session = await registerPassword('new-user', 'password123')
+
+    expect(session.access_token).toBe('access-new')
+    expect(requestMock.mock.calls[0]?.[0]).toMatchObject({
+      url: '/api/v1/auth/mini/register',
+      method: 'POST',
+      data: { username: 'new-user', password: 'password123' },
     })
   })
 

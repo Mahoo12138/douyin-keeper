@@ -59,6 +59,12 @@ export function loginPassword(username: string, password: string) {
   })
 }
 
+export function registerPassword(username: string, password: string) {
+  return request<components['schemas']['AuthResponse']>('/auth/mini/register', {
+    method: 'POST', data: { username, password }, skipRefresh: true,
+  })
+}
+
 export function loginWechatMini(wechatCode: string) {
   return request<components['schemas']['AuthResponse']>('/auth/wechat-mini/login', { method: 'POST', data: { wechat_code: wechatCode } })
 }

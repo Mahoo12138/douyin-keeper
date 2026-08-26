@@ -105,6 +105,7 @@ func (s *Server) Router() http.Handler {
 		// Public auth endpoints each get an independent IP window (docs/13 §15).
 		api.Group(func(public chi.Router) {
 			public.With(RateLimit(30, time.Minute)).Post("/auth/register", s.handleRegister)
+			public.With(RateLimit(30, time.Minute)).Post("/auth/mini/register", s.handleMiniRegister)
 			public.With(RateLimit(30, time.Minute)).Post("/auth/login", s.handleLogin)
 			public.With(RateLimit(30, time.Minute)).Post("/auth/mini/login", s.handleMiniLogin)
 			public.With(RateLimit(30, time.Minute)).Post("/auth/refresh", s.handleRefresh)

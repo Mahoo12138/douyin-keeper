@@ -121,6 +121,14 @@ func TestAuthRegisterLoginMe(t *testing.T) {
 		t.Fatalf("login returned different user")
 	}
 
+	miniRegistered, err := svc.RegisterClient(ctx, "mini_"+uuid.NewString()[:8], "password123", auth.ClientMini)
+	if err != nil {
+		t.Fatalf("mini register: %v", err)
+	}
+	if miniRegistered.User.PublicID == uuid.Nil || miniRegistered.RefreshToken == "" {
+		t.Fatalf("unexpected mini register session: %+v", miniRegistered)
+	}
+
 	miniResult, err := svc.Login(ctx, username, "password123", auth.ClientMini)
 	if err != nil {
 		t.Fatalf("mini login: %v", err)

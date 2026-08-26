@@ -40,18 +40,28 @@ type wechatLoginReq struct {
 }
 
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
+	s.handlePasswordRegister(w, r, auth.ClientWeb)
+}
+
+func (s *Server) handleMiniRegister(w http.ResponseWriter, r *http.Request) {
+	s.handlePasswordRegister(w, r, auth.ClientMini)
+}
+
+func (s *Server) handlePasswordRegister(w http.ResponseWriter, r *http.Request, client auth.ClientType) {
 	var req registerReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid body"))
 		return
 	}
-	res, err := s.auth.Register(r.Context(), req.Username, req.Password)
+	res, err := s.auth.RegisterClient(r.Context(), req.Username, req.Password, client)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	s.setRefreshCookie(w, r, res)
-	writeCreated(w, authResponse(res, false))
+	if client == auth.ClientWeb {
+		s.setRefreshCookie(w, r, res)
+	}
+	writeCreated(w, authResponse(res, client == auth.ClientMini))
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {

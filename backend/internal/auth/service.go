@@ -58,8 +58,15 @@ func NormalizeUsername(username string) string {
 	return strings.ToLower(strings.TrimSpace(username))
 }
 
-// Register creates a user + local identity in one tx, then issues a session.
+// Register creates a web session for a new user. RegisterClient is the
+// client-aware variant used by non-browser clients such as the mini program.
 func (s *Service) Register(ctx context.Context, username, password string) (SessionResult, error) {
+	return s.RegisterClient(ctx, username, password, ClientWeb)
+}
+
+// RegisterClient creates a user + local identity in one tx, then issues a
+// session for the requested client.
+func (s *Service) RegisterClient(ctx context.Context, username, password string, client ClientType) (SessionResult, error) {
 	if len(username) < 3 || len(username) > 64 {
 		return SessionResult{}, apperr.Validation(apperr.CodeConflict, "username must be 3-64 characters")
 	}
@@ -95,7 +102,7 @@ func (s *Service) Register(ctx context.Context, username, password string) (Sess
 		}
 		return SessionResult{}, apperr.Wrap(apperr.CodeInternal, apperr.KindInternal, "register failed", err)
 	}
-	return s.newSession(ctx, user, ClientWeb)
+	return s.newSession(ctx, user, client)
 }
 
 // Login verifies local credentials and starts a web session.

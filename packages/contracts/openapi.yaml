@@ -1535,6 +1535,26 @@ paths:
                 $ref: '#/components/schemas/AuthResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+  /auth/mini/register:
+    post:
+      operationId: miniPasswordRegister
+      description: Register a mini-program client with local account credentials and return a refresh token in the response body.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registered mini-program session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /auth/mini/login:
     post:
       operationId: miniPasswordLogin

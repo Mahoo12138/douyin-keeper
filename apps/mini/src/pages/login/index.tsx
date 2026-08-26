@@ -1,26 +1,33 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Button, Image, Input, Text, View } from '@tarojs/components'
+import { Button, Checkbox, Image, Input, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 
-import { getMe, getNotificationPreferences, listMyEntitlementGrants, listNotifications, linkWechatMini, loginPassword, loginWechatMini, markAllNotificationsRead, markNotificationRead, MiniApiError, myEntitlement, redeemCardCode, updateNotificationPreferences } from '@/lib/api'
+import { getMe, getNotificationPreferences, listMyEntitlementGrants, listNotifications, linkWechatMini, loginPassword, loginWechatMini, markAllNotificationsRead, markNotificationRead, MiniApiError, myEntitlement, redeemCardCode, registerPassword, updateNotificationPreferences } from '@/lib/api'
 import { clearSession, getAccessToken, setSession } from '@/lib/session'
 import { entitlementGrantStatus, entitlementSourceLabel, entitlementStatus, formatEntitlementDate, normalizeRedeemCode, quotaLabel } from '@/features/entitlement/entitlement-utils'
 import { helpSections, privacySections } from '@/features/help/help-content'
 import { notificationPriorityLabel } from '@/features/notification/notification-utils'
 import profileAvatar from '@/assets/me/avatar-profile.png'
 import mascotSprout from '@/assets/me/mascot-sprout.png'
+import authGuardian from '@/assets/me/auth-guardian.png'
 import notificationBell from '@/assets/me/notification-bell.png'
 
 const notificationTemplateId = process.env.TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID || ''
 const requestWechatSubscribe = Taro.requestSubscribeMessage as unknown as (options: { tmplIds: string[] }) => Promise<Record<string, string>>
 type MeScreen = 'overview' | 'entitlement' | 'history' | 'notifications' | 'settings'
+type AuthMode = 'login' | 'register'
 
 export default function Me() {
   const [screen, setScreen] = useState<MeScreen>('overview')
   const [linkCode, setLinkCode] = useState('')
+  const [authMode, setAuthMode] = useState<AuthMode>('login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [registerUsername, setRegisterUsername] = useState('')
+  const [registerPasswordValue, setRegisterPasswordValue] = useState('')
+  const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState('')
+  const [termsAccepted, setTermsAccepted] = useState(false)
   const [busy, setBusy] = useState('')
   const [message, setMessage] = useState('')
   const [hasToken, setHasToken] = useState(() => !!getAccessToken())
@@ -89,6 +96,37 @@ export default function Me() {
       setPassword('')
       setHasToken(true)
       await Taro.showToast({ title: '登录成功', icon: 'success' })
+    } catch (cause) {
+      setMessage(authError(cause))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function runPasswordRegister() {
+    const name = registerUsername.trim()
+    if (!name || !registerPasswordValue || !registerPasswordConfirm || busy) return
+    if (name.length < 3 || name.length > 64) {
+      setMessage('用户名长度需为 3–64 个字符。')
+      return
+    }
+    if (registerPasswordValue.length < 8 || registerPasswordValue.length > 256) {
+      setMessage('密码长度需为 8–256 个字符。')
+      return
+    }
+    if (registerPasswordValue !== registerPasswordConfirm) {
+      setMessage('两次输入的密码不一致。')
+      return
+    }
+    setBusy('password-register')
+    setMessage('')
+    try {
+      const session = await registerPassword(name, registerPasswordValue)
+      setSession(session)
+      setRegisterPasswordValue('')
+      setRegisterPasswordConfirm('')
+      setHasToken(true)
+      await Taro.showToast({ title: '注册成功', icon: 'success' })
     } catch (cause) {
       setMessage(authError(cause))
     } finally {
@@ -217,13 +255,13 @@ export default function Me() {
     setScreen('overview')
   }
 
-  if (!hasToken) return <AuthGate username={username} password={password} linkCode={linkCode} busy={busy} message={message} onUsernameChange={setUsername} onPasswordChange={setPassword} onLinkCodeChange={setLinkCode} onPasswordLogin={() => void runPasswordLogin()} onLogin={() => void runWechatLogin()} onLink={() => void runLink()} />
+  if (!hasToken) return <AuthGate mode={authMode} username={username} password={password} registerUsername={registerUsername} registerPassword={registerPasswordValue} registerPasswordConfirm={registerPasswordConfirm} termsAccepted={termsAccepted} linkCode={linkCode} busy={busy} message={message} onModeChange={setAuthMode} onUsernameChange={setUsername} onPasswordChange={setPassword} onRegisterUsernameChange={setRegisterUsername} onRegisterPasswordChange={setRegisterPasswordValue} onRegisterPasswordConfirmChange={setRegisterPasswordConfirm} onTermsChange={setTermsAccepted} onLinkCodeChange={setLinkCode} onPasswordLogin={() => void runPasswordLogin()} onPasswordRegister={() => void runPasswordRegister()} onLogin={() => void runWechatLogin()} onLink={() => void runLink()} />
   if (screen !== 'overview') return <View className="mini-page me-page"><MeTopbar title={screenTitle(screen)} onBack={() => setScreen('overview')} />{screen === 'entitlement' && <EntitlementScreen entitlement={entitlement} redeemCode={redeemCode} busy={busy} onRedeemCodeChange={setRedeemCode} onRedeem={() => void redeem()} onOpenHistory={() => setScreen('history')} />}{screen === 'history' && <GrantHistoryScreen grants={grantHistory} cursor={grantCursor} busy={busy} onLoadMore={() => void loadMoreGrants()} />}{screen === 'notifications' && <NotificationScreen notifications={notifications} unreadCount={unreadCount} enabled={wechatNotificationsEnabled} busy={busy} onToggle={() => void toggleWechatNotifications()} onMarkRead={(id) => void markRead(id)} onMarkAll={() => void markAllRead()} />}{screen === 'settings' && <SettingsScreen helpExpanded={helpExpanded} privacyExpanded={privacyExpanded} onHelp={() => setHelpExpanded((current) => !current)} onPrivacy={() => setPrivacyExpanded((current) => !current)} onLogout={logout} message={message} />}</View>
 
   return <View className="mini-page me-page"><View className="me-topbar"><Text className="me-page-title">我的</Text><Button className="me-more-button" onClick={() => setScreen('settings')}>•••</Button></View><View className="profile-card"><Image className="profile-avatar" src={profileAvatar} mode="aspectFill" /><View className="profile-copy"><Text className="profile-name">{user?.display_name || '小豆同学'} <Text className="profile-leaf">◆</Text></Text><Text className="profile-id">ID: {user?.id?.slice(0, 12) || 'keeper_user'}</Text><Text className="profile-note">保持专注，享受每一次连接</Text></View><Text className="me-chevron">›</Text></View><View className="entitlement-preview" onClick={() => setScreen('entitlement')}><View><Text className="entitlement-preview-label">当前权益</Text><Text className="entitlement-preview-plan">{entitlement?.plan_code || '未激活权益'}</Text><Text className="entitlement-preview-date">有效期至 {formatEntitlementDate(entitlement?.expires_at)}</Text></View><Image className="mascot-small" src={mascotSprout} mode="aspectFit" /><View className="entitlement-progress"><View style={{ width: entitlement?.active ? '72%' : '12%' }} /></View></View><View className="me-action-grid"><MeAction icon="▣" title="权益与兑换" hint="查看权益与兑换卡密" onClick={() => setScreen('entitlement')} tone="green" /><MeAction icon="▤" title="兑换记录" hint="查看历史兑换记录" onClick={() => setScreen('history')} tone="blue" /><MeAction icon="♧" title="通知设置" hint={`${unreadCount ? `${unreadCount} 条未读` : '管理通知偏好'}`} onClick={() => setScreen('notifications')} tone="coral" /><MeAction icon="?" title="帮助中心" hint="使用说明与安全边界" onClick={() => setScreen('settings')} tone="purple" /><MeAction icon="⚙" title="设置" hint="通用设置与账号安全" onClick={() => setScreen('settings')} tone="teal" /><MeAction icon="i" title="关于我们" hint="了解 Douyin Keeper" onClick={() => setScreen('settings')} tone="amber" /></View><View className="me-feature-card"><View className="me-feature-heading"><Text>已启用功能</Text><Text className="muted">权益范围内</Text></View><View className="feature-grid"><Feature label="好友火花" enabled /><Feature label="每日发送" enabled /><Feature label="风险提醒" enabled /><Feature label="安全暂停" enabled /></View></View>{message && <View className="me-inline-error"><Text>{message}</Text></View>}</View>
 }
 
-function AuthGate({ username, password, linkCode, busy, message, onUsernameChange, onPasswordChange, onLinkCodeChange, onPasswordLogin, onLogin, onLink }: { username: string; password: string; linkCode: string; busy: string; message: string; onUsernameChange: (value: string) => void; onPasswordChange: (value: string) => void; onLinkCodeChange: (value: string) => void; onPasswordLogin: () => void; onLogin: () => void; onLink: () => void }) { return <View className="mini-page me-page me-auth-page"><Image className="auth-mascot" src={mascotSprout} mode="aspectFit" /><Text className="auth-title">我的</Text><Text className="muted auth-subtitle">登录后管理权益、通知与安全设置。</Text><View className="me-auth-card"><Text className="me-section-title">账号密码登录</Text><Text className="muted">使用 PC 端账号登录，跨设备同步你的数据。</Text><Input className="me-code-input" value={username} maxlength={64} placeholder="请输入用户名" onInput={(event) => onUsernameChange(event.detail.value)} /><Input className="me-code-input" value={password} maxlength={256} password placeholder="请输入密码" onInput={(event) => onPasswordChange(event.detail.value)} /><Button className="me-primary-button" disabled={busy !== '' || !username.trim() || !password} onClick={onPasswordLogin}>{busy === 'password-login' ? '登录中…' : '登录'}</Button></View><View className="me-auth-card me-auth-alternative"><Text className="me-section-title">微信登录</Text><Text className="muted">已绑定过微信身份？直接登录移动控制台。</Text><Button className="me-secondary-button" disabled={busy !== ''} onClick={onLogin}>{busy === 'login' ? '处理中…' : '微信登录'}</Button></View><View className="me-auth-card"><Text className="me-section-title">绑定 PC 账号</Text><Text className="muted">在 PC 端“我的”页面生成一次性绑定码。</Text><Input className="me-code-input" value={linkCode} maxlength={32} placeholder="例如 ABCD-EFGH" onInput={(event) => onLinkCodeChange(event.detail.value)} /><Button className="me-secondary-button" disabled={busy !== '' || !linkCode.trim()} onClick={onLink}>绑定已有账号</Button></View>{message && <View className="me-inline-error"><Text>{message}</Text></View>}</View> }
+function AuthGate({ mode, username, password, registerUsername, registerPassword, registerPasswordConfirm, termsAccepted, linkCode, busy, message, onModeChange, onUsernameChange, onPasswordChange, onRegisterUsernameChange, onRegisterPasswordChange, onRegisterPasswordConfirmChange, onTermsChange, onLinkCodeChange, onPasswordLogin, onPasswordRegister, onLogin, onLink }: { mode: AuthMode; username: string; password: string; registerUsername: string; registerPassword: string; registerPasswordConfirm: string; termsAccepted: boolean; linkCode: string; busy: string; message: string; onModeChange: (mode: AuthMode) => void; onUsernameChange: (value: string) => void; onPasswordChange: (value: string) => void; onRegisterUsernameChange: (value: string) => void; onRegisterPasswordChange: (value: string) => void; onRegisterPasswordConfirmChange: (value: string) => void; onTermsChange: (accepted: boolean) => void; onLinkCodeChange: (value: string) => void; onPasswordLogin: () => void; onPasswordRegister: () => void; onLogin: () => void; onLink: () => void }) { const isRegister = mode === 'register'; return <View className="mini-page me-page me-auth-page"><Image className="auth-mascot" src={authGuardian} mode="aspectFit" /><Text className="auth-title">Douyin Keeper</Text><Text className="muted auth-subtitle">轻量守护，稳定连接</Text><View className="me-auth-card"><View className="auth-mode-tabs"><Button className={`auth-mode-tab ${!isRegister ? 'auth-mode-tab-active' : ''}`} onClick={() => onModeChange('login')}>登录</Button><Button className={`auth-mode-tab ${isRegister ? 'auth-mode-tab-active' : ''}`} onClick={() => onModeChange('register')}>注册</Button></View>{isRegister ? <><Text className="me-section-title">创建账号</Text><Text className="muted">注册后即可在 PC 端和小程序同步使用。</Text><Input className="me-code-input" value={registerUsername} maxlength={64} placeholder="请输入用户名（3–64 个字符）" onInput={(event) => onRegisterUsernameChange(event.detail.value)} /><Input className="me-code-input" value={registerPassword} maxlength={256} password placeholder="请输入密码（至少 8 个字符）" onInput={(event) => onRegisterPasswordChange(event.detail.value)} /><Input className="me-code-input" value={registerPasswordConfirm} maxlength={256} password placeholder="请再次输入密码" onInput={(event) => onRegisterPasswordConfirmChange(event.detail.value)} /><Button className="me-primary-button" disabled={busy !== '' || !registerUsername.trim() || !registerPassword || !registerPasswordConfirm || !termsAccepted} onClick={onPasswordRegister}>{busy === 'password-register' ? '注册中…' : '注册并登录'}</Button></> : <><Text className="me-section-title">账号密码登录</Text><Text className="muted">使用 PC 端账号登录，跨设备同步你的数据。</Text><Input className="me-code-input" value={username} maxlength={64} placeholder="请输入用户名" onInput={(event) => onUsernameChange(event.detail.value)} /><Input className="me-code-input" value={password} maxlength={256} password placeholder="请输入密码" onInput={(event) => onPasswordChange(event.detail.value)} /><Button className="me-primary-button" disabled={busy !== '' || !username.trim() || !password} onClick={onPasswordLogin}>{busy === 'password-login' ? '登录中…' : '登录'}</Button></>}</View><View className="auth-terms" onClick={() => onTermsChange(!termsAccepted)}><Checkbox value="terms" checked={termsAccepted} /><Text>我已阅读并同意</Text><Text className="auth-terms-link">《用户协议》</Text><Text>和</Text><Text className="auth-terms-link">《隐私政策》</Text></View><View className="me-auth-card me-auth-alternative"><Text className="me-section-title">微信快捷登录</Text><Text className="muted">已绑定过微信身份？无需输入密码即可登录。</Text><Button className="me-secondary-button" disabled={busy !== ''} onClick={onLogin}>{busy === 'login' ? '处理中…' : '微信登录'}</Button></View><View className="me-auth-card"><Text className="me-section-title">绑定 PC 账号</Text><Text className="muted">在 PC 端“我的”页面生成一次性绑定码。</Text><Input className="me-code-input" value={linkCode} maxlength={32} placeholder="例如 ABCD-EFGH" onInput={(event) => onLinkCodeChange(event.detail.value)} /><Button className="me-secondary-button" disabled={busy !== '' || !linkCode.trim()} onClick={onLink}>绑定已有账号</Button></View>{message && <View className="me-inline-error"><Text>{message}</Text></View>}</View> }
 function MeTopbar({ title, onBack }: { title: string; onBack: () => void }) { return <View className="me-detail-topbar"><Button className="me-back-button" onClick={onBack}>‹</Button><Text>{title}</Text><View className="me-topbar-spacer" /></View> }
 function EntitlementScreen({ entitlement, redeemCode, busy, onRedeemCodeChange, onRedeem, onOpenHistory }: { entitlement: Awaited<ReturnType<typeof myEntitlement>> | null; redeemCode: string; busy: string; onRedeemCodeChange: (value: string) => void; onRedeem: () => void; onOpenHistory: () => void }) { return <View><View className="entitlement-hero"><Text className="entitlement-hero-label">当前权益 ♛</Text><Text className="entitlement-hero-plan">{entitlement?.plan_code || '未激活'}</Text><Text className="entitlement-hero-date">有效期至 {formatEntitlementDate(entitlement?.expires_at)}</Text><Image className="mascot-entitlement" src={mascotSprout} mode="aspectFit" /><Text className="entitlement-remaining">剩余 {entitlement?.active ? Math.max(0, Math.ceil((new Date(entitlement.expires_at || Date.now()).getTime() - Date.now()) / 86400000)) : 0} 天</Text></View><View className="me-panel"><Text className="me-section-title">额度概览</Text><View className="quota-grid-me"><Quota label="账号槽位" value={quotaLabel(entitlement?.usage?.accounts_used, entitlement?.account_quota)} /><Quota label="任务额度" value={quotaLabel(entitlement?.usage?.tasks_used, entitlement?.task_quota)} /><Quota label="今日已用" value={quotaLabel(entitlement?.usage?.daily_send_reserved, entitlement?.daily_send_quota)} /></View></View><View className="me-panel"><View className="me-panel-heading"><Text className="me-section-title">兑换卡密</Text><Button className="me-link-button" onClick={onOpenHistory}>查看记录 ›</Button></View><Input className="me-code-input" value={redeemCode} maxlength={128} placeholder="请输入兑换码（区分大小写）" onInput={(event) => onRedeemCodeChange(event.detail.value)} /><Button className="me-primary-button" disabled={busy !== '' || !redeemCode.trim()} onClick={onRedeem}>{busy === 'redeem' ? '兑换中…' : '立即兑换'}</Button></View><View className="me-panel enabled-features"><Text className="me-section-title">已启用功能</Text><View className="feature-grid"><Feature label="好友火花" enabled /><Feature label="每日发送" enabled /><Feature label="风险提醒" enabled /></View></View></View> }
 function GrantHistoryScreen({ grants, cursor, busy, onLoadMore }: { grants: Awaited<ReturnType<typeof listMyEntitlementGrants>>['items']; cursor: string | null; busy: string; onLoadMore: () => void }) { return <View className="me-panel history-panel"><View className="history-timeline">{grants.length === 0 ? <View className="me-empty"><Text className="me-empty-title">暂无兑换记录</Text><Text className="muted">兑换成功后，会在这里保留记录。</Text></View> : grants.map((grant) => { const status = entitlementGrantStatus(grant); return <View className="grant-card-me" key={grant.id}><View className="grant-dot" /><View className="grant-card-main"><View className="grant-card-heading"><Text className="grant-card-plan">{grant.plan_code || '未命名方案'} · {daysBetween(grant.starts_at, grant.expires_at)}天</Text><Text className={`grant-status grant-status-${status.tone}`}>{status.label}</Text></View><Text className="muted">兑换时间 {formatEntitlementDate(grant.starts_at)}</Text><Text className="muted">有效期 {formatEntitlementDate(grant.starts_at)} ～ {formatEntitlementDate(grant.expires_at)}</Text><Text className="grant-source">{entitlementSourceLabel(grant.source_type)}</Text></View></View> })}</View>{cursor && <Button className="me-secondary-button" disabled={busy === 'grants'} onClick={onLoadMore}>{busy === 'grants' ? '加载中…' : '加载更多记录'}</Button>}</View> }
@@ -237,4 +275,11 @@ function Feature({ label, enabled }: { label: string; enabled?: boolean }) { ret
 function Quota({ label, value }: { label: string; value: string }) { return <View className="quota-item-me"><Text className="quota-value-me">{value}</Text><Text className="muted">{label}</Text></View> }
 function screenTitle(screen: MeScreen) { return { overview: '我的', entitlement: '权益与兑换', history: '兑换记录', notifications: '通知设置', settings: '设置' }[screen] }
 function daysBetween(start: string, end: string) { return Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000)) }
-function authError(cause: unknown) { if (cause instanceof MiniApiError && (cause.code === 'WECHAT_NOT_LINKED' || cause.code === 'WECHAT_IDENTITY_NOT_LINKED')) return '微信身份尚未绑定，请先在 PC 端生成绑定码。'; return cause instanceof Error ? cause.message : '登录失败，请稍后重试。' }
+function authError(cause: unknown) {
+  if (cause instanceof MiniApiError) {
+    if (cause.code === 'WECHAT_NOT_LINKED' || cause.code === 'WECHAT_IDENTITY_NOT_LINKED') return '微信身份尚未绑定，请先在 PC 端生成绑定码。'
+    if (cause.code === 'INVALID_CREDENTIALS') return '用户名或密码错误。'
+    if (cause.code === 'CONFLICT') return '用户名已存在，或账号信息冲突。'
+  }
+  return cause instanceof Error ? cause.message : '操作失败，请稍后重试。'
+}
