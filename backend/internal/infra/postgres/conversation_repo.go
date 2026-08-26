@@ -62,9 +62,12 @@ func (r *ConversationRepo) SyncBatch(ctx context.Context, accountID int64, items
 func (r *ConversationRepo) findConversationFriend(ctx context.Context, accountID int64, item conversation.SyncItem, at time.Time) (int64, bool, error) {
 	var friendID int64
 	err := From(ctx, r.pool).QueryRow(ctx, `
-		UPDATE friends SET has_conversation=true, last_seen_at=$3, updated_at=$3
+		UPDATE friends SET
+			has_conversation=true,
+			display_name=CASE WHEN $3 <> '' THEN $3 ELSE display_name END,
+			last_seen_at=$4, updated_at=$4
 		WHERE account_id=$1 AND platform_user_id=$2 AND deleted_at IS NULL
-		RETURNING id`, accountID, item.PlatformUserID, at).Scan(&friendID)
+		RETURNING id`, accountID, item.PlatformUserID, item.DisplayName, at).Scan(&friendID)
 	if err == nil {
 		return friendID, true, nil
 	}
