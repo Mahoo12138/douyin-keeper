@@ -789,6 +789,19 @@ function collectConversationIdentityRecords(value, records, depth = 0) {
   for (const item of Object.values(value)) collectConversationIdentityRecords(item, records, depth + 1);
 }
 
+function collectPayloadKeyNames(value, keys, depth = 0) {
+  if (depth > 5 || keys.size >= 120 || value === null || value === undefined) return;
+  if (Array.isArray(value)) {
+    for (const item of value.slice(0, 20)) collectPayloadKeyNames(item, keys, depth + 1);
+    return;
+  }
+  if (typeof value !== "object") return;
+  for (const [key, item] of Object.entries(value)) {
+    keys.add(key.toLowerCase().replaceAll("-", "_"));
+    collectPayloadKeyNames(item, keys, depth + 1);
+  }
+}
+
 function attachConversationCollector(page) {
   const collector = { records: [], responseSeen: false, relevantResponses: 0, pending: new Set() };
   const consume = async (response) => {
@@ -798,15 +811,28 @@ function attachConversationCollector(page) {
       const url = response.url().split("?", 1)[0];
       if (!/(conversation|message|chat|\/im(?:\/|$))/i.test(url)) return;
       collector.relevantResponses += 1;
-      const payload = await response.json();
+      let payload;
+      try {
+        payload = await response.json();
+      } catch (error) {
+        debugLog("conversations_response_body_unreadable", {
+          path: (() => { try { return new URL(url).pathname; } catch { return ""; } })(),
+          status: response.status(),
+          error_name: String(error?.name || "Error"),
+        });
+        return;
+      }
       const records = [];
       collectConversationIdentityRecords(payload, records);
+      const keyNames = new Set();
+      collectPayloadKeyNames(payload, keyNames);
       if (records.length) collector.records.push(...records);
       collector.responseSeen = true;
       debugLog("conversations_response", {
         path: (() => { try { return new URL(url).pathname; } catch { return ""; } })(),
         status: response.status(),
         identity_record_count: records.length,
+        payload_key_names: [...keyNames].sort().slice(0, 80),
       });
     } catch {
       // A response may disappear before its body is readable. DOM extraction
@@ -1402,7 +1428,15 @@ for await (const line of readline) {
     debugLog("request_succeeded", { request_id: request.request_id, op: request.op, duration_ms: nowMs() - started });
     process.stdout.write(`${JSON.stringify(success(request, result, started))}\n`);
   } catch (error) {
-    debugLog("request_failed", { request_id: request?.request_id || "invalid-request", op: request?.op || "", code: error.code || "SIDECAR_INTERNAL_ERROR", message: error.code ? error.message : "internal error", duration_ms: nowMs() - started });
+    debugLog("request_failed", {
+      request_id: request?.request_id || "invalid-request",
+      op: request?.op || "",
+      code: error.code || "SIDECAR_INTERNAL_ERROR",
+      message: error.code ? error.message : "internal error",
+      internal_error: error.code ? undefined : String(error?.message || error?.name || error),
+      stack: error.code ? undefined : String(error?.stack || "").split("\n").slice(0, 4).join("\n"),
+      duration_ms: nowMs() - started,
+    });
     process.stdout.write(`${JSON.stringify(failure(request, error, started))}\n`);
   }
 }
