@@ -24,10 +24,11 @@ func (l wechatNotificationLoader) FetchByPublicID(context.Context, string) (*pos
 }
 
 type wechatDeliveryRepo struct {
-	delivery *notification.WechatDelivery
-	sent     bool
-	skipped  string
-	failed   string
+	delivery      *notification.WechatDelivery
+	sent          bool
+	skipped       string
+	failed        string
+	markFailedErr error
 }
 
 func (r *wechatDeliveryRepo) EnsureWechatDelivery(context.Context, uuid.UUID) error { return nil }
@@ -53,7 +54,7 @@ func (r *wechatDeliveryRepo) MarkWechatDeliveryFailed(_ context.Context, _ uuid.
 	r.failed = code
 	r.delivery.Status = notification.DeliveryFailed
 	r.delivery.Attempts++
-	return nil
+	return r.markFailedErr
 }
 
 type wechatNotificationSender struct {
@@ -132,5 +133,24 @@ func TestWechatNotificationHandlerMarksFailureAndReturnsRetryableError(t *testin
 	err := handler(context.Background(), task)
 	if err == nil || repo.failed != "WECHAT_NOTIFICATION_SEND_FAILED" || repo.delivery.Attempts != 1 {
 		t.Fatalf("err=%v failed=%q attempts=%d", err, repo.failed, repo.delivery.Attempts)
+	}
+}
+
+func TestWechatNotificationHandlerPreservesDeliveryStateError(t *testing.T) {
+	publicID := uuid.New()
+	task, message := newWechatNotificationTask(publicID)
+	markErr := errors.New("postgres unavailable")
+	repo := &wechatDeliveryRepo{delivery: &notification.WechatDelivery{
+		NotificationPublicID: publicID, OpenID: "openid-1", WechatEnabled: true,
+		Status: notification.DeliveryPending,
+	}, markFailedErr: markErr}
+	sendErr := errors.New("wechat unavailable")
+	handler := wechatNotificationHandler(wechatNotificationLoader{message: message}, WechatNotificationDeps{
+		Deliveries: repo, Sender: &wechatNotificationSender{err: sendErr}, TemplateID: "template-1",
+	})
+
+	err := handler(context.Background(), task)
+	if err == nil || !errors.Is(err, sendErr) || !errors.Is(err, markErr) {
+		t.Fatalf("err=%v, want both send and delivery-state errors", err)
 	}
 }

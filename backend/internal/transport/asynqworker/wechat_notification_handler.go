@@ -3,6 +3,7 @@ package asynqworker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -75,8 +76,11 @@ func wechatNotificationHandler(loader PayloadLoader, deps WechatNotificationDeps
 				bodyField:  {Value: delivery.Body},
 			},
 		}); err != nil {
-			_ = deps.Deliveries.MarkWechatDeliveryFailed(ctx, publicID, "WECHAT_NOTIFICATION_SEND_FAILED", now)
+			markErr := deps.Deliveries.MarkWechatDeliveryFailed(ctx, publicID, "WECHAT_NOTIFICATION_SEND_FAILED", now)
 			deps.Metrics.AddCounter("wechat_notification_delivery_total", 1, telemetry.Label{Name: "status", Value: string(notification.DeliveryFailed)})
+			if markErr != nil {
+				return errors.Join(err, fmt.Errorf("mark WeChat delivery failed: %w", markErr))
+			}
 			return err
 		}
 		err = deps.Deliveries.MarkWechatDeliverySent(ctx, publicID, now)
