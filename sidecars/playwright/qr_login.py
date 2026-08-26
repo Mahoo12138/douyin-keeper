@@ -240,6 +240,27 @@ def _qr_visible(page):
     return False
 
 
+def _wait_for_qr_or_challenge(page, attempts=20, wait_ms=250):
+    """Give the login layer time to expose its QR before reporting a challenge.
+
+    Douyin can briefly render verification text while the login layer is still
+    mounting. The QR is the primary user action, so keep checking for it
+    before converting that transient page state into ``challenge_required``.
+    """
+    challenge_seen = False
+    for _ in range(max(1, attempts)):
+        qr = _qr_data_url(page)
+        if qr:
+            return qr, False
+        if _platform_challenge_visible(page):
+            challenge_seen = True
+        try:
+            page.wait_for_timeout(wait_ms)
+        except Exception:
+            pass
+    return "", challenge_seen
+
+
 def _identity(page, context):
     platform_user_id = ""
     try:
@@ -285,15 +306,7 @@ def start(input_data):
         challenge_required = _platform_challenge_visible(page)
         if not challenge_required and not _cookies_have_session(context):
             _click_login(page)
-        qr = ""
-        for _ in range(20):
-            if _platform_challenge_visible(page):
-                challenge_required = True
-                break
-            qr = _qr_data_url(page)
-            if qr:
-                break
-            page.wait_for_timeout(250)
+        qr, challenge_required = _wait_for_qr_or_challenge(page)
         if not qr and not challenge_required:
             manager.__exit__(None, None, None)
             entered = False

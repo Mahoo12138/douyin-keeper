@@ -845,6 +845,20 @@ def test_qr_data_url_ignores_small_data_image_logo():
     assert value == qr
 
 
+def test_qr_start_prefers_qr_before_platform_challenge(monkeypatch):
+    import qr_login
+
+    calls = []
+    monkeypatch.setattr(qr_login, "_qr_data_url", lambda _page: calls.append("qr") or "data:image/png;base64,qr")
+    monkeypatch.setattr(qr_login, "_platform_challenge_visible", lambda _page: calls.append("challenge") or True)
+
+    qr, challenge = qr_login._wait_for_qr_or_challenge(object())
+
+    assert qr == "data:image/png;base64,qr"
+    assert challenge is False
+    assert calls == ["qr"]
+
+
 def test_interactive_and_probe_operations_reject_unknown_fields():
     import friends_list
     import qr_login

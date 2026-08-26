@@ -209,7 +209,7 @@ function useAccountBinding(accountId?: string, onSuccess?: () => void) {
       return
     }
     if (event.event_type === 'platform_challenge') {
-      setBinding((current) => current?.jobId === jobId ? { ...current, status: 'challenge_required', qr: null } : current)
+      setBinding((current) => current?.jobId === jobId ? { ...current, status: 'challenge_required' } : current)
       return
     }
     if (event.event_type === 'scanned' || event.event_type === 'confirming') {
