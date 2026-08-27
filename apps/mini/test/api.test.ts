@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, deleteTask, getJob, getMe, listAccounts, listFriends, listMyEntitlementGrants, listNotifications, listSendIntents, listTasks, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, setConversationArchived, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, deleteTask, getJob, getMe, getSendJob, listAccounts, listFriends, listMyEntitlementGrants, listNotifications, listSendIntents, listTasks, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, setConversationArchived, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -352,6 +352,19 @@ describe('mini API auth recovery', () => {
     expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/tasks/task-1/run-now')
     expect(requestMock.mock.calls[0]?.[0]?.method).toBe('POST')
     expect(requestMock.mock.calls[0]?.[0]?.header['Idempotency-Key']).toBe('00000000-0000-4000-8000-000000000001')
+  })
+
+  it('reads immediate execution status from the send-job endpoint', async () => {
+    requestMock.mockResolvedValueOnce({ statusCode: 200, data: { id: 'job-1', status: 'running', attempt: 1, retryable: false } })
+
+    const result = await getSendJob('access-1', 'job-1')
+
+    expect(result.status).toBe('running')
+    expect(requestMock.mock.calls[0]?.[0]).toMatchObject({
+      url: '/api/v1/send-jobs/job-1',
+      method: 'GET',
+      header: { Authorization: 'Bearer access-1' },
+    })
   })
 
   it('submits an account session check job', async () => {
