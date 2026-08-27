@@ -36,6 +36,6 @@ export function taskDraftError(windowStart: string, windowEnd: string, message: 
 
 export function taskCreateDraftError(accountId: string, friendId: string, windowStart: string, windowEnd: string, message: string) {
   if (!accountId) return '请选择要使用的抖音账号。'
-  if (!friendId) return '请选择已确认好友。'
+  if (!friendId) return '请选择已确认会话。'
   return taskDraftError(windowStart, windowEnd, message)
 }

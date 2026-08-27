@@ -9,6 +9,8 @@ type Collection<T> = { items: T[]; next_cursor?: string | null }
 type ApiErrorBody = { error?: { code?: string; message?: string } }
 type RequestOptions = { token?: string | null; method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; data?: unknown; headers?: Record<string, string>; skipRefresh?: boolean }
 
+export type SparkFriend = components['schemas']['Friend'] & Pick<components['schemas']['Conversation'], 'conversation_type' | 'spark_supported' | 'channel'>
+
 async function listAllPages<T>(loadPage: (cursor?: string) => Promise<Collection<T>>): Promise<Collection<T>> {
   const items: T[] = []
   let cursor: string | undefined
@@ -250,7 +252,7 @@ export function accountCapabilities(token: string, accountId: string) {
   return request<{ items: components['schemas']['Capability'][] }>(`/accounts/${accountId}/capabilities`, { token })
 }
 
-export function listFriends(token: string, accountId: string): Promise<Collection<components['schemas']['Friend']>> {
+export function listFriends(token: string, accountId: string): Promise<Collection<SparkFriend>> {
   // Compatibility projection for the existing spark UI. Its source is the
   // unified conversation endpoint; no follower/friend crawl is performed.
   return listAllPages((cursor) => {
@@ -258,10 +260,11 @@ export function listFriends(token: string, accountId: string): Promise<Collectio
     return request<Collection<components['schemas']['Conversation']>>(`/accounts/${accountId}/conversations?include_archived=true&group_only=false${query}`, { token })
   }).then((response) => {
     // The endpoint intentionally returns the mixed conversation inventory
-    // when group_only=false. The spark/task surfaces only support direct
-    // conversations, so keep group sessions out of the legacy friend shape.
+    // when group_only=false. Keep the legacy friend shape for existing mini
+    // callers, while carrying the conversation metadata needed to show and
+    // operate group sessions correctly.
     return {
-      items: response.items.filter((item) => item.conversation_type !== 'group').map((item) => ({
+      items: response.items.map((item) => ({
         id: item.friend_id ?? item.id,
         platform_identity_status: item.friend_id ? item.platform_identity_status : 'missing',
         display_name: item.friend_display_name,
@@ -272,6 +275,9 @@ export function listFriends(token: string, accountId: string): Promise<Collectio
         has_conversation: true,
         spark_enabled: item.spark_enabled,
         last_sent_at: item.last_sent_at,
+        conversation_type: item.conversation_type,
+        spark_supported: item.spark_supported,
+        channel: item.channel,
       })),
       next_cursor: null,
     }

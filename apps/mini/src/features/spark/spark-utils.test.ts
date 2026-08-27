@@ -66,7 +66,7 @@ describe('spark view helpers', () => {
     expect(taskDraftError('19:30', '22:30', '   ')).toContain('消息')
     expect(taskDraftError('19:30', '22:30', '问候')).toBeNull()
     expect(taskCreateDraftError('', 'friend-1', '19:30', '22:30', '问候')).toContain('账号')
-    expect(taskCreateDraftError('account-1', '', '19:30', '22:30', '问候')).toContain('好友')
+    expect(taskCreateDraftError('account-1', '', '19:30', '22:30', '问候')).toContain('会话')
     expect(taskCreateDraftError('account-1', 'friend-1', '19:30', '22:30', '问候')).toBeNull()
   })
 })
