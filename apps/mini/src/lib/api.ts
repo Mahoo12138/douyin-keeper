@@ -16,11 +16,15 @@ export type SparkFriend = components['schemas']['Friend'] & Pick<components['sch
 
 async function listAllPages<T>(loadPage: (cursor?: string) => Promise<Collection<T>>): Promise<Collection<T>> {
   const items: T[] = []
+  const seenCursors = new Set<string>()
   let cursor: string | undefined
   do {
     const page = await loadPage(cursor)
     items.push(...page.items)
-    cursor = page.next_cursor ?? undefined
+    const nextCursor = page.next_cursor ?? undefined
+    if (!nextCursor || seenCursors.has(nextCursor)) break
+    seenCursors.add(nextCursor)
+    cursor = nextCursor
   } while (cursor)
   return { items, next_cursor: null }
 }

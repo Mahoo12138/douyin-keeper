@@ -273,6 +273,15 @@ describe('mini API auth recovery', () => {
     expect(result.next_cursor).toBeNull()
   })
 
+  it('stops safely when a paginated endpoint repeats its cursor', async () => {
+    requestMock.mockResolvedValue({ statusCode: 200, data: { items: [{ id: 'task-1' }], next_cursor: 'cursor-loop' } })
+
+    const result = await listTasks('access-1')
+
+    expect(result.items).toEqual([{ id: 'task-1' }, { id: 'task-1' }])
+    expect(requestMock).toHaveBeenCalledTimes(2)
+  })
+
   it('loads all reusable message templates with the backend filter', async () => {
     requestMock
       .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ id: 'template-1', name: '晚安', kind: 'text', body: '晚安' }], next_cursor: 'cursor-2' } })
