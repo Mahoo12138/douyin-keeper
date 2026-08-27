@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, getMe, listMyEntitlementGrants, listNotifications, loginPassword, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, getMe, listFriends, listMyEntitlementGrants, listNotifications, loginPassword, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -111,6 +111,37 @@ describe('mini API auth recovery', () => {
 
     expect(result.next_cursor).toBe('cursor-2')
     expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/entitlements/redemptions?limit=10&cursor=cursor-1')
+  })
+
+  it('projects group conversations into the spark page friend shape', async () => {
+    requestMock.mockResolvedValueOnce({
+      statusCode: 200,
+      data: {
+        items: [{
+          id: 'conversation-1',
+          friend_id: null,
+          friend_display_name: '项目群',
+          friend_nickname: '',
+          friend_avatar_url: null,
+          streak_days: 0,
+          spark_enabled: true,
+          last_sent_at: null,
+          platform_identity_status: 'missing',
+        }],
+        next_cursor: null,
+      },
+    })
+
+    const result = await listFriends('access-1', 'account-1')
+
+    expect(result.items[0]).toMatchObject({
+      id: 'conversation-1',
+      display_name: '项目群',
+      nickname: '项目群',
+      platform_identity_status: 'missing',
+      has_conversation: true,
+    })
+    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/accounts/account-1/conversations?include_archived=true&group_only=false')
   })
 
   it('loads notifications and supports marking one or all as read', async () => {
