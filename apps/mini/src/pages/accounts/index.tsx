@@ -5,7 +5,7 @@ import Taro, { useDidShow } from '@tarojs/taro'
 import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, listAccounts, listFriends, MiniApiError, myEntitlement, pauseAccount, resumeAccount, streamJobEvents, submitSMSVerification, syncAccountFriends } from '@/lib/api'
 import type { JobEvent } from '@/lib/api'
 import { getAccessToken } from '@/lib/session'
-import { smsBindingEventState } from '@/features/accounts/binding-events'
+import { bindingEventState } from '@/features/accounts/binding-events'
 import { effectiveCapabilities } from '@/features/accounts/capability-utils'
 import { createIdempotencyKey } from '@/features/home/home-utils'
 import { MiniButton as Button } from '@/components/mini-button'
@@ -273,12 +273,12 @@ export default function Accounts() {
   }
 
   function handleBindingEvent(event: JobEvent) {
-    const smsState = smsBindingEventState(event.eventType)
-    if (smsState) {
-      setBindingStatus(smsState.status)
-      setBindingStep(smsState.step)
-      if (smsState.error) setError(smsState.error)
-      setScreen('progress')
+    const state = bindingEventState(event.eventType)
+    if (state) {
+      setBindingStatus(state.status)
+      setBindingStep(state.step)
+      if (state.error) setError(typeof event.payload.code === 'string' ? event.payload.code : state.error)
+      setScreen(state.screen)
     } else if (event.eventType === 'qr_ready') {
       setQrValue(typeof event.payload.value === 'string' ? event.payload.value : '')
       setQrExpiresAt(typeof event.payload.expires_at === 'string' ? event.payload.expires_at : '')
