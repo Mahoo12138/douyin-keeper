@@ -3,7 +3,7 @@ import { Button, Image, Input, Picker, Switch, Text, Textarea, View } from '@tar
 import Taro from '@tarojs/taro'
 
 import { getAccessToken } from '@/lib/session'
-import { createTask, listAccounts, listFriends, listSendIntents, listTasks, MiniApiError, runTaskNow, updateTask } from '@/lib/api'
+import { createTask, deleteTask, listAccounts, listFriends, listSendIntents, listTasks, MiniApiError, runTaskNow, updateTask } from '@/lib/api'
 import { createIdempotencyKey } from '@/features/home/home-utils'
 import { taskCreateDraftError, taskTimePayload } from '@/features/spark/spark-utils'
 import taskChecklist from '@/assets/tasks/task-checklist.png'
@@ -86,7 +86,7 @@ export default function Tasks() {
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId)
   if (screen === 'edit' && selectedTask && draft) return <EditTask task={selectedTask} draft={draft} busy={busy} error={error} onBack={() => setScreen('detail')} onDraftChange={setDraft} onSave={() => void saveTask()} />
-  if (screen === 'detail' && selectedTask) return <TaskDetail task={selectedTask} friend={friends[selectedTask.friend_id]} account={accounts.find((account) => account.id === selectedTask.account_id)} history={history} busy={busy} error={error} onBack={() => setScreen('list')} onEdit={() => openEdit(selectedTask)} onRun={() => void runTask(selectedTask)} onToggle={(enabled) => void toggleTask(selectedTask, enabled)} onHistory={() => void openHistory(selectedTask)} />
+  if (screen === 'detail' && selectedTask) return <TaskDetail task={selectedTask} friend={friends[selectedTask.friend_id]} account={accounts.find((account) => account.id === selectedTask.account_id)} history={history} busy={busy} error={error} onBack={() => setScreen('list')} onEdit={() => openEdit(selectedTask)} onRun={() => void runTask(selectedTask)} onToggle={(enabled) => void toggleTask(selectedTask, enabled)} onHistory={() => void openHistory(selectedTask)} onDelete={() => void deleteCurrentTask(selectedTask)} />
   if (screen === 'history' && selectedTask) return <TaskHistory task={selectedTask} friend={friends[selectedTask.friend_id]} history={history} onBack={() => setScreen('detail')} />
   if (screen === 'create' && createDraft) return <CreateTask draft={createDraft} accounts={accounts} friendsByAccount={friendsByAccount} busy={busy} error={error} onBack={() => { setCreateDraft(null); setScreen('list') }} onDraftChange={setCreateDraft} onSave={() => void saveCreatedTask()} />
 
@@ -199,6 +199,27 @@ export default function Tasks() {
       setScreen('detail')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '立即执行失败，请稍后重试。')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function deleteCurrentTask(task: Task) {
+    const token = getAccessToken()
+    if (!token || busy) return
+    const result = await Taro.showModal({ title: '删除任务？', content: `删除“${friends[task.friend_id]?.display_name || '未命名好友'}”的火花任务后，将不再执行后续计划。` })
+    if (!result.confirm) return
+    setBusy('delete')
+    setError('')
+    try {
+      await deleteTask(token, task.id)
+      setTasks((current) => current.filter((item) => item.id !== task.id))
+      setHistory([])
+      setSelectedTaskId('')
+      setScreen('list')
+      await Taro.showToast({ title: '任务已删除', icon: 'success' })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '删除任务失败')
     } finally {
       setBusy('')
     }

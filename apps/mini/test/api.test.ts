@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, getJob, getMe, listFriends, listMyEntitlementGrants, listNotifications, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, deleteTask, getJob, getMe, listFriends, listMyEntitlementGrants, listNotifications, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -207,6 +207,18 @@ describe('mini API auth recovery', () => {
       window_start: '19:30:00',
       window_end: '22:30:00',
       message: { kind: 'text', body: '晚间问候' },
+    })
+  })
+
+  it('deletes a task through the shared auth client contract', async () => {
+    requestMock.mockResolvedValueOnce({ statusCode: 204, data: undefined })
+
+    await deleteTask('access-1', 'task-1')
+
+    expect(requestMock.mock.calls[0]?.[0]).toMatchObject({
+      url: '/api/v1/tasks/task-1',
+      method: 'DELETE',
+      header: { Authorization: 'Bearer access-1' },
     })
   })
 

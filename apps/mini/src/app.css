@@ -578,7 +578,8 @@ page {
 .task-primary-button, .task-secondary-button { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 78rpx; margin: 0; padding: 0 22rpx; border-radius: 15rpx; font-size: 25rpx; font-weight: 600; line-height: 1.2; }
 .task-primary-button { border: 0; color: #fff; background: #19bb79; box-shadow: 0 10rpx 20rpx rgba(25, 187, 121, .15); }
 .task-secondary-button { margin-top: 12rpx; border: 1rpx solid #c6e8d8; color: #159e69; background: #fff; }
-.task-primary-button::after, .task-secondary-button::after { display: none; }
+.task-danger-button { margin-top: 12rpx; border: 1rpx solid #f2c9c9; color: #c94a4a; background: #fff; }
+.task-primary-button::after, .task-secondary-button::after, .task-danger-button::after { display: none; }
 .task-edit-static { padding: 18rpx; border-radius: 14rpx; background: #f6faf8; color: #33443a; font-size: 23rpx; }
 .task-edit-static .muted { display: block; margin-top: 5rpx; }
 .task-create-card { margin-top: 18rpx; padding: 22rpx; border: 1rpx solid #e4ece8; border-radius: 22rpx; background: #fff; box-shadow: 0 10rpx 24rpx rgba(35, 86, 65, .045); }
