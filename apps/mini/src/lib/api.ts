@@ -239,24 +239,35 @@ export function accountCapabilities(token: string, accountId: string) {
 export function listFriends(token: string, accountId: string): Promise<Collection<components['schemas']['Friend']>> {
   // Compatibility projection for the existing spark UI. Its source is the
   // unified conversation endpoint; no follower/friend crawl is performed.
-  return request<Collection<components['schemas']['Conversation']>>(`/accounts/${accountId}/conversations?include_archived=true&group_only=false`, { token }).then((response) => ({
-    ...response,
+  return (async () => {
+    const conversations: components['schemas']['Conversation'][] = []
+    let cursor: string | undefined
+    do {
+      const query = cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''
+      const response = await request<Collection<components['schemas']['Conversation']>>(`/accounts/${accountId}/conversations?include_archived=true&group_only=false${query}`, { token })
+      conversations.push(...response.items)
+      cursor = response.next_cursor ?? undefined
+    } while (cursor)
+
     // The endpoint intentionally returns the mixed conversation inventory
     // when group_only=false. The spark/task surfaces only support direct
     // conversations, so keep group sessions out of the legacy friend shape.
-    items: response.items.filter((item) => item.conversation_type !== 'group').map((item) => ({
-      id: item.friend_id ?? item.id,
-      platform_identity_status: item.friend_id ? item.platform_identity_status : 'missing',
-      display_name: item.friend_display_name,
-      nickname: item.friend_nickname || item.friend_display_name,
-      short_id: null,
-      avatar_url: item.friend_avatar_url,
-      streak_days: item.streak_days,
-      has_conversation: true,
-      spark_enabled: item.spark_enabled,
-      last_sent_at: item.last_sent_at,
-    })),
-  }))
+    return {
+      items: conversations.filter((item) => item.conversation_type !== 'group').map((item) => ({
+        id: item.friend_id ?? item.id,
+        platform_identity_status: item.friend_id ? item.platform_identity_status : 'missing',
+        display_name: item.friend_display_name,
+        nickname: item.friend_nickname || item.friend_display_name,
+        short_id: null,
+        avatar_url: item.friend_avatar_url,
+        streak_days: item.streak_days,
+        has_conversation: true,
+        spark_enabled: item.spark_enabled,
+        last_sent_at: item.last_sent_at,
+      })),
+      next_cursor: null,
+    }
+  })()
 }
 
 export function updateFriend(token: string, friendId: string, sparkEnabled: boolean) {
