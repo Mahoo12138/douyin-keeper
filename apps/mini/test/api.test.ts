@@ -243,6 +243,15 @@ describe('mini API auth recovery', () => {
     expect(result.marked_count).toBe(2)
   })
 
+  it('requests the next notification page with the existing cursor', async () => {
+    requestMock.mockResolvedValueOnce({ statusCode: 200, data: { items: [], unread_count: 3, next_cursor: null } })
+
+    const result = await listNotifications('access-1', { limit: 20, cursor: 'cursor-2' })
+
+    expect(result.next_cursor).toBeNull()
+    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/notifications?limit=20&cursor=cursor-2')
+  })
+
   it('patches task settings without changing the shared auth client contract', async () => {
     requestMock.mockResolvedValueOnce({ statusCode: 200, data: { id: 'task-1', enabled: true } })
 
