@@ -5,6 +5,7 @@ import Taro, { useDidShow } from '@tarojs/taro'
 import { getAccessToken } from '@/lib/session'
 import { listSendIntents, MiniApiError } from '@/lib/api'
 import { dayKey, filterHistory, localDayRange, recentDays, statusMeta, taskLabel, type HistoryFilter, type HistoryItem } from '@/features/history/history-utils'
+import { PRODUCT_TIMEZONE } from '@/features/time/time-utils'
 import { MiniButton as Button } from '@/components/mini-button'
 
 export default function History() {
@@ -76,4 +77,4 @@ function GuestHistory() { return <View className="mini-page"><View className="ca
 function ErrorHistory({ message, onRetry }: { message: string; onRetry: () => void }) { return <View className="mini-page"><View className="card empty-card"><Text className="card-title">发送记录暂时不可用</Text><Text className="muted">{message || '请检查网络连接后重试。'}</Text><Button className="mini-button secondary-button" onClick={onRetry}>重新加载</Button></View></View> }
 function LoadingHistory() { return <View className="mini-page"><View className="card loading-card"><View className="loading-line loading-line-wide" /><View className="loading-line" /><View className="loading-block" /></View><View className="metric-grid"><View className="loading-block metric-loading" /><View className="loading-block metric-loading" /><View className="loading-block metric-loading" /></View></View> }
 function dayLabel(value: string) { const today = dayKey(new Date()); if (value === today) return '今天'; const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1); if (value === dayKey(yesterday)) return '昨天'; return value.slice(5).replace('-', '/') }
-function formatTime(value: string) { return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
+function formatTime(value: string) { return new Intl.DateTimeFormat('zh-CN', { timeZone: PRODUCT_TIMEZONE, hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }

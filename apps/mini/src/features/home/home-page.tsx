@@ -7,6 +7,7 @@ import { getAccessToken } from '@/lib/session'
 import { createIdempotencyKey, homeAccountStatus, homeOverallStatus, homeTaskStatus, nextEnabledTask, selectAccountId } from '@/features/home/home-utils'
 import { openMeNotifications } from '@/features/navigation/mini-navigation'
 import { notificationPriorityLabel } from '@/features/notification/notification-utils'
+import { productDayKey, productDayRange, productHour, PRODUCT_TIMEZONE } from '@/features/time/time-utils'
 import { MiniButton as Button } from '@/components/mini-button'
 import avatarChen from '@/assets/home/avatar-chen.png'
 import avatarJasper from '@/assets/home/avatar-jasper.png'
@@ -52,7 +53,7 @@ export function HomePage() {
         getMe(token),
         listAccounts(token),
         listTasks(token),
-        listSendIntents(token, todayRange()),
+        listSendIntents(token, productDayRange(productDayKey())),
       ])
       const notificationsResponse = await listNotifications(token, { limit: 3 }).catch(() => null)
       setData({
@@ -248,12 +249,11 @@ function ErrorHome({ message, onRetry }: { message: string; onRetry: () => void 
 function LoadingHome() { return <View className="mini-page home-page"><View className="home-skeleton home-skeleton-header" /><View className="home-skeleton home-skeleton-account" /><View className="home-skeleton home-skeleton-summary" /><View className="home-skeleton home-skeleton-card" /><View className="home-skeleton home-skeleton-card" /></View> }
 function homeJobStatusLabel(value: string) { return value === 'queued' ? '排队中' : value === 'running' ? '执行中' : value === 'succeeded' ? '已完成' : value === 'failed' ? '执行失败' : value === 'cancelled' ? '已取消' : '处理中' }
 function getTodayStats(items: HomeData['history']) { return { successful: items.filter((item) => item.status === 'succeeded').length, pending: items.filter((item) => ['pending', 'queued', 'running', 'retry_wait'].includes(item.status)).length, failed: items.filter((item) => ['failed', 'skipped', 'cancelled'].includes(item.status)).length } }
-function buildTrend(items: HomeData['history']) { const slots = [0, 4, 8, 12, 16, 20]; const counts = slots.map((slot) => items.filter((item) => { const hour = new Date(item.scheduled_at).getHours(); return hour >= slot && hour < slot + 4 }).length); const max = Math.max(...counts, 1); return slots.map((slot, index) => ({ label: `${String(slot).padStart(2, '0')}:00`, height: (counts[index] / max) * 92, tone: index === 3 ? 'green' : index === 4 ? 'blue' : 'soft' })) }
+function buildTrend(items: HomeData['history']) { const slots = [0, 4, 8, 12, 16, 20]; const counts = slots.map((slot) => items.filter((item) => { const hour = productHour(item.scheduled_at); return hour >= slot && hour < slot + 4 }).length); const max = Math.max(...counts, 1); return slots.map((slot, index) => ({ label: `${String(slot).padStart(2, '0')}:00`, height: (counts[index] / max) * 92, tone: index === 3 ? 'green' : index === 4 ? 'blue' : 'soft' })) }
 function recentStatus(value: HomeData['history'][number]['status']) { if (value === 'succeeded') return { label: '已完成', tone: 'success' }; if (['pending', 'queued', 'running', 'retry_wait'].includes(value)) return { label: '执行中', tone: 'running' }; return { label: '待处理', tone: 'pending' } }
-function todayRange() { const now = new Date(); return { from: new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString(), to: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString() } }
-function formatToday() { return new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric' }).format(new Date()) }
-function formatTime(value: string) { return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(new Date(value)) }
-function formatClock(value: string) { return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
+function formatToday() { return new Intl.DateTimeFormat('zh-CN', { timeZone: PRODUCT_TIMEZONE, month: 'long', day: 'numeric' }).format(new Date()) }
+function formatTime(value: string) { return new Intl.DateTimeFormat('zh-CN', { timeZone: PRODUCT_TIMEZONE, month: 'numeric', day: 'numeric' }).format(new Date(value)) }
+function formatClock(value: string) { return new Intl.DateTimeFormat('zh-CN', { timeZone: PRODUCT_TIMEZONE, hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
 function accountStatus(value: string) { return value === 'bound' ? '在线' : value === 'binding' ? '绑定中' : '未绑定' }
 function sessionStatus(value: string) { return value === 'valid' ? '正常' : value === 'expired' ? '已过期' : value === 'challenge_required' ? '需验证' : '待检查' }
 function avatarAssetFor(name: string) { const value = name.toLowerCase(); if (value.includes('jasper') || name.includes('杰') || name.includes('雅')) return avatarJasper; if (value.includes('chen') || name.includes('陈')) return avatarChen; return avatarMiles }
