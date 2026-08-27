@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Button, Input, Switch, Text, Textarea, View } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import Taro, { useDidShow } from '@tarojs/taro'
 
 import { getAccessToken } from '@/lib/session'
 import { listAccounts, listFriends, listTasks, MiniApiError, setConversationArchived, updateFriend, updateTask } from '@/lib/api'
@@ -62,7 +62,7 @@ export default function Spark() {
     }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  useDidShow(() => { void load() })
 
   async function chooseAccount(accountId: string) {
     closeTaskEditor()

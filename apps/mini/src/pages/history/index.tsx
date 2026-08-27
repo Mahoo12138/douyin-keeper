@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Button, Text, View } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import Taro, { useDidShow } from '@tarojs/taro'
 
 import { getAccessToken } from '@/lib/session'
 import { listSendIntents, MiniApiError } from '@/lib/api'
@@ -37,7 +37,7 @@ export default function History() {
     }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  useDidShow(() => { void load() })
 
   function chooseDay(day: string) {
     selectedDayRef.current = day

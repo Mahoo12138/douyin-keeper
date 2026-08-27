@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Image, Input, Text, View } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import Taro, { useDidShow } from '@tarojs/taro'
 
 import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, listAccounts, listFriends, MiniApiError, myEntitlement, pauseAccount, resumeAccount, streamJobEvents, submitSMSVerification, syncAccountFriends } from '@/lib/api'
 import type { JobEvent } from '@/lib/api'
@@ -80,7 +80,7 @@ export default function Accounts() {
     }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  useDidShow(() => { void load() })
 
   useEffect(() => {
     if (!bindingJobId) return

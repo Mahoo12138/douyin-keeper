@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Image, Input, Picker, Switch, Text, Textarea, View } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import Taro, { useDidShow } from '@tarojs/taro'
 
 import { getAccessToken } from '@/lib/session'
 import { createTask, deleteTask, getSendJob, listAccounts, listFriends, listSendIntents, listTasks, MiniApiError, runTaskNow, updateTask } from '@/lib/api'
@@ -69,7 +69,7 @@ export default function Tasks() {
     }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  useDidShow(() => { void load() })
 
   useEffect(() => {
     const token = getAccessToken()
