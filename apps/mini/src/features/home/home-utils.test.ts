@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createIdempotencyKey, nextEnabledTask, selectAccountId } from './home-utils'
+import { createIdempotencyKey, homeAccountStatus, homeOverallStatus, homeTaskStatus, nextEnabledTask, selectAccountId } from './home-utils'
 
 describe('mini home actions', () => {
   it('creates UUID-shaped keys for idempotent manual sends', () => {
@@ -25,5 +25,22 @@ describe('mini home actions', () => {
 
     expect(nextEnabledTask(tasks, 'account-1')?.id).toBe('task-current')
     expect(nextEnabledTask(tasks, 'account-3')).toBeUndefined()
+  })
+
+  it('derives the account status from binding, session and risk fields', () => {
+    expect(homeAccountStatus({ binding_status: 'bound', session_status: 'valid', risk_status: 'normal' })).toEqual({ label: '正常', tone: 'green' })
+    expect(homeAccountStatus({ binding_status: 'bound', session_status: 'expired', risk_status: 'normal' })).toEqual({ label: '已过期', tone: 'amber' })
+    expect(homeAccountStatus({ binding_status: 'bound', session_status: 'valid', risk_status: 'paused' })).toEqual({ label: '已暂停', tone: 'amber' })
+    expect(homeAccountStatus(null)).toEqual({ label: '未绑定', tone: 'amber' })
+  })
+
+  it('marks the home system as needing attention for failed work or unavailable data', () => {
+    const account = homeAccountStatus({ binding_status: 'bound', session_status: 'valid', risk_status: 'normal' })
+    const tasks = homeTaskStatus(['failed'])
+
+    expect(tasks).toEqual({ label: '有异常', tone: 'amber' })
+    expect(homeOverallStatus(account, homeTaskStatus([]), true)).toEqual({ label: '全部正常', tone: 'green' })
+    expect(homeOverallStatus(account, tasks, true)).toEqual({ label: '需要关注', tone: 'amber' })
+    expect(homeOverallStatus(account, homeTaskStatus([]), false)).toEqual({ label: '需要关注', tone: 'amber' })
   })
 })

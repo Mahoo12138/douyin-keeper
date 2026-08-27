@@ -4,7 +4,7 @@ import Taro from '@tarojs/taro'
 
 import { checkAccountSession, getMe, listAccounts, listNotifications, listSendIntents, listTasks, markAllNotificationsRead, markNotificationRead, MiniApiError, runTaskNow } from '@/lib/api'
 import { getAccessToken } from '@/lib/session'
-import { createIdempotencyKey, nextEnabledTask, selectAccountId } from '@/features/home/home-utils'
+import { createIdempotencyKey, homeAccountStatus, homeOverallStatus, homeTaskStatus, nextEnabledTask, selectAccountId } from '@/features/home/home-utils'
 import { openMeNotifications } from '@/features/navigation/mini-navigation'
 import { notificationPriorityLabel } from '@/features/notification/notification-utils'
 import avatarChen from '@/assets/home/avatar-chen.png'
@@ -82,6 +82,9 @@ export function HomePage() {
   const todayStats = getTodayStats(data.history)
   const activeTaskCount = data.tasks.filter((task) => task.enabled).length
   const trend = buildTrend(data.history)
+  const accountHealth = homeAccountStatus(account)
+  const taskHealth = homeTaskStatus(data.history.map((item) => item.status))
+  const overallHealth = homeOverallStatus(accountHealth, taskHealth, data.notificationsAvailable)
 
   async function markRead(notificationId: string) {
     const token = getAccessToken()
@@ -168,7 +171,7 @@ export function HomePage() {
 
     <View className="home-card recent-card"><View className="home-card-heading"><Text className="home-card-title">最近任务</Text><Button className="home-card-link-button" onClick={() => Taro.navigateTo({ url: '/pages/history/index' })}>查看全部 ›</Button></View>{data.history.length === 0 ? <View className="home-empty"><Text className="home-empty-icon">＋</Text><Text className="home-empty-title">今天还没有执行记录</Text><Text className="muted">开启任务后，执行结果会显示在这里。</Text></View> : <View>{data.history.slice(0, 4).map((item) => <RecentTask key={item.id} item={item} />)}</View>}</View>
 
-    <View className="home-card status-panel"><View className="home-card-heading"><Text className="home-card-title">系统状态</Text><Text className="running-state"><StatusDot tone="green" />全部正常</Text></View><View className="status-grid"><StatusItem label="数据服务" value="正常" tone="green" /><StatusItem label="任务服务" value={data.history.some((item) => item.status === 'running') ? '执行中' : '就绪'} tone="green" /><StatusItem label="账号会话" value={account ? sessionStatus(account.session_status) : '未绑定'} tone={account?.session_status === 'valid' ? 'green' : 'amber'} /></View>{account && <Button className="home-outline-button" disabled={sessionCheckBusy} onClick={() => void checkSession()}>{sessionCheckBusy ? '检查中…' : '重新检查当前账号'}</Button>}</View>
+    <View className="home-card status-panel"><View className="home-card-heading"><Text className="home-card-title">系统状态</Text><Text className={`running-state running-state-${overallHealth.tone}`}><StatusDot tone={overallHealth.tone} />{overallHealth.label}</Text></View><View className="status-grid"><StatusItem label="数据服务" value={data.notificationsAvailable ? '正常' : '降级'} tone={data.notificationsAvailable ? 'green' : 'amber'} /><StatusItem label="任务服务" value={taskHealth.label} tone={taskHealth.tone} /><StatusItem label="账号会话" value={accountHealth.label} tone={accountHealth.tone} /></View>{account && <Button className="home-outline-button" disabled={sessionCheckBusy} onClick={() => void checkSession()}>{sessionCheckBusy ? '检查中…' : '重新检查当前账号'}</Button>}</View>
 
     <View className="home-quick-actions"><Button className="home-primary-button" disabled={!nextTask || runBusy} onClick={() => void runNextTask()}><Text className="quick-action-icon">↯</Text>{runBusy ? '加入中…' : nextTask ? '立即执行下一项' : '暂无可执行任务'}</Button><Button className="home-secondary-button" onClick={() => Taro.switchTab({ url: '/pages/tasks/index' })}>管理会话与任务</Button></View>
 
