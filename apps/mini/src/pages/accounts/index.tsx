@@ -105,8 +105,14 @@ export default function Accounts() {
           }
         } else if (job.status === 'failed' || job.status === 'cancelled') {
           setBindingJobId('')
-          setError(job.error_code || '绑定任务未完成，请重试。')
-          if (active) setScreen('progress')
+          setBindingStatus('')
+          if (active) {
+            await load()
+            if (active) {
+              setError(job.error_code || (job.status === 'cancelled' ? '绑定任务已取消，请重新开始。' : '绑定任务未完成，请重试。'))
+              setScreen('method')
+            }
+          }
         }
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : '绑定状态查询失败')
@@ -182,6 +188,10 @@ export default function Accounts() {
   async function runAccountAction(account: Account, action: 'session' | 'friends' | 'pause' | 'resume') {
     const token = getAccessToken()
     if (!token || busy) return
+    if (account.binding_status !== 'bound') {
+      setError('账号尚未完成绑定，暂不能执行此操作。')
+      return
+    }
     setBusy(action)
     setError('')
     let queued = false
@@ -325,6 +335,7 @@ export default function Accounts() {
       await cancelJob(token, bindingJobId)
       setBindingJobId('')
       setBindingStatus('')
+      await load()
       setScreen('method')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '取消绑定失败')
@@ -354,8 +365,9 @@ function AccountDetail({ account, conversationCount, menuOpen, busy, accountJobA
   const [capabilities, setCapabilities] = useState<Awaited<ReturnType<typeof accountCapabilities>>['items']>([])
   useEffect(() => { const token = getAccessToken(); if (token) void accountCapabilities(token, account.id).then((result) => setCapabilities(result.items)).catch(() => setCapabilities([])) }, [account.id])
   const paused = account.risk_status === 'paused' || !!account.paused_at
+  const isBound = account.binding_status === 'bound'
   const effectiveCapabilityItems = effectiveCapabilities(capabilities)
-  return <View className="mini-page account-page"><View className="account-detail-topbar"><Button className="account-back-button" onClick={onBack}>‹</Button><Text>账号详情</Text><Button className="account-more-button" onClick={onMenu}>•••</Button></View><View className="account-detail-hero"><Avatar src={account.avatar_url} name={account.nickname || '未命名'} size="large" /><Text className="account-detail-name">{account.nickname || '未命名账号'}</Text><Text className="account-detail-status"><StatusDot tone={account.session_status === 'valid' ? 'green' : 'amber'} />{bindingLabel(account.binding_status)} · {sessionLabel(account.session_status)}</Text></View>{menuOpen && <View className="account-menu"><Button onClick={() => onAction('session')}>重新登录态检查 <Text>›</Text></Button><Button onClick={() => onAction('friends')}>同步会话 <Text>›</Text></Button><Button onClick={() => onAction(paused ? 'resume' : 'pause')}>{paused ? '恢复任务' : '暂停任务'} <Text>›</Text></Button><Button className="account-menu-danger" onClick={onDelete}>解除绑定 <Text>›</Text></Button></View>}{accountJobStatus && <View className="account-operation-status"><Text>{accountJobAction === 'friends' ? '会话同步' : '登录态检查'}：{accountJobStatus}</Text></View>}{error && <View className="account-inline-error"><Text>{error}</Text></View>}<View className="account-detail-card"><Text className="account-section-title">账号状态</Text><DetailRow label="登录状态" value={sessionLabel(account.session_status)} tone={account.session_status === 'valid' ? 'green' : 'amber'} /><DetailRow label="账号健康度" value={riskLabel(account.risk_status)} tone={account.risk_status === 'normal' ? 'green' : 'amber'} /><DetailRow label="活跃会话" value={`${conversationCount} 个`} /><DetailRow label="活跃任务数" value={`${account.enabled_task_count} 个`} /><DetailRow label="最近检查" value={formatDate(account.last_session_check_at)} /></View><View className="account-detail-card"><Text className="account-section-title">今日数据</Text><View className="detail-stat-grid"><DetailStat label="互动成功" value={account.today_send_succeeded} tone="green" /><DetailStat label="互动失败" value={account.today_send_failed} tone={account.today_send_failed ? 'red' : 'green'} /><DetailStat label="完成率" value={`${account.today_send_succeeded + account.today_send_failed ? Math.round(account.today_send_succeeded / (account.today_send_succeeded + account.today_send_failed) * 100) : 0}%`} tone="green" /></View></View><View className="account-detail-card"><Text className="account-section-title">能力状态</Text>{effectiveCapabilityItems.length === 0 ? <Text className="muted">暂无能力快照，稍后可重新检查。</Text> : effectiveCapabilityItems.map((item) => <DetailRow key={item.capability} label={item.capability} value={capabilityLabel(item.status)} tone={item.status === 'available' ? 'green' : 'amber'} />)}</View><View className="account-detail-actions"><Button className="account-primary-button" disabled={busy !== ''} onClick={() => onAction('friends')}>{busy === 'friends' ? '同步中…' : '同步会话'}</Button><Button className="account-secondary-button" disabled={busy !== ''} onClick={onBind}>重新登录</Button></View></View>
+  return <View className="mini-page account-page"><View className="account-detail-topbar"><Button className="account-back-button" onClick={onBack}>‹</Button><Text>账号详情</Text>{isBound ? <Button className="account-more-button" onClick={onMenu}>•••</Button> : <View className="account-topbar-spacer" />}</View><View className="account-detail-hero"><Avatar src={account.avatar_url} name={account.nickname || '未命名'} size="large" /><Text className="account-detail-name">{account.nickname || '未命名账号'}</Text><Text className="account-detail-status"><StatusDot tone={account.session_status === 'valid' ? 'green' : 'amber'} />{bindingLabel(account.binding_status)} · {sessionLabel(account.session_status)}</Text></View>{!isBound && <View className="account-pending-notice"><Text className="account-pending-title">抖音账号正在绑定</Text><Text className="muted">绑定任务完成后，才能同步会话、检查登录态或管理任务。请稍候刷新账号列表。</Text><Button className="account-secondary-button" onClick={onBack}>返回账号列表</Button></View>}{menuOpen && isBound && <View className="account-menu"><Button onClick={() => onAction('session')}>重新登录态检查 <Text>›</Text></Button><Button onClick={() => onAction('friends')}>同步会话 <Text>›</Text></Button><Button onClick={() => onAction(paused ? 'resume' : 'pause')}>{paused ? '恢复任务' : '暂停任务'} <Text>›</Text></Button><Button className="account-menu-danger" onClick={onDelete}>解除绑定 <Text>›</Text></Button></View>}{accountJobStatus && <View className="account-operation-status"><Text>{accountJobAction === 'friends' ? '会话同步' : '登录态检查'}：{accountJobStatus}</Text></View>}{error && <View className="account-inline-error"><Text>{error}</Text></View>}<View className="account-detail-card"><Text className="account-section-title">账号状态</Text><DetailRow label="登录状态" value={sessionLabel(account.session_status)} tone={account.session_status === 'valid' ? 'green' : 'amber'} /><DetailRow label="账号健康度" value={riskLabel(account.risk_status)} tone={account.risk_status === 'normal' ? 'green' : 'amber'} /><DetailRow label="活跃会话" value={`${conversationCount} 个`} /><DetailRow label="活跃任务数" value={`${account.enabled_task_count} 个`} /><DetailRow label="最近检查" value={formatDate(account.last_session_check_at)} /></View><View className="account-detail-card"><Text className="account-section-title">今日数据</Text><View className="detail-stat-grid"><DetailStat label="互动成功" value={account.today_send_succeeded} tone="green" /><DetailStat label="互动失败" value={account.today_send_failed} tone={account.today_send_failed ? 'red' : 'green'} /><DetailStat label="完成率" value={`${account.today_send_succeeded + account.today_send_failed ? Math.round(account.today_send_succeeded / (account.today_send_succeeded + account.today_send_failed) * 100) : 0}%`} tone="green" /></View></View><View className="account-detail-card"><Text className="account-section-title">能力状态</Text>{effectiveCapabilityItems.length === 0 ? <Text className="muted">暂无能力快照，稍后可重新检查。</Text> : effectiveCapabilityItems.map((item) => <DetailRow key={item.capability} label={item.capability} value={capabilityLabel(item.status)} tone={item.status === 'available' ? 'green' : 'amber'} />)}</View>{isBound && <View className="account-detail-actions"><Button className="account-primary-button" disabled={busy !== ''} onClick={() => onAction('friends')}>{busy === 'friends' ? '同步中…' : '同步会话'}</Button><Button className="account-secondary-button" disabled={busy !== ''} onClick={onBind}>重新登录</Button></View>}</View>
 }
 
 function BindingIntro({ onBack, onStart }: { onBack: () => void; onStart: () => void }) {

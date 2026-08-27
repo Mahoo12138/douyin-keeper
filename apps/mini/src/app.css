@@ -288,6 +288,9 @@ page {
 .account-detail-name { display: block; margin-top: 14rpx; font-size: 34rpx; font-weight: 650; }
 .account-detail-status { display: flex; align-items: center; justify-content: center; gap: 8rpx; margin-top: 8rpx; color: rgba(255,255,255,.84); font-size: 22rpx; }
 .account-detail-status .status-dot-small { background: #d5ffec; }
+.account-pending-notice { margin-top: 18rpx; padding: 22rpx 24rpx; border: 1rpx solid #f2dfb5; border-radius: 22rpx; color: #7e5a1c; background: #fff9eb; font-size: 23rpx; line-height: 1.55; }
+.account-pending-title { display: block; margin-bottom: 6rpx; color: #6b4c13; font-size: 26rpx; font-weight: 650; }
+.account-pending-notice .account-secondary-button { color: #996d1d; border-color: #e8ce94; }
 .account-menu { margin-top: 14rpx; padding: 10rpx 18rpx; border: 1rpx solid #e2ebe7; border-radius: 20rpx; background: #fff; box-shadow: 0 14rpx 30rpx rgba(35, 86, 65, .1); }
 .account-menu Button { display: flex; align-items: center; justify-content: space-between; width: 100%; margin: 0; padding: 20rpx 0; border: 0; border-bottom: 1rpx solid #edf1ef; color: #26332d; background: #fff; font-size: 25rpx; text-align: left; }
 .account-menu Button::after { display: none; }
