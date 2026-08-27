@@ -233,7 +233,7 @@ page {
 .guest-home { min-height: 100vh; padding-top: 110rpx; text-align: center; }
 .home-branding .home-brand, .home-branding .home-greeting { text-align: center; }
 .guest-illustration { display: flex; align-items: center; justify-content: center; width: 280rpx; height: 240rpx; margin: 88rpx auto 38rpx; border-radius: 50%; background: #eefbf5; box-shadow: 0 0 0 24rpx #f5fcf8; }
-.guest-illustration-image { display: block; width: 280rpx; height: 280rpx; }
+.guest-illustration-image { display: block; width: 280rpx; height: 280rpx; text-align: left; }
 .guest-title { display: block; color: #18211d; font-size: 38rpx; font-weight: 700; }
 .guest-copy { display: block; margin: 14rpx 30rpx 0; }
 .guest-home .home-primary-button { margin-top: 44rpx; }
@@ -331,7 +331,7 @@ page {
 .binding-safe-note { display: flex; align-items: flex-start; gap: 12rpx; margin: 20rpx 8rpx 0; color: #819087; font-size: 21rpx; line-height: 1.5; }
 .binding-safe-mark { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 30rpx; height: 30rpx; border-radius: 50%; color: #159f69; background: #e1f8ed; font-size: 18rpx; }
 .account-empty { padding: 82rpx 20rpx 30rpx; text-align: center; }
-.account-empty-image { display: block; width: 260rpx; height: 230rpx; margin: 0 auto 12rpx; }
+.account-empty-image { display: block; width: 260rpx; height: 230rpx; margin: 0 auto 12rpx; text-align: left; }
 .account-empty-title { display: block; color: #1b2a21; font-size: 29rpx; font-weight: 650; }
 .account-empty .muted { display: block; margin-top: 8rpx; }
 .account-empty .account-primary-button { margin-top: 28rpx; }
@@ -357,7 +357,7 @@ page {
 .binding-flow-step-current .binding-flow-number { box-shadow: 0 0 0 6rpx #dff8eb; }
 .binding-flow-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .binding-intro-hero { display: flex; align-items: center; justify-content: center; width: 300rpx; height: 250rpx; margin: 52rpx auto 24rpx; border-radius: 50%; background: #eefbf5; box-shadow: 0 0 0 24rpx #f7fcf9; }
-.binding-intro-image { display: block; width: 300rpx; height: 300rpx; }
+.binding-intro-image { display: block; width: 300rpx; height: 300rpx; text-align: left; }
 .binding-intro-title { display: block; color: #17271e; font-size: 34rpx; font-weight: 700; }
 .binding-intro-copy { display: block; margin-top: 10rpx; }
 .binding-benefits { margin-top: 34rpx; text-align: left; }
@@ -384,15 +384,15 @@ page {
 .binding-notice-title { display: block; margin-bottom: 5rpx; color: #3a4d40; font-size: 23rpx; font-weight: 650; }
 .binding-qr-title { display: block; margin-top: 58rpx; color: #1e2d24; font-size: 27rpx; font-weight: 650; }
 .binding-qr-box { display: flex; align-items: center; justify-content: center; width: 420rpx; height: 420rpx; margin: 26rpx auto 20rpx; border: 1rpx solid #edf1ef; border-radius: 28rpx; background: #fff; box-shadow: 0 12rpx 30rpx rgba(35, 86, 65, .07); }
-.binding-qr-image { display: block; width: 370rpx; height: 370rpx; }
+.binding-qr-image { display: block; width: 370rpx; height: 370rpx; text-align: left; }
 .binding-qr-loading { display: flex; align-items: center; justify-content: center; flex-direction: column; color: #5d7165; font-size: 22rpx; }
-.binding-qr-loading-image { display: block; width: 180rpx; height: 180rpx; margin-bottom: 10rpx; }
+.binding-qr-loading-image { display: block; width: 180rpx; height: 180rpx; margin-bottom: 10rpx; text-align: left; }
 .binding-qr-status { display: block; color: #169d68; font-size: 23rpx; }
 .binding-qr-expiry, .binding-qr-help { display: block; margin-top: 8rpx; color: #89958f; font-size: 20rpx; }
 .binding-refresh-button { width: 360rpx; margin: 30rpx auto 0; }
 .binding-flow-step-note { display: block; margin-top: 28rpx; color: #9aa59f; font-size: 20rpx; }
 .binding-progress-visual { display: flex; align-items: center; justify-content: center; width: 220rpx; height: 190rpx; margin: 48rpx auto 16rpx; border-radius: 50%; background: #eefbf5; }
-.binding-progress-image { display: block; width: 220rpx; height: 220rpx; }
+.binding-progress-image { display: block; width: 220rpx; height: 220rpx; text-align: left; }
 .binding-progress-title-large { display: block; color: #1e3025; font-size: 29rpx; font-weight: 650; }
 .binding-progress-copy { display: block; margin-top: 7rpx; }
 .binding-checklist { margin: 34rpx 24rpx 0; text-align: left; }
@@ -406,7 +406,7 @@ page {
 .binding-sms-entry .account-primary-button { margin-top: 16rpx; }
 .binding-progress-note { margin-top: 20rpx; padding: 16rpx; border-radius: 14rpx; color: #937242; background: #fff8ea; font-size: 21rpx; line-height: 1.5; }
 .binding-success-visual { display: flex; align-items: center; justify-content: center; height: 260rpx; margin-top: 38rpx; }
-.binding-success-image { display: block; width: 280rpx; height: 260rpx; }
+.binding-success-image { display: block; width: 280rpx; height: 260rpx; text-align: left; }
 .binding-success-title { display: block; color: #1c2e23; font-size: 34rpx; font-weight: 700; }
 .binding-success-copy { display: block; margin-top: 8rpx; }
 .binding-success-account { display: flex; align-items: center; gap: 18rpx; margin-top: 28rpx; padding: 20rpx; border: 1rpx solid #e4ece8; border-radius: 20rpx; background: #fff; text-align: left; }
@@ -488,7 +488,7 @@ page {
 .welcome-dot-active { width: 26rpx; border-radius: 999rpx; background: #2d7bf0; }
 .auth-back-button { display: block; margin: 0 0 12rpx; padding: 0; border: 0; color: #6d8a7c; background: transparent; font-size: 21rpx; line-height: 1.5; text-align: left; }
 .auth-back-button::after { display: none; }
-.auth-mascot { display: block; width: 190rpx; height: 190rpx; margin: 0 auto; }
+.auth-mascot { display: block; width: 190rpx; height: 190rpx; margin: 0 auto; text-align: left; }
 .auth-title { display: block; margin-top: 12rpx; color: #17241d; font-size: 40rpx; font-weight: 700; }
 .auth-subtitle { display: block; margin-top: 8rpx; }
 .me-auth-card { text-align: left; }
@@ -671,7 +671,7 @@ page {
 .task-history-row-copy { min-width: 0; flex: 1; color: #2f4035; font-size: 23rpx; }
 .task-history-row-copy .muted { display: block; margin-top: 6rpx; }
 .task-empty { padding: 70rpx 20rpx 30rpx; text-align: center; }
-.task-empty-image { display: block; width: 270rpx; height: 235rpx; margin: 0 auto 16rpx; }
+.task-empty-image { display: block; width: 270rpx; height: 235rpx; margin: 0 auto 16rpx; text-align: left; }
 .task-empty-title { display: block; color: #1d2d24; font-size: 29rpx; font-weight: 650; }
 .task-empty .muted { display: block; margin-top: 8rpx; line-height: 1.6; }
 .task-empty .task-primary-button, .task-empty .task-secondary-button { margin-top: 28rpx; }
