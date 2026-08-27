@@ -241,7 +241,10 @@ export function listFriends(token: string, accountId: string): Promise<Collectio
   // unified conversation endpoint; no follower/friend crawl is performed.
   return request<Collection<components['schemas']['Conversation']>>(`/accounts/${accountId}/conversations?include_archived=true&group_only=false`, { token }).then((response) => ({
     ...response,
-    items: response.items.map((item) => ({
+    // The endpoint intentionally returns the mixed conversation inventory
+    // when group_only=false. The spark/task surfaces only support direct
+    // conversations, so keep group sessions out of the legacy friend shape.
+    items: response.items.filter((item) => item.conversation_type !== 'group').map((item) => ({
       id: item.friend_id ?? item.id,
       platform_identity_status: item.friend_id ? item.platform_identity_status : 'missing',
       display_name: item.friend_display_name,

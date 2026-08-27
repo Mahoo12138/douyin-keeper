@@ -125,7 +125,7 @@ describe('mini API auth recovery', () => {
     expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/entitlements/redemptions?limit=10&cursor=cursor-1')
   })
 
-  it('projects group conversations into the spark page friend shape', async () => {
+  it('projects conversations without an explicit type into the spark page friend shape', async () => {
     requestMock.mockResolvedValueOnce({
       statusCode: 200,
       data: {
@@ -154,6 +154,24 @@ describe('mini API auth recovery', () => {
       has_conversation: true,
     })
     expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/accounts/account-1/conversations?include_archived=true&group_only=false')
+  })
+
+  it('does not expose group conversations as spark friends', async () => {
+    requestMock.mockResolvedValueOnce({
+      statusCode: 200,
+      data: {
+        items: [
+          { id: 'conversation-group', conversation_type: 'group', friend_id: null, friend_display_name: '项目群', friend_nickname: '', friend_avatar_url: null, streak_days: 0, spark_enabled: false, last_sent_at: null, platform_identity_status: 'missing' },
+          { id: 'conversation-direct', conversation_type: 'direct', friend_id: 'friend-1', friend_display_name: '小明', friend_nickname: '明明', friend_avatar_url: null, streak_days: 2, spark_enabled: true, last_sent_at: null, platform_identity_status: 'resolved' },
+        ],
+        next_cursor: null,
+      },
+    })
+
+    const result = await listFriends('access-1', 'account-1')
+
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]).toMatchObject({ id: 'friend-1', nickname: '明明' })
   })
 
   it('loads notifications and supports marking one or all as read', async () => {
