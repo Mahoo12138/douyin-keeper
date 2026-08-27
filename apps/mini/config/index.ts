@@ -29,4 +29,9 @@ export default defineConfig({
       htmltransform: { enable: true },
     },
   },
+  h5: {
+    webpackChain(chain) {
+      chain.resolve.alias.set('@', path.resolve(__dirname, '../src'))
+    },
+  },
 })

@@ -4,7 +4,9 @@
   "private": true,
   "description": "Douyin Keeper WeChat mini program (Taro + React) — mobile console for spark maintenance",
   "scripts": {
+    "dev:h5": "taro build --type h5 --watch",
     "dev:weapp": "taro build --type weapp --watch",
+    "build:h5": "taro build --type h5",
     "build:weapp": "taro build --type weapp",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
@@ -25,7 +27,9 @@
   "devDependencies": {
     "@babel/core": "^7.26.0",
     "@babel/preset-react": "^7.29.7",
+    "@pmmmwh/react-refresh-webpack-plugin": "^0.5.17",
     "@tarojs/cli": "^4.0.9",
+    "@tarojs/plugin-platform-h5": "^4.2.1",
     "@tarojs/taro-loader": "^4.0.9",
     "@tarojs/webpack5-runner": "^4.0.9",
     "@types/react": "^18.3.1",
