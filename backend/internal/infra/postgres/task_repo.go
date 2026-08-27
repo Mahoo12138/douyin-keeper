@@ -145,7 +145,7 @@ func (r *TaskRepo) GetOwned(ctx context.Context, userID int64, publicID uuid.UUI
 }
 
 func (r *TaskRepo) Create(ctx context.Context, t *task.SparkTask) error {
-	return From(ctx, r.pool).QueryRow(ctx, `
+	err := From(ctx, r.pool).QueryRow(ctx, `
 		INSERT INTO spark_tasks (public_id, user_id, account_id, friend_id, enabled, timezone,
 			window_start, window_end, message_kind, message_body, allow_first_message, created_at, updated_at)
 		VALUES ($1,$2,$3,$4,$5,$6,$7::time,$8::time,$9,$10,$11,$12,$13)
@@ -153,6 +153,10 @@ func (r *TaskRepo) Create(ctx context.Context, t *task.SparkTask) error {
 	`, t.PublicID, t.UserID, t.AccountID, t.FriendID, t.Enabled, t.Timezone,
 		t.WindowStart, t.WindowEnd, t.MessageKind, t.MessageBody, t.AllowFirstMessage,
 		t.CreatedAt, t.UpdatedAt).Scan(&t.ID)
+	if isUniqueViolation(err) {
+		return apperr.Conflict(apperr.CodeConflict, "a task already exists for this account and conversation")
+	}
+	return err
 }
 
 func (r *TaskRepo) Update(ctx context.Context, t *task.SparkTask) error {
