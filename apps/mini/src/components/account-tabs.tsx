@@ -1,4 +1,6 @@
-import { Button, View } from '@tarojs/components'
+import { View } from '@tarojs/components'
+
+import { MiniButton as Button } from './mini-button'
 
 export type AccountTabItem = { id: string; nickname?: string | null }
 

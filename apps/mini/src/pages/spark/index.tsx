@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, Input, Picker, Switch, Text, Textarea, View } from '@tarojs/components'
+import { Input, Picker, Switch, Text, Textarea, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 
 import { getAccessToken } from '@/lib/session'
@@ -7,6 +7,7 @@ import { cancelJob, getJob, listAccounts, listFriends, listMessageTemplates, lis
 import { AccountTabs } from '@/components/account-tabs'
 import { createIdempotencyKey, selectAccountId } from '@/features/home/home-utils'
 import { enabledTaskCount, replaceFriend, replaceTask, taskDraftError, taskForFriend, taskTimeInput, taskTimePayload } from '@/features/spark/spark-utils'
+import { MiniButton as Button } from '@/components/mini-button'
 
 type SparkData = {
   accounts: Awaited<ReturnType<typeof listAccounts>>['items']
@@ -17,7 +18,7 @@ type SparkData = {
 type MessageTemplate = Awaited<ReturnType<typeof listMessageTemplates>>['items'][number]
 type TaskDraft = { windowStart: string; windowEnd: string; message: string; messageKind: 'text' | 'sticker' }
 type PlatformArchiveJob = { id: string; conversationId: string; archived: boolean }
-type ConversationSyncJob = { id: string }
+type ConversationSyncJob = { id: string; cancelable: boolean }
 
 export default function Spark() {
   const [state, setState] = useState<'loading' | 'guest' | 'empty' | 'ready' | 'error'>('loading')
@@ -122,6 +123,9 @@ export default function Spark() {
       try {
         const job = await getJob(token, conversationSyncJob.id)
         if (!active) return
+        if (conversationSyncJob.cancelable !== job.cancelable) {
+          setConversationSyncJob((current) => current ? { ...current, cancelable: job.cancelable } : current)
+        }
         setConversationSyncStatus(jobStatusLabel(job.status))
         if (!['succeeded', 'failed', 'cancelled'].includes(job.status)) return
         setConversationSyncJob(null)
@@ -218,7 +222,7 @@ export default function Spark() {
     setError('')
     try {
       const job = await syncAccountFriends(token, accountId, createIdempotencyKey())
-      setConversationSyncJob({ id: job.job_id })
+      setConversationSyncJob({ id: job.job_id, cancelable: false })
       setConversationSyncStatus('排队中')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '会话同步请求提交失败')
@@ -323,7 +327,7 @@ export default function Spark() {
   const visibleTasks = data.tasks.filter((task) => task.account_id === selectedAccountId)
   const visibleFriends = data.friends.filter((friend) => showArchived ? friend.archived : !friend.archived)
 
-  return <View className="mini-page"><View className="mini-hero card"><Text className="eyebrow">M4 · 会话与火花</Text><Text className="title mini-hero-title">维护会话火花</Text><Text className="muted">按账号查看直接会话与群聊，分别控制火花维护和每日任务。</Text></View><AccountTabs accounts={data.accounts} selectedId={selectedAccountId} onSelect={(id) => void chooseAccount(id)} /><View className="conversation-view-tabs"><Button className={`conversation-view-tab ${!showArchived ? 'conversation-view-tab-active' : ''}`} onClick={() => void changeArchiveView(false)}>当前会话</Button><Button className={`conversation-view-tab ${showArchived ? 'conversation-view-tab-active' : ''}`} onClick={() => void changeArchiveView(true)}>已归档</Button></View><View className="section-title"><Text>{selectedAccount?.nickname || '当前账号'}</Text><Text className="muted">{visibleFriends.length} 个{showArchived ? '已归档会话' : '会话'} · {enabledTaskCount(visibleTasks)} 个任务启用</Text></View><ConversationSyncControls busy={busyKey !== ''} active={conversationSyncJob !== null} available={selectedAccount?.binding_status === 'bound'} status={conversationSyncStatus} onSync={() => void syncConversations()} onCancel={() => void cancelConversationSync()} onBind={() => Taro.switchTab({ url: '/pages/accounts/index' })} />{error && <View className="card error-card"><Text>{error}</Text></View>}{visibleFriends.length === 0 ? <View className="card empty-card"><Text className="card-title">{showArchived ? '暂无已归档会话' : '还没有会话'}</Text><Text className="muted">{showArchived ? '归档后的会话会显示在这里，可随时恢复。' : '先完成账号绑定，再同步消息面板会话。'}</Text></View> : <View>{visibleFriends.map((friend) => { const task = taskForFriend(visibleTasks, friend.id); const platformBusy = platformArchiveJob?.conversationId === friend.conversation_id; return <View className="spark-friend-group" key={`${friend.conversation_id}:${friend.id}`}><FriendCard friend={friend} task={task} templates={templates} busyKey={busyKey} editingTaskId={editingTaskId} taskDraft={taskDraft} onFriendToggle={(enabled) => void toggleFriend(friend.id, enabled)} onTaskToggle={task ? (enabled) => void toggleTask(task.id, enabled) : undefined} onEditTask={task ? () => openTaskEditor(task) : undefined} onDraftChange={setTaskDraft} onSaveTask={task ? () => void saveTask(task) : undefined} onCancelTask={closeTaskEditor} onArchive={() => void toggleArchive(friend)} /><PlatformArchiveControls archived={friend.archived} busy={busyKey !== ''} active={platformBusy} status={platformBusy ? platformArchiveStatus : ''} onRequest={() => void requestPlatformArchive(friend)} onCancel={() => void cancelPlatformArchive()} /></View> })}</View>}</View>
+  return <View className="mini-page"><View className="mini-hero card"><Text className="eyebrow">M4 · 会话与火花</Text><Text className="title mini-hero-title">维护会话火花</Text><Text className="muted">按账号查看直接会话与群聊，分别控制火花维护和每日任务。</Text></View><AccountTabs accounts={data.accounts} selectedId={selectedAccountId} onSelect={(id) => void chooseAccount(id)} /><View className="conversation-view-tabs"><Button className={`conversation-view-tab ${!showArchived ? 'conversation-view-tab-active' : ''}`} onClick={() => void changeArchiveView(false)}>当前会话</Button><Button className={`conversation-view-tab ${showArchived ? 'conversation-view-tab-active' : ''}`} onClick={() => void changeArchiveView(true)}>已归档</Button></View><View className="section-title"><Text>{selectedAccount?.nickname || '当前账号'}</Text><Text className="muted">{visibleFriends.length} 个{showArchived ? '已归档会话' : '会话'} · {enabledTaskCount(visibleTasks)} 个任务启用</Text></View><ConversationSyncControls busy={busyKey !== ''} active={conversationSyncJob !== null} cancelable={conversationSyncJob?.cancelable ?? false} available={selectedAccount?.binding_status === 'bound'} status={conversationSyncStatus} onSync={() => void syncConversations()} onCancel={() => void cancelConversationSync()} onBind={() => Taro.switchTab({ url: '/pages/accounts/index' })} />{error && <View className="card error-card"><Text>{error}</Text></View>}{visibleFriends.length === 0 ? <View className="card empty-card"><Text className="card-title">{showArchived ? '暂无已归档会话' : '还没有会话'}</Text><Text className="muted">{showArchived ? '归档后的会话会显示在这里，可随时恢复。' : '先完成账号绑定，再同步消息面板会话。'}</Text></View> : <View>{visibleFriends.map((friend) => { const task = taskForFriend(visibleTasks, friend.id); const platformBusy = platformArchiveJob?.conversationId === friend.conversation_id; return <View className="spark-friend-group" key={`${friend.conversation_id}:${friend.id}`}><FriendCard friend={friend} task={task} templates={templates} busyKey={busyKey} editingTaskId={editingTaskId} taskDraft={taskDraft} onFriendToggle={(enabled) => void toggleFriend(friend.id, enabled)} onTaskToggle={task ? (enabled) => void toggleTask(task.id, enabled) : undefined} onEditTask={task ? () => openTaskEditor(task) : undefined} onDraftChange={setTaskDraft} onSaveTask={task ? () => void saveTask(task) : undefined} onCancelTask={closeTaskEditor} onArchive={() => void toggleArchive(friend)} /><PlatformArchiveControls archived={friend.archived} busy={busyKey !== ''} active={platformBusy} status={platformBusy ? platformArchiveStatus : ''} onRequest={() => void requestPlatformArchive(friend)} onCancel={() => void cancelPlatformArchive()} /></View> })}</View>}</View>
 }
 
 function FriendCard({ friend, task, templates, busyKey, editingTaskId, taskDraft, onFriendToggle, onTaskToggle, onEditTask, onDraftChange, onSaveTask, onCancelTask, onArchive }: { friend: SparkData['friends'][number]; task?: SparkData['tasks'][number]; templates: MessageTemplate[]; busyKey: string; editingTaskId: string; taskDraft: TaskDraft | null; onFriendToggle: (enabled: boolean) => void; onTaskToggle?: (enabled: boolean) => void; onEditTask?: () => void; onDraftChange: (draft: TaskDraft | null) => void; onSaveTask?: () => void; onCancelTask: () => void; onArchive: () => void }) {
@@ -338,9 +342,9 @@ function PlatformArchiveControls({ archived, busy, active, status, onRequest, on
   return <Button className="conversation-platform-button" disabled={busy} onClick={onRequest}>{archived ? '请求平台恢复' : '请求平台归档'}</Button>
 }
 
-function ConversationSyncControls({ busy, active, available, status, onSync, onCancel, onBind }: { busy: boolean; active: boolean; available: boolean; status: string; onSync: () => void; onCancel: () => void; onBind: () => void }) {
+function ConversationSyncControls({ busy, active, cancelable, available, status, onSync, onCancel, onBind }: { busy: boolean; active: boolean; cancelable: boolean; available: boolean; status: string; onSync: () => void; onCancel: () => void; onBind: () => void }) {
   if (!available && !active) return <View className="conversation-sync-unavailable"><View><Text>账号尚未完成抖音绑定</Text><Text className="muted">绑定成功后，才能从消息面板同步会话。</Text></View><Button className="conversation-sync-bind" onClick={onBind}>去绑定</Button></View>
-  if (active) return <View className="conversation-sync-status"><Text>会话同步：{status || '处理中…'}</Text><Button className="conversation-sync-cancel" onClick={onCancel}>取消同步</Button></View>
+  if (active) return <View className="conversation-sync-status"><Text>会话同步：{status || '处理中…'}</Text>{cancelable && <Button className="conversation-sync-cancel" onClick={onCancel}>取消同步</Button>}</View>
   return <Button className="conversation-sync-button" disabled={busy} onClick={onSync}>同步会话</Button>
 }
 

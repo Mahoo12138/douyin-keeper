@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Image, Input, Picker, Switch, Text, Textarea, View } from '@tarojs/components'
+import { Image, Input, Picker, Switch, Text, Textarea, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 
 import { getAccessToken } from '@/lib/session'
@@ -7,6 +7,7 @@ import { createMessageTemplate, createTask, deleteMessageTemplate, deleteTask, g
 import { createIdempotencyKey } from '@/features/home/home-utils'
 import { taskCreateDraftError, taskTargetCandidates, taskTimePayload, uniqueSparkTargets } from '@/features/spark/spark-utils'
 import taskChecklist from '@/assets/tasks/task-checklist.png'
+import { MiniButton as Button } from '@/components/mini-button'
 
 type Task = Awaited<ReturnType<typeof listTasks>>['items'][number]
 type Account = Awaited<ReturnType<typeof listAccounts>>['items'][number]

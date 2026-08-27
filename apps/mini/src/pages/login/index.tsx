@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Button, Checkbox, Image, Input, Text, View } from '@tarojs/components'
+import { Checkbox, Image, Input, Text, View } from '@tarojs/components'
 import Taro, { useDidHide, useDidShow } from '@tarojs/taro'
 
 import { getMe, getNotificationPreferences, listMyEntitlementGrants, listNotifications, linkWechatMini, loginPassword, loginWechatMini, logoutMini, markAllNotificationsRead, markNotificationRead, MiniApiError, myEntitlement, redeemCardCode, registerPassword, updateNotificationPreferences } from '@/lib/api'
@@ -14,6 +14,7 @@ import profileAvatar from '@/assets/me/avatar-profile.png'
 import mascotSprout from '@/assets/me/mascot-sprout.png'
 import authGuardian from '@/assets/me/auth-guardian.png'
 import notificationBell from '@/assets/me/notification-bell.png'
+import { MiniButton as Button } from '@/components/mini-button'
 
 const notificationTemplateId = typeof process !== 'undefined' ? process.env.TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID || '' : ''
 const requestWechatSubscribe = Taro.requestSubscribeMessage as unknown as ((options: { tmplIds: string[] }) => Promise<Record<string, string>>) | undefined

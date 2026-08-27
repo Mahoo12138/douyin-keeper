@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { Button, Text, View } from '@tarojs/components'
+import { Text, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 
 import { getAccessToken } from '@/lib/session'
 import { listSendIntents, MiniApiError } from '@/lib/api'
 import { dayKey, filterHistory, localDayRange, recentDays, statusMeta, taskLabel, type HistoryFilter, type HistoryItem } from '@/features/history/history-utils'
+import { MiniButton as Button } from '@/components/mini-button'
 
 export default function History() {
   const [state, setState] = useState<'loading' | 'guest' | 'ready' | 'error'>('loading')
