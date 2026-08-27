@@ -9,7 +9,7 @@ import { entitlementGrantStatus, entitlementSourceLabel, entitlementStatus, form
 import { helpSections, privacySections } from '@/features/help/help-content'
 import { notificationPriorityLabel } from '@/features/notification/notification-utils'
 import { consumeMeScreenTarget } from '@/features/navigation/mini-navigation'
-import { authConsentError } from '@/features/auth/auth-validation'
+import { authConsentError, wechatMiniRuntimeError, wechatNotificationRuntimeError } from '@/features/auth/auth-validation'
 import profileAvatar from '@/assets/me/avatar-profile.png'
 import mascotSprout from '@/assets/me/mascot-sprout.png'
 import authGuardian from '@/assets/me/auth-guardian.png'
@@ -18,6 +18,7 @@ import { MiniButton as Button } from '@/components/mini-button'
 
 const notificationTemplateId = typeof process !== 'undefined' ? process.env.TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID || '' : ''
 const requestWechatSubscribe = Taro.requestSubscribeMessage as unknown as ((options: { tmplIds: string[] }) => Promise<Record<string, string>>) | undefined
+const isH5Runtime = typeof window !== 'undefined'
 type MeScreen = 'overview' | 'entitlement' | 'history' | 'notifications' | 'settings'
 type AuthMode = 'login' | 'register'
 type OnboardingStage = 'splash' | 'welcome' | 'auth'
@@ -110,6 +111,11 @@ export default function Me() {
 
   async function runWechatLogin() {
     if (!ensureAuthConsent() || busy) return
+    const runtimeError = wechatMiniRuntimeError(isH5Runtime)
+    if (runtimeError) {
+      setMessage(runtimeError)
+      return
+    }
     setBusy('login')
     setMessage('')
     try {
@@ -179,6 +185,11 @@ export default function Me() {
 
   async function runLink() {
     if (!linkCode.trim() || !ensureAuthConsent()) return
+    const runtimeError = wechatMiniRuntimeError(isH5Runtime)
+    if (runtimeError) {
+      setMessage(runtimeError)
+      return
+    }
     setBusy('link')
     setMessage('')
     try {
@@ -251,11 +262,16 @@ export default function Me() {
     setMessage('')
     try {
       if (!wechatNotificationsEnabled) {
-        if (!notificationTemplateId) {
-          setMessage('小程序尚未配置通知模板，请联系管理员。')
-          return
-        }
-        if (typeof requestWechatSubscribe !== 'function') {
+      if (!notificationTemplateId) {
+        setMessage('小程序尚未配置通知模板，请联系管理员。')
+        return
+      }
+      const runtimeError = wechatNotificationRuntimeError(isH5Runtime)
+      if (runtimeError) {
+        setMessage(runtimeError)
+        return
+      }
+      if (typeof requestWechatSubscribe !== 'function') {
           setMessage('微信服务通知需在微信小程序中授权，H5 端可继续使用站内通知。')
           return
         }
