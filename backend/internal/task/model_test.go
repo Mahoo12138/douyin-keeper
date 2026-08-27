@@ -130,6 +130,31 @@ func TestCreateFirstMessageRequiresEntitlementFeature(t *testing.T) {
 	}
 }
 
+func TestCreateRejectsFriendFromDifferentAccount(t *testing.T) {
+	accountID := uuid.New()
+	friendID := uuid.New()
+	gate := &taskGateStub{decision: entitlement.AuthorizationDecision{
+		Allowed: true, Entitlement: &entitlement.EffectiveEntitlement{TaskQuota: 10},
+	}}
+	repo := &taskRepoStub{}
+	service := NewService(repo,
+		taskAccountLookupStub{value: &account.Account{ID: 42, PublicID: accountID, UserID: 7, BindingStatus: account.BindingBound}},
+		taskFriendLookupStub{value: &friend.Friend{ID: 43, PublicID: friendID, AccountID: 99, IdentityStatus: friend.IdentityResolved}},
+		gate, taskLockerStub{}, taskTxStub{})
+
+	_, err := service.Create(context.Background(), 7, CreateInput{
+		AccountPublicID: accountID, FriendPublicID: friendID,
+		Timezone: "Asia/Shanghai", WindowStart: "19:30:00", WindowEnd: "22:30:00",
+		MessageKind: "text", MessageBody: stringPtr("晚安"), Enabled: false,
+	})
+	if app, ok := apperr.As(err); !ok || app.Code != apperr.CodeConflict {
+		t.Fatalf("Create() error = %v, want account/friend conflict", err)
+	}
+	if repo.created != nil {
+		t.Fatal("cross-account task must not be created")
+	}
+}
+
 func TestUpdateFirstMessageRequiresEntitlementFeature(t *testing.T) {
 	taskID := uuid.New()
 	gate := &taskGateStub{decision: entitlement.AuthorizationDecision{ReasonCode: apperr.CodeFeatureNotEntitled}}

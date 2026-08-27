@@ -278,6 +278,9 @@ func (s *Service) Create(ctx context.Context, userID int64, in CreateInput) (*Sp
 		if err != nil {
 			return err
 		}
+		if f.AccountID != acct.ID {
+			return apperr.Conflict(apperr.CodeConflict, "friend does not belong to account")
+		}
 		if !f.Resolved() {
 			return apperr.Conflict(apperr.CodeFriendIdentityUnsolid, "friend identity is not resolved")
 		}
