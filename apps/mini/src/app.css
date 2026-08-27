@@ -248,6 +248,7 @@ page {
 .account-quota-line { height: 10rpx; margin-top: 22rpx; overflow: hidden; border-radius: 999rpx; background: #dbece4; }
 .account-quota-line View { height: 100%; border-radius: inherit; background: #1cbd7c; }
 .account-inline-error { margin-top: 16rpx; padding: 16rpx 18rpx; border-radius: 14rpx; color: #b83f3f; background: #fff1f1; font-size: 22rpx; line-height: 1.5; }
+.account-operation-status { margin-top: 16rpx; padding: 16rpx 18rpx; border-radius: 14rpx; color: #2467a4; background: #eff7ff; font-size: 22rpx; line-height: 1.5; }
 .account-card { position: relative; display: flex; align-items: flex-start; width: 100%; margin: 18rpx 0 0; padding: 20rpx; border: 1rpx solid #e4ece8; border-radius: 22rpx; color: #18221d; background: #fff; box-shadow: 0 12rpx 26rpx rgba(35, 86, 65, .05); text-align: left; }
 .account-card-copy { min-width: 0; flex: 1; margin-left: 18rpx; }
 .account-card-top { display: flex; align-items: center; gap: 12rpx; }
