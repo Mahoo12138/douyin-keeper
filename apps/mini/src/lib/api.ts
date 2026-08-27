@@ -351,6 +351,10 @@ export function runTaskNow(token: string, taskId: string, idempotencyKey: string
   })
 }
 
+export function getSendJob(token: string, jobId: string) {
+  return request<components['schemas']['SendJob']>(`/send-jobs/${jobId}`, { token })
+}
+
 export function checkAccountSession(token: string, accountId: string, idempotencyKey?: string) {
   return request<components['schemas']['JobRef']>(`/accounts/${accountId}/session-check`, {
     method: 'POST', token, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,

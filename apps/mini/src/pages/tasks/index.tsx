@@ -3,7 +3,7 @@ import { Button, Image, Input, Picker, Switch, Text, Textarea, View } from '@tar
 import Taro from '@tarojs/taro'
 
 import { getAccessToken } from '@/lib/session'
-import { createTask, deleteTask, listAccounts, listFriends, listSendIntents, listTasks, MiniApiError, runTaskNow, updateTask } from '@/lib/api'
+import { createTask, deleteTask, getSendJob, listAccounts, listFriends, listSendIntents, listTasks, MiniApiError, runTaskNow, updateTask } from '@/lib/api'
 import { createIdempotencyKey } from '@/features/home/home-utils'
 import { taskCreateDraftError, taskTargetCandidates, taskTimePayload, uniqueSparkTargets } from '@/features/spark/spark-utils'
 import taskChecklist from '@/assets/tasks/task-checklist.png'
@@ -31,6 +31,8 @@ export default function Tasks() {
   const [error, setError] = useState('')
   const [draft, setDraft] = useState<Draft | null>(null)
   const [createDraft, setCreateDraft] = useState<CreateDraft | null>(null)
+  const [runJobId, setRunJobId] = useState('')
+  const [runJobStatus, setRunJobStatus] = useState('')
 
   const load = useCallback(async () => {
     const token = getAccessToken()
@@ -79,6 +81,46 @@ export default function Tasks() {
     return () => { active = false }
   }, [screen, selectedTaskId])
 
+  useEffect(() => {
+    if (!runJobId) return
+    const token = getAccessToken()
+    if (!token) {
+      setRunJobId('')
+      setRunJobStatus('')
+      setBusy('')
+      return
+    }
+    let active = true
+    const poll = async () => {
+      try {
+        const job = await getSendJob(token, runJobId)
+        if (!active) return
+        setRunJobStatus(runStatusLabel(job.status))
+        if (!['succeeded', 'failed', 'cancelled'].includes(job.status)) return
+        setRunJobId('')
+        setBusy('')
+        if (job.status === 'succeeded') {
+          if (selectedTaskId) {
+            const latest = await listSendIntents(token, { task_id: selectedTaskId })
+            if (active) setHistory(latest.items)
+          }
+          if (active) await Taro.showToast({ title: '任务执行完成', icon: 'success' })
+        } else if (active) {
+          setError(job.error_code || '任务执行失败，请查看执行记录。')
+        }
+      } catch (cause) {
+        if (!active) return
+        setRunJobId('')
+        setRunJobStatus('')
+        setBusy('')
+        setError(cause instanceof Error ? cause.message : '任务状态查询失败')
+      }
+    }
+    void poll()
+    const timer = setInterval(() => void poll(), 2500)
+    return () => { active = false; clearInterval(timer) }
+  }, [runJobId, selectedTaskId])
+
   const visibleTasks = useMemo(() => filter === 'all' ? tasks : tasks.filter((task) => filter === 'enabled' ? task.enabled : !task.enabled), [filter, tasks])
 
   if (state === 'loading') return <LoadingTasks />
@@ -87,7 +129,7 @@ export default function Tasks() {
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId)
   if (screen === 'edit' && selectedTask && draft) return <EditTask task={selectedTask} draft={draft} busy={busy} error={error} onBack={() => setScreen('detail')} onDraftChange={setDraft} onSave={() => void saveTask()} />
-  if (screen === 'detail' && selectedTask) return <TaskDetail task={selectedTask} friend={friends[selectedTask.friend_id]} account={accounts.find((account) => account.id === selectedTask.account_id)} history={history} busy={busy} error={error} onBack={() => setScreen('list')} onEdit={() => openEdit(selectedTask)} onRun={() => void runTask(selectedTask)} onToggle={(enabled) => void toggleTask(selectedTask, enabled)} onHistory={() => void openHistory(selectedTask)} onDelete={() => void deleteCurrentTask(selectedTask)} />
+  if (screen === 'detail' && selectedTask) return <TaskDetail task={selectedTask} friend={friends[selectedTask.friend_id]} account={accounts.find((account) => account.id === selectedTask.account_id)} history={history} busy={busy} runJobStatus={runJobStatus} error={error} onBack={() => setScreen('list')} onEdit={() => openEdit(selectedTask)} onRun={() => void runTask(selectedTask)} onToggle={(enabled) => void toggleTask(selectedTask, enabled)} onHistory={() => void openHistory(selectedTask)} onDelete={() => void deleteCurrentTask(selectedTask)} />
   if (screen === 'history' && selectedTask) return <TaskHistory task={selectedTask} friend={friends[selectedTask.friend_id]} history={history} onBack={() => setScreen('detail')} />
   if (screen === 'create' && createDraft) return <CreateTask draft={createDraft} accounts={accounts} friendsByAccount={friendsByAccount} busy={busy} error={error} onBack={() => { setCreateDraft(null); setScreen('list') }} onDraftChange={setCreateDraft} onSave={() => void saveCreatedTask()} />
 
@@ -194,14 +236,18 @@ export default function Tasks() {
     if (!token || busy) return
     setBusy(`run:${task.id}`)
     setError('')
+    let queued = false
     try {
-      await runTaskNow(token, task.id, createIdempotencyKey())
+      const result = await runTaskNow(token, task.id, createIdempotencyKey())
+      queued = true
+      setRunJobId(result.job_id)
+      setRunJobStatus(runStatusLabel(result.status))
       await Taro.showToast({ title: '已加入发送队列', icon: 'success' })
       setScreen('detail')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '立即执行失败，请稍后重试。')
     } finally {
-      setBusy('')
+      if (!queued) setBusy('')
     }
   }
 
@@ -258,7 +304,7 @@ function CreateTask({ draft, accounts, friendsByAccount, busy, error, onBack, on
 
   return <View className="mini-page task-page"><View className="task-detail-topbar"><Button className="task-back-button" onClick={onBack}>‹</Button><Text>新建任务</Text><View className="task-topbar-spacer" /></View><View className="task-create-card"><Text className="task-section-title">任务对象</Text><Text className="task-create-caption">仅可选择已绑定账号下、未归档且身份已确认的会话。</Text><Text className="task-create-label">抖音账号</Text><Picker mode="selector" range={accountOptions} value={accountIndex} onChange={(event) => { const nextAccount = selectableAccounts[Number(event.detail.value)]; const nextFriend = nextAccount ? taskTargetCandidates(friendsByAccount[nextAccount.id] ?? [])[0] : undefined; onDraftChange({ ...draft, accountId: nextAccount?.id ?? '', friendId: nextFriend?.id ?? '' }) }}><View className="task-picker-control"><Text>{selectedAccount?.nickname || '请选择账号'}</Text><Text className="task-picker-arrow">›</Text></View></Picker><Text className="task-create-label">目标会话</Text>{friendOptions.length === 0 ? <View className="task-picker-empty"><Text>当前账号没有可创建任务的会话</Text><Text className="muted">请先同步会话，并等待身份确认后再创建任务。</Text></View> : <Picker mode="selector" range={friendOptions} value={friendIndex} onChange={(event) => { const nextFriend = availableFriends[Number(event.detail.value)]; onDraftChange({ ...draft, friendId: nextFriend?.id ?? '' }) }}><View className="task-picker-control"><Text>{selectedFriend?.nickname || selectedFriend?.display_name || '请选择会话'}</Text><Text className="task-picker-arrow">›</Text></View></Picker>}<Text className="task-section-title task-edit-section">发送时间</Text><View className="task-time-grid"><Input className="task-input-me" value={draft.windowStart} onInput={(event) => onDraftChange({ ...draft, windowStart: event.detail.value })} placeholder="19:30" /><Text className="task-time-separator">～</Text><Input className="task-input-me" value={draft.windowEnd} onInput={(event) => onDraftChange({ ...draft, windowEnd: event.detail.value })} placeholder="22:30" /></View><Text className="task-section-title task-edit-section">消息内容</Text><Textarea className="task-textarea-me" maxlength={500} value={draft.message} placeholder="请输入每日发送的文字" onInput={(event) => onDraftChange({ ...draft, message: event.detail.value })} /><View className="task-detail-row-with-control task-first-message"><View><Text>允许首聊</Text><Text className="muted">目标会话没有历史消息时才尝试发送。</Text></View><Switch checked={draft.allowFirstMessage} color="#19bb79" onChange={(event) => onDraftChange({ ...draft, allowFirstMessage: event.detail.value })} /></View><View className="task-detail-row-with-control task-first-message"><View><Text>创建后立即启用</Text><Text className="muted">任务会进入每日发送计划。</Text></View><Switch checked={draft.enabled} color="#19bb79" onChange={(event) => onDraftChange({ ...draft, enabled: event.detail.value })} /></View>{error && <View className="task-inline-error"><Text>{error}</Text></View>}<Button className="task-primary-button" disabled={busy === 'create' || !selectedFriend} onClick={onSave}>{busy === 'create' ? '创建中…' : '创建任务'}</Button></View></View>
 }
-function TaskDetail({ task, friend, account, history, busy, error, onBack, onEdit, onRun, onToggle, onHistory, onDelete }: { task: Task; friend?: Friend; account?: Account; history: HistoryItem[]; busy: string; error: string; onBack: () => void; onEdit: () => void; onRun: () => void; onToggle: (enabled: boolean) => void; onHistory: () => void; onDelete: () => void }) { return <View className="mini-page task-page"><View className="task-detail-topbar"><Button className="task-back-button" onClick={onBack}>‹</Button><Text>任务详情</Text><View className="task-topbar-spacer" /></View><View className="task-detail-hero"><View className="task-detail-avatar"><Text>{(friend?.display_name || '会').slice(0, 1)}</Text></View><View className="task-detail-copy"><Text className="task-detail-name">{friend?.display_name || '未命名会话'}</Text><Text className="muted">关联账号：{account?.nickname || '未命名账号'}</Text></View><Text className={`task-status task-status-${task.enabled ? 'running' : 'paused'}`}>{task.enabled ? '运行中' : '已暂停'}</Text></View>{error && <View className="task-inline-error"><Text>{error}</Text></View>}<View className="task-detail-card"><DetailRow label="时间窗口" value={`${task.window_start.slice(0, 5)} ～ ${task.window_end.slice(0, 5)}`} /><DetailRow label="消息类型" value={task.message.kind === 'sticker' ? '贴纸消息' : '私信消息'} /><DetailRow label="消息内容" value={task.message.body || '未填写消息'} multiline /><DetailRow label="允许首聊" value={task.allow_first_message ? '允许' : '不允许'} tone={task.allow_first_message ? 'green' : undefined} /></View><View className="task-detail-card"><View className="task-detail-row-with-control"><View><Text className="task-section-title">启用状态</Text><Text className="muted">停用后不会再进入每日发送计划。</Text></View><Switch checked={task.enabled} disabled={busy !== ''} color="#19bb79" onChange={(event) => onToggle(event.detail.value)} /></View></View><View className="task-detail-card"><View className="task-card-heading"><Text className="task-section-title">最近执行</Text><Button className="task-link-button" onClick={onHistory}>查看全部 ›</Button></View>{history.length === 0 ? <Text className="muted">暂未加载执行记录。</Text> : history.slice(0, 3).map((item) => <View className="task-mini-history" key={item.id}><Text className={`history-dot history-dot-${item.status}`} /><View><Text>{formatClock(item.scheduled_at)} <Text className={`task-history-status task-history-status-${item.status}`}>{historyLabel(item.status)}</Text></Text><Text className="muted">{item.error_code || '执行记录'}</Text></View></View>)}</View><View className="task-detail-actions"><Button className="task-primary-button" disabled={busy !== '' || !task.enabled} onClick={onRun}>{busy.startsWith('run:') ? '加入中…' : '↯ 立即执行'}</Button><Button className="task-secondary-button" disabled={busy !== ''} onClick={onEdit}>编辑任务</Button><Button className="task-danger-button" disabled={busy !== ''} onClick={onDelete}>{busy === 'delete' ? '删除中…' : '删除任务'}</Button></View></View> }
+function TaskDetail({ task, friend, account, history, busy, runJobStatus, error, onBack, onEdit, onRun, onToggle, onHistory, onDelete }: { task: Task; friend?: Friend; account?: Account; history: HistoryItem[]; busy: string; runJobStatus: string; error: string; onBack: () => void; onEdit: () => void; onRun: () => void; onToggle: (enabled: boolean) => void; onHistory: () => void; onDelete: () => void }) { return <View className="mini-page task-page"><View className="task-detail-topbar"><Button className="task-back-button" onClick={onBack}>‹</Button><Text>任务详情</Text><View className="task-topbar-spacer" /></View><View className="task-detail-hero"><View className="task-detail-avatar"><Text>{(friend?.display_name || '会').slice(0, 1)}</Text></View><View className="task-detail-copy"><Text className="task-detail-name">{friend?.display_name || '未命名会话'}</Text><Text className="muted">关联账号：{account?.nickname || '未命名账号'}</Text></View><Text className={`task-status task-status-${task.enabled ? 'running' : 'paused'}`}>{task.enabled ? '运行中' : '已暂停'}</Text></View>{runJobStatus && <View className="task-operation-status"><Text>立即执行：{runJobStatus}</Text></View>}{error && <View className="task-inline-error"><Text>{error}</Text></View>}<View className="task-detail-card"><DetailRow label="时间窗口" value={`${task.window_start.slice(0, 5)} ～ ${task.window_end.slice(0, 5)}`} /><DetailRow label="消息类型" value={task.message.kind === 'sticker' ? '贴纸消息' : '私信消息'} /><DetailRow label="消息内容" value={task.message.body || '未填写消息'} multiline /><DetailRow label="允许首聊" value={task.allow_first_message ? '允许' : '不允许'} tone={task.allow_first_message ? 'green' : undefined} /></View><View className="task-detail-card"><View className="task-detail-row-with-control"><View><Text className="task-section-title">启用状态</Text><Text className="muted">停用后不会再进入每日发送计划。</Text></View><Switch checked={task.enabled} disabled={busy !== ''} color="#19bb79" onChange={(event) => onToggle(event.detail.value)} /></View></View><View className="task-detail-card"><View className="task-card-heading"><Text className="task-section-title">最近执行</Text><Button className="task-link-button" onClick={onHistory}>查看全部 ›</Button></View>{history.length === 0 ? <Text className="muted">暂未加载执行记录。</Text> : history.slice(0, 3).map((item) => <View className="task-mini-history" key={item.id}><Text className={`history-dot history-dot-${item.status}`} /><View><Text>{formatClock(item.scheduled_at)} <Text className={`task-history-status task-history-status-${item.status}`}>{historyLabel(item.status)}</Text></Text><Text className="muted">{item.error_code || '执行记录'}</Text></View></View>)}</View><View className="task-detail-actions"><Button className="task-primary-button" disabled={busy !== '' || !task.enabled} onClick={onRun}>{busy.startsWith('run:') ? '执行中…' : '↯ 立即执行'}</Button><Button className="task-secondary-button" disabled={busy !== ''} onClick={onEdit}>编辑任务</Button><Button className="task-danger-button" disabled={busy !== ''} onClick={onDelete}>{busy === 'delete' ? '删除中…' : '删除任务'}</Button></View></View> }
 function EditTask({ task, draft, busy, error, onBack, onDraftChange, onSave }: { task: Task; draft: Draft; busy: string; error: string; onBack: () => void; onDraftChange: (draft: Draft) => void; onSave: () => void }) { return <View className="mini-page task-page"><View className="task-detail-topbar"><Button className="task-back-button" onClick={onBack}>‹</Button><Text>编辑任务</Text><View className="task-topbar-spacer" /></View><View className="task-edit-card"><Text className="task-section-title">关联对象</Text><View className="task-edit-static"><Text>目标好友</Text><Text className="muted">任务对象不会在小程序内切换</Text></View><Text className="task-section-title task-edit-section">时间窗口</Text><View className="task-time-grid"><Input className="task-input-me" value={draft.windowStart} onInput={(event) => onDraftChange({ ...draft, windowStart: event.detail.value })} /><Text className="task-time-separator">～</Text><Input className="task-input-me" value={draft.windowEnd} onInput={(event) => onDraftChange({ ...draft, windowEnd: event.detail.value })} /></View><Text className="task-section-title task-edit-section">消息内容</Text><Textarea className="task-textarea-me" maxlength={500} value={draft.message} placeholder={task.message.kind === 'sticker' ? '输入贴纸 ID' : '请输入每日发送的消息'} onInput={(event) => onDraftChange({ ...draft, message: event.detail.value })} /><View className="task-detail-row-with-control task-first-message"><View><Text>允许首聊</Text><Text className="muted">仅在目标好友没有会话时尝试发送</Text></View><Switch checked={draft.allowFirstMessage} color="#19bb79" onChange={(event) => onDraftChange({ ...draft, allowFirstMessage: event.detail.value })} /></View>{error && <View className="task-inline-error"><Text>{error}</Text></View>}<Button className="task-primary-button" disabled={busy === 'save'} onClick={onSave}>{busy === 'save' ? '保存中…' : '保存任务'}</Button></View></View> }
 function TaskHistory({ task, friend, history, onBack }: { task: Task; friend?: Friend; history: HistoryItem[]; onBack: () => void }) { return <View className="mini-page task-page"><View className="task-detail-topbar"><Button className="task-back-button" onClick={onBack}>‹</Button><Text>执行记录</Text><View className="task-topbar-spacer" /></View><View className="task-history-summary"><Text className="task-section-title">{friend?.display_name || '未命名好友'}</Text><Text className="muted">{task.window_start.slice(0, 5)} ～ {task.window_end.slice(0, 5)} · 最近记录</Text><View className="history-summary-grid"><Overview label="总执行" value={history.length} tone="blue" /><Overview label="成功" value={history.filter((item) => item.status === 'succeeded').length} tone="green" /><Overview label="需关注" value={history.filter((item) => ['failed', 'retry_wait'].includes(item.status)).length} tone="amber" /></View></View>{history.length === 0 ? <View className="task-empty-small"><Text className="task-empty-title">暂无执行记录</Text><Text className="muted">任务执行后，结果会显示在这里。</Text></View> : <View className="task-history-list">{history.map((item) => <View className="task-history-row" key={item.id}><View className={`history-dot history-dot-${item.status}`} /><View className="task-history-row-copy"><Text>{formatClock(item.scheduled_at)} <Text className={`task-history-status task-history-status-${item.status}`}>{historyLabel(item.status)}</Text></Text><Text className="muted">{item.error_code ? item.error_code : item.intent_type === 'manual' ? '手动执行' : '定时执行'}</Text></View><Text className="muted">{formatDay(item.scheduled_at)}</Text></View>)}</View>}</View> }
 function Overview({ label, value, tone }: { label: string; value: number; tone: string }) { return <View className={`task-overview-item task-overview-${tone}`}><Text className={`task-overview-value task-overview-value-${tone}`}>{value}</Text><Text className="task-overview-label">{label}</Text></View> }
@@ -267,6 +313,7 @@ function EmptyTasks({ onCreate }: { onCreate: () => void }) { return <View class
 function GuestTasks() { return <View className="mini-page task-page"><View className="task-empty"><Image className="task-empty-image" src={taskChecklist} mode="aspectFit" /><Text className="task-empty-title">请先登录</Text><Text className="muted">登录后才能查看和管理任务。</Text><Button className="task-primary-button" onClick={() => Taro.switchTab({ url: '/pages/login/index' })}>去登录 / 绑定</Button></View></View> }
 function TaskError({ message, onRetry }: { message: string; onRetry: () => void }) { return <View className="mini-page task-page"><View className="task-empty"><Text className="task-error-mark">!</Text><Text className="task-empty-title">任务暂时不可用</Text><Text className="muted">{message || '请检查网络后重试。'}</Text><Button className="task-secondary-button" onClick={onRetry}>重新加载</Button></View></View> }
 function LoadingTasks() { return <View className="mini-page task-page"><View className="task-skeleton task-skeleton-header" /><View className="task-skeleton task-skeleton-tabs" /><View className="task-skeleton task-skeleton-card" /><View className="task-skeleton task-skeleton-card" /></View> }
+function runStatusLabel(value: string) { return value === 'queued' ? '排队中' : value === 'running' ? '执行中' : value === 'succeeded' ? '已完成' : value === 'failed' ? '执行失败' : value === 'cancelled' ? '已取消' : '处理中' }
 function historyLabel(value: string) { return value === 'succeeded' ? '成功' : ['pending', 'queued', 'running', 'retry_wait'].includes(value) ? '进行中' : value === 'failed' ? '失败' : '跳过' }
 function formatClock(value: string) { return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
 function formatDay(value: string) { return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(new Date(value)) }

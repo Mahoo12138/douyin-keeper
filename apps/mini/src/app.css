@@ -539,6 +539,7 @@ page {
 .task-overview-value-amber { color: #d49a2a; }
 .task-overview-value-blue { color: #5b8bd6; }
 .task-inline-error { margin-top: 16rpx; padding: 16rpx 18rpx; border-radius: 14rpx; color: #b83f3f; background: #fff1f1; font-size: 22rpx; line-height: 1.5; }
+.task-operation-status { margin-top: 16rpx; padding: 16rpx 18rpx; border-radius: 14rpx; color: #2467a4; background: #eff7ff; font-size: 22rpx; line-height: 1.5; }
 .task-card { margin-top: 16rpx; padding: 22rpx 20rpx; border: 1rpx solid #e4ece8; border-radius: 22rpx; background: #fff; box-shadow: 0 10rpx 24rpx rgba(35, 86, 65, .045); }
 .task-card-copy { min-width: 0; flex: 1; }
 .task-card-name { display: block; overflow: hidden; color: #1c2b23; font-size: 28rpx; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
