@@ -195,7 +195,7 @@ describe('mini API auth recovery', () => {
       ['/api/v1/accounts/bindings', 'POST'],
       ['/api/v1/jobs/job-bind', 'GET'],
       ['/api/v1/jobs/job-bind/cancel', 'POST'],
-      ['/api/v1/accounts/account-1/friends-sync', 'POST'],
+      ['/api/v1/accounts/account-1/conversations-sync', 'POST'],
       ['/api/v1/accounts/account-1/pause', 'POST'],
       ['/api/v1/accounts/account-1/resume', 'POST'],
       ['/api/v1/accounts/account-1', 'DELETE'],
