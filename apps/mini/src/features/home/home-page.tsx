@@ -136,7 +136,7 @@ export function HomePage() {
     setSessionCheckBusy(true)
     setError('')
     try {
-      await checkAccountSession(token, account.id)
+      await checkAccountSession(token, account.id, createIdempotencyKey())
       await Taro.showToast({ title: '检查任务已提交', icon: 'success' })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '登录态检查提交失败，请稍后重试。')

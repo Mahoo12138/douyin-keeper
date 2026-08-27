@@ -237,11 +237,12 @@ describe('mini API auth recovery', () => {
   it('submits an account session check job', async () => {
     requestMock.mockResolvedValueOnce({ statusCode: 202, data: { job_id: 'job-1' } })
 
-    const result = await checkAccountSession('access-1', 'account-1')
+    const result = await checkAccountSession('access-1', 'account-1', 'session-check-key-1')
 
     expect(result.job_id).toBe('job-1')
     expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/accounts/account-1/session-check')
     expect(requestMock.mock.calls[0]?.[0]?.method).toBe('POST')
+    expect(requestMock.mock.calls[0]?.[0]?.header['Idempotency-Key']).toBe('session-check-key-1')
   })
 
   it('uses the account operations from the frozen backend contract', async () => {
@@ -255,10 +256,10 @@ describe('mini API auth recovery', () => {
       .mockResolvedValueOnce({ statusCode: 204, data: undefined })
       .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ capability: 'send_text', status: 'available', checked_at: '2026-08-26T00:00:00Z' }] } })
 
-    await createAccountBinding('access-1', 'qr')
+    await createAccountBinding('access-1', 'qr', { idempotencyKey: 'binding-key-1' })
     await getJob('access-1', 'job-bind')
     await cancelJob('access-1', 'job-bind')
-    await syncAccountFriends('access-1', 'account-1')
+    await syncAccountFriends('access-1', 'account-1', 'sync-key-1')
     await pauseAccount('access-1', 'account-1')
     await resumeAccount('access-1', 'account-1')
     await deleteAccount('access-1', 'account-1')
@@ -275,6 +276,8 @@ describe('mini API auth recovery', () => {
       ['/api/v1/accounts/account-1', 'DELETE'],
       ['/api/v1/accounts/account-1/capabilities', 'GET'],
     ])
+    expect(requestMock.mock.calls[0]?.[0]?.header['Idempotency-Key']).toBe('binding-key-1')
+    expect(requestMock.mock.calls[3]?.[0]?.header['Idempotency-Key']).toBe('sync-key-1')
   })
 
   it('streams account binding events and submits SMS verification', async () => {

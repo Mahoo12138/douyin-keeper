@@ -6,6 +6,7 @@ import { accountCapabilities, cancelJob, checkAccountSession, createAccountBindi
 import type { JobEvent } from '@/lib/api'
 import { getAccessToken } from '@/lib/session'
 import { smsBindingEventState } from '@/features/accounts/binding-events'
+import { createIdempotencyKey } from '@/features/home/home-utils'
 import avatarChen from '@/assets/home/avatar-chen.png'
 import avatarJasper from '@/assets/home/avatar-jasper.png'
 import avatarMiles from '@/assets/home/avatar-miles.png'
@@ -131,8 +132,9 @@ export default function Accounts() {
     setBusy(action)
     setError('')
     try {
-      if (action === 'session') await checkAccountSession(token, account.id)
-      if (action === 'friends') await syncAccountFriends(token, account.id)
+      const idempotencyKey = createIdempotencyKey()
+      if (action === 'session') await checkAccountSession(token, account.id, idempotencyKey)
+      if (action === 'friends') await syncAccountFriends(token, account.id, idempotencyKey)
       if (action === 'pause') await pauseAccount(token, account.id)
       if (action === 'resume') await resumeAccount(token, account.id)
       await Taro.showToast({ title: action === 'friends' ? '会话同步已提交' : action === 'session' ? '检查已提交' : action === 'pause' ? '任务已暂停' : '任务已恢复', icon: 'success' })
@@ -177,7 +179,7 @@ export default function Accounts() {
     setQrExpiresAt('')
     setBindingStep(3)
     try {
-      const job = await createAccountBinding(token, bindingMethod, { phone: bindingMethod === 'sms' ? bindingPhone.trim() : undefined, accountId: bindingAccountId || undefined })
+      const job = await createAccountBinding(token, bindingMethod, { phone: bindingMethod === 'sms' ? bindingPhone.trim() : undefined, accountId: bindingAccountId || undefined, idempotencyKey: createIdempotencyKey() })
       setBindingJobId(job.job_id)
       setBindingStatus('绑定任务已创建，等待后端进度')
       setScreen(bindingMethod === 'qr' ? 'qr' : 'progress')
@@ -219,6 +221,7 @@ export default function Accounts() {
     } else if (event.eventType === 'platform_challenge') {
       setBindingStatus('需要完成抖音安全验证后继续')
       setBindingStep(4)
+      setScreen('progress')
     } else if (event.eventType === 'error') {
       setError(typeof event.payload.code === 'string' ? event.payload.code : '绑定失败，请重试')
     }

@@ -130,9 +130,9 @@ export function listAccounts(token: string) {
   return request<Collection<components['schemas']['Account']>>('/accounts', { token })
 }
 
-export function createAccountBinding(token: string, method: 'qr' | 'sms', options: { phone?: string; accountId?: string } = {}) {
+export function createAccountBinding(token: string, method: 'qr' | 'sms', options: { phone?: string; accountId?: string; idempotencyKey?: string } = {}) {
   return request<components['schemas']['JobRef']>('/accounts/bindings', {
-    method: 'POST', token,
+    method: 'POST', token, headers: options.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : undefined,
     data: { method, ...(options.phone ? { phone: options.phone } : {}), ...(options.accountId ? { account_id: options.accountId } : {}) },
   })
 }
@@ -203,10 +203,12 @@ export function deleteAccount(token: string, accountId: string) {
   return request<void>(`/accounts/${accountId}`, { method: 'DELETE', token })
 }
 
-export function syncAccountFriends(token: string, accountId: string) {
+export function syncAccountFriends(token: string, accountId: string, idempotencyKey?: string) {
   // Compatibility name for older mini-program callers. Conversation sync is
   // now the only platform crawl and reads the mixed message-panel inventory.
-  return request<components['schemas']['JobRef']>(`/accounts/${accountId}/conversations-sync`, { method: 'POST', token })
+  return request<components['schemas']['JobRef']>(`/accounts/${accountId}/conversations-sync`, {
+    method: 'POST', token, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+  })
 }
 
 export function accountCapabilities(token: string, accountId: string) {
@@ -287,9 +289,9 @@ export function runTaskNow(token: string, taskId: string, idempotencyKey: string
   })
 }
 
-export function checkAccountSession(token: string, accountId: string) {
+export function checkAccountSession(token: string, accountId: string, idempotencyKey?: string) {
   return request<components['schemas']['JobRef']>(`/accounts/${accountId}/session-check`, {
-    method: 'POST', token,
+    method: 'POST', token, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
   })
 }
 
