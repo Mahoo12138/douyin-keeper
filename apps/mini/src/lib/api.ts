@@ -309,6 +309,18 @@ export function listTasks(token: string) {
   })
 }
 
+export function listMessageTemplates(token: string, options: { kind?: 'text' | 'sticker'; limit?: number } = {}) {
+  const query = new URLSearchParams()
+  if (options.kind) query.set('kind', options.kind)
+  if (options.limit) query.set('limit', String(options.limit))
+  return listAllPages((cursor) => {
+    const pageQuery = new URLSearchParams(query)
+    if (cursor) pageQuery.set('cursor', cursor)
+    const suffix = pageQuery.toString() ? `?${pageQuery.toString()}` : ''
+    return request<Collection<components['schemas']['MessageTemplate']>>(`/message-templates${suffix}`, { token })
+  })
+}
+
 export type CreateTaskInput = {
   account_id: string
   friend_id: string
