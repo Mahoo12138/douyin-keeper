@@ -16,7 +16,7 @@ import authGuardian from '@/assets/me/auth-guardian.png'
 import notificationBell from '@/assets/me/notification-bell.png'
 
 const notificationTemplateId = process.env.TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID || ''
-const requestWechatSubscribe = Taro.requestSubscribeMessage as unknown as (options: { tmplIds: string[] }) => Promise<Record<string, string>>
+const requestWechatSubscribe = Taro.requestSubscribeMessage as unknown as ((options: { tmplIds: string[] }) => Promise<Record<string, string>>) | undefined
 type MeScreen = 'overview' | 'entitlement' | 'history' | 'notifications' | 'settings'
 type AuthMode = 'login' | 'register'
 
@@ -227,6 +227,10 @@ export default function Me() {
       if (!wechatNotificationsEnabled) {
         if (!notificationTemplateId) {
           setMessage('小程序尚未配置通知模板，请联系管理员。')
+          return
+        }
+        if (typeof requestWechatSubscribe !== 'function') {
+          setMessage('微信服务通知需在微信小程序中授权，H5 端可继续使用站内通知。')
           return
         }
         const result = await requestWechatSubscribe({ tmplIds: [notificationTemplateId] })
