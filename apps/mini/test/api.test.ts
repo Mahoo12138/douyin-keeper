@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, getMe, listFriends, listMyEntitlementGrants, listNotifications, loginPassword, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, getJob, getMe, listFriends, listMyEntitlementGrants, listNotifications, loginPassword, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -177,6 +177,37 @@ describe('mini API auth recovery', () => {
       window_start: '19:30:00',
       window_end: '22:30:00',
       message: { kind: 'text', body: '晚间问候' },
+    })
+  })
+
+  it('creates a task with the selected account and friend payload', async () => {
+    requestMock.mockResolvedValueOnce({ statusCode: 201, data: { id: 'task-1', account_id: 'account-1', friend_id: 'friend-1', enabled: true } })
+
+    const task = await createTask('access-1', {
+      account_id: 'account-1',
+      friend_id: 'friend-1',
+      enabled: true,
+      timezone: 'Asia/Shanghai',
+      window_start: '19:30:00',
+      window_end: '22:30:00',
+      message: { kind: 'text', body: '晚间问候' },
+      allow_first_message: false,
+    })
+
+    expect(task.id).toBe('task-1')
+    expect(requestMock.mock.calls[0]?.[0]).toMatchObject({
+      url: '/api/v1/tasks',
+      method: 'POST',
+      data: {
+        account_id: 'account-1',
+        friend_id: 'friend-1',
+        enabled: true,
+        timezone: 'Asia/Shanghai',
+        window_start: '19:30:00',
+        window_end: '22:30:00',
+        message: { kind: 'text', body: '晚间问候' },
+        allow_first_message: false,
+      },
     })
   })
 

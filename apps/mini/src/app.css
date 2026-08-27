@@ -585,6 +585,13 @@ page {
 .task-primary-button[disabled], .task-secondary-button[disabled] { opacity: .6; }
 .task-edit-static { padding: 18rpx; border-radius: 14rpx; background: #f6faf8; color: #33443a; font-size: 23rpx; }
 .task-edit-static .muted { display: block; margin-top: 5rpx; }
+.task-create-card { margin-top: 18rpx; padding: 22rpx; border: 1rpx solid #e4ece8; border-radius: 22rpx; background: #fff; box-shadow: 0 10rpx 24rpx rgba(35, 86, 65, .045); }
+.task-create-caption { display: block; margin-top: 8rpx; color: #89958f; font-size: 21rpx; line-height: 1.5; }
+.task-create-label { display: block; margin-top: 22rpx; color: #5c6c63; font-size: 22rpx; }
+.task-picker-control { display: flex; align-items: center; justify-content: space-between; min-height: 74rpx; margin-top: 10rpx; padding: 0 16rpx; border: 1rpx solid #dbe7e1; border-radius: 13rpx; color: #33443a; background: #fbfdfc; font-size: 24rpx; }
+.task-picker-arrow { color: #16a86e; font-size: 34rpx; line-height: 1; }
+.task-picker-empty { margin-top: 10rpx; padding: 18rpx 16rpx; border-radius: 13rpx; color: #9b741f; background: #fff8e6; font-size: 22rpx; line-height: 1.5; }
+.task-picker-empty .muted { display: block; margin-top: 5rpx; }
 .task-edit-section { margin-top: 24rpx; margin-bottom: 12rpx; }
 .task-time-grid { display: flex; align-items: center; gap: 10rpx; }
 .task-input-me { box-sizing: border-box; flex: 1; height: 74rpx; padding: 0 16rpx; border: 1rpx solid #dbe7e1; border-radius: 13rpx; background: #fbfdfc; font-size: 25rpx; text-align: center; }

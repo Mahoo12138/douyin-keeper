@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { components } from '@douyin-keeper/sdk-ts'
 
-import { enabledTaskCount, replaceFriend, replaceTask, taskDraftError, taskForFriend, taskTimeInput, taskTimePayload } from './spark-utils'
+import { enabledTaskCount, replaceFriend, replaceTask, taskCreateDraftError, taskDraftError, taskForFriend, taskTimeInput, taskTimePayload } from './spark-utils'
 
 type Friend = components['schemas']['Friend']
 type SparkTask = components['schemas']['SparkTask']
@@ -65,5 +65,8 @@ describe('spark view helpers', () => {
     expect(taskDraftError('22:30', '19:30', '问候')).toContain('晚于')
     expect(taskDraftError('19:30', '22:30', '   ')).toContain('消息')
     expect(taskDraftError('19:30', '22:30', '问候')).toBeNull()
+    expect(taskCreateDraftError('', 'friend-1', '19:30', '22:30', '问候')).toContain('账号')
+    expect(taskCreateDraftError('account-1', '', '19:30', '22:30', '问候')).toContain('好友')
+    expect(taskCreateDraftError('account-1', 'friend-1', '19:30', '22:30', '问候')).toBeNull()
   })
 })
