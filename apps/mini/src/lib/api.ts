@@ -257,7 +257,7 @@ export function listFriends(token: string, accountId: string): Promise<Collectio
   // unified conversation endpoint; no follower/friend crawl is performed.
   return listAllPages((cursor) => {
     const query = cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''
-    return request<Collection<components['schemas']['Conversation']>>(`/accounts/${accountId}/conversations?include_archived=true&group_only=false${query}`, { token })
+    return request<Collection<components['schemas']['Conversation']>>(`/accounts/${accountId}/conversations?include_archived=false&group_only=false${query}`, { token })
   }).then((response) => {
     // The endpoint intentionally returns the mixed conversation inventory
     // when group_only=false. Keep the legacy friend shape for existing mini

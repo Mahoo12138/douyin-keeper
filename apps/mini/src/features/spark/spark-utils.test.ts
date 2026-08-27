@@ -50,6 +50,18 @@ describe('spark view helpers', () => {
     expect(replaceFriend(friends, updated)).toEqual([updated, friends[1]])
   })
 
+  it('preserves conversation metadata when the legacy friend endpoint responds', () => {
+    const friends = [{ ...makeFriend('group-target', false), conversation_type: 'group' as const, spark_supported: true, channel: 'consumer' as const }]
+    const updated = makeFriend('group-target', true)
+
+    expect(replaceFriend(friends, updated)[0]).toMatchObject({
+      spark_enabled: true,
+      conversation_type: 'group',
+      spark_supported: true,
+      channel: 'consumer',
+    })
+  })
+
   it('replaces task state and counts enabled tasks', () => {
     const tasks = [makeTask('task-1', 'friend-1', true), makeTask('task-2', 'friend-2', false)]
 

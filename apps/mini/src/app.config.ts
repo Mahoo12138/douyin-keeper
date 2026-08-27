@@ -11,7 +11,7 @@ export default defineAppConfig({
     selectedColor: '#18b979',
     list: [
       { pagePath: 'pages/index/index', text: '首页' },
-      { pagePath: 'pages/spark/index', text: '好友' },
+      { pagePath: 'pages/spark/index', text: '会话' },
       { pagePath: 'pages/tasks/index', text: '任务' },
       { pagePath: 'pages/accounts/index', text: '账号' },
       { pagePath: 'pages/login/index', text: '我的' },

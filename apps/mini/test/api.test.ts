@@ -153,7 +153,7 @@ describe('mini API auth recovery', () => {
       platform_identity_status: 'missing',
       has_conversation: true,
     })
-    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/accounts/account-1/conversations?include_archived=true&group_only=false')
+    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/accounts/account-1/conversations?include_archived=false&group_only=false')
   })
 
   it('keeps group conversations available as spark targets', async () => {
@@ -183,7 +183,7 @@ describe('mini API auth recovery', () => {
     const result = await listFriends('access-1', 'account-1')
 
     expect(result.items.map((item) => item.id)).toEqual(['friend-1', 'friend-2'])
-    expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/accounts/account-1/conversations?include_archived=true&group_only=false&cursor=cursor-2')
+    expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/accounts/account-1/conversations?include_archived=false&group_only=false&cursor=cursor-2')
     expect(result.next_cursor).toBeNull()
   })
 

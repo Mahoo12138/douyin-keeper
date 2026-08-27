@@ -7,8 +7,8 @@ export function taskForFriend(tasks: SparkTask[], friendId: string) {
   return tasks.find((task) => task.friend_id === friendId)
 }
 
-export function replaceFriend(friends: Friend[], updated: Friend) {
-  return friends.map((friend) => friend.id === updated.id ? updated : friend)
+export function replaceFriend<T extends Friend>(friends: T[], updated: Friend): T[] {
+  return friends.map((friend) => friend.id === updated.id ? { ...friend, ...updated } : friend)
 }
 
 export function replaceTask(tasks: SparkTask[], updated: SparkTask) {
