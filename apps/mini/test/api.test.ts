@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, deleteTask, getJob, getMe, getSendJob, listAccounts, listFriends, listMyEntitlementGrants, listNotifications, listSendIntents, listTasks, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, setConversationArchived, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, deleteTask, getJob, getMe, getSendJob, listAccounts, listFriends, listMessageTemplates, listMyEntitlementGrants, listNotifications, listSendIntents, listTasks, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, setConversationArchived, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -239,6 +239,19 @@ describe('mini API auth recovery', () => {
     expect(result.items.map((item) => item.id)).toEqual(['task-1', 'task-2'])
     expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/tasks')
     expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/tasks?cursor=cursor-2')
+    expect(result.next_cursor).toBeNull()
+  })
+
+  it('loads all reusable message templates with the backend filter', async () => {
+    requestMock
+      .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ id: 'template-1', name: '晚安', kind: 'text', body: '晚安' }], next_cursor: 'cursor-2' } })
+      .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ id: 'template-2', name: '早安', kind: 'text', body: '早安' }], next_cursor: null } })
+
+    const result = await listMessageTemplates('access-1', { kind: 'text', limit: 20 })
+
+    expect(result.items.map((item) => item.id)).toEqual(['template-1', 'template-2'])
+    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/message-templates?kind=text&limit=20')
+    expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/message-templates?kind=text&limit=20&cursor=cursor-2')
     expect(result.next_cursor).toBeNull()
   })
 
