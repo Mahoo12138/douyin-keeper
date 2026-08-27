@@ -8,6 +8,7 @@ import { clearSession, getAccessToken, setSession } from '@/lib/session'
 import { entitlementGrantStatus, entitlementSourceLabel, entitlementStatus, formatEntitlementDate, normalizeRedeemCode, quotaLabel } from '@/features/entitlement/entitlement-utils'
 import { helpSections, privacySections } from '@/features/help/help-content'
 import { notificationPriorityLabel } from '@/features/notification/notification-utils'
+import { authConsentError } from '@/features/auth/auth-validation'
 import profileAvatar from '@/assets/me/avatar-profile.png'
 import mascotSprout from '@/assets/me/mascot-sprout.png'
 import authGuardian from '@/assets/me/auth-guardian.png'
@@ -70,7 +71,14 @@ export default function Me() {
     })
   }, [hasToken])
 
+  function ensureAuthConsent() {
+    const error = authConsentError(termsAccepted)
+    if (error) setMessage(error)
+    return !error
+  }
+
   async function runWechatLogin() {
+    if (!ensureAuthConsent() || busy) return
     setBusy('login')
     setMessage('')
     try {
@@ -87,7 +95,7 @@ export default function Me() {
   }
 
   async function runPasswordLogin() {
-    if (!username.trim() || !password || busy) return
+    if (!username.trim() || !password || busy || !ensureAuthConsent()) return
     setBusy('password-login')
     setMessage('')
     try {
@@ -106,6 +114,7 @@ export default function Me() {
   async function runPasswordRegister() {
     const name = registerUsername.trim()
     if (!name || !registerPasswordValue || !registerPasswordConfirm || busy) return
+    if (!ensureAuthConsent()) return
     if (name.length < 3 || name.length > 64) {
       setMessage('用户名长度需为 3–64 个字符。')
       return
@@ -135,7 +144,7 @@ export default function Me() {
   }
 
   async function runLink() {
-    if (!linkCode.trim()) return
+    if (!linkCode.trim() || !ensureAuthConsent()) return
     setBusy('link')
     setMessage('')
     try {
