@@ -138,7 +138,10 @@ export function getMe(token: string) {
 }
 
 export function listAccounts(token: string) {
-  return request<Collection<components['schemas']['Account']>>('/accounts', { token })
+  return listAllPages((cursor) => {
+    const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
+    return request<Collection<components['schemas']['Account']>>(`/accounts${suffix}`, { token })
+  })
 }
 
 export function createAccountBinding(token: string, method: 'qr' | 'sms', options: { phone?: string; accountId?: string; idempotencyKey?: string } = {}) {

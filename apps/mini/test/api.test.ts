@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, deleteTask, getJob, getMe, listFriends, listMyEntitlementGrants, listNotifications, listSendIntents, listTasks, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, deleteTask, getJob, getMe, listAccounts, listFriends, listMyEntitlementGrants, listNotifications, listSendIntents, listTasks, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -183,6 +183,19 @@ describe('mini API auth recovery', () => {
 
     expect(result.items.map((item) => item.id)).toEqual(['friend-1', 'friend-2'])
     expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/accounts/account-1/conversations?include_archived=true&group_only=false&cursor=cursor-2')
+    expect(result.next_cursor).toBeNull()
+  })
+
+  it('loads all account pages used by the home and task surfaces', async () => {
+    requestMock
+      .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ id: 'account-1' }], next_cursor: 'cursor-2' } })
+      .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ id: 'account-2' }], next_cursor: null } })
+
+    const result = await listAccounts('access-1')
+
+    expect(result.items.map((item) => item.id)).toEqual(['account-1', 'account-2'])
+    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/accounts')
+    expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/accounts?cursor=cursor-2')
     expect(result.next_cursor).toBeNull()
   })
 
