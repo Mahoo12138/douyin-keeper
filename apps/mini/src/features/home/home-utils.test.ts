@@ -16,6 +16,12 @@ describe('mini home actions', () => {
     expect(selectAccountId([], 'missing')).toBe('')
   })
 
+  it('prefers a bound account when there is no saved selection', () => {
+    const accounts = [{ id: 'pending', binding_status: 'binding' }, { id: 'bound', binding_status: 'bound' }]
+
+    expect(selectAccountId(accounts)).toBe('bound')
+  })
+
   it('only selects an enabled task belonging to the active account', () => {
     const tasks = [
       { id: 'task-other', account_id: 'account-2', enabled: true },

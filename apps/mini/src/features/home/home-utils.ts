@@ -1,8 +1,8 @@
-export type AccountOption = { id: string }
+export type AccountOption = { id: string; binding_status?: string }
 
 export function selectAccountId(accounts: readonly AccountOption[], preferredId = '') {
   if (preferredId && accounts.some((account) => account.id === preferredId)) return preferredId
-  return accounts[0]?.id ?? ''
+  return accounts.find((account) => account.binding_status === 'bound')?.id ?? accounts[0]?.id ?? ''
 }
 
 export function nextEnabledTask<T extends { account_id: string; enabled: boolean }>(tasks: readonly T[], accountId: string) {

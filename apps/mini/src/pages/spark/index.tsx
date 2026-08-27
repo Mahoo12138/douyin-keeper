@@ -5,7 +5,7 @@ import Taro, { useDidShow } from '@tarojs/taro'
 import { getAccessToken } from '@/lib/session'
 import { cancelJob, getJob, listAccounts, listFriends, listMessageTemplates, listTasks, MiniApiError, requestPlatformConversationArchive, setConversationArchived, syncAccountFriends, updateFriend, updateTask } from '@/lib/api'
 import { AccountTabs } from '@/components/account-tabs'
-import { createIdempotencyKey } from '@/features/home/home-utils'
+import { createIdempotencyKey, selectAccountId } from '@/features/home/home-utils'
 import { enabledTaskCount, replaceFriend, replaceTask, taskDraftError, taskForFriend, taskTimeInput, taskTimePayload } from '@/features/spark/spark-utils'
 
 type SparkData = {
@@ -46,7 +46,7 @@ export default function Spark() {
     try {
       const accountsResponse = await listAccounts(token)
       const accounts = accountsResponse.items
-      const nextAccountId = accountId || selectedAccountIdRef.current || accounts[0]?.id || ''
+      const nextAccountId = accountId || selectAccountId(accounts, selectedAccountIdRef.current)
       if (!nextAccountId) {
         setData({ accounts, friends: [], tasks: [] })
         setState('empty')
