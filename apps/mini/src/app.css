@@ -83,6 +83,10 @@ page {
 .account-tabs { display: flex; gap: 12rpx; overflow-x: auto; padding: 4rpx 24rpx 8rpx; white-space: nowrap; }
 .account-tab { flex: 0 0 auto; width: auto; min-width: 180rpx; margin: 0; padding: 0 24rpx; border: 1rpx solid #e3e3e3; border-radius: 999rpx; color: #5f5f5f; background: #fff; font-size: 24rpx; line-height: 72rpx; }
 .account-tab-active { border-color: #1f5bd8; color: #1f5bd8; background: #edf3ff; }
+.conversation-view-tabs { display: flex; gap: 10rpx; margin: 12rpx 24rpx 0; padding: 4rpx; border-radius: 14rpx; background: #eef2f8; }
+.conversation-view-tab { flex: 1; margin: 0; padding: 0; border: 0; border-radius: 10rpx; color: #697383; background: transparent; font-size: 23rpx; line-height: 62rpx; }
+.conversation-view-tab::after { display: none; }
+.conversation-view-tab-active { color: #1f5bd8; background: #fff; box-shadow: 0 3rpx 10rpx rgba(31, 91, 216, .08); }
 .friend-card { padding-top: 28rpx; padding-bottom: 28rpx; }
 .streak-badge { flex: 0 0 auto; color: #9a5f0e; background: #fff3d9; border-radius: 999rpx; padding: 6rpx 14rpx; font-size: 22rpx; }
 .toggle-row { display: flex; justify-content: space-between; align-items: center; gap: 20rpx; margin-top: 24rpx; }
@@ -99,6 +103,8 @@ page {
 .task-editor-actions { display: flex; justify-content: flex-end; gap: 12rpx; margin-top: 18rpx; }
 .task-cancel-button, .task-save-button { width: auto; min-width: 160rpx; margin: 0; }
 .task-cancel-button { color: #5f5f5f; background: #f0f0f0; }
+.conversation-archive-button { display: block; width: 100%; margin-top: 18rpx; padding: 0; border: 1rpx solid #dbe5df; border-radius: 10rpx; color: #66766d; background: #fff; font-size: 23rpx; line-height: 60rpx; }
+.conversation-archive-button::after { display: none; }
 .date-tabs { display: flex; gap: 12rpx; overflow-x: auto; padding: 4rpx 24rpx 8rpx; white-space: nowrap; }
 .date-tab { flex: 0 0 auto; width: 128rpx; margin: 0; padding: 0; border: 1rpx solid #e3e3e3; border-radius: 12rpx; color: #5f5f5f; background: #fff; font-size: 24rpx; line-height: 68rpx; }
 .date-tab-active { border-color: #1f5bd8; color: #1f5bd8; background: #edf3ff; }

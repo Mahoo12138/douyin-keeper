@@ -9,7 +9,7 @@ type Collection<T> = { items: T[]; next_cursor?: string | null }
 type ApiErrorBody = { error?: { code?: string; message?: string } }
 type RequestOptions = { token?: string | null; method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; data?: unknown; headers?: Record<string, string>; skipRefresh?: boolean }
 
-export type SparkFriend = components['schemas']['Friend'] & Pick<components['schemas']['Conversation'], 'conversation_type' | 'spark_supported' | 'channel'> & { conversation_id: components['schemas']['Conversation']['id'] }
+export type SparkFriend = components['schemas']['Friend'] & Pick<components['schemas']['Conversation'], 'conversation_type' | 'spark_supported' | 'channel' | 'archived' | 'archived_at'> & { conversation_id: components['schemas']['Conversation']['id'] }
 
 async function listAllPages<T>(loadPage: (cursor?: string) => Promise<Collection<T>>): Promise<Collection<T>> {
   const items: T[] = []
@@ -252,12 +252,13 @@ export function accountCapabilities(token: string, accountId: string) {
   return request<{ items: components['schemas']['Capability'][] }>(`/accounts/${accountId}/capabilities`, { token })
 }
 
-export function listFriends(token: string, accountId: string): Promise<Collection<SparkFriend>> {
+export function listFriends(token: string, accountId: string, options: { includeArchived?: boolean } = {}): Promise<Collection<SparkFriend>> {
   // Compatibility projection for the existing spark UI. Its source is the
   // unified conversation endpoint; no follower/friend crawl is performed.
   return listAllPages((cursor) => {
     const query = cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''
-    return request<Collection<components['schemas']['Conversation']>>(`/accounts/${accountId}/conversations?include_archived=false&group_only=false${query}`, { token })
+    const includeArchived = options.includeArchived ? 'true' : 'false'
+    return request<Collection<components['schemas']['Conversation']>>(`/accounts/${accountId}/conversations?include_archived=${includeArchived}&group_only=false${query}`, { token })
   }).then((response) => {
     // The endpoint intentionally returns the mixed conversation inventory
     // when group_only=false. Keep the legacy friend shape for existing mini
@@ -279,9 +280,17 @@ export function listFriends(token: string, accountId: string): Promise<Collectio
         conversation_type: item.conversation_type,
         spark_supported: item.spark_supported,
         channel: item.channel,
+        archived: item.archived,
+        archived_at: item.archived_at,
       })),
       next_cursor: null,
     }
+  })
+}
+
+export function setConversationArchived(token: string, accountId: string, conversationId: string, archived: boolean) {
+  return request<components['schemas']['Conversation']>(`/accounts/${accountId}/conversations/${conversationId}`, {
+    method: 'PATCH', token, data: { archived },
   })
 }
 

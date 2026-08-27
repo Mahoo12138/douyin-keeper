@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, deleteTask, getJob, getMe, listAccounts, listFriends, listMyEntitlementGrants, listNotifications, listSendIntents, listTasks, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, deleteTask, getJob, getMe, listAccounts, listFriends, listMyEntitlementGrants, listNotifications, listSendIntents, listTasks, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, setConversationArchived, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -139,6 +139,8 @@ describe('mini API auth recovery', () => {
           spark_enabled: true,
           last_sent_at: null,
           platform_identity_status: 'missing',
+          archived: false,
+          archived_at: null,
         }],
         next_cursor: null,
       },
@@ -148,12 +150,39 @@ describe('mini API auth recovery', () => {
 
     expect(result.items[0]).toMatchObject({
       id: 'conversation-1',
+      conversation_id: 'conversation-1',
       display_name: '项目群',
       nickname: '项目群',
       platform_identity_status: 'missing',
       has_conversation: true,
+      archived: false,
     })
     expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/accounts/account-1/conversations?include_archived=false&group_only=false')
+  })
+
+  it('updates archive state with the conversation identity', async () => {
+    requestMock.mockResolvedValueOnce({ statusCode: 200, data: { id: 'conversation-1', archived: true } })
+
+    const result = await setConversationArchived('access-1', 'account-1', 'conversation-1', true)
+
+    expect(result.archived).toBe(true)
+    expect(requestMock.mock.calls[0]?.[0]).toMatchObject({
+      url: '/api/v1/accounts/account-1/conversations/conversation-1',
+      method: 'PATCH',
+      data: { archived: true },
+    })
+  })
+
+  it('can request archived conversations for the restore view', async () => {
+    requestMock.mockResolvedValueOnce({
+      statusCode: 200,
+      data: { items: [{ id: 'conversation-archived', friend_id: 'friend-1', friend_display_name: '小明', archived: true, archived_at: '2026-08-27T00:00:00Z' }], next_cursor: null },
+    })
+
+    const result = await listFriends('access-1', 'account-1', { includeArchived: true })
+
+    expect(result.items[0]).toMatchObject({ conversation_id: 'conversation-archived', archived: true, archived_at: '2026-08-27T00:00:00Z' })
+    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/accounts/account-1/conversations?include_archived=true&group_only=false')
   })
 
   it('keeps group conversations available as spark targets', async () => {
