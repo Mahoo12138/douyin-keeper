@@ -99,11 +99,12 @@ pnpm --filter ./apps/mini dev:h5    # http://localhost:10086
 ```
 
 The mini program development build reads `apps/mini/.env.development` and
-calls the local Go API at `http://127.0.0.1:8080/api/v1`. For testing on a
-physical device, create `apps/mini/.env.development.local` (ignored by Git)
-and replace `127.0.0.1` with the development machine's LAN IP. Start the API
-with `go run ./cmd/api` from `backend/`, then open `apps/mini/dist` in WeChat
-Developer Tools.
+calls the local Go API at `http://127.0.0.1:18080/api/v1` (the workspace
+development port). H5 keeps the browser same-origin and proxies `/api` to the
+same API target. For testing on a physical device, create
+`apps/mini/.env.development.local` (ignored by Git) and replace `127.0.0.1`
+with the development machine's LAN IP. Start the API with `go run ./cmd/api`
+from `backend/`, then open `apps/mini/dist` in WeChat Developer Tools.
 
 ## Deploy
 
