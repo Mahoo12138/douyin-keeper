@@ -7,6 +7,7 @@ import type { JobEvent } from '@/lib/api'
 import { getAccessToken } from '@/lib/session'
 import { bindingEventState } from '@/features/accounts/binding-events'
 import { effectiveCapabilities } from '@/features/accounts/capability-utils'
+import { accountBindingError } from '@/features/accounts/account-error-utils'
 import { createIdempotencyKey } from '@/features/home/home-utils'
 import { accountTabLabel } from '@/components/account-tab-utils'
 import { MiniButton as Button } from '@/components/mini-button'
@@ -259,7 +260,7 @@ export default function Accounts() {
       setBindingStatus('绑定任务已创建，等待后端进度')
       setScreen(bindingMethod === 'qr' ? 'qr' : 'progress')
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '创建绑定任务失败')
+      setError(accountBindingError(cause instanceof MiniApiError ? cause.code : '', cause instanceof Error ? cause.message : undefined))
     } finally {
       setBusy('')
     }
