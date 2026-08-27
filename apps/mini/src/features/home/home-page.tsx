@@ -5,6 +5,7 @@ import Taro from '@tarojs/taro'
 import { checkAccountSession, getMe, listAccounts, listNotifications, listSendIntents, listTasks, markAllNotificationsRead, markNotificationRead, MiniApiError, runTaskNow } from '@/lib/api'
 import { getAccessToken } from '@/lib/session'
 import { createIdempotencyKey, nextEnabledTask, selectAccountId } from '@/features/home/home-utils'
+import { openMeNotifications } from '@/features/navigation/mini-navigation'
 import { notificationPriorityLabel } from '@/features/notification/notification-utils'
 import avatarChen from '@/assets/home/avatar-chen.png'
 import avatarJasper from '@/assets/home/avatar-jasper.png'
@@ -148,7 +149,7 @@ export function HomePage() {
   return <View className="mini-page home-page">
     <View className="home-header">
       <View><Text className="home-brand">Douyin Keeper</Text><Text className="home-greeting">你好，{data.user.display_name || '火花助手'}</Text></View>
-      <Button className="home-notification-button" onClick={() => Taro.switchTab({ url: '/pages/login/index' })}><Image className="home-bell" src={bellIcon} mode="aspectFit" />{data.unreadNotificationCount > 0 && <Text className="home-notification-badge">{Math.min(9, data.unreadNotificationCount)}</Text>}</Button>
+      <Button className="home-notification-button" onClick={openMeNotifications}><Image className="home-bell" src={bellIcon} mode="aspectFit" />{data.unreadNotificationCount > 0 && <Text className="home-notification-badge">{Math.min(9, data.unreadNotificationCount)}</Text>}</Button>
     </View>
 
     <View className="account-selector" onClick={() => setAccountPickerOpen((current) => !current)}>

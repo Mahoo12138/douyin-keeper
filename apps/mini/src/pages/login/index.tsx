@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Button, Checkbox, Image, Input, Text, View } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import Taro, { useDidShow } from '@tarojs/taro'
 
 import { getMe, getNotificationPreferences, listMyEntitlementGrants, listNotifications, linkWechatMini, loginPassword, loginWechatMini, logoutMini, markAllNotificationsRead, markNotificationRead, MiniApiError, myEntitlement, redeemCardCode, registerPassword, updateNotificationPreferences } from '@/lib/api'
 import { clearSession, getAccessToken, setSession } from '@/lib/session'
 import { entitlementGrantStatus, entitlementSourceLabel, entitlementStatus, formatEntitlementDate, normalizeRedeemCode, quotaLabel } from '@/features/entitlement/entitlement-utils'
 import { helpSections, privacySections } from '@/features/help/help-content'
 import { notificationPriorityLabel } from '@/features/notification/notification-utils'
+import { consumeMeScreenTarget } from '@/features/navigation/mini-navigation'
 import { authConsentError } from '@/features/auth/auth-validation'
 import profileAvatar from '@/assets/me/avatar-profile.png'
 import mascotSprout from '@/assets/me/mascot-sprout.png'
@@ -42,6 +43,12 @@ export default function Me() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [helpExpanded, setHelpExpanded] = useState(false)
   const [privacyExpanded, setPrivacyExpanded] = useState(false)
+
+  useDidShow(() => {
+    if (!hasToken) return
+    const target = consumeMeScreenTarget()
+    if (target) setScreen(target)
+  })
 
   useEffect(() => {
     const token = getAccessToken()
