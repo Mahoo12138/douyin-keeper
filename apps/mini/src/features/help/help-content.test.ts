@@ -6,6 +6,8 @@ describe('mini help and agreement content', () => {
   it('covers the supported mobile-console help paths', () => {
     expect(helpSections.map((section) => section.title)).toEqual(['首次绑定', '配置任务', '处理风险提醒'])
     expect(helpSections.every((section) => section.body.length > 20)).toBe(true)
+    expect(helpSections[1]?.body).toContain('已确认会话')
+    expect(helpSections[1]?.body).not.toContain('已确认好友')
   })
 
   it('states the product privacy and security boundaries', () => {
