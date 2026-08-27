@@ -309,4 +309,28 @@ describe('mini API auth recovery', () => {
       data: { code: '123456' },
     })
   })
+
+  it('uses fetch streaming for account binding events in H5', async () => {
+    const frame = 'event: scanned\nid: 8\ndata: {"status":"confirmed"}\n\n'
+    const read = vi.fn()
+      .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode(frame) })
+      .mockResolvedValueOnce({ done: true, value: undefined })
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: { getReader: () => ({ read }) } })
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const events: Array<{ eventType: string; eventId: number; payload: Record<string, unknown> }> = []
+      const stream = streamJobEvents('access-1', 'job-h5', (event) => events.push(event))
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      stream.abort()
+
+      expect(fetchMock).toHaveBeenCalled()
+      expect(events).toEqual([{ eventType: 'scanned', eventId: 8, payload: { status: 'confirmed' } }])
+      expect(fetchMock).toHaveBeenCalledWith('/api/v1/jobs/job-h5/events', expect.objectContaining({
+        headers: { Accept: 'text/event-stream', Authorization: 'Bearer access-1' },
+      }))
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })

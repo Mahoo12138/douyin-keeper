@@ -3,7 +3,7 @@ import type { components } from '@douyin-keeper/sdk-ts'
 
 import { clearSession, getRefreshToken, setSession } from './session'
 
-const API_BASE_URL = (process.env.TARO_APP_API_BASE_URL || '/api/v1').replace(/\/$/, '')
+const API_BASE_URL = ((process.env.TARO_ENV === 'h5' ? process.env.TARO_APP_H5_API_BASE_URL : process.env.TARO_APP_API_BASE_URL) || '/api/v1').replace(/\/$/, '')
 
 type Collection<T> = { items: T[]; next_cursor?: string | null }
 type ApiErrorBody = { error?: { code?: string; message?: string } }
@@ -148,20 +148,9 @@ export type JobEvent = {
 }
 
 export function streamJobEvents(token: string, jobId: string, onEvent: (event: JobEvent) => void) {
-  const task = Taro.request<string>({
-    url: `${API_BASE_URL}/jobs/${jobId}/events`,
-    method: 'GET',
-    dataType: 'text',
-    timeout: 305000,
-    enableChunked: true,
-    header: {
-      Accept: 'text/event-stream',
-      Authorization: `Bearer ${token}`,
-    },
-  })
   let buffer = ''
   const decoder = new TextDecoder()
-  const consume = (chunk: ArrayBuffer) => {
+  const consumeSSEChunk = (chunk: ArrayBuffer | Uint8Array) => {
     buffer += decoder.decode(chunk, { stream: true })
     const frames = buffer.split(/\r?\n\r?\n/)
     buffer = frames.pop() ?? ''
@@ -177,7 +166,39 @@ export function streamJobEvents(token: string, jobId: string, onEvent: (event: J
       }
     })
   }
-  task.onChunkReceived(({ data }) => consume(data))
+
+  if (typeof window !== 'undefined' && typeof fetch === 'function' && typeof AbortController !== 'undefined') {
+    const controller = new AbortController()
+    void fetch(`${API_BASE_URL}/jobs/${jobId}/events`, {
+      method: 'GET',
+      headers: { Accept: 'text/event-stream', Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    }).then(async (response) => {
+      if (!response.ok || !response.body) return
+      const reader = response.body.getReader()
+      while (true) {
+        const result = await reader.read()
+        if (result.done) break
+        consumeSSEChunk(result.value)
+      }
+    }).catch(() => {
+      // Polling observes the terminal job state when the stream is unavailable.
+    })
+    return { abort: () => controller.abort() }
+  }
+
+  const task = Taro.request<string>({
+    url: `${API_BASE_URL}/jobs/${jobId}/events`,
+    method: 'GET',
+    dataType: 'text',
+    timeout: 305000,
+    enableChunked: true,
+    header: {
+      Accept: 'text/event-stream',
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  task.onChunkReceived(({ data }) => consumeSSEChunk(data))
   return { abort: () => task.abort() }
 }
 

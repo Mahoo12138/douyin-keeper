@@ -6,6 +6,7 @@ const appEnv = dotenvParse(path.resolve(__dirname, '..'), ['TARO_APP_'], process
 const injectedEnv = Object.fromEntries(
   Object.entries(appEnv).map(([key, value]) => [key, JSON.stringify(value)]),
 )
+const apiTarget = (appEnv.TARO_APP_API_BASE_URL || 'http://127.0.0.1:18080/api/v1').replace(/\/api\/v1\/?$/, '')
 
 export default defineConfig({
   projectName: 'douyin-keeper-mini',
@@ -19,9 +20,10 @@ export default defineConfig({
   sourceRoot: 'src',
   outputRoot: 'dist',
   env: {
-    TARO_APP_API_BASE_URL: JSON.stringify(appEnv.TARO_APP_API_BASE_URL || '/api/v1'),
-    TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID: JSON.stringify(appEnv.TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID || ''),
     ...injectedEnv,
+    TARO_APP_API_BASE_URL: JSON.stringify(appEnv.TARO_APP_API_BASE_URL || '/api/v1'),
+    TARO_APP_H5_API_BASE_URL: JSON.stringify('/api/v1'),
+    TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID: JSON.stringify(appEnv.TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID || ''),
   },
   framework: 'react',
   compiler: 'webpack5',
@@ -41,6 +43,16 @@ export default defineConfig({
     },
   },
   h5: {
+    devServer: {
+      proxy: {
+        '/api': {
+          target: apiTarget,
+          // Keep the H5 page host so the backend's same-origin mutation
+          // guard accepts browser requests forwarded by the dev server.
+          changeOrigin: false,
+        },
+      },
+    },
     webpackChain(chain) {
       chain.resolve.alias.set('@', path.resolve(__dirname, '../src'))
     },
