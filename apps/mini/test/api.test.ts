@@ -232,8 +232,8 @@ describe('mini API auth recovery', () => {
 
   it('loads all account pages used by the home and task surfaces', async () => {
     requestMock
-      .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ id: 'account-1' }], next_cursor: 'cursor-2' } })
-      .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ id: 'account-2' }], next_cursor: null } })
+      .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ id: 'account-1', binding_status: 'bound' }], next_cursor: 'cursor-2' } })
+      .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ id: 'account-2', binding_status: 'bound' }], next_cursor: null } })
 
     const result = await listAccounts('access-1')
 
@@ -241,6 +241,23 @@ describe('mini API auth recovery', () => {
     expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/accounts')
     expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/accounts?cursor=cursor-2')
     expect(result.next_cursor).toBeNull()
+  })
+
+  it('hides released account placeholders from mini account consumers', async () => {
+    requestMock.mockResolvedValueOnce({
+      statusCode: 200,
+      data: {
+        items: [
+          { id: 'account-released', binding_status: 'unbound' },
+          { id: 'account-bound', binding_status: 'bound' },
+        ],
+        next_cursor: null,
+      },
+    })
+
+    const result = await listAccounts('access-1')
+
+    expect(result.items.map((item) => item.id)).toEqual(['account-bound'])
   })
 
   it('loads all task pages for the spark and task surfaces', async () => {

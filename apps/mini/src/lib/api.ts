@@ -1,6 +1,8 @@
 import Taro from '@tarojs/taro'
 import type { components } from '@douyin-keeper/sdk-ts'
 
+import { visibleMiniAccounts } from '../features/accounts/account-utils'
+
 import { clearSession, getRefreshToken, setSession } from './session'
 
 const appEnv = typeof process !== 'undefined' ? process.env : undefined
@@ -144,7 +146,7 @@ export function listAccounts(token: string) {
   return listAllPages((cursor) => {
     const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
     return request<Collection<components['schemas']['Account']>>(`/accounts${suffix}`, { token })
-  })
+  }).then((response) => ({ ...response, items: visibleMiniAccounts(response.items) }))
 }
 
 export function createAccountBinding(token: string, method: 'qr' | 'sms', options: { phone?: string; accountId?: string; idempotencyKey?: string } = {}) {
