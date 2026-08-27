@@ -9,6 +9,17 @@ type Collection<T> = { items: T[]; next_cursor?: string | null }
 type ApiErrorBody = { error?: { code?: string; message?: string } }
 type RequestOptions = { token?: string | null; method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; data?: unknown; headers?: Record<string, string>; skipRefresh?: boolean }
 
+async function listAllPages<T>(loadPage: (cursor?: string) => Promise<Collection<T>>): Promise<Collection<T>> {
+  const items: T[] = []
+  let cursor: string | undefined
+  do {
+    const page = await loadPage(cursor)
+    items.push(...page.items)
+    cursor = page.next_cursor ?? undefined
+  } while (cursor)
+  return { items, next_cursor: null }
+}
+
 export class MiniApiError extends Error {
   constructor(public readonly code: string, message: string, public readonly statusCode: number) {
     super(message)
@@ -239,21 +250,15 @@ export function accountCapabilities(token: string, accountId: string) {
 export function listFriends(token: string, accountId: string): Promise<Collection<components['schemas']['Friend']>> {
   // Compatibility projection for the existing spark UI. Its source is the
   // unified conversation endpoint; no follower/friend crawl is performed.
-  return (async () => {
-    const conversations: components['schemas']['Conversation'][] = []
-    let cursor: string | undefined
-    do {
-      const query = cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''
-      const response = await request<Collection<components['schemas']['Conversation']>>(`/accounts/${accountId}/conversations?include_archived=true&group_only=false${query}`, { token })
-      conversations.push(...response.items)
-      cursor = response.next_cursor ?? undefined
-    } while (cursor)
-
+  return listAllPages((cursor) => {
+    const query = cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''
+    return request<Collection<components['schemas']['Conversation']>>(`/accounts/${accountId}/conversations?include_archived=true&group_only=false${query}`, { token })
+  }).then((response) => {
     // The endpoint intentionally returns the mixed conversation inventory
     // when group_only=false. The spark/task surfaces only support direct
     // conversations, so keep group sessions out of the legacy friend shape.
     return {
-      items: conversations.filter((item) => item.conversation_type !== 'group').map((item) => ({
+      items: response.items.filter((item) => item.conversation_type !== 'group').map((item) => ({
         id: item.friend_id ?? item.id,
         platform_identity_status: item.friend_id ? item.platform_identity_status : 'missing',
         display_name: item.friend_display_name,
@@ -267,7 +272,7 @@ export function listFriends(token: string, accountId: string): Promise<Collectio
       })),
       next_cursor: null,
     }
-  })()
+  })
 }
 
 export function updateFriend(token: string, friendId: string, sparkEnabled: boolean) {
@@ -279,7 +284,10 @@ export function updateFriend(token: string, friendId: string, sparkEnabled: bool
 }
 
 export function listTasks(token: string) {
-  return request<Collection<components['schemas']['SparkTask']>>('/tasks', { token })
+  return listAllPages((cursor) => {
+    const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
+    return request<Collection<components['schemas']['SparkTask']>>(`/tasks${suffix}`, { token })
+  })
 }
 
 export type CreateTaskInput = {
@@ -333,6 +341,9 @@ export function checkAccountSession(token: string, accountId: string, idempotenc
 export type SendHistoryOptions = { from?: string; to?: string; status?: components['schemas']['SendIntent']['status']; task_id?: string; account_id?: string; friend_id?: string }
 
 export function listSendIntents(token: string, options: SendHistoryOptions = {}) {
-  const query = Object.entries(options).filter(([, value]) => value).map(([key, value]) => `${key}=${encodeURIComponent(value!)}`).join('&')
-  return request<Collection<components['schemas']['SendIntent']>>(`/send-intents${query ? `?${query}` : ''}`, { token })
+  const baseQuery = Object.entries(options).filter(([, value]) => value).map(([key, value]) => `${key}=${encodeURIComponent(value!)}`)
+  return listAllPages((cursor) => {
+    const query = cursor ? [...baseQuery, `cursor=${encodeURIComponent(cursor)}`] : baseQuery
+    return request<Collection<components['schemas']['SendIntent']>>(`/send-intents${query.length ? `?${query.join('&')}` : ''}`, { token })
+  })
 }

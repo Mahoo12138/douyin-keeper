@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, deleteTask, getJob, getMe, listFriends, listMyEntitlementGrants, listNotifications, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, deleteTask, getJob, getMe, listFriends, listMyEntitlementGrants, listNotifications, listSendIntents, listTasks, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -183,6 +183,32 @@ describe('mini API auth recovery', () => {
 
     expect(result.items.map((item) => item.id)).toEqual(['friend-1', 'friend-2'])
     expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/accounts/account-1/conversations?include_archived=true&group_only=false&cursor=cursor-2')
+    expect(result.next_cursor).toBeNull()
+  })
+
+  it('loads all task pages for the spark and task surfaces', async () => {
+    requestMock
+      .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ id: 'task-1' }], next_cursor: 'cursor-2' } })
+      .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ id: 'task-2' }], next_cursor: null } })
+
+    const result = await listTasks('access-1')
+
+    expect(result.items.map((item) => item.id)).toEqual(['task-1', 'task-2'])
+    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/tasks')
+    expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/tasks?cursor=cursor-2')
+    expect(result.next_cursor).toBeNull()
+  })
+
+  it('loads all send history pages while preserving filters', async () => {
+    requestMock
+      .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ id: 'intent-1' }], next_cursor: 'cursor-2' } })
+      .mockResolvedValueOnce({ statusCode: 200, data: { items: [{ id: 'intent-2' }], next_cursor: null } })
+
+    const result = await listSendIntents('access-1', { task_id: 'task-1', status: 'succeeded' })
+
+    expect(result.items.map((item) => item.id)).toEqual(['intent-1', 'intent-2'])
+    expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/send-intents?task_id=task-1&status=succeeded')
+    expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/send-intents?task_id=task-1&status=succeeded&cursor=cursor-2')
     expect(result.next_cursor).toBeNull()
   })
 
