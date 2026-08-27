@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Button, Checkbox, Image, Input, Text, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
@@ -45,23 +45,18 @@ export default function Me() {
   const [helpExpanded, setHelpExpanded] = useState(false)
   const [privacyExpanded, setPrivacyExpanded] = useState(false)
 
-  useDidShow(() => {
-    if (!hasToken) return
-    const target = consumeMeScreenTarget()
-    if (target) setScreen(target)
-  })
-
-  useEffect(() => {
+  const loadProfile = useCallback(async () => {
     const token = getAccessToken()
-    if (!token || !hasToken) return
+    if (!token) return
     setMessage('')
-    void Promise.all([
-      getMe(token),
-      getNotificationPreferences(token),
-      myEntitlement(token),
-      listMyEntitlementGrants(token, { limit: 10 }),
-      listNotifications(token, { limit: 20 }),
-    ]).then(([me, preferences, currentEntitlement, history, notificationList]) => {
+    try {
+      const [me, preferences, currentEntitlement, history, notificationList] = await Promise.all([
+        getMe(token),
+        getNotificationPreferences(token),
+        myEntitlement(token),
+        listMyEntitlementGrants(token, { limit: 10 }),
+        listNotifications(token, { limit: 20 }),
+      ])
       setUser(me)
       setWechatNotificationsEnabled(preferences.wechat_enabled)
       setEntitlement(currentEntitlement)
@@ -70,15 +65,22 @@ export default function Me() {
       setNotifications(notificationList.items)
       setUnreadCount(notificationList.unread_count)
       setNotificationCursor(notificationList.next_cursor ?? null)
-    }).catch((cause) => {
+    } catch (cause) {
       if (cause instanceof MiniApiError && cause.statusCode === 401) {
         clearSession()
         setHasToken(false)
         return
       }
       setMessage(cause instanceof Error ? cause.message : '我的页面数据暂时不可用，请稍后重试。')
-    })
-  }, [hasToken])
+    }
+  }, [])
+
+  useDidShow(() => {
+    if (!getAccessToken()) return
+    const target = consumeMeScreenTarget()
+    if (target) setScreen(target)
+    void loadProfile()
+  })
 
   function ensureAuthConsent() {
     const error = authConsentError(termsAccepted)
@@ -95,6 +97,7 @@ export default function Me() {
       const session = await loginWechatMini(result.code)
       setSession(session)
       setHasToken(true)
+      void loadProfile()
       await Taro.showToast({ title: '登录成功', icon: 'success' })
     } catch (cause) {
       setMessage(authError(cause))
@@ -112,6 +115,7 @@ export default function Me() {
       setSession(session)
       setPassword('')
       setHasToken(true)
+      void loadProfile()
       await Taro.showToast({ title: '登录成功', icon: 'success' })
     } catch (cause) {
       setMessage(authError(cause))
@@ -144,6 +148,7 @@ export default function Me() {
       setRegisterPasswordValue('')
       setRegisterPasswordConfirm('')
       setHasToken(true)
+      void loadProfile()
       await Taro.showToast({ title: '注册成功', icon: 'success' })
     } catch (cause) {
       setMessage(authError(cause))
@@ -161,6 +166,7 @@ export default function Me() {
       const session = await linkWechatMini(result.code, linkCode.trim().toUpperCase())
       setSession(session)
       setHasToken(true)
+      void loadProfile()
       await Taro.showToast({ title: '绑定成功', icon: 'success' })
     } catch (cause) {
       setMessage(authError(cause))
