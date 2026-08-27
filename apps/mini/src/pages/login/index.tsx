@@ -14,7 +14,7 @@ import mascotSprout from '@/assets/me/mascot-sprout.png'
 import authGuardian from '@/assets/me/auth-guardian.png'
 import notificationBell from '@/assets/me/notification-bell.png'
 
-const notificationTemplateId = typeof process !== 'undefined' ? process.env.TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID || '' : ''
+const notificationTemplateId = process.env.TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID || ''
 const requestWechatSubscribe = Taro.requestSubscribeMessage as unknown as (options: { tmplIds: string[] }) => Promise<Record<string, string>>
 type MeScreen = 'overview' | 'entitlement' | 'history' | 'notifications' | 'settings'
 type AuthMode = 'login' | 'register'

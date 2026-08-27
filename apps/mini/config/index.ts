@@ -1,5 +1,11 @@
 import { defineConfig } from '@tarojs/cli'
+import { dotenvParse } from '@tarojs/helper'
 import path from 'node:path'
+
+const appEnv = dotenvParse(path.resolve(__dirname, '..'), ['TARO_APP_'], process.env.NODE_ENV || 'development')
+const injectedEnv = Object.fromEntries(
+  Object.entries(appEnv).map(([key, value]) => [key, JSON.stringify(value)]),
+)
 
 export default defineConfig({
   projectName: 'douyin-keeper-mini',
@@ -12,6 +18,11 @@ export default defineConfig({
   },
   sourceRoot: 'src',
   outputRoot: 'dist',
+  env: {
+    TARO_APP_API_BASE_URL: JSON.stringify(appEnv.TARO_APP_API_BASE_URL || '/api/v1'),
+    TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID: JSON.stringify(appEnv.TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID || ''),
+    ...injectedEnv,
+  },
   framework: 'react',
   compiler: 'webpack5',
   mini: {
