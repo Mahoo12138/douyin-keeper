@@ -6,6 +6,7 @@ import { getAccessToken } from '@/lib/session'
 import { listSendIntents, MiniApiError } from '@/lib/api'
 import { dayKey, filterHistory, localDayRange, recentDays, statusMeta, taskLabel, type HistoryFilter, type HistoryItem } from '@/features/history/history-utils'
 import { PRODUCT_TIMEZONE } from '@/features/time/time-utils'
+import { accountTabLabel } from '@/components/account-tab-utils'
 import { MiniButton as Button } from '@/components/mini-button'
 
 export default function History() {
@@ -70,7 +71,7 @@ function FilterTabs({ value, onChange }: { value: HistoryFilter; onChange: (valu
 function HistoryCard({ item }: { item: HistoryItem }) {
   const status = statusMeta[item.status]
   const job = item.latest_job
-  return <View className="card history-card"><View className="card-heading"><View><Text className="card-title">{item.friend.display_name}</Text><Text className="muted">{item.account.nickname || '未命名账号'} · {formatTime(item.scheduled_at)}</Text></View><Text className={`history-status history-status-${status.tone}`}>{status.label}</Text></View><View className="history-grid"><View><Text className="history-label">任务</Text><Text className="history-value">{taskLabel(item)}</Text></View><View><Text className="history-label">通道</Text><Text className="history-value">{job?.adapter || '待分配'}</Text></View></View>{item.error_code && <View className="history-error"><Text>{item.error_code}</Text></View>}{item.intent_type === 'manual' && <Text className="muted history-manual">手动执行</Text>}</View>
+  return <View className="card history-card"><View className="card-heading"><View><Text className="card-title">{item.friend.display_name}</Text><Text className="muted">{accountTabLabel(item.account)} · {formatTime(item.scheduled_at)}</Text></View><Text className={`history-status history-status-${status.tone}`}>{status.label}</Text></View><View className="history-grid"><View><Text className="history-label">任务</Text><Text className="history-value">{taskLabel(item)}</Text></View><View><Text className="history-label">通道</Text><Text className="history-value">{job?.adapter || '待分配'}</Text></View></View>{item.error_code && <View className="history-error"><Text>{item.error_code}</Text></View>}{item.intent_type === 'manual' && <Text className="muted history-manual">手动执行</Text>}</View>
 }
 
 function GuestHistory() { return <View className="mini-page"><View className="card empty-card"><Text className="card-title">请先登录</Text><Text className="muted">登录后才能查看发送记录。</Text><Button className="mini-button primary-button" onClick={() => Taro.switchTab({ url: '/pages/login/index' })}>去登录 / 绑定</Button></View></View> }
