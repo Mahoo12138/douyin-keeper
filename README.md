@@ -82,6 +82,8 @@ pnpm build:spa                  # dists consumed by go:embed (docs/16)
 
 # WeChat mini program development (Taro + React)
 pnpm --filter ./apps/mini dev:weapp
+# H5 browser development (same Taro pages, useful for local flow debugging)
+pnpm --filter ./apps/mini dev:h5    # http://localhost:10086
 ```
 
 The mini program development build reads `apps/mini/.env.development` and
