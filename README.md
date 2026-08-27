@@ -50,6 +50,18 @@ go run ./cmd/api
 # http://localhost:8080/health/ready
 ```
 
+The API only writes jobs to the transactional outbox. To exercise asynchronous
+mini-program flows such as QR/SMS binding, session checks, conversation sync,
+and cancellation cleanup, run these processes in separate terminals with the
+same environment:
+
+```bash
+go run ./cmd/scheduler           # outbox publisher and periodic reconciliation
+go run ./cmd/worker-interactive  # QR/SMS binding
+go run ./cmd/worker-browser      # browser session/conversation operations
+go run ./cmd/worker-light        # dispatch, protocol, and notifications
+```
+
 Smoke test the seeded demo card:
 
 ```bash
