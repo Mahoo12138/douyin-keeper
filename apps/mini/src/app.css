@@ -463,6 +463,31 @@ page {
 .feature-state { margin-left: auto; color: #72a48b; font-size: 18rpx; }
 .me-inline-error { margin-top: 16rpx; padding: 16rpx 18rpx; border-radius: 14rpx; color: #b83f3f; background: #fff1f1; font-size: 22rpx; line-height: 1.5; }
 .me-auth-page { padding-top: 82rpx; text-align: center; }
+.onboarding-page { min-height: 100vh; box-sizing: border-box; background: linear-gradient(180deg, #f8fffb 0%, #f2fbf7 100%); text-align: center; }
+.onboarding-splash { display: flex; align-items: center; justify-content: center; padding: 64rpx 42rpx; }
+.onboarding-logo { display: flex; align-items: center; justify-content: center; width: 210rpx; height: 210rpx; border-radius: 64rpx; background: rgba(255,255,255,.82); box-shadow: 0 22rpx 50rpx rgba(37, 133, 94, .13); }
+.onboarding-logo-image { width: 176rpx; height: 176rpx; }
+.onboarding-brand { display: block; margin-top: 28rpx; color: #182a20; font-size: 42rpx; font-weight: 720; letter-spacing: .5rpx; }
+.onboarding-tagline { display: block; margin-top: 10rpx; color: #719184; font-size: 22rpx; letter-spacing: 2rpx; }
+.onboarding-progress { width: 230rpx; height: 8rpx; margin-top: 78rpx; overflow: hidden; border-radius: 999rpx; background: #dceee5; }
+.onboarding-progress-value { width: 62%; height: 100%; border-radius: inherit; background: #1cbd7c; animation: onboarding-progress 900ms ease-out both; }
+.onboarding-progress-label { display: block; margin-top: 14rpx; color: #8ba197; font-size: 19rpx; }
+.onboarding-welcome { padding: 46rpx 36rpx 54rpx; }
+.onboarding-page-indicator { display: grid; grid-template-columns: 38rpx 72rpx 38rpx 72rpx 38rpx; align-items: center; justify-content: center; gap: 10rpx; color: #9baea4; font-size: 21rpx; }
+.onboarding-page-indicator View { height: 2rpx; background: #cce8da; }
+.onboarding-indicator-active { display: flex; align-items: center; justify-content: center; width: 38rpx; height: 38rpx; border-radius: 50%; color: #fff; background: #1cbd7c; font-weight: 700; }
+.welcome-hero { display: block; width: 390rpx; height: 390rpx; margin: 24rpx auto 0; }
+.welcome-title { display: block; margin-top: 6rpx; color: #1b2a22; font-size: 31rpx; font-weight: 650; }
+.welcome-brand { display: block; margin-top: 5rpx; color: #1b2a22; font-size: 39rpx; font-weight: 720; }
+.welcome-brand-accent { color: #1769e8; }
+.welcome-copy { display: block; margin-top: 13rpx; color: #82978b; font-size: 22rpx; line-height: 1.7; white-space: pre-line; }
+.welcome-actions { margin: 44rpx auto 0; max-width: 430rpx; }
+.welcome-actions .me-primary-button, .welcome-actions .me-secondary-button { margin-top: 14rpx; }
+.welcome-dots { display: flex; justify-content: center; gap: 10rpx; margin-top: 28rpx; }
+.welcome-dot { display: block; width: 10rpx; height: 10rpx; border-radius: 50%; background: #c5ddd2; }
+.welcome-dot-active { width: 26rpx; border-radius: 999rpx; background: #2d7bf0; }
+.auth-back-button { display: block; margin: 0 0 12rpx; padding: 0; border: 0; color: #6d8a7c; background: transparent; font-size: 21rpx; line-height: 1.5; text-align: left; }
+.auth-back-button::after { display: none; }
 .auth-mascot { display: block; width: 190rpx; height: 190rpx; margin: 0 auto; }
 .auth-title { display: block; margin-top: 12rpx; color: #17241d; font-size: 40rpx; font-weight: 700; }
 .auth-subtitle { display: block; margin-top: 8rpx; }
@@ -537,6 +562,8 @@ page {
 .me-empty { padding: 40rpx 0 22rpx; text-align: center; }
 .me-empty-title { display: block; color: #27362d; font-size: 25rpx; font-weight: 600; }
 .me-empty .muted { display: block; margin-top: 7rpx; }
+
+@keyframes onboarding-progress { from { width: 0; } to { width: 62%; } }
 
 /* Task module */
 .task-page { min-height: 100vh; padding: 34rpx 24rpx 54rpx; background: #f8fbfa; box-sizing: border-box; }
