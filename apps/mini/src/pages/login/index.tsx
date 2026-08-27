@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Button, Checkbox, Image, Input, Text, View } from '@tarojs/components'
-import Taro, { useDidShow } from '@tarojs/taro'
+import Taro, { useDidHide, useDidShow } from '@tarojs/taro'
 
 import { getMe, getNotificationPreferences, listMyEntitlementGrants, listNotifications, linkWechatMini, loginPassword, loginWechatMini, logoutMini, markAllNotificationsRead, markNotificationRead, MiniApiError, myEntitlement, redeemCardCode, registerPassword, updateNotificationPreferences } from '@/lib/api'
 import { clearSession, getAccessToken, setSession } from '@/lib/session'
@@ -55,6 +55,10 @@ export default function Me() {
     return () => clearTimeout(timer)
   }, [hasToken, onboardingStage])
 
+  useEffect(() => {
+    void (hasToken ? Taro.showTabBar({ animation: false }) : Taro.hideTabBar({ animation: false }))
+  }, [hasToken])
+
   const loadProfile = useCallback(async () => {
     const token = getAccessToken()
     if (!token) return
@@ -86,10 +90,15 @@ export default function Me() {
   }, [])
 
   useDidShow(() => {
+    void (hasToken ? Taro.showTabBar({ animation: false }) : Taro.hideTabBar({ animation: false }))
     if (!getAccessToken()) return
     const target = consumeMeScreenTarget()
     if (target) setScreen(target)
     void loadProfile()
+  })
+
+  useDidHide(() => {
+    void Taro.showTabBar({ animation: false })
   })
 
   function ensureAuthConsent() {

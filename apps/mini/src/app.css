@@ -464,8 +464,8 @@ page {
 .me-inline-error { margin-top: 16rpx; padding: 16rpx 18rpx; border-radius: 14rpx; color: #b83f3f; background: #fff1f1; font-size: 22rpx; line-height: 1.5; }
 .me-auth-page { padding-top: 82rpx; text-align: center; }
 .onboarding-page { min-height: 100vh; box-sizing: border-box; background: linear-gradient(180deg, #f8fffb 0%, #f2fbf7 100%); text-align: center; }
-.onboarding-splash { display: flex; align-items: center; justify-content: center; padding: 64rpx 42rpx; }
-.onboarding-logo { display: flex; align-items: center; justify-content: center; width: 210rpx; height: 210rpx; border-radius: 64rpx; background: rgba(255,255,255,.82); box-shadow: 0 22rpx 50rpx rgba(37, 133, 94, .13); }
+.onboarding-splash { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64rpx 42rpx; }
+.onboarding-logo { display: flex; align-items: center; justify-content: center; width: 210rpx; height: 210rpx; border-radius: 64rpx; background: rgba(255,255,255,.82); box-shadow: 0 22rpx 50rpx rgba(37, 133, 94, .13); text-align: left; }
 .onboarding-logo-image { width: 176rpx; height: 176rpx; }
 .onboarding-brand { display: block; margin-top: 28rpx; color: #182a20; font-size: 42rpx; font-weight: 720; letter-spacing: .5rpx; }
 .onboarding-tagline { display: block; margin-top: 10rpx; color: #719184; font-size: 22rpx; letter-spacing: 2rpx; }
@@ -476,7 +476,7 @@ page {
 .onboarding-page-indicator { display: grid; grid-template-columns: 38rpx 72rpx 38rpx 72rpx 38rpx; align-items: center; justify-content: center; gap: 10rpx; color: #9baea4; font-size: 21rpx; }
 .onboarding-page-indicator View { height: 2rpx; background: #cce8da; }
 .onboarding-indicator-active { display: flex; align-items: center; justify-content: center; width: 38rpx; height: 38rpx; border-radius: 50%; color: #fff; background: #1cbd7c; font-weight: 700; }
-.welcome-hero { display: block; width: 390rpx; height: 390rpx; margin: 24rpx auto 0; }
+.welcome-hero { display: block; width: 390rpx; height: 390rpx; margin: 24rpx auto 0; text-align: left; }
 .welcome-title { display: block; margin-top: 6rpx; color: #1b2a22; font-size: 31rpx; font-weight: 650; }
 .welcome-brand { display: block; margin-top: 5rpx; color: #1b2a22; font-size: 39rpx; font-weight: 720; }
 .welcome-brand-accent { color: #1769e8; }
