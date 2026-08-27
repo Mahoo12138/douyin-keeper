@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Image, Text, View } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import Taro, { useDidShow } from '@tarojs/taro'
 
-import { checkAccountSession, getMe, listAccounts, listNotifications, listSendIntents, listTasks, markAllNotificationsRead, markNotificationRead, MiniApiError, runTaskNow } from '@/lib/api'
+import { checkAccountSession, getJob, getMe, getSendJob, listAccounts, listNotifications, listSendIntents, listTasks, markAllNotificationsRead, markNotificationRead, MiniApiError, runTaskNow } from '@/lib/api'
 import { getAccessToken } from '@/lib/session'
 import { createIdempotencyKey, homeAccountStatus, homeOverallStatus, homeTaskStatus, nextEnabledTask, selectAccountId } from '@/features/home/home-utils'
 import { openMeNotifications } from '@/features/navigation/mini-navigation'
@@ -22,6 +22,8 @@ type HomeData = {
   unreadNotificationCount: number
   notificationsAvailable: boolean
 }
+type HomeJobAction = 'send' | 'session'
+type HomeJob = { id: string; action: HomeJobAction }
 
 export function HomePage() {
   const [state, setState] = useState<'loading' | 'guest' | 'ready' | 'error'>('loading')
@@ -32,6 +34,9 @@ export function HomePage() {
   const [notificationBusy, setNotificationBusy] = useState<string | 'all' | null>(null)
   const [runBusy, setRunBusy] = useState(false)
   const [sessionCheckBusy, setSessionCheckBusy] = useState(false)
+  const [homeJob, setHomeJob] = useState<HomeJob | null>(null)
+  const [homeJobAction, setHomeJobAction] = useState<HomeJobAction | ''>('')
+  const [homeJobStatus, setHomeJobStatus] = useState('')
 
   const load = useCallback(async () => {
     const token = getAccessToken()
@@ -70,7 +75,48 @@ export function HomePage() {
     }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  useDidShow(() => { void load() })
+
+  useEffect(() => {
+    if (!homeJob) return
+    const token = getAccessToken()
+    if (!token) {
+      setHomeJob(null)
+      setHomeJobAction('')
+      setHomeJobStatus('')
+      setRunBusy(false)
+      setSessionCheckBusy(false)
+      return
+    }
+    let active = true
+    const poll = async () => {
+      try {
+        const job = homeJob.action === 'send' ? await getSendJob(token, homeJob.id) : await getJob(token, homeJob.id)
+        if (!active) return
+        setHomeJobStatus(homeJobStatusLabel(job.status))
+        if (!['succeeded', 'failed', 'cancelled'].includes(job.status)) return
+        setHomeJob(null)
+        setRunBusy(false)
+        setSessionCheckBusy(false)
+        if (job.status === 'succeeded') {
+          await load()
+          if (active) await Taro.showToast({ title: homeJob.action === 'send' ? '任务执行完成' : '登录态检查完成', icon: 'success' })
+        } else if (active) {
+          setError(job.error_code || (homeJob.action === 'send' ? '任务执行失败，请查看执行记录。' : '登录态检查失败，请重试。'))
+        }
+      } catch (cause) {
+        if (!active) return
+        setHomeJob(null)
+        setHomeJobStatus('')
+        setRunBusy(false)
+        setSessionCheckBusy(false)
+        setError(cause instanceof Error ? cause.message : '后台任务状态查询失败')
+      }
+    }
+    void poll()
+    const timer = setInterval(() => void poll(), 2500)
+    return () => { active = false; clearInterval(timer) }
+  }, [homeJob, load])
 
   if (state === 'loading') return <LoadingHome />
   if (state === 'guest') return <GuestHome />
@@ -124,13 +170,18 @@ export function HomePage() {
     if (!token || !nextTask || runBusy) return
     setRunBusy(true)
     setError('')
+    let queued = false
     try {
-      await runTaskNow(token, nextTask.id, createIdempotencyKey())
+      const result = await runTaskNow(token, nextTask.id, createIdempotencyKey())
+      queued = true
+      setHomeJob({ id: result.job_id, action: 'send' })
+      setHomeJobAction('send')
+      setHomeJobStatus(homeJobStatusLabel(result.status))
       await Taro.showToast({ title: '已加入发送队列', icon: 'success' })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '立即执行失败，请稍后重试。')
     } finally {
-      setRunBusy(false)
+      if (!queued) setRunBusy(false)
     }
   }
 
@@ -139,13 +190,18 @@ export function HomePage() {
     if (!token || !account || sessionCheckBusy) return
     setSessionCheckBusy(true)
     setError('')
+    let queued = false
     try {
-      await checkAccountSession(token, account.id, createIdempotencyKey())
+      const result = await checkAccountSession(token, account.id, createIdempotencyKey())
+      queued = true
+      setHomeJob({ id: result.job_id, action: 'session' })
+      setHomeJobAction('session')
+      setHomeJobStatus(homeJobStatusLabel('queued'))
       await Taro.showToast({ title: '检查任务已提交', icon: 'success' })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '登录态检查提交失败，请稍后重试。')
     } finally {
-      setSessionCheckBusy(false)
+      if (!queued) setSessionCheckBusy(false)
     }
   }
 
@@ -164,6 +220,8 @@ export function HomePage() {
     {accountPickerOpen && <View className="account-picker"><View className="account-picker-heading"><Text>切换账号</Text><Text className="account-picker-count">{data.accounts.length} 个账号</Text></View>{data.accounts.length === 0 ? <Text className="muted">暂未绑定账号</Text> : data.accounts.map((item) => <Button key={item.id} className={`account-picker-row ${item.id === activeAccountId ? 'account-picker-row-active' : ''}`} onClick={() => { setSelectedAccountId(item.id); setAccountPickerOpen(false) }}><Avatar src={item.avatar_url} name={item.nickname || '未命名'} /><View className="account-picker-copy"><Text>{item.nickname || '未命名账号'}</Text><Text className="muted">{accountStatus(item.binding_status)} · {sessionStatus(item.session_status)}</Text></View>{item.id === activeAccountId && <Text className="account-check">✓</Text>}</Button>)}<Button className="account-picker-add" onClick={() => Taro.switchTab({ url: '/pages/accounts/index' })}><Text className="plus">+</Text> 添加或管理账号</Button></View>}
 
     <View className="home-summary"><View className="summary-heading"><View><Text className="summary-title">今日概览</Text><Text className="summary-caption">数据实时更新</Text></View><Text className="summary-date">{formatToday()}</Text></View><View className="summary-grid"><SummaryMetric label="活跃账号" value={data.accounts.filter((item) => item.binding_status === 'bound').length} /><SummaryMetric label="活跃任务" value={activeTaskCount} /><SummaryMetric label="已完成" value={todayStats.successful} /><SummaryMetric label="待处理" value={todayStats.pending} /></View></View>
+
+    {homeJobStatus && <View className="home-operation-status"><Text>{homeJobAction === 'send' ? '立即执行' : '登录态检查'}：{homeJobStatus}</Text></View>}
 
     {error && <View className="home-error"><Text>{error}</Text></View>}
 
@@ -187,6 +245,7 @@ function StatusItem({ label, value, tone }: { label: string; value: string; tone
 function GuestHome() { return <View className="mini-page home-page guest-home"><View className="home-branding"><Text className="home-brand">Douyin Keeper</Text><Text className="home-greeting">管理你的火花关系</Text></View><View className="guest-illustration"><Image className="guest-illustration-image" src={emptyGiftBox} mode="aspectFit" /></View><Text className="guest-title">欢迎使用火花助手</Text><Text className="muted guest-copy">登录后查看账号、会话和今日任务状态。</Text><Button className="home-primary-button" onClick={() => Taro.switchTab({ url: '/pages/login/index' })}>登录 / 绑定 PC 账号</Button></View> }
 function ErrorHome({ message, onRetry }: { message: string; onRetry: () => void }) { return <View className="mini-page home-page"><View className="home-error-state"><Text className="home-error-icon">!</Text><Text className="home-empty-title">首页暂时不可用</Text><Text className="muted">{message || '请检查网络连接后重试。'}</Text><Button className="home-secondary-button" onClick={onRetry}>重新加载</Button></View></View> }
 function LoadingHome() { return <View className="mini-page home-page"><View className="home-skeleton home-skeleton-header" /><View className="home-skeleton home-skeleton-account" /><View className="home-skeleton home-skeleton-summary" /><View className="home-skeleton home-skeleton-card" /><View className="home-skeleton home-skeleton-card" /></View> }
+function homeJobStatusLabel(value: string) { return value === 'queued' ? '排队中' : value === 'running' ? '执行中' : value === 'succeeded' ? '已完成' : value === 'failed' ? '执行失败' : value === 'cancelled' ? '已取消' : '处理中' }
 function getTodayStats(items: HomeData['history']) { return { successful: items.filter((item) => item.status === 'succeeded').length, pending: items.filter((item) => ['pending', 'queued', 'running', 'retry_wait'].includes(item.status)).length, failed: items.filter((item) => ['failed', 'skipped', 'cancelled'].includes(item.status)).length } }
 function buildTrend(items: HomeData['history']) { const slots = [0, 4, 8, 12, 16, 20]; const counts = slots.map((slot) => items.filter((item) => { const hour = new Date(item.scheduled_at).getHours(); return hour >= slot && hour < slot + 4 }).length); const max = Math.max(...counts, 1); return slots.map((slot, index) => ({ label: `${String(slot).padStart(2, '0')}:00`, height: (counts[index] / max) * 92, tone: index === 3 ? 'green' : index === 4 ? 'blue' : 'soft' })) }
 function recentStatus(value: HomeData['history'][number]['status']) { if (value === 'succeeded') return { label: '已完成', tone: 'success' }; if (['pending', 'queued', 'running', 'retry_wait'].includes(value)) return { label: '执行中', tone: 'running' }; return { label: '待处理', tone: 'pending' } }
