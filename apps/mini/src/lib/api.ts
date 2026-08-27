@@ -3,7 +3,8 @@ import type { components } from '@douyin-keeper/sdk-ts'
 
 import { clearSession, getRefreshToken, setSession } from './session'
 
-const API_BASE_URL = ((process.env.TARO_ENV === 'h5' ? process.env.TARO_APP_H5_API_BASE_URL : process.env.TARO_APP_API_BASE_URL) || '/api/v1').replace(/\/$/, '')
+const appEnv = typeof process !== 'undefined' ? process.env : undefined
+const API_BASE_URL = ((appEnv?.TARO_ENV === 'h5' ? appEnv.TARO_APP_H5_API_BASE_URL : appEnv?.TARO_APP_API_BASE_URL) || '/api/v1').replace(/\/$/, '')
 
 type Collection<T> = { items: T[]; next_cursor?: string | null }
 type ApiErrorBody = { error?: { code?: string; message?: string } }
