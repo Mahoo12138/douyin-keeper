@@ -3,7 +3,7 @@ import { Button, Image, Input, Picker, Switch, Text, Textarea, View } from '@tar
 import Taro, { useDidShow } from '@tarojs/taro'
 
 import { getAccessToken } from '@/lib/session'
-import { createTask, deleteTask, getSendJob, listAccounts, listFriends, listMessageTemplates, listSendIntents, listTasks, MiniApiError, runTaskNow, updateTask } from '@/lib/api'
+import { createMessageTemplate, createTask, deleteMessageTemplate, deleteTask, getSendJob, listAccounts, listFriends, listMessageTemplates, listSendIntents, listTasks, MiniApiError, runTaskNow, updateMessageTemplate, updateTask } from '@/lib/api'
 import { createIdempotencyKey } from '@/features/home/home-utils'
 import { taskCreateDraftError, taskTargetCandidates, taskTimePayload, uniqueSparkTargets } from '@/features/spark/spark-utils'
 import taskChecklist from '@/assets/tasks/task-checklist.png'
@@ -13,10 +13,11 @@ type Account = Awaited<ReturnType<typeof listAccounts>>['items'][number]
 type Friend = Awaited<ReturnType<typeof listFriends>>['items'][number]
 type HistoryItem = Awaited<ReturnType<typeof listSendIntents>>['items'][number]
 type MessageTemplate = Awaited<ReturnType<typeof listMessageTemplates>>['items'][number]
-type Screen = 'list' | 'detail' | 'edit' | 'history' | 'create'
+type Screen = 'list' | 'detail' | 'edit' | 'history' | 'create' | 'templates'
 type Filter = 'all' | 'enabled' | 'paused'
 type Draft = { windowStart: string; windowEnd: string; message: string; messageKind: 'text' | 'sticker'; allowFirstMessage: boolean }
 type CreateDraft = Draft & { accountId: string; friendId: string; enabled: boolean }
+type TemplateDraft = { id?: string; name: string; kind: 'text' | 'sticker'; body: string }
 
 export default function Tasks() {
   const [state, setState] = useState<'loading' | 'guest' | 'ready' | 'error'>('loading')
@@ -35,6 +36,7 @@ export default function Tasks() {
   const [createDraft, setCreateDraft] = useState<CreateDraft | null>(null)
   const [runJobId, setRunJobId] = useState('')
   const [runJobStatus, setRunJobStatus] = useState('')
+  const [templateDraft, setTemplateDraft] = useState<TemplateDraft | null>(null)
 
   const load = useCallback(async () => {
     const token = getAccessToken()
@@ -129,6 +131,7 @@ export default function Tasks() {
   if (state === 'loading') return <LoadingTasks />
   if (state === 'guest') return <GuestTasks />
   if (state === 'error') return <TaskError message={error} onRetry={() => void load()} />
+  if (screen === 'templates') return <TemplateManager templates={templates} draft={templateDraft} busy={busy} error={error} onBack={() => { setTemplateDraft(null); setScreen('list') }} onNew={() => { setError(''); setTemplateDraft({ name: '', kind: 'text', body: '' }) }} onEdit={(template) => { setError(''); setTemplateDraft({ id: template.id, name: template.name, kind: template.kind, body: template.body }) }} onDraftChange={setTemplateDraft} onSave={() => void saveTemplate()} onDelete={(template) => void removeTemplate(template)} />
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId)
   if (screen === 'edit' && selectedTask && draft) return <EditTask task={selectedTask} draft={draft} templates={templates} busy={busy} error={error} onBack={() => setScreen('detail')} onDraftChange={setDraft} onSave={() => void saveTask()} />
@@ -173,6 +176,12 @@ export default function Tasks() {
     setError('')
     setCreateDraft({ accountId: account.id, friendId: friend.id, enabled: true, windowStart: '19:30', windowEnd: '22:30', message: '', messageKind: 'text', allowFirstMessage: false })
     setScreen('create')
+  }
+
+  function openTemplates() {
+    setError('')
+    setTemplateDraft(null)
+    setScreen('templates')
   }
 
   async function saveTask() {
@@ -291,7 +300,63 @@ export default function Tasks() {
     }
   }
 
-  return <View className="mini-page task-page"><View className="task-page-header"><View><Text className="task-page-kicker">Douyin Keeper</Text><Text className="task-page-title">任务</Text></View><Button className="task-new-button" onClick={openCreate}>+</Button></View><View className="task-filter-tabs">{([{ value: 'all', label: '全部' }, { value: 'enabled', label: '运行中' }, { value: 'paused', label: '已暂停' }] as const).map((item) => <Button key={item.value} className={filter === item.value ? 'task-filter-active' : ''} onClick={() => setFilter(item.value)}>{item.label}</Button>)}</View><View className="task-overview"><Overview label="运行中" value={tasks.filter((task) => task.enabled).length} tone="green" /><Overview label="已暂停" value={tasks.filter((task) => !task.enabled).length} tone="amber" /><Overview label="今日任务" value={tasks.length} tone="blue" /></View>{error && <View className="task-inline-error"><Text>{error}</Text></View>}{visibleTasks.length === 0 ? <EmptyTasks onCreate={openCreate} /> : <View>{visibleTasks.map((task) => <TaskCard key={task.id} task={task} friend={friends[task.friend_id]} account={accounts.find((account) => account.id === task.account_id)} busy={busy === task.id} onSelect={() => { setSelectedTaskId(task.id); setScreen('detail') }} onToggle={(enabled) => void toggleTask(task, enabled)} />)}</View>}</View>
+  async function saveTemplate() {
+    const token = getAccessToken()
+    if (!token || !templateDraft || busy) return
+    const name = templateDraft.name.trim()
+    const body = templateDraft.body.trim()
+    if (!name) {
+      setError('请填写模板名称。')
+      return
+    }
+    if (!body) {
+      setError(templateDraft.kind === 'sticker' ? '请填写贴纸 ID。' : '请填写模板内容。')
+      return
+    }
+    setBusy(templateDraft.id ? `template-save:${templateDraft.id}` : 'template-create')
+    setError('')
+    try {
+      const saved = templateDraft.id
+        ? await updateMessageTemplate(token, templateDraft.id, { name, kind: templateDraft.kind, body })
+        : await createMessageTemplate(token, { name, kind: templateDraft.kind, body })
+      setTemplates((current) => templateDraft.id ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current])
+      setTemplateDraft(null)
+      await Taro.showToast({ title: templateDraft.id ? '模板已保存' : '模板已创建', icon: 'success' })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '模板保存失败')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function removeTemplate(template: MessageTemplate) {
+    const token = getAccessToken()
+    if (!token || busy) return
+    const result = await Taro.showModal({ title: '删除模板？', content: `删除“${template.name}”后，已创建任务不受影响。` })
+    if (!result.confirm) return
+    setBusy(`template-delete:${template.id}`)
+    setError('')
+    try {
+      await deleteMessageTemplate(token, template.id)
+      setTemplates((current) => current.filter((item) => item.id !== template.id))
+      await Taro.showToast({ title: '模板已删除', icon: 'success' })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '模板删除失败')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  return <View className="mini-page task-page"><View className="task-page-header"><View><Text className="task-page-kicker">Douyin Keeper</Text><Text className="task-page-title">任务</Text></View><View className="task-header-actions"><Button className="task-template-link" onClick={openTemplates}>模板</Button><Button className="task-new-button" onClick={openCreate}>+</Button></View></View><View className="task-filter-tabs">{([{ value: 'all', label: '全部' }, { value: 'enabled', label: '运行中' }, { value: 'paused', label: '已暂停' }] as const).map((item) => <Button key={item.value} className={filter === item.value ? 'task-filter-active' : ''} onClick={() => setFilter(item.value)}>{item.label}</Button>)}</View><View className="task-overview"><Overview label="运行中" value={tasks.filter((task) => task.enabled).length} tone="green" /><Overview label="已暂停" value={tasks.filter((task) => !task.enabled).length} tone="amber" /><Overview label="今日任务" value={tasks.length} tone="blue" /></View>{error && <View className="task-inline-error"><Text>{error}</Text></View>}{visibleTasks.length === 0 ? <EmptyTasks onCreate={openCreate} /> : <View>{visibleTasks.map((task) => <TaskCard key={task.id} task={task} friend={friends[task.friend_id]} account={accounts.find((account) => account.id === task.account_id)} busy={busy === task.id} onSelect={() => { setSelectedTaskId(task.id); setScreen('detail') }} onToggle={(enabled) => void toggleTask(task, enabled)} />)}</View>}</View>
+}
+
+function TemplateManager({ templates, draft, busy, error, onBack, onNew, onEdit, onDraftChange, onSave, onDelete }: { templates: MessageTemplate[]; draft: TemplateDraft | null; busy: string; error: string; onBack: () => void; onNew: () => void; onEdit: (template: MessageTemplate) => void; onDraftChange: (draft: TemplateDraft | null) => void; onSave: () => void; onDelete: (template: MessageTemplate) => void }) {
+  if (draft) {
+    const kindOptions = ['文字', '贴纸']
+    const kindIndex = draft.kind === 'sticker' ? 1 : 0
+    return <View className="mini-page task-page"><View className="task-detail-topbar"><Button className="task-back-button" onClick={() => onDraftChange(null)}>‹</Button><Text>{draft.id ? '编辑模板' : '新建模板'}</Text><View className="task-topbar-spacer" /></View><View className="task-template-card"><Text className="task-section-title">模板信息</Text><Text className="task-create-label">模板名称</Text><Input className="task-template-input" maxlength={80} value={draft.name} placeholder="例如：晚安问候" onInput={(event) => onDraftChange({ ...draft, name: event.detail.value })} /><Text className="task-create-label">消息类型</Text><Picker mode="selector" range={kindOptions} value={kindIndex} onChange={(event) => onDraftChange({ ...draft, kind: Number(event.detail.value) === 1 ? 'sticker' : 'text' })}><View className="task-picker-control"><Text>{kindOptions[kindIndex]}</Text><Text className="task-picker-arrow">›</Text></View></Picker><Text className="task-create-label">{draft.kind === 'sticker' ? '贴纸 ID' : '模板内容'}</Text><Textarea className="task-template-textarea" maxlength={500} value={draft.body} placeholder={draft.kind === 'sticker' ? '输入稳定 sticker_id' : '输入可复用的文字内容'} onInput={(event) => onDraftChange({ ...draft, body: event.detail.value })} />{error && <View className="task-inline-error"><Text>{error}</Text></View>}<Button className="task-primary-button" disabled={busy !== ''} onClick={onSave}>{busy ? '保存中…' : '保存模板'}</Button></View></View>
+  }
+  return <View className="mini-page task-page"><View className="task-detail-topbar"><Button className="task-back-button" onClick={onBack}>‹</Button><Text>消息模板</Text><Button className="task-template-add-button" onClick={onNew}>+ 新建</Button></View><Text className="task-template-caption">模板可以在创建任务时直接套用，保存为任务自己的内容快照。</Text>{error && <View className="task-inline-error"><Text>{error}</Text></View>}{templates.length === 0 ? <View className="task-empty-small"><Text className="task-empty-title">暂无消息模板</Text><Text className="muted">新建一个常用问候，之后创建任务时可以快速套用。</Text><Button className="task-primary-button" onClick={onNew}>新建模板</Button></View> : <View className="task-template-list">{templates.map((template) => <View className="task-template-card" key={template.id}><View className="task-template-heading"><View className="task-template-copy"><Text className="task-template-name">{template.name}</Text><Text className="task-template-kind">{template.kind === 'sticker' ? '贴纸' : '文字'}</Text></View><View className="task-template-actions"><Button className="task-template-action" disabled={busy !== ''} onClick={() => onEdit(template)}>编辑</Button><Button className="task-template-action task-template-delete" disabled={busy !== ''} onClick={() => onDelete(template)}>删除</Button></View></View><Text className="task-template-body">{template.body}</Text></View>)}</View>}</View>
 }
 
 function TaskCard({ task, friend, account, busy, onSelect, onToggle }: { task: Task; friend?: Friend; account?: Account; busy: boolean; onSelect: () => void; onToggle: (enabled: boolean) => void }) { return <View className="task-card"><View className="task-card-heading"><View className="task-card-copy" onClick={onSelect}><Text className="task-card-name">{friend?.display_name || '未命名会话'}</Text><Text className="muted">关联账号：{account?.nickname || '未命名账号'}</Text></View><Text className={`task-status task-status-${task.enabled ? 'running' : 'paused'}`}>{task.enabled ? '运行中' : '已暂停'}</Text></View><View className="task-card-row"><Text className="task-row-label">时间窗口</Text><Text className="task-row-value">{task.window_start.slice(0, 5)} ～ {task.window_end.slice(0, 5)}</Text></View><View className="task-card-row"><Text className="task-row-label">消息内容</Text><Text className="task-message-preview">{task.message.body || (task.message.kind === 'sticker' ? '贴纸消息' : '未填写消息')}</Text></View><View className="task-card-bottom"><Text className="task-last-result">每日一次 · {task.timezone}</Text><Switch checked={task.enabled} disabled={busy} color="#19bb79" onChange={(event) => onToggle(event.detail.value)} /></View></View> }

@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, deleteTask, getJob, getMe, getSendJob, listAccounts, listFriends, listMessageTemplates, listMyEntitlementGrants, listNotifications, listSendIntents, listTasks, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, setConversationArchived, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createMessageTemplate, createTask, deleteAccount, deleteMessageTemplate, deleteTask, getJob, getMe, getSendJob, listAccounts, listFriends, listMessageTemplates, listMyEntitlementGrants, listNotifications, listSendIntents, listTasks, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, setConversationArchived, streamJobEvents, submitSMSVerification, syncAccountFriends, updateMessageTemplate, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -253,6 +253,24 @@ describe('mini API auth recovery', () => {
     expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/message-templates?kind=text&limit=20')
     expect(requestMock.mock.calls[1]?.[0]?.url).toBe('/api/v1/message-templates?kind=text&limit=20&cursor=cursor-2')
     expect(result.next_cursor).toBeNull()
+  })
+
+  it('creates, updates, and deletes a reusable message template', async () => {
+    requestMock
+      .mockResolvedValueOnce({ statusCode: 201, data: { id: 'template-1', name: '晚安', kind: 'text', body: '晚安' } })
+      .mockResolvedValueOnce({ statusCode: 200, data: { id: 'template-1', name: '晚安新版', kind: 'text', body: '晚安，明天见' } })
+      .mockResolvedValueOnce({ statusCode: 204, data: undefined })
+
+    const created = await createMessageTemplate('access-1', { name: '晚安', kind: 'text', body: '晚安' })
+    const updated = await updateMessageTemplate('access-1', created.id, { name: '晚安新版', body: '晚安，明天见' })
+    await deleteMessageTemplate('access-1', updated.id)
+
+    expect(updated.body).toBe('晚安，明天见')
+    expect(requestMock.mock.calls.map((call) => [call[0]?.url, call[0]?.method])).toEqual([
+      ['/api/v1/message-templates', 'POST'],
+      ['/api/v1/message-templates/template-1', 'PATCH'],
+      ['/api/v1/message-templates/template-1', 'DELETE'],
+    ])
   })
 
   it('loads all send history pages while preserving filters', async () => {

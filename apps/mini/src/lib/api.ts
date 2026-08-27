@@ -321,6 +321,22 @@ export function listMessageTemplates(token: string, options: { kind?: 'text' | '
   })
 }
 
+export type MessageTemplateInput = { name: string; kind: 'text' | 'sticker'; body: string }
+
+export function createMessageTemplate(token: string, input: MessageTemplateInput) {
+  return request<components['schemas']['MessageTemplate']>('/message-templates', { method: 'POST', token, data: input })
+}
+
+export type MessageTemplatePatch = Partial<MessageTemplateInput>
+
+export function updateMessageTemplate(token: string, templateId: string, patch: MessageTemplatePatch) {
+  return request<components['schemas']['MessageTemplate']>(`/message-templates/${templateId}`, { method: 'PATCH', token, data: patch })
+}
+
+export function deleteMessageTemplate(token: string, templateId: string) {
+  return request<void>(`/message-templates/${templateId}`, { method: 'DELETE', token })
+}
+
 export type CreateTaskInput = {
   account_id: string
   friend_id: string
