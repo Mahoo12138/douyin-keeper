@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { components } from '@douyin-keeper/sdk-ts'
 
-import { enabledTaskCount, replaceFriend, replaceTask, taskCreateDraftError, taskDraftError, taskForFriend, taskTimeInput, taskTimePayload, uniqueSparkTargets } from './spark-utils'
+import { enabledTaskCount, replaceFriend, replaceTask, taskCreateDraftError, taskDraftError, taskForFriend, taskTargetCandidates, taskTimeInput, taskTimePayload, uniqueSparkTargets } from './spark-utils'
 
 type Friend = components['schemas']['Friend']
 type SparkTask = components['schemas']['SparkTask']
@@ -75,6 +75,16 @@ describe('spark view helpers', () => {
     const second = { ...makeFriend('friend-2', true), conversation_id: 'conversation-3' }
 
     expect(uniqueSparkTargets([first, duplicate, second])).toEqual([first, second])
+  })
+
+  it('only exposes active resolved conversations as task creation candidates', () => {
+    const friends = [
+      { id: 'friend-1', archived: false, platform_identity_status: 'resolved', label: 'active' },
+      { id: 'friend-1', archived: true, platform_identity_status: 'resolved', label: 'archived' },
+      { id: 'conversation-1', archived: false, platform_identity_status: 'missing', label: 'unresolved' },
+    ]
+
+    expect(taskTargetCandidates(friends)).toEqual([{ id: 'friend-1', archived: false, platform_identity_status: 'resolved', label: 'active' }])
   })
 
   it('normalizes task editor times and rejects invalid drafts', () => {

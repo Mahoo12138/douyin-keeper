@@ -28,6 +28,10 @@ export function uniqueSparkTargets<T extends { id: string }>(friends: T[]) {
   })
 }
 
+export function taskTargetCandidates<T extends { id: string; archived: boolean; platform_identity_status: string }>(friends: T[]) {
+  return uniqueSparkTargets(friends.filter((friend) => !friend.archived && friend.platform_identity_status === 'resolved'))
+}
+
 export function taskTimeInput(value: string) {
   return value.slice(0, 5)
 }
