@@ -200,15 +200,33 @@ export function deleteAccount(token: string, accountId: string) {
 }
 
 export function syncAccountFriends(token: string, accountId: string) {
-  return request<components['schemas']['JobRef']>(`/accounts/${accountId}/friends-sync`, { method: 'POST', token })
+  // Compatibility name for older mini-program callers. Conversation sync is
+  // now the only platform crawl and reads the mixed message-panel inventory.
+  return request<components['schemas']['JobRef']>(`/accounts/${accountId}/conversations-sync`, { method: 'POST', token })
 }
 
 export function accountCapabilities(token: string, accountId: string) {
   return request<{ items: components['schemas']['Capability'][] }>(`/accounts/${accountId}/capabilities`, { token })
 }
 
-export function listFriends(token: string, accountId: string) {
-  return request<Collection<components['schemas']['Friend']>>(`/accounts/${accountId}/friends`, { token })
+export function listFriends(token: string, accountId: string): Promise<Collection<components['schemas']['Friend']>> {
+  // Compatibility projection for the existing spark UI. Its source is the
+  // unified conversation endpoint; no follower/friend crawl is performed.
+  return request<Collection<components['schemas']['Conversation']>>(`/accounts/${accountId}/conversations?include_archived=true&group_only=false`, { token }).then((response) => ({
+    ...response,
+    items: response.items.map((item) => ({
+      id: item.friend_id ?? item.id,
+      platform_identity_status: item.friend_id ? item.platform_identity_status : 'missing',
+      display_name: item.friend_display_name,
+      nickname: item.friend_nickname || item.friend_display_name,
+      short_id: null,
+      avatar_url: item.friend_avatar_url,
+      streak_days: item.streak_days,
+      has_conversation: true,
+      spark_enabled: item.spark_enabled,
+      last_sent_at: item.last_sent_at,
+    })),
+  }))
 }
 
 export function updateFriend(token: string, friendId: string, sparkEnabled: boolean) {

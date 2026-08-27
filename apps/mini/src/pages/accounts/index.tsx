@@ -5,6 +5,7 @@ import Taro from '@tarojs/taro'
 import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, listAccounts, MiniApiError, myEntitlement, pauseAccount, resumeAccount, streamJobEvents, submitSMSVerification, syncAccountFriends } from '@/lib/api'
 import type { JobEvent } from '@/lib/api'
 import { getAccessToken } from '@/lib/session'
+import { smsBindingEventState } from '@/features/accounts/binding-events'
 import avatarChen from '@/assets/home/avatar-chen.png'
 import avatarJasper from '@/assets/home/avatar-jasper.png'
 import avatarMiles from '@/assets/home/avatar-miles.png'
@@ -134,7 +135,7 @@ export default function Accounts() {
       if (action === 'friends') await syncAccountFriends(token, account.id)
       if (action === 'pause') await pauseAccount(token, account.id)
       if (action === 'resume') await resumeAccount(token, account.id)
-      await Taro.showToast({ title: action === 'friends' ? '好友同步已提交' : action === 'session' ? '检查已提交' : action === 'pause' ? '任务已暂停' : '任务已恢复', icon: 'success' })
+      await Taro.showToast({ title: action === 'friends' ? '会话同步已提交' : action === 'session' ? '检查已提交' : action === 'pause' ? '任务已暂停' : '任务已恢复', icon: 'success' })
       await load()
       setMenuOpen(false)
     } catch (cause) {
@@ -196,7 +197,13 @@ export default function Accounts() {
   }
 
   function handleBindingEvent(event: JobEvent) {
-    if (event.eventType === 'qr_ready') {
+    const smsState = smsBindingEventState(event.eventType)
+    if (smsState) {
+      setBindingStatus(smsState.status)
+      setBindingStep(smsState.step)
+      if (smsState.error) setError(smsState.error)
+      setScreen('progress')
+    } else if (event.eventType === 'qr_ready') {
       setQrValue(typeof event.payload.value === 'string' ? event.payload.value : '')
       setQrExpiresAt(typeof event.payload.expires_at === 'string' ? event.payload.expires_at : '')
       setBindingStatus('请使用抖音 App 扫描二维码')
@@ -285,7 +292,7 @@ function AccountDetail({ account, menuOpen, busy, error, onBack, onMenu, onActio
 }
 
 function BindingIntro({ onBack, onStart }: { onBack: () => void; onStart: () => void }) {
-  return <View className="mini-page account-page account-binding-page"><BindingTopbar title="添加抖音账号" onBack={onBack} /><View className="binding-intro-hero"><Image className="binding-intro-image" src={accountAddHero} mode="aspectFit" /></View><Text className="binding-intro-title">添加你的抖音账号</Text><Text className="muted binding-intro-copy">添加后即可管理好友与火花任务</Text><View className="binding-benefits"><Benefit title="管理好友列表" copy="添加后即可管理好友互动状态" tone="green" /><Benefit title="点亮火花" copy="添加好友后可互动并维护关系" tone="mint" /><Benefit title="安全加密" copy="多重加密保护账号安全" tone="blue" /></View><Button className="account-primary-button binding-start-button" onClick={onStart}>开始添加</Button></View>
+  return <View className="mini-page account-page account-binding-page"><BindingTopbar title="添加抖音账号" onBack={onBack} /><View className="binding-intro-hero"><Image className="binding-intro-image" src={accountAddHero} mode="aspectFit" /></View><Text className="binding-intro-title">添加你的抖音账号</Text><Text className="muted binding-intro-copy">添加后即可管理会话与火花任务</Text><View className="binding-benefits"><Benefit title="管理消息会话" copy="从消息面板同步全部会话" tone="green" /><Benefit title="点亮火花" copy="为会话持续维护火花" tone="mint" /><Benefit title="安全加密" copy="多重加密保护账号安全" tone="blue" /></View><Button className="account-primary-button binding-start-button" onClick={onStart}>开始添加</Button></View>
 }
 
 function BindingMethodScreen({ method, phone, error, busy, onBack, onMethodChange, onPhoneChange, onStart }: { method: BindingMethod; phone: string; error: string; busy: string; onBack: () => void; onMethodChange: (method: BindingMethod) => void; onPhoneChange: (phone: string) => void; onStart: () => void }) {
