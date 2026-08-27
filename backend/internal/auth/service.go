@@ -234,6 +234,12 @@ func (s *Service) GetUserByPublicIDForAdmin(ctx context.Context, publicID uuid.U
 	return s.users.GetUserByPublicID(ctx, publicID)
 }
 
+// GetSessionByPublicID resolves the server-side session referenced by an
+// access token. HTTP auth middleware uses it to enforce session revocation.
+func (s *Service) GetSessionByPublicID(ctx context.Context, publicID uuid.UUID) (*AuthSession, error) {
+	return s.sessions.GetSessionByPublicID(ctx, publicID)
+}
+
 // newSession creates an AuthSession + first refresh token in one tx.
 func (s *Service) newSession(ctx context.Context, user *User, client ClientType) (SessionResult, error) {
 	var out SessionResult

@@ -16,10 +16,17 @@ import (
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/telemetry"
 )
 
-type middlewareUserStub struct{ user *auth.User }
+type middlewareUserStub struct {
+	user    *auth.User
+	session *auth.AuthSession
+}
 
 func (s middlewareUserStub) GetUserByPublicID(context.Context, uuid.UUID) (*auth.User, error) {
 	return s.user, nil
+}
+
+func (s middlewareUserStub) GetSessionByPublicID(context.Context, uuid.UUID) (*auth.AuthSession, error) {
+	return s.session, nil
 }
 
 func requestThroughTrustedProxy(t *testing.T, r *http.Request) *http.Request {
@@ -147,16 +154,47 @@ func TestAuthenticateRejectsDisabledUserBeforeHandler(t *testing.T) {
 	now := time.Now().UTC()
 	user := &auth.User{PublicID: uuid.MustParse("99999999-9999-9999-9999-999999999999"), Role: auth.RoleUser, Status: auth.UserDisabled}
 	secret := []byte("test-signing-key")
-	token, err := auth.IssueAccess(secret, time.Minute, user, uuid.NewString(), auth.ClientWeb, now)
+	sessionID := uuid.New()
+	token, err := auth.IssueAccess(secret, time.Minute, user, sessionID.String(), auth.ClientWeb, now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req = req.WithContext(context.Background())
-	_, err = authenticate(req, secret, middlewareUserStub{user: user})
+	_, err = authenticate(req, secret, middlewareUserStub{user: user, session: &auth.AuthSession{ID: 7, PublicID: sessionID, UserID: 42, ExpiresAt: now.Add(time.Hour)}})
 	if appErr, ok := apperr.As(err); !ok || appErr.Code != apperr.CodeUserDisabled || appErr.Kind != apperr.KindForbidden {
 		t.Fatalf("authenticate error = %v, want USER_DISABLED/forbidden", err)
+	}
+}
+
+func TestAuthenticateLoadsAndValidatesServerSession(t *testing.T) {
+	now := time.Now().UTC()
+	user := &auth.User{ID: 42, PublicID: uuid.MustParse("99999999-9999-9999-9999-999999999999"), Role: auth.RoleUser, Status: auth.UserActive}
+	sessionID := uuid.New()
+	token, err := auth.IssueAccess([]byte("test-signing-key"), time.Minute, user, sessionID.String(), auth.ClientMini, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	principal, err := authenticate(req, []byte("test-signing-key"), middlewareUserStub{
+		user:    user,
+		session: &auth.AuthSession{ID: 19, PublicID: sessionID, UserID: user.ID, ClientType: auth.ClientMini, ExpiresAt: now.Add(time.Hour)},
+	})
+	if err != nil {
+		t.Fatalf("authenticate() error = %v", err)
+	}
+	if principal.SessionID != 19 || principal.UserID != user.ID || principal.ClientType != auth.ClientMini {
+		t.Fatalf("principal = %+v, want session/user/client from token session", principal)
+	}
+
+	_, err = authenticate(req, []byte("test-signing-key"), middlewareUserStub{
+		user:    user,
+		session: &auth.AuthSession{ID: 19, PublicID: sessionID, UserID: user.ID, RevokedAt: &now, ExpiresAt: now.Add(time.Hour)},
+	})
+	if appErr, ok := apperr.As(err); !ok || appErr.Code != apperr.CodeUnauthenticated {
+		t.Fatalf("revoked session error = %v, want UNAUTHENTICATED", err)
 	}
 }
 

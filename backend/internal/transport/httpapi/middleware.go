@@ -351,8 +351,9 @@ func defaultOriginPort(scheme string) string {
 	return "80"
 }
 
-// RequireAuth authenticates the Bearer token and loads the user (docs/13 §7).
-// Disabled users are rejected on every request.
+// RequireAuth authenticates the Bearer token, validates its server-side
+// session, and loads the user (docs/13 §7). Disabled users and revoked
+// sessions are rejected on every request.
 func RequireAuth(signingKey []byte, users authUserResolver) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -388,6 +389,7 @@ func RequiresRole(role auth.Role, signingKey []byte, users authUserResolver) fun
 // authUserResolver is the slice used by middleware to reload the user.
 type authUserResolver interface {
 	GetUserByPublicID(ctx context.Context, id uuid.UUID) (*auth.User, error)
+	GetSessionByPublicID(ctx context.Context, id uuid.UUID) (*auth.AuthSession, error)
 }
 
 func authenticate(r *http.Request, signingKey []byte, users authUserResolver) (auth.Principal, error) {
@@ -405,6 +407,20 @@ func authenticate(r *http.Request, signingKey []byte, users authUserResolver) (a
 	if err != nil {
 		return auth.Principal{}, apperr.Unauthorized(apperr.CodeUnauthenticated, "invalid token subject")
 	}
+	sessionPub, err := uuid.Parse(claims.Sid)
+	if err != nil {
+		return auth.Principal{}, apperr.Unauthorized(apperr.CodeUnauthenticated, "invalid token session")
+	}
+	session, err := users.GetSessionByPublicID(r.Context(), sessionPub)
+	if err != nil {
+		if apperr.KindOf(err) == apperr.KindNotFound {
+			return auth.Principal{}, apperr.Unauthorized(apperr.CodeUnauthenticated, "invalid token session")
+		}
+		return auth.Principal{}, err
+	}
+	if session == nil || !session.IsValid(time.Now()) || session.UserID == 0 {
+		return auth.Principal{}, apperr.Unauthorized(apperr.CodeUnauthenticated, "session revoked or expired")
+	}
 	user, err := users.GetUserByPublicID(r.Context(), userPub)
 	if err != nil {
 		return auth.Principal{}, err
@@ -412,12 +428,15 @@ func authenticate(r *http.Request, signingKey []byte, users authUserResolver) (a
 	if !user.IsActive() {
 		return auth.Principal{}, apperr.New(apperr.CodeUserDisabled, apperr.KindForbidden, "account is disabled")
 	}
+	if session.UserID != user.ID {
+		return auth.Principal{}, apperr.Unauthorized(apperr.CodeUnauthenticated, "invalid token session")
+	}
 	// ClientType from claims; if empty default web.
 	ct := auth.ClientType(claims.Client)
 	if ct == "" {
 		ct = auth.ClientWeb
 	}
 	return auth.Principal{
-		UserID: user.ID, UserPublicID: user.PublicID, Role: user.Role, ClientType: ct,
+		UserID: user.ID, UserPublicID: user.PublicID, SessionID: session.ID, Role: user.Role, ClientType: ct,
 	}, nil
 }

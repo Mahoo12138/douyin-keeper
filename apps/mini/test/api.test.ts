@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, getJob, getMe, listFriends, listMyEntitlementGrants, listNotifications, loginPassword, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createTask, deleteAccount, getJob, getMe, listFriends, listMyEntitlementGrants, listNotifications, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, streamJobEvents, submitSMSVerification, syncAccountFriends, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -86,6 +86,18 @@ describe('mini API auth recovery', () => {
       url: '/api/v1/auth/mini/register',
       method: 'POST',
       data: { username: 'new-user', password: 'password123' },
+    })
+  })
+
+  it('revokes the current mini session on logout', async () => {
+    requestMock.mockResolvedValueOnce({ statusCode: 204, data: undefined })
+
+    await logoutMini('access-1')
+
+    expect(requestMock.mock.calls[0]?.[0]).toMatchObject({
+      url: '/api/v1/auth/logout',
+      method: 'POST',
+      header: { Authorization: 'Bearer access-1' },
     })
   })
 
