@@ -9,7 +9,7 @@ type Collection<T> = { items: T[]; next_cursor?: string | null }
 type ApiErrorBody = { error?: { code?: string; message?: string } }
 type RequestOptions = { token?: string | null; method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; data?: unknown; headers?: Record<string, string>; skipRefresh?: boolean }
 
-export type SparkFriend = components['schemas']['Friend'] & Pick<components['schemas']['Conversation'], 'conversation_type' | 'spark_supported' | 'channel'>
+export type SparkFriend = components['schemas']['Friend'] & Pick<components['schemas']['Conversation'], 'conversation_type' | 'spark_supported' | 'channel'> & { conversation_id: components['schemas']['Conversation']['id'] }
 
 async function listAllPages<T>(loadPage: (cursor?: string) => Promise<Collection<T>>): Promise<Collection<T>> {
   const items: T[] = []
@@ -266,6 +266,7 @@ export function listFriends(token: string, accountId: string): Promise<Collectio
     return {
       items: response.items.map((item) => ({
         id: item.friend_id ?? item.id,
+        conversation_id: item.id,
         platform_identity_status: item.friend_id ? item.platform_identity_status : 'missing',
         display_name: item.friend_display_name,
         nickname: item.friend_nickname || item.friend_display_name,

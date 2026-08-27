@@ -171,7 +171,7 @@ describe('mini API auth recovery', () => {
     const result = await listFriends('access-1', 'account-1')
 
     expect(result.items).toHaveLength(2)
-    expect(result.items[0]).toMatchObject({ id: 'conversation-group', display_name: '项目群', conversation_type: 'group', spark_supported: true })
+    expect(result.items[0]).toMatchObject({ id: 'conversation-group', conversation_id: 'conversation-group', display_name: '项目群', conversation_type: 'group', spark_supported: true })
     expect(result.items[1]).toMatchObject({ id: 'friend-1', nickname: '明明', conversation_type: 'direct' })
   })
 

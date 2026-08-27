@@ -19,6 +19,15 @@ export function enabledTaskCount(tasks: SparkTask[]) {
   return tasks.filter((task) => task.enabled).length
 }
 
+export function uniqueSparkTargets<T extends { id: string }>(friends: T[]) {
+  const seen = new Set<string>()
+  return friends.filter((friend) => {
+    if (seen.has(friend.id)) return false
+    seen.add(friend.id)
+    return true
+  })
+}
+
 export function taskTimeInput(value: string) {
   return value.slice(0, 5)
 }

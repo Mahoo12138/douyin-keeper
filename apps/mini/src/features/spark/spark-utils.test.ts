@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { components } from '@douyin-keeper/sdk-ts'
 
-import { enabledTaskCount, replaceFriend, replaceTask, taskCreateDraftError, taskDraftError, taskForFriend, taskTimeInput, taskTimePayload } from './spark-utils'
+import { enabledTaskCount, replaceFriend, replaceTask, taskCreateDraftError, taskDraftError, taskForFriend, taskTimeInput, taskTimePayload, uniqueSparkTargets } from './spark-utils'
 
 type Friend = components['schemas']['Friend']
 type SparkTask = components['schemas']['SparkTask']
@@ -67,6 +67,14 @@ describe('spark view helpers', () => {
 
     expect(enabledTaskCount(tasks)).toBe(1)
     expect(enabledTaskCount(replaceTask(tasks, makeTask('task-2', 'friend-2', true)))).toBe(2)
+  })
+
+  it('deduplicates task targets while keeping the first conversation projection', () => {
+    const first = { ...makeFriend('friend-1', true), conversation_id: 'conversation-1' }
+    const duplicate = { ...makeFriend('friend-1', false), conversation_id: 'conversation-2' }
+    const second = { ...makeFriend('friend-2', true), conversation_id: 'conversation-3' }
+
+    expect(uniqueSparkTargets([first, duplicate, second])).toEqual([first, second])
   })
 
   it('normalizes task editor times and rejects invalid drafts', () => {

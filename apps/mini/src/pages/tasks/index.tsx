@@ -5,7 +5,7 @@ import Taro from '@tarojs/taro'
 import { getAccessToken } from '@/lib/session'
 import { createTask, deleteTask, listAccounts, listFriends, listSendIntents, listTasks, MiniApiError, runTaskNow, updateTask } from '@/lib/api'
 import { createIdempotencyKey } from '@/features/home/home-utils'
-import { taskCreateDraftError, taskTimePayload } from '@/features/spark/spark-utils'
+import { taskCreateDraftError, taskTimePayload, uniqueSparkTargets } from '@/features/spark/spark-utils'
 import taskChecklist from '@/assets/tasks/task-checklist.png'
 
 type Task = Awaited<ReturnType<typeof listTasks>>['items'][number]
@@ -48,8 +48,9 @@ export default function Tasks() {
       friendResponses.forEach((response, index) => {
         const accountId = accountsResponse.items[index]?.id
         if (!accountId) return
-        friendGroups[accountId] = response.items
-        response.items.forEach((friend) => { friendIndex[friend.id] = friend })
+        const taskTargets = uniqueSparkTargets(response.items)
+        friendGroups[accountId] = taskTargets
+        taskTargets.forEach((friend) => { friendIndex[friend.id] = friend })
       })
       setAccounts(accountsResponse.items)
       setTasks(tasksResponse.items)
