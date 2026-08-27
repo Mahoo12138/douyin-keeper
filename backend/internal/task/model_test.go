@@ -128,6 +128,9 @@ func TestCreateFirstMessageRequiresEntitlementFeature(t *testing.T) {
 	if created == nil || !created.AllowFirstMessage || allowedRepo.created == nil {
 		t.Fatalf("created task did not preserve allow_first_message: %+v", created)
 	}
+	if created.AccountPublicID != accountID || created.FriendPublicID != friendID {
+		t.Fatalf("created task lost public relation IDs: account=%s friend=%s", created.AccountPublicID, created.FriendPublicID)
+	}
 }
 
 func TestCreateRejectsFriendFromDifferentAccount(t *testing.T) {

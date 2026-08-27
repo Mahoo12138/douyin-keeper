@@ -298,6 +298,7 @@ func (s *Service) Create(ctx context.Context, userID int64, in CreateInput) (*Sp
 		}
 		t = &SparkTask{
 			PublicID: uuid.New(), UserID: userID, AccountID: acct.ID, FriendID: f.ID,
+			AccountPublicID: acct.PublicID, FriendPublicID: f.PublicID,
 			Enabled: in.Enabled, Timezone: tz, WindowStart: in.WindowStart, WindowEnd: in.WindowEnd,
 			MessageKind: in.MessageKind, MessageBody: in.MessageBody,
 			AllowFirstMessage: in.AllowFirstMessage, CreatedAt: now, UpdatedAt: now,
