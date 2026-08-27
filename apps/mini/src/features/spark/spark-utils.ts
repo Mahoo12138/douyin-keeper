@@ -28,6 +28,11 @@ export function uniqueSparkTargets<T extends { id: string }>(friends: T[]) {
   })
 }
 
+export function templatePickerIndex<T extends { kind: string; body: string }>(templates: T[], kind: string, body: string) {
+  const index = templates.findIndex((template) => template.kind === kind && template.body === body)
+  return index >= 0 ? index + 1 : 0
+}
+
 export function taskTargetCandidates<T extends { id: string; archived: boolean; platform_identity_status: string }>(friends: T[]) {
   return uniqueSparkTargets(friends.filter((friend) => !friend.archived && friend.platform_identity_status === 'resolved'))
 }

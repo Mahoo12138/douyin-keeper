@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { components } from '@douyin-keeper/sdk-ts'
 
-import { enabledTaskCount, replaceFriend, replaceTask, taskCreateDraftError, taskDraftError, taskForFriend, taskTargetCandidates, taskTimeInput, taskTimePayload, uniqueSparkTargets } from './spark-utils'
+import { enabledTaskCount, replaceFriend, replaceTask, taskCreateDraftError, taskDraftError, taskForFriend, taskTargetCandidates, taskTimeInput, taskTimePayload, templatePickerIndex, uniqueSparkTargets } from './spark-utils'
 
 type Friend = components['schemas']['Friend']
 type SparkTask = components['schemas']['SparkTask']
@@ -85,6 +85,16 @@ describe('spark view helpers', () => {
     ]
 
     expect(taskTargetCandidates(friends)).toEqual([{ id: 'friend-1', archived: false, platform_identity_status: 'resolved', label: 'active' }])
+  })
+
+  it('returns the selected template index from the current task content', () => {
+    const templates = [
+      { kind: 'text', body: '晚安' },
+      { kind: 'sticker', body: 'sticker-1' },
+    ]
+
+    expect(templatePickerIndex(templates, 'sticker', 'sticker-1')).toBe(2)
+    expect(templatePickerIndex(templates, 'text', '手动编辑')).toBe(0)
   })
 
   it('normalizes task editor times and rejects invalid drafts', () => {
