@@ -295,6 +295,12 @@ export function setConversationArchived(token: string, accountId: string, conver
   })
 }
 
+export function requestPlatformConversationArchive(token: string, accountId: string, conversationId: string, archived: boolean, idempotencyKey: string) {
+  return request<components['schemas']['JobRef']>(`/accounts/${accountId}/conversations/${conversationId}/platform-archive`, {
+    method: 'POST', token, headers: { 'Idempotency-Key': idempotencyKey }, data: { archived },
+  })
+}
+
 export function updateFriend(token: string, friendId: string, sparkEnabled: boolean) {
   return request<components['schemas']['Friend']>(`/friends/${friendId}`, {
     method: 'PATCH',

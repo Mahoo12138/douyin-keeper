@@ -12,7 +12,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createMessageTemplate, createTask, deleteAccount, deleteMessageTemplate, deleteTask, getJob, getMe, getSendJob, listAccounts, listFriends, listMessageTemplates, listMyEntitlementGrants, listNotifications, listSendIntents, listTasks, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, resumeAccount, runTaskNow, setConversationArchived, streamJobEvents, submitSMSVerification, syncAccountFriends, updateMessageTemplate, updateTask } from '../src/lib/api'
+import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, createMessageTemplate, createTask, deleteAccount, deleteMessageTemplate, deleteTask, getJob, getMe, getSendJob, listAccounts, listFriends, listMessageTemplates, listMyEntitlementGrants, listNotifications, listSendIntents, listTasks, loginPassword, logoutMini, markAllNotificationsRead, markNotificationRead, myEntitlement, pauseAccount, redeemCardCode, registerPassword, requestPlatformConversationArchive, resumeAccount, runTaskNow, setConversationArchived, streamJobEvents, submitSMSVerification, syncAccountFriends, updateMessageTemplate, updateTask } from '../src/lib/api'
 import { getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
 
 describe('mini API auth recovery', () => {
@@ -183,6 +183,20 @@ describe('mini API auth recovery', () => {
 
     expect(result.items[0]).toMatchObject({ conversation_id: 'conversation-archived', archived: true, archived_at: '2026-08-27T00:00:00Z' })
     expect(requestMock.mock.calls[0]?.[0]?.url).toBe('/api/v1/accounts/account-1/conversations?include_archived=true&group_only=false')
+  })
+
+  it('requests a platform conversation archive job with idempotency', async () => {
+    requestMock.mockResolvedValueOnce({ statusCode: 202, data: { job_id: 'job-platform-1' } })
+
+    const job = await requestPlatformConversationArchive('access-1', 'account-1', 'conversation-1', true, 'archive-key-1')
+
+    expect(job.job_id).toBe('job-platform-1')
+    expect(requestMock.mock.calls[0]?.[0]).toMatchObject({
+      url: '/api/v1/accounts/account-1/conversations/conversation-1/platform-archive',
+      method: 'POST',
+      data: { archived: true },
+      header: { Authorization: 'Bearer access-1', 'Idempotency-Key': 'archive-key-1' },
+    })
   })
 
   it('keeps group conversations available as spark targets', async () => {
