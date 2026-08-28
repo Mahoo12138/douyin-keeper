@@ -710,6 +710,47 @@ page {
 .task-skeleton-tabs { height: 76rpx; margin-top: 24rpx; }
 .task-skeleton-card { height: 250rpx; margin-top: 18rpx; }
 
+/* Shared foundation components. These selectors stay WXSS-compatible. */
+.mini-navbar { display: flex; align-items: center; justify-content: space-between; min-height: 76rpx; color: #1b2a22; }
+.mini-navbar-leading, .mini-navbar-back, .mini-navbar-trailing { width: 62rpx; flex: 0 0 62rpx; }
+.mini-navbar-back { display: flex; align-items: center; justify-content: flex-start; height: 62rpx; margin: 0; padding: 0; border: 0; color: #1b2a22; background: transparent; font-size: 54rpx; font-weight: 300; line-height: 1; }
+.mini-navbar-copy { min-width: 0; flex: 1; text-align: center; }
+.mini-navbar-title, .mini-navbar-subtitle { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-navbar-title { font-size: 29rpx; font-weight: 650; }
+.mini-navbar-subtitle { margin-top: 4rpx; color: #8a9990; font-size: 18rpx; }
+.mini-navbar-trailing { display: flex; align-items: center; justify-content: flex-end; }
+.mini-navbar-spacer { width: 62rpx; height: 1rpx; }
+.mini-navbar-back::after, .mini-dialog-close::after, .mini-dialog-cancel::after, .mini-dialog-confirm::after { display: none; }
+.mini-toast { position: fixed; z-index: 1000; right: 28rpx; bottom: 142rpx; left: 28rpx; display: flex; align-items: center; gap: 12rpx; min-height: 76rpx; padding: 0 18rpx; border: 1rpx solid #dfe9e3; border-radius: 18rpx; background: rgba(255, 255, 255, .98); box-shadow: 0 16rpx 34rpx rgba(36, 79, 63, .14); animation: mini-toast-in 180ms cubic-bezier(.23, 1, .32, 1) both; }
+.mini-toast-icon { display: flex; align-items: center; justify-content: center; width: 34rpx; height: 34rpx; flex: 0 0 auto; border-radius: 50%; color: #fff; background: #6f8c7d; font-size: 20rpx; font-weight: 700; }
+.mini-toast-message { min-width: 0; flex: 1; color: #304139; font-size: 23rpx; line-height: 1.45; }
+.mini-toast-success { border-color: #bfe8d1; background: #f7fef9; }
+.mini-toast-success .mini-toast-icon { background: #18b978; }
+.mini-toast-error { border-color: #f0caca; background: #fff8f8; }
+.mini-toast-error .mini-toast-icon { background: #d96464; }
+.mini-toast-warning { border-color: #f0dfb7; background: #fffdf7; }
+.mini-toast-warning .mini-toast-icon { background: #d99c2b; }
+@keyframes mini-toast-in { from { opacity: 0; transform: translateY(10rpx); } to { opacity: 1; transform: translateY(0); } }
+.mini-dialog-mask { position: fixed; z-index: 1100; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; padding: 36rpx; background: rgba(25, 39, 31, .42); animation: mini-dialog-fade-in 160ms ease-out both; }
+.mini-dialog { width: 100%; max-width: 620rpx; padding: 26rpx 24rpx 22rpx; border: 1rpx solid #e1ebe5; border-radius: 24rpx; background: #fff; box-shadow: 0 24rpx 70rpx rgba(26, 52, 39, .2); animation: mini-dialog-rise-in 180ms cubic-bezier(.23, 1, .32, 1) both; }
+.mini-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 18rpx; }
+.mini-dialog-title { color: #1d2b23; font-size: 30rpx; font-weight: 650; }
+.mini-dialog-close { display: flex; align-items: center; justify-content: center; width: 48rpx; height: 48rpx; margin: 0; padding: 0; border: 0; border-radius: 50%; color: #7b8c82; background: #f3f7f4; font-size: 34rpx; font-weight: 300; line-height: 1; }
+.mini-dialog-content { display: block; margin-top: 18rpx; color: #687970; font-size: 23rpx; line-height: 1.65; }
+.mini-dialog-actions { display: flex; gap: 12rpx; margin-top: 26rpx; }
+.mini-dialog-cancel, .mini-dialog-confirm { flex: 1; min-height: 76rpx; margin: 0; padding: 0 18rpx; border-radius: 14rpx; font-size: 24rpx; font-weight: 600; line-height: 1.2; }
+.mini-dialog-cancel { border: 1rpx solid #dfe9e3; color: #6c7d73; background: #f8fbf9; }
+.mini-dialog-confirm { border: 0; color: #fff; background: #18b978; box-shadow: 0 8rpx 18rpx rgba(24, 185, 120, .18); }
+.mini-dialog-warning .mini-dialog-confirm { background: #d99c2b; box-shadow: 0 8rpx 18rpx rgba(217, 156, 43, .18); }
+.mini-dialog-danger .mini-dialog-confirm { background: #d96464; box-shadow: 0 8rpx 18rpx rgba(217, 100, 100, .18); }
+.mini-navbar-back, .mini-dialog-close, .mini-dialog-cancel, .mini-dialog-confirm { transition: transform 140ms cubic-bezier(.23, 1, .32, 1); }
+.mini-navbar-back:active, .mini-dialog-close:active, .mini-dialog-cancel:active, .mini-dialog-confirm:active { transform: scale(.97); }
+@keyframes mini-dialog-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mini-dialog-rise-in { from { opacity: 0; transform: translateY(8rpx) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .mini-toast, .mini-dialog-mask, .mini-dialog { animation: none; } .mini-navbar-back, .mini-dialog-close, .mini-dialog-cancel, .mini-dialog-confirm { transition: none; } }
+.history-page-intro { display: block; margin: 2rpx 24rpx 0; color: #7b8c82; font-size: 22rpx; line-height: 1.6; }
+.history-page .date-tabs { margin-top: 20rpx; }
+
 /* Conversation module: a calm control surface for sessions and spark tasks. */
 .spark-page { box-sizing: border-box; min-height: 100vh; padding: 34rpx 24rpx 168rpx; background: #f5f8f6; }
 .spark-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18rpx; }

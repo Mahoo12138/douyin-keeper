@@ -9,6 +9,7 @@ import { PRODUCT_TIMEZONE } from '@/features/time/time-utils'
 import { jobErrorMessage } from '@/features/job-error-utils'
 import { accountTabLabel } from '@/components/account-tab-utils'
 import { MiniButton as Button } from '@/components/mini-button'
+import { MiniNavbar } from '@/components/mini-navbar'
 
 export default function History() {
   const [state, setState] = useState<'loading' | 'guest' | 'ready' | 'error'>('loading')
@@ -57,7 +58,7 @@ export default function History() {
   const successCount = items.filter((item) => item.status === 'succeeded').length
   const attentionCount = items.filter((item) => ['failed', 'retry_wait'].includes(item.status)).length
 
-  return <View className="mini-page"><View className="mini-hero card"><Text className="eyebrow">M4 · 运行记录</Text><Text className="title mini-hero-title">发送记录</Text><Text className="muted">按日期查看火花维护的执行结果和失败原因。</Text></View><View className="date-tabs">{days.map((day) => <Button key={day} className={`date-tab ${day === selectedDay ? 'date-tab-active' : ''}`} onClick={() => chooseDay(day)}>{dayLabel(day)}</Button>)}</View><View className="metric-grid"><Metric label="记录总数" value={items.length} tone="neutral" /><Metric label="已成功" value={successCount} tone="success" /><Metric label="需关注" value={attentionCount} tone={attentionCount ? 'warning' : 'neutral'} /></View><FilterTabs value={filter} onChange={setFilter} />{visibleItems.length === 0 ? <View className="card empty-card"><Text className="card-title">暂无发送记录</Text><Text className="muted">{filter === 'all' ? '这一天还没有任务执行记录。' : '当前筛选下没有匹配记录。'}</Text></View> : <View>{visibleItems.map((item) => <HistoryCard key={item.id} item={item} />)}</View>}</View>
+  return <View className="mini-page history-page"><MiniNavbar title="发送记录" subtitle="M4 · 运行记录" /><Text className="history-page-intro">按日期查看火花维护的执行结果和失败原因。</Text><View className="date-tabs">{days.map((day) => <Button key={day} className={`date-tab ${day === selectedDay ? 'date-tab-active' : ''}`} onClick={() => chooseDay(day)}>{dayLabel(day)}</Button>)}</View><View className="metric-grid"><Metric label="记录总数" value={items.length} tone="neutral" /><Metric label="已成功" value={successCount} tone="success" /><Metric label="需关注" value={attentionCount} tone={attentionCount ? 'warning' : 'neutral'} /></View><FilterTabs value={filter} onChange={setFilter} />{visibleItems.length === 0 ? <View className="card empty-card"><Text className="card-title">暂无发送记录</Text><Text className="muted">{filter === 'all' ? '这一天还没有任务执行记录。' : '当前筛选下没有匹配记录。'}</Text></View> : <View>{visibleItems.map((item) => <HistoryCard key={item.id} item={item} />)}</View>}</View>
 }
 
 function Metric({ label, value, tone }: { label: string; value: number; tone: 'success' | 'warning' | 'neutral' }) {

@@ -10,6 +10,8 @@ import { createIdempotencyKey, selectAccountId } from '@/features/home/home-util
 import { jobErrorMessage } from '@/features/job-error-utils'
 import { enabledTaskCount, replaceFriend, replaceTask, taskDraftError, taskForFriend, taskTimeInput, taskTimePayload, templatePickerIndex } from '@/features/spark/spark-utils'
 import { MiniButton as Button } from '@/components/mini-button'
+import { MiniDialog } from '@/components/mini-dialog'
+import { MiniToast, useMiniToast } from '@/components/mini-toast'
 
 type SparkData = {
   accounts: Awaited<ReturnType<typeof listAccounts>>['items']
@@ -37,6 +39,8 @@ export default function Spark() {
   const [platformArchiveStatus, setPlatformArchiveStatus] = useState('')
   const [conversationSyncJob, setConversationSyncJob] = useState<ConversationSyncJob | null>(null)
   const [conversationSyncStatus, setConversationSyncStatus] = useState('')
+  const [platformArchiveTarget, setPlatformArchiveTarget] = useState<SparkData['friends'][number] | null>(null)
+  const { toast, showToast, hideToast } = useMiniToast()
 
   const load = useCallback(async (accountId?: string, includeArchived = false) => {
     const token = getAccessToken()
@@ -98,7 +102,7 @@ export default function Spark() {
         setBusyKey('')
         if (job.status === 'succeeded') {
           await load(selectedAccountIdRef.current, showArchived)
-          if (active) await Taro.showToast({ title: platformArchiveJob.archived ? '平台归档完成' : '平台恢复完成', icon: 'success' })
+          if (active) showToast(platformArchiveJob.archived ? '平台归档完成' : '平台恢复完成', 'success')
         } else if (active) {
           setError(jobErrorMessage(job.error_code, job.status === 'cancelled' ? '平台归档请求已取消' : '平台归档未完成，请重试。'))
         }
@@ -134,7 +138,7 @@ export default function Spark() {
         setBusyKey('')
         if (job.status === 'succeeded') {
           await load(selectedAccountIdRef.current, showArchived)
-          if (active) await Taro.showToast({ title: '会话同步完成', icon: 'success' })
+          if (active) showToast('会话同步完成', 'success')
         } else if (active) {
           setError(jobErrorMessage(job.error_code, job.status === 'cancelled' ? '会话同步请求已取消' : '会话同步失败，请重试。'))
         }
@@ -241,7 +245,7 @@ export default function Spark() {
       setConversationSyncJob(null)
       setConversationSyncStatus('')
       setError('')
-      await Taro.showToast({ title: '同步请求已取消', icon: 'success' })
+      showToast('同步请求已取消', 'success')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '取消同步请求失败')
     } finally {
@@ -249,12 +253,18 @@ export default function Spark() {
     }
   }
 
-  async function requestPlatformArchive(friend: SparkData['friends'][number]) {
+  function requestPlatformArchive(friend: SparkData['friends'][number]) {
     const token = getAccessToken()
     if (!token || !data || busyKey || platformArchiveJob) return
+    setPlatformArchiveTarget(friend)
+  }
+
+  async function confirmPlatformArchive() {
+    const friend = platformArchiveTarget
+    const token = getAccessToken()
+    if (!friend || !token) return
+    setPlatformArchiveTarget(null)
     const archived = !friend.archived
-    const result = await Taro.showModal({ title: archived ? '请求平台归档？' : '请求平台恢复？', content: '这会创建后台任务，请求抖音平台变更会话状态；平台最终结果以适配器确认事件为准。' })
-    if (!result.confirm) return
     setBusyKey(`platform-archive:${friend.conversation_id}`)
     setError('')
     try {
@@ -276,7 +286,7 @@ export default function Spark() {
       setPlatformArchiveJob(null)
       setPlatformArchiveStatus('')
       setError('')
-      await Taro.showToast({ title: '平台请求已取消', icon: 'success' })
+      showToast('平台请求已取消', 'success')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '取消平台归档请求失败')
     } finally {
@@ -381,6 +391,8 @@ export default function Spark() {
         </View>
       })}
     </View>}
+    <MiniToast visible={toast !== null} message={toast?.message ?? ''} tone={toast?.tone} onClose={hideToast} />
+    <MiniDialog open={platformArchiveTarget !== null} title={platformArchiveTarget?.archived ? '请求平台恢复？' : '请求平台归档？'} content="这会创建后台任务，请求抖音平台变更会话状态；平台最终结果以适配器确认事件为准。" tone="warning" confirmText={platformArchiveTarget?.archived ? '请求恢复' : '请求归档'} onCancel={() => setPlatformArchiveTarget(null)} onConfirm={() => void confirmPlatformArchive()} />
   </View>
 }
 
