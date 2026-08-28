@@ -51,7 +51,7 @@ export function HistoryPage() {
   const friendQueries = useQueries({
     queries: friendAccounts.map((account) => ({
       queryKey: ['history-friend-options', account.id],
-      queryFn: () => listAllFriendsForAccount(token as string, account.id),
+      queryFn: async () => (await listAllFriendsForAccount(token as string, account.id)).map((item) => ({ id: item.friend_id ?? item.id, nickname: item.friend_nickname, display_name: item.friend_display_name })),
       enabled: !!token,
     })),
   })

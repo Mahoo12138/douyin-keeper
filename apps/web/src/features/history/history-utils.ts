@@ -1,6 +1,6 @@
 import type { components } from '@douyin-keeper/sdk-ts'
 
-export { listAllFriendsForAccount } from '../friends/friend-pagination'
+export { listAllConversationsForAccount as listAllFriendsForAccount } from '../conversations/conversation-pagination'
 
 type HistoryFriend = Pick<components['schemas']['Friend'], 'id' | 'nickname' | 'display_name'>
 

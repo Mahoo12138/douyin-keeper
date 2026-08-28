@@ -12,7 +12,6 @@ import { notificationUnreadLabel } from '@/features/notifications/notification-s
 const nav = [
   { to: '/dashboard', label: '概览' },
   { to: '/accounts', label: '抖音账号' },
-  { to: '/friends', label: '好友与火花' },
   { to: '/conversations', label: '会话' },
   { to: '/tasks', label: '任务' },
   { to: '/templates', label: '模板' },

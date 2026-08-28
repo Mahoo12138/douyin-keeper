@@ -6,9 +6,9 @@ import { Button, ThemeToggle } from '@douyin-keeper/ui-web'
 const steps = [
   {
     title: '选定关系',
-    description: '从真实好友列表中选择需要维护的关系，账号和好友身份始终清楚可见。',
+    description: '从消息面板的真实会话中选择需要维护的关系，账号和会话边界始终清楚可见。',
     icon: Users,
-    points: ['多账号独立登录态', '好友稳定身份映射', '不碰陌生人和群发'],
+    points: ['多账号独立登录态', '会话稳定路由', '不碰陌生人和群发'],
   },
   {
     title: '设定窗口',
@@ -66,7 +66,7 @@ export function LandingPage() {
                 每天一次，<br /><span className="text-chart-1">把火花续上。</span>
               </h1>
               <p className="mt-8 max-w-xl text-lg leading-8 text-muted-foreground sm:text-xl">
-                从真实好友列表出发，设置一个清晰的时间窗口，让关系维护变成可理解、可停止、可追溯的一件小事。
+                从消息面板的真实会话出发，设置一个清晰的时间窗口，让关系维护变成可理解、可停止、可追溯的一件小事。
               </p>
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg" className="h-12 rounded-full px-7 text-base"><Link to="/signup">创建我的任务 <ArrowRight /></Link></Button>
@@ -134,8 +134,8 @@ export function LandingPage() {
           <div className="mx-auto max-w-7xl">
             <div className="flex flex-col justify-between gap-6 border-b pb-10 sm:flex-row sm:items-end"><div><h2 className="text-4xl font-semibold tracking-[-0.04em] sm:text-6xl">有边界，才有长期。</h2></div><p className="max-w-md leading-7 text-muted-foreground">抖音火花助手把“不要做什么”也写进产品里，让你始终知道系统正在做什么。</p></div>
             <div className="mt-12 grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr]">
-              <article className="relative min-h-[300px] overflow-hidden rounded-[1.5rem] bg-chart-1 p-7 text-foreground sm:p-9"><div className="absolute -right-16 -top-16 size-56 rounded-full border-[28px] border-foreground/10" aria-hidden="true" /><div className="relative flex h-full flex-col justify-between"><Users className="size-7" /><div><h3 className="text-3xl font-semibold tracking-[-0.03em]">只维护确定的关系。</h3><p className="mt-3 max-w-sm leading-7 text-foreground/70">从你的好友列表开始，不把真实关系变成一张无边界的发送清单。</p></div></div></article>
-              <article className="flex min-h-[300px] flex-col justify-between rounded-[1.5rem] border bg-card p-7 sm:p-9"><Layers3 className="size-7 text-chart-3" /><div><h3 className="text-2xl font-semibold tracking-[-0.03em]">每个账号，独立一层。</h3><p className="mt-3 leading-7 text-muted-foreground">登录态、好友数据和任务执行互相隔离，切换账号时不会混淆。</p></div></article>
+              <article className="relative min-h-[300px] overflow-hidden rounded-[1.5rem] bg-chart-1 p-7 text-foreground sm:p-9"><div className="absolute -right-16 -top-16 size-56 rounded-full border-[28px] border-foreground/10" aria-hidden="true" /><div className="relative flex h-full flex-col justify-between"><Users className="size-7" /><div><h3 className="text-3xl font-semibold tracking-[-0.03em]">只维护确定的会话。</h3><p className="mt-3 max-w-sm leading-7 text-foreground/70">从消息面板开始，不把真实关系变成一张无边界的发送清单。</p></div></div></article>
+              <article className="flex min-h-[300px] flex-col justify-between rounded-[1.5rem] border bg-card p-7 sm:p-9"><Layers3 className="size-7 text-chart-3" /><div><h3 className="text-2xl font-semibold tracking-[-0.03em]">每个账号，独立一层。</h3><p className="mt-3 leading-7 text-muted-foreground">登录态、会话数据和任务执行互相隔离，切换账号时不会混淆。</p></div></article>
               <article className="flex min-h-[300px] flex-col justify-between rounded-[1.5rem] border bg-card p-7 sm:p-9"><TriangleAlert className="size-7 text-chart-5" /><div><h3 className="text-2xl font-semibold tracking-[-0.03em]">看见风险，马上停。</h3><p className="mt-3 leading-7 text-muted-foreground">失败和安全验证不是黑盒，系统会通知你，并保留下一步判断的空间。</p></div></article>
             </div>
           </div>

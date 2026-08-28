@@ -2,7 +2,7 @@ export type HelpSection = { title: string; body: string }
 
 export const helpSections: HelpSection[] = [
   { title: '首次绑定', body: '首次绑定抖音账号请在 PC 端完成扫码或短信流程；小程序可以通过绑定码关联已有产品账号。' },
-  { title: '配置任务', body: '在任务页为已确认身份的好友设置每日时间窗口和文字或贴纸内容；好友同步与新任务创建都在 PC 端完成。' },
+  { title: '配置任务', body: '在任务页为支持火花维护的直接会话设置每日时间窗口和文字或贴纸内容；会话同步与新任务创建都在 PC 端完成。' },
   { title: '处理风险提醒', body: '登录失效或安全验证出现时，请按通知提示在 PC 端重新处理，不要尝试绕过验证码或平台安全校验。' },
 ]
 
