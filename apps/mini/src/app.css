@@ -16,7 +16,7 @@ page {
   font-size: 34rpx;
 }
 
-.mini-page { padding: 16rpx 0 40rpx; }
+.mini-page { padding: 16rpx 0 140rpx; }
 .mini-hero { padding-top: 32rpx; padding-bottom: 32rpx; }
 .mini-hero-title { display: block; margin: 10rpx 0; }
 .eyebrow { display: block; color: #3767d6; font-size: 24rpx; font-weight: 600; }
@@ -137,7 +137,7 @@ page {
 .history-manual { margin-top: 16rpx; }
 
 /* Home module: a calm green control surface matching the supplied mini-program references. */
-.home-page { padding: 34rpx 24rpx 52rpx; background: #f8fbfa; box-sizing: border-box; }
+.home-page { padding: 34rpx 24rpx 140rpx; background: #f8fbfa; box-sizing: border-box; }
 .home-header, .home-card-heading, .summary-heading, .notification-heading { display: flex; justify-content: space-between; align-items: center; gap: 20rpx; }
 .home-brand, .home-greeting { display: block; }
 .home-brand { color: #111827; font-size: 38rpx; font-weight: 700; letter-spacing: -1rpx; }
@@ -245,7 +245,7 @@ page {
 @keyframes home-skeleton-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
 /* Account module */
-.account-page { min-height: 100vh; padding-bottom: 54rpx; background: #f8fbfa; }
+.account-page { min-height: 100vh; padding-bottom: 140rpx; background: #f8fbfa; }
 .account-page-header { display: flex; align-items: center; justify-content: space-between; }
 .account-page-kicker { display: block; color: #94a19b; font-size: 21rpx; }
 .account-page-title { display: block; margin-top: 6rpx; color: #14211b; font-size: 40rpx; font-weight: 700; }
@@ -417,7 +417,7 @@ page {
 .binding-friends-link::after { display: none; }
 
 /* Me module */
-.me-page { min-height: 100vh; padding: 34rpx 24rpx 54rpx; background: #f8fbfa; box-sizing: border-box; }
+.me-page { min-height: 100vh; padding: 34rpx 24rpx 140rpx; background: #f8fbfa; box-sizing: border-box; }
 .me-topbar, .me-detail-topbar, .me-panel-heading, .me-feature-heading { display: flex; align-items: center; justify-content: space-between; gap: 18rpx; }
 .me-page-title { color: #15221b; font-size: 40rpx; font-weight: 700; }
 .me-more-button, .me-back-button { display: flex; align-items: center; justify-content: center; margin: 0; padding: 0; border: 0; color: #1c2821; background: #fff; line-height: 1; }
@@ -566,7 +566,7 @@ page {
 @keyframes onboarding-progress { from { width: 0; } to { width: 62%; } }
 
 /* Task module */
-.task-page { min-height: 100vh; padding: 34rpx 24rpx 54rpx; background: #f8fbfa; box-sizing: border-box; }
+.task-page { min-height: 100vh; padding: 34rpx 24rpx 140rpx; background: #f8fbfa; box-sizing: border-box; }
 .task-page-header, .task-detail-topbar, .task-card-heading, .task-card-bottom, .task-detail-row-with-control { display: flex; align-items: center; justify-content: space-between; gap: 18rpx; }
 .task-header-actions { display: flex; align-items: center; gap: 12rpx; }
 .task-page-kicker { display: block; color: #94a19b; font-size: 21rpx; }
