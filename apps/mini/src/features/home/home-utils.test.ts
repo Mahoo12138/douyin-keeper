@@ -45,6 +45,8 @@ describe('mini home actions', () => {
     const tasks = homeTaskStatus(['failed'])
 
     expect(tasks).toEqual({ label: '有异常', tone: 'amber' })
+    expect(homeTaskStatus(['queued'])).toEqual({ label: '排队中', tone: 'amber' })
+    expect(homeTaskStatus(['retry_wait'])).toEqual({ label: '执行中', tone: 'amber' })
     expect(homeOverallStatus(account, homeTaskStatus([]), true)).toEqual({ label: '全部正常', tone: 'green' })
     expect(homeOverallStatus(account, tasks, true)).toEqual({ label: '需要关注', tone: 'amber' })
     expect(homeOverallStatus(account, homeTaskStatus([]), false)).toEqual({ label: '需要关注', tone: 'amber' })

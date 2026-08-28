@@ -24,7 +24,8 @@ export function homeAccountStatus(account?: { binding_status: string; session_st
 
 export function homeTaskStatus(statuses: readonly string[]): HomeStatus {
   if (statuses.some((status) => ['failed', 'skipped', 'cancelled'].includes(status))) return { label: '有异常', tone: 'amber' }
-  if (statuses.some((status) => status === 'running')) return { label: '执行中', tone: 'green' }
+  if (statuses.some((status) => ['pending', 'queued'].includes(status))) return { label: '排队中', tone: 'amber' }
+  if (statuses.some((status) => ['running', 'retry_wait'].includes(status))) return { label: '执行中', tone: 'amber' }
   return { label: '就绪', tone: 'green' }
 }
 
