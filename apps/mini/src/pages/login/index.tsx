@@ -110,6 +110,12 @@ export default function Me() {
     return !error
   }
 
+  async function enterHomeAfterAuth(title: string) {
+    setHasToken(true)
+    await Taro.switchTab({ url: '/pages/index/index' })
+    await Taro.showToast({ title, icon: 'success' })
+  }
+
   async function runWechatLogin() {
     if (!ensureAuthConsent() || busy) return
     const runtimeError = wechatMiniRuntimeError(isH5Runtime)
@@ -123,9 +129,7 @@ export default function Me() {
       const result = await Taro.login()
       const session = await loginWechatMini(result.code)
       setSession(session)
-      setHasToken(true)
-      void loadProfile()
-      await Taro.showToast({ title: '登录成功', icon: 'success' })
+      await enterHomeAfterAuth('登录成功')
     } catch (cause) {
       setMessage(authError(cause))
     } finally {
@@ -141,9 +145,7 @@ export default function Me() {
       const session = await loginPassword(username.trim(), password)
       setSession(session)
       setPassword('')
-      setHasToken(true)
-      void loadProfile()
-      await Taro.showToast({ title: '登录成功', icon: 'success' })
+      await enterHomeAfterAuth('登录成功')
     } catch (cause) {
       setMessage(authError(cause))
     } finally {
@@ -174,9 +176,7 @@ export default function Me() {
       setSession(session)
       setRegisterPasswordValue('')
       setRegisterPasswordConfirm('')
-      setHasToken(true)
-      void loadProfile()
-      await Taro.showToast({ title: '注册成功', icon: 'success' })
+      await enterHomeAfterAuth('注册成功')
     } catch (cause) {
       setMessage(authError(cause))
     } finally {
@@ -197,9 +197,7 @@ export default function Me() {
       const result = await Taro.login()
       const session = await linkWechatMini(result.code, linkCode.trim().toUpperCase())
       setSession(session)
-      setHasToken(true)
-      void loadProfile()
-      await Taro.showToast({ title: '绑定成功', icon: 'success' })
+      await enterHomeAfterAuth('绑定成功')
     } catch (cause) {
       setMessage(authError(cause))
     } finally {

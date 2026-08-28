@@ -5,7 +5,7 @@ import Taro, { useDidShow } from '@tarojs/taro'
 import { checkAccountSession, getJob, getMe, getSendJob, listAccounts, listNotifications, listSendIntents, listTasks, markAllNotificationsRead, markNotificationRead, MiniApiError, runTaskNow } from '@/lib/api'
 import { getAccessToken } from '@/lib/session'
 import { createIdempotencyKey, homeAccountStatus, homeOverallStatus, homeTaskStatus, nextEnabledTask, selectAccountId } from '@/features/home/home-utils'
-import { openMeNotifications } from '@/features/navigation/mini-navigation'
+import { openLoginPage, openMeNotifications } from '@/features/navigation/mini-navigation'
 import { notificationBodyLabel, notificationPriorityLabel } from '@/features/notification/notification-utils'
 import { jobErrorMessage } from '@/features/job-error-utils'
 import { productDayKey, productDayRange, productHour, PRODUCT_TIMEZONE } from '@/features/time/time-utils'
@@ -72,6 +72,7 @@ export function HomePage() {
       if (cause instanceof MiniApiError && cause.statusCode === 401) {
         setData(null)
         setState('guest')
+        openLoginPage()
         return
       }
       setError(cause instanceof Error ? cause.message : '首页数据加载失败')
@@ -79,7 +80,14 @@ export function HomePage() {
     }
   }, [])
 
-  useDidShow(() => { void load() })
+  useDidShow(() => {
+    if (!getAccessToken()) {
+      openLoginPage()
+      return
+    }
+    void Taro.showTabBar({ animation: false })
+    void load()
+  })
 
   useEffect(() => {
     if (!homeJob) return
@@ -246,7 +254,7 @@ function StatusDot({ tone }: { tone: 'green' | 'blue' | 'amber' }) { return <Tex
 function SummaryMetric({ label, value }: { label: string; value: number }) { return <View className="summary-metric"><Text className="summary-metric-value">{value}</Text><Text className="summary-metric-label">{label}</Text></View> }
 function RecentTask({ item }: { item: HomeData['history'][number] }) { const status = recentStatus(item.status); return <View className="recent-task"><Avatar name={item.friend.display_name} /><View className="recent-task-copy"><Text className="recent-task-name">{item.friend.display_name}</Text><Text className="muted">{accountTabLabel(item.account)} · {formatTime(item.scheduled_at)}</Text></View><Text className={`recent-task-status recent-task-status-${status.tone}`}>{status.label}</Text><Text className="recent-task-time">{formatClock(item.scheduled_at)}</Text></View> }
 function StatusItem({ label, value, tone }: { label: string; value: string; tone: 'green' | 'amber' }) { return <View className="status-item"><StatusDot tone={tone} /><View><Text className="status-item-label">{label}</Text><Text className="status-item-value">{value}</Text></View></View> }
-function GuestHome() { return <View className="mini-page home-page guest-home"><View className="home-branding"><Text className="home-brand">Douyin Keeper</Text><Text className="home-greeting">管理你的火花关系</Text></View><View className="guest-illustration"><Image className="guest-illustration-image" src={emptyGiftBox} mode="aspectFit" /></View><Text className="guest-title">欢迎使用火花助手</Text><Text className="muted guest-copy">登录后查看账号、会话和今日任务状态。</Text><Button className="home-primary-button" onClick={() => Taro.switchTab({ url: '/pages/login/index' })}>登录 / 绑定 PC 账号</Button></View> }
+function GuestHome() { return <View className="mini-page home-page guest-home"><View className="home-branding"><Text className="home-brand">Douyin Keeper</Text><Text className="home-greeting">管理你的火花关系</Text></View><View className="guest-illustration"><Image className="guest-illustration-image" src={emptyGiftBox} mode="aspectFit" /></View><Text className="guest-title">欢迎使用火花助手</Text><Text className="muted guest-copy">登录后查看账号、会话和今日任务状态。</Text><Button className="home-primary-button" onClick={openLoginPage}>登录 / 绑定 PC 账号</Button></View> }
 function ErrorHome({ message, onRetry }: { message: string; onRetry: () => void }) { return <View className="mini-page home-page"><View className="home-error-state"><Text className="home-error-icon">!</Text><Text className="home-empty-title">首页暂时不可用</Text><Text className="muted">{message || '请检查网络连接后重试。'}</Text><Button className="home-secondary-button" onClick={onRetry}>重新加载</Button></View></View> }
 function LoadingHome() { return <View className="mini-page home-page"><View className="home-skeleton home-skeleton-header" /><View className="home-skeleton home-skeleton-account" /><View className="home-skeleton home-skeleton-summary" /><View className="home-skeleton home-skeleton-card" /><View className="home-skeleton home-skeleton-card" /></View> }
 function homeJobStatusLabel(value: string) { return value === 'queued' ? '排队中' : value === 'running' ? '执行中' : value === 'succeeded' ? '已完成' : value === 'failed' ? '执行失败' : value === 'cancelled' ? '已取消' : '处理中' }
