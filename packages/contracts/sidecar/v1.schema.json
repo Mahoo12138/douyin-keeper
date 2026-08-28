@@ -19,7 +19,6 @@
             "login.sms.start",
             "login.sms.verify",
             "session.validate",
-            "friends.list",
             "conversations.list",
             "conversations.archive",
             "message.send_text",
@@ -50,10 +49,6 @@
         {
           "if": {"properties": {"op": {"const": "session.validate"}}},
           "then": {"properties": {"input": {"$ref": "#/$defs/sessionValidateInput"}}}
-        },
-        {
-          "if": {"properties": {"op": {"const": "friends.list"}}},
-          "then": {"properties": {"input": {"$ref": "#/$defs/friendsListInput"}}}
         },
         {
           "if": {"properties": {"op": {"const": "conversations.list"}}},
@@ -141,14 +136,6 @@
       "properties": {
         "session": {"$ref": "#/$defs/sessionRef"},
         "validation_level": {"const": "basic", "default": "basic"}
-      }
-    },
-    "friendsListInput": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["session"],
-      "properties": {
-        "session": {"$ref": "#/$defs/sessionRef"}
       }
     },
     "existingConversationTarget": {

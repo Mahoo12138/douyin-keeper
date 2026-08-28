@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -109,25 +110,24 @@ func (r *FriendRepo) GetSendTarget(ctx context.Context, accountID, friendID int6
 	var target friend.SendTarget
 	var platformUserID *string
 	var identityStatus friend.IdentityStatus
+	var conversationType string
 	if err := From(ctx, r.pool).QueryRow(ctx, `
-		SELECT platform_user_id, identity_status
-		FROM friends
-		WHERE id=$1 AND account_id=$2 AND deleted_at IS NULL`, friendID, accountID).
-		Scan(&platformUserID, &identityStatus); err != nil {
+		SELECT f.platform_user_id, f.identity_status, c.platform_conversation_id,
+			c.channel, c.conversation_type
+		FROM friends f
+		JOIN conversations c ON c.friend_id=f.id AND c.account_id=f.account_id
+		WHERE f.id=$1 AND f.account_id=$2 AND f.deleted_at IS NULL
+		ORDER BY c.updated_at DESC LIMIT 1`, friendID, accountID).
+		Scan(&platformUserID, &identityStatus, &target.PlatformConversationID, &target.Channel, &conversationType); err != nil {
 		return nil, mapNoRows(err, apperr.CodeNotFound, "friend not found")
 	}
-	if platformUserID == nil || *platformUserID == "" || identityStatus != friend.IdentityResolved {
+	groupTarget := conversationType == "group" && platformUserID != nil && strings.HasPrefix(*platformUserID, "__conversation__:")
+	if !groupTarget && (platformUserID == nil || *platformUserID == "" || identityStatus != friend.IdentityResolved) {
 		return nil, apperr.New(apperr.CodeFriendIdentityUnsolid, apperr.KindConflict, "friend identity is unresolved")
 	}
-	if err := From(ctx, r.pool).QueryRow(ctx, `
-		SELECT platform_conversation_id, channel
-		FROM conversations
-		WHERE account_id=$1 AND friend_id=$2
-		ORDER BY updated_at DESC LIMIT 1`, accountID, friendID).
-		Scan(&target.PlatformConversationID, &target.Channel); err != nil {
-		return nil, mapNoRows(err, apperr.CodeConversationNotFound, "conversation not found")
+	if platformUserID != nil && !groupTarget {
+		target.PlatformUserID = *platformUserID
 	}
-	target.PlatformUserID = *platformUserID
 	return &target, nil
 }
 

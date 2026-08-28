@@ -16,11 +16,16 @@ import (
 
 type ConversationView struct {
 	ID                     uuid.UUID  `json:"id"`
-	FriendID               uuid.UUID  `json:"friend_id"`
+	FriendID               *uuid.UUID `json:"friend_id"`
 	FriendDisplayName      string     `json:"friend_display_name"`
 	FriendNickname         string     `json:"friend_nickname"`
 	FriendAvatarURL        *string    `json:"friend_avatar_url"`
+	StreakDays             int        `json:"streak_days"`
+	SparkEnabled           bool       `json:"spark_enabled"`
+	LastSentAt             *time.Time `json:"last_sent_at"`
 	PlatformIdentityStatus string     `json:"platform_identity_status"`
+	ConversationType       string     `json:"conversation_type"`
+	SparkSupported         bool       `json:"spark_supported"`
 	Channel                string     `json:"channel"`
 	LastMessageAt          *time.Time `json:"last_message_at"`
 	LastSyncedAt           *time.Time `json:"last_synced_at"`
@@ -49,12 +54,17 @@ func (s *Server) handleListConversations(w http.ResponseWriter, r *http.Request)
 		writeError(w, r, err)
 		return
 	}
+	groupOnly, err := conversationGroupOnly(r)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
 	afterID, err := conversationCursor(r)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	page, err := s.conversations.ListPageForAccount(r.Context(), p.UserID, accountID, conversation.ListFilter{Limit: limit, AfterID: afterID, IncludeArchived: includeArchived})
+	page, err := s.conversations.ListPageForAccount(r.Context(), p.UserID, accountID, conversation.ListFilter{Limit: limit, AfterID: afterID, IncludeArchived: includeArchived, GroupOnly: groupOnly})
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -169,11 +179,25 @@ func conversationIncludeArchived(r *http.Request) (bool, error) {
 	return includeArchived, nil
 }
 
+func conversationGroupOnly(r *http.Request) (bool, error) {
+	value := r.URL.Query().Get("group_only")
+	if value == "" {
+		return false, nil
+	}
+	groupOnly, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, apperr.Validation(apperr.CodeConflict, "invalid group_only")
+	}
+	return groupOnly, nil
+}
+
 func conversationView(item *conversation.Conversation) ConversationView {
 	return ConversationView{
 		ID: item.ID, FriendID: item.FriendID, FriendDisplayName: item.FriendDisplayName,
 		FriendNickname: item.FriendNickname, FriendAvatarURL: item.FriendAvatarURL,
-		PlatformIdentityStatus: item.PlatformIdentityStatus, Channel: item.Channel,
+		StreakDays: item.StreakDays, SparkEnabled: item.SparkEnabled, LastSentAt: item.LastSentAt,
+		PlatformIdentityStatus: item.PlatformIdentityStatus, ConversationType: item.ConversationType,
+		SparkSupported: item.SparkSupported, Channel: item.Channel,
 		LastMessageAt: item.LastMessageAt, LastSyncedAt: item.LastSyncedAt,
 		Archived: item.ArchivedAt != nil, ArchivedAt: item.ArchivedAt,
 	}

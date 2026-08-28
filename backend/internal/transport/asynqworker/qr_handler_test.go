@@ -224,6 +224,12 @@ func TestQRStartInputForcesFreshLoginOnlyForRebinds(t *testing.T) {
 	}
 }
 
+func TestQRPollDeadlineAllowsAuthenticatedSessionFinalization(t *testing.T) {
+	if qrPollDeadlineMS < 30_000 {
+		t.Fatalf("QR poll deadline = %dms; authenticated session validation and identity resolution need at least 30s", qrPollDeadlineMS)
+	}
+}
+
 func TestQRStartRecoveryReportsResetCloseErrors(t *testing.T) {
 	var logs bytes.Buffer
 	ctx := telemetry.WithContext(context.Background(), slog.New(slog.NewTextHandler(&logs, nil)))
@@ -273,6 +279,17 @@ func TestRebindProtectsSessionAndAccountIdentityBoundaries(t *testing.T) {
 	}
 	if rebindIdentityMatches(acct, bindIdentity{PlatformUserID: "another-user"}) {
 		t.Fatal("different platform identity must be rejected")
+	}
+	legacyID := strings.Repeat("a", 32)
+	legacyAcct := &account.Account{PlatformUserID: &legacyID, Nickname: "昵称"}
+	if !rebindIdentityMatches(legacyAcct, bindIdentity{PlatformUserID: "stable-user", Nickname: "昵称", IdentitySource: "response"}) {
+		t.Fatal("matching page identity should migrate a legacy cookie identity")
+	}
+	if rebindIdentityMatches(legacyAcct, bindIdentity{PlatformUserID: "stable-user", Nickname: "其他账号", IdentitySource: "response"}) {
+		t.Fatal("legacy migration must reject a different nickname")
+	}
+	if rebindIdentityMatches(legacyAcct, bindIdentity{PlatformUserID: "stable-user", Nickname: "昵称", IdentitySource: "cookie_fallback"}) {
+		t.Fatal("legacy migration must not accept another cookie fallback")
 	}
 }
 

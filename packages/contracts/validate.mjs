@@ -59,10 +59,6 @@ check('sidecar schema is valid JSON Schema draft-2020-12', () => {
       input: {session},
     },
     {
-      op: 'friends.list',
-      input: {session},
-    },
-    {
       op: 'conversations.list',
       input: {session, cursor: null, limit: 100},
     },

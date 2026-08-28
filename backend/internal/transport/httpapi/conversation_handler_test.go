@@ -12,8 +12,9 @@ import (
 
 func TestConversationViewKeepsPlatformIdentityOutOfResponse(t *testing.T) {
 	now := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	friendID := uuid.New()
 	view := conversationView(&conversation.Conversation{
-		ID: uuid.New(), FriendID: uuid.New(), FriendDisplayName: "Jasmine", FriendNickname: "小雅",
+		ID: uuid.New(), FriendID: &friendID, FriendDisplayName: "Jasmine", FriendNickname: "小雅",
 		PlatformIdentityStatus: "resolved", Channel: "consumer", LastMessageAt: &now, LastSyncedAt: &now, ArchivedAt: &now,
 	})
 	if view.FriendDisplayName != "Jasmine" || view.Channel != "consumer" || view.LastMessageAt == nil || !view.Archived || view.ArchivedAt == nil {
@@ -30,6 +31,18 @@ func TestConversationIncludeArchivedParsesBoolean(t *testing.T) {
 	}
 	if _, err := conversationIncludeArchived(httptest.NewRequest("GET", "/?include_archived=maybe", nil)); err == nil {
 		t.Fatal("invalid include_archived should be rejected")
+	}
+}
+
+func TestConversationGroupOnlyParsesBoolean(t *testing.T) {
+	if enabled, err := conversationGroupOnly(httptest.NewRequest("GET", "/?group_only=true", nil)); err != nil || !enabled {
+		t.Fatalf("group_only = %v, err=%v", enabled, err)
+	}
+	if enabled, err := conversationGroupOnly(httptest.NewRequest("GET", "/", nil)); err != nil || enabled {
+		t.Fatalf("default group_only = %v, err=%v", enabled, err)
+	}
+	if _, err := conversationGroupOnly(httptest.NewRequest("GET", "/?group_only=maybe", nil)); err == nil {
+		t.Fatal("invalid group_only should be rejected")
 	}
 }
 

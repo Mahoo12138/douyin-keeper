@@ -17,11 +17,16 @@ type Conversation struct {
 	InternalID             int64
 	ID                     uuid.UUID
 	AccountID              uuid.UUID
-	FriendID               uuid.UUID
+	FriendID               *uuid.UUID
 	FriendDisplayName      string
 	FriendNickname         string
 	FriendAvatarURL        *string
+	StreakDays             int
+	SparkEnabled           bool
+	LastSentAt             *time.Time
 	PlatformIdentityStatus string
+	ConversationType       string
+	SparkSupported         bool
 	Channel                string
 	LastMessageAt          *time.Time
 	LastSyncedAt           *time.Time
@@ -32,6 +37,7 @@ type ListFilter struct {
 	Limit           int
 	AfterID         int64
 	IncludeArchived bool
+	GroupOnly       bool
 }
 
 type ListPage struct {
@@ -46,14 +52,31 @@ type SyncItem struct {
 	PlatformConversationID string
 	PlatformUserID         string
 	DisplayName            string
+	AvatarURL              string
 	Channel                string
+	ConversationType       string
 	LastMessageAt          *time.Time
+	StreakDays             *int
 }
 
 // SyncRepository is the worker-only write slice for a complete conversation
 // crawl. It intentionally does not expose bulk mutation to HTTP handlers.
 type SyncRepository interface {
 	SyncBatch(ctx context.Context, accountID int64, items []SyncItem, at time.Time) error
+}
+
+// SnapshotSyncRepository applies a complete message-panel snapshot and
+// archives rows that were not present after the panel was fully scrolled.
+type SnapshotSyncRepository interface {
+	SyncSnapshot(ctx context.Context, accountID int64, items []SyncItem, at time.Time) error
+}
+
+// GroupSyncRepository replaces the account's group snapshot while preserving
+// the platform conversation ID as the routing key. It is intentionally an
+// optional extension so other conversation sync implementations can continue
+// to use SyncRepository.
+type GroupSyncRepository interface {
+	ReplaceGroupBatch(ctx context.Context, accountID int64, items []SyncItem, at time.Time) error
 }
 
 type Repository interface {

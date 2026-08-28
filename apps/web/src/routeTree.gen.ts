@@ -20,6 +20,7 @@ import { Route as rootConversationsRouteImport } from './routes/(root)/conversat
 import { Route as rootDashboardRouteImport } from './routes/(root)/dashboard'
 import { Route as rootEntitlementRouteImport } from './routes/(root)/entitlement'
 import { Route as rootFriendsRouteImport } from './routes/(root)/friends'
+import { Route as rootGroupsRouteImport } from './routes/(root)/groups'
 import { Route as rootHelpRouteImport } from './routes/(root)/help'
 import { Route as rootHistoryRouteImport } from './routes/(root)/history'
 import { Route as rootNotificationsRouteImport } from './routes/(root)/notifications'
@@ -92,6 +93,11 @@ const rootEntitlementRoute = rootEntitlementRouteImport.update({
 const rootFriendsRoute = rootFriendsRouteImport.update({
   id: '/friends',
   path: '/friends',
+  getParentRoute: () => rootRouteRoute,
+} as any)
+const rootGroupsRoute = rootGroupsRouteImport.update({
+  id: '/groups',
+  path: '/groups',
   getParentRoute: () => rootRouteRoute,
 } as any)
 const rootHelpRoute = rootHelpRouteImport.update({
@@ -206,6 +212,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof rootDashboardRoute
   '/entitlement': typeof rootEntitlementRoute
   '/friends': typeof rootFriendsRoute
+  '/groups': typeof rootGroupsRoute
   '/help': typeof rootHelpRoute
   '/history': typeof rootHistoryRoute
   '/notifications': typeof rootNotificationsRoute
@@ -236,6 +243,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof rootDashboardRoute
   '/entitlement': typeof rootEntitlementRoute
   '/friends': typeof rootFriendsRoute
+  '/groups': typeof rootGroupsRoute
   '/help': typeof rootHelpRoute
   '/history': typeof rootHistoryRoute
   '/notifications': typeof rootNotificationsRoute
@@ -270,6 +278,7 @@ export interface FileRoutesById {
   '/(root)/dashboard': typeof rootDashboardRoute
   '/(root)/entitlement': typeof rootEntitlementRoute
   '/(root)/friends': typeof rootFriendsRoute
+  '/(root)/groups': typeof rootGroupsRoute
   '/(root)/help': typeof rootHelpRoute
   '/(root)/history': typeof rootHistoryRoute
   '/(root)/notifications': typeof rootNotificationsRoute
@@ -303,6 +312,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/entitlement'
     | '/friends'
+    | '/groups'
     | '/help'
     | '/history'
     | '/notifications'
@@ -333,6 +343,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/entitlement'
     | '/friends'
+    | '/groups'
     | '/help'
     | '/history'
     | '/notifications'
@@ -366,6 +377,7 @@ export interface FileRouteTypes {
     | '/(root)/dashboard'
     | '/(root)/entitlement'
     | '/(root)/friends'
+    | '/(root)/groups'
     | '/(root)/help'
     | '/(root)/history'
     | '/(root)/notifications'
@@ -472,6 +484,13 @@ declare module '@tanstack/react-router' {
       path: '/friends'
       fullPath: '/friends'
       preLoaderRoute: typeof rootFriendsRouteImport
+      parentRoute: typeof rootRouteRoute
+    }
+    '/(root)/groups': {
+      id: '/(root)/groups'
+      path: '/groups'
+      fullPath: '/groups'
+      preLoaderRoute: typeof rootGroupsRouteImport
       parentRoute: typeof rootRouteRoute
     }
     '/(root)/help': {
@@ -651,6 +670,7 @@ interface rootRouteRouteChildren {
   rootDashboardRoute: typeof rootDashboardRoute
   rootEntitlementRoute: typeof rootEntitlementRoute
   rootFriendsRoute: typeof rootFriendsRoute
+  rootGroupsRoute: typeof rootGroupsRoute
   rootHelpRoute: typeof rootHelpRoute
   rootHistoryRoute: typeof rootHistoryRoute
   rootNotificationsRoute: typeof rootNotificationsRoute
@@ -665,6 +685,7 @@ const rootRouteRouteChildren: rootRouteRouteChildren = {
   rootDashboardRoute: rootDashboardRoute,
   rootEntitlementRoute: rootEntitlementRoute,
   rootFriendsRoute: rootFriendsRoute,
+  rootGroupsRoute: rootGroupsRoute,
   rootHelpRoute: rootHelpRoute,
   rootHistoryRoute: rootHistoryRoute,
   rootNotificationsRoute: rootNotificationsRoute,

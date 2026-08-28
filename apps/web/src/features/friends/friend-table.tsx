@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage, Badge, Switch, Table, TableBody, T
 import { MessageCircle, Smartphone } from 'lucide-react'
 
 import type { Friend, SparkTask } from './friend-types'
-import { formatFriendDate, FriendStatusBadge, TaskStatusBadge } from './friend-status'
+import { formatFriendDate, TaskStatusBadge } from './friend-status'
 import { taskForFriend } from './friend-filters'
 
 export function FriendTable({ friends, tasks, accountId, pendingFriendId, bulkBusy = false, selectedFriendIds = [], onSelectFriend = () => {}, onSelectAll = () => {}, selectionEnabled = false, onToggle }: {
@@ -22,12 +22,11 @@ export function FriendTable({ friends, tasks, accountId, pendingFriendId, bulkBu
   const allResolvedSelected = resolvedFriends.length > 0 && resolvedFriends.every((friend) => selected.has(friend.id))
 
   return (
-    <Table className="min-w-[820px]">
+    <Table className="min-w-[720px]">
       <TableHeader>
         <TableRow>
-          {selectionEnabled && <TableHead className="w-12 pl-5"><input type="checkbox" checked={allResolvedSelected} disabled={bulkBusy || !resolvedFriends.length} onChange={(event) => onSelectAll(event.target.checked)} aria-label="选择全部可维护好友" /></TableHead>}
-          <TableHead className="pl-5">好友</TableHead>
-          <TableHead>身份</TableHead>
+          {selectionEnabled && <TableHead className="w-12 pl-5"><input type="checkbox" checked={allResolvedSelected} disabled={bulkBusy || !resolvedFriends.length} onChange={(event) => onSelectAll(event.target.checked)} aria-label="选择全部可维护会话" /></TableHead>}
+          <TableHead className="pl-5">会话</TableHead>
           <TableHead>火花</TableHead>
           <TableHead>任务</TableHead>
           <TableHead>最近发送</TableHead>
@@ -55,7 +54,6 @@ export function FriendTable({ friends, tasks, accountId, pendingFriendId, bulkBu
                   </div>
                 </div>
               </TableCell>
-              <TableCell><FriendStatusBadge friend={friend} /></TableCell>
               <TableCell>
                 <div className="flex items-center gap-2 whitespace-nowrap">
                   <Badge variant={friend.streak_days > 0 ? 'success' : 'muted'}>{friend.streak_days} 天</Badge>

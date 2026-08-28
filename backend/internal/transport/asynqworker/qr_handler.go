@@ -67,7 +67,14 @@ type bindIdentity struct {
 	PlatformUserID string  `json:"platform_user_id"`
 	Nickname       string  `json:"nickname"`
 	AvatarURL      *string `json:"avatar_url"`
+	IdentitySource string  `json:"identity_source"`
 }
+
+// A waiting poll normally returns in milliseconds, but the first authenticated
+// poll validates /user/self, resolves the stable account identity, and exports
+// storage state. Keep its budget aligned with the equivalent SMS finalization
+// path instead of killing a successfully authenticated browser after 10s.
+const qrPollDeadlineMS = 60_000
 
 func qrStartInput(profileDir string, forceLogin bool) map[string]any {
 	return map[string]any{"profile_dir": profileDir, "locale": "zh-CN", "force_login": forceLogin}
@@ -271,7 +278,7 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 				var err error
 				response, err = deps.Sidecar.Call(ctx, sidecar.Request{
 					ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
-					Op: sidecar.OpsLoginQRPoll, DeadlineMS: 10_000,
+					Op: sidecar.OpsLoginQRPoll, DeadlineMS: qrPollDeadlineMS,
 					Input: map[string]any{"login_handle": started.LoginHandle, "export_session_file": exportPath},
 				})
 				return err
@@ -349,7 +356,21 @@ func completeBind(ctx context.Context, deps QRBindDeps, claimed *job.Job, acct *
 		return finishBindFailure(ctx, deps, claimed, apperr.CodeAccountIdentityUnresolved)
 	}
 	if isRebindJob(claimed) && !rebindIdentityMatches(acct, identity) {
+		storedIDLength := 0
+		if acct.PlatformUserID != nil {
+			storedIDLength = len(strings.TrimSpace(*acct.PlatformUserID))
+		}
+		telemetry.L(ctx).Warn("qr_bind_identity_mismatch",
+			"job_id", claimed.PublicID.String(),
+			"stored_platform_id_length", storedIDLength,
+			"returned_platform_id_length", len(strings.TrimSpace(identity.PlatformUserID)),
+			"returned_identity_source", identity.IdentitySource,
+			"returned_nickname_present", strings.TrimSpace(identity.Nickname) != "",
+		)
 		return finishBindFailure(ctx, deps, claimed, apperr.CodeAccountIdentityMismatch)
+	}
+	if isRebindJob(claimed) && legacyRebindIdentityMatches(acct, identity) {
+		telemetry.L(ctx).Info("qr_bind_identity_legacy_migration", "job_id", claimed.PublicID.String(), "stored_platform_id_length", len(strings.TrimSpace(*acct.PlatformUserID)), "returned_platform_id_length", len(strings.TrimSpace(identity.PlatformUserID)), "returned_identity_source", identity.IdentitySource)
 	}
 	if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "confirming", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now()}); err != nil {
 		return err
@@ -455,7 +476,7 @@ func commitBindSuccess(ctx context.Context, deps QRBindDeps, claimed *job.Job, a
 		if err := deps.Accounts.SetBindingStatus(tctx, acct.ID, account.BindingBound); err != nil {
 			return err
 		}
-		if err := enqueueInitialFriendsSync(tctx, deps, acct); err != nil {
+		if err := enqueueInitialConversationSync(tctx, deps, acct); err != nil {
 			return err
 		}
 		return deps.Jobs.AppendEvent(tctx, claimed.ID, job.JobEvent{EventType: "success", Payload: json.RawMessage(`{"binding_status":"bound"}`), CreatedAt: deps.Now()})
@@ -466,21 +487,21 @@ type qrValidationError struct{}
 
 func (qrValidationError) Error() string { return "session validation returned an invalid result" }
 
-func enqueueInitialFriendsSync(ctx context.Context, deps QRBindDeps, acct *account.Account) error {
+func enqueueInitialConversationSync(ctx context.Context, deps QRBindDeps, acct *account.Account) error {
 	userID, accountID := acct.UserID, acct.ID
-	friendsJob := &job.Job{
+	conversationJob := &job.Job{
 		PublicID: uuid.New(), UserID: &userID, AccountID: &accountID,
-		Type: "account.friends_sync.browser", Status: job.StatusQueued,
+		Type: "account.conversations_sync.browser", Status: job.StatusQueued,
 		Cancelable: false, CreatedAt: deps.Now(),
 	}
-	if err := deps.Jobs.CreateJob(ctx, friendsJob); err != nil {
+	if err := deps.Jobs.CreateJob(ctx, conversationJob); err != nil {
 		return err
 	}
 	if err := deps.Outbox.Add(ctx, outbox.Message{
-		Kind: outbox.KindFriendsSyncBrowser, AggregateType: "job",
-		AggregateID: friendsJob.PublicID.String(),
-		Payload:     mustJSON(map[string]string{"job_id": friendsJob.PublicID.String()}),
-		DedupeKey:   "job.platform:" + friendsJob.PublicID.String(),
+		Kind: outbox.KindConversationsSyncBrowser, AggregateType: "job",
+		AggregateID: conversationJob.PublicID.String(),
+		Payload:     mustJSON(map[string]string{"job_id": conversationJob.PublicID.String()}),
+		DedupeKey:   "job.platform:" + conversationJob.PublicID.String(),
 	}); err != nil {
 		return err
 	}
@@ -490,7 +511,7 @@ func enqueueInitialFriendsSync(ctx context.Context, deps QRBindDeps, acct *accou
 		Payload:     mustJSON(map[string]int64{"account_id": acct.ID}),
 		// Scope the dedupe key to this binding lifecycle so a later rebind
 		// gets a fresh health snapshot while duplicate enqueue paths remain safe.
-		DedupeKey: "capability.probe:" + acct.PublicID.String() + ":" + friendsJob.PublicID.String(),
+		DedupeKey: "capability.probe:" + acct.PublicID.String() + ":" + conversationJob.PublicID.String(),
 	})
 }
 
@@ -563,7 +584,24 @@ func isRebindJob(claimed *job.Job) bool {
 }
 
 func rebindIdentityMatches(acct *account.Account, identity bindIdentity) bool {
-	return acct == nil || acct.PlatformUserID == nil || *acct.PlatformUserID == identity.PlatformUserID
+	return acct == nil || acct.PlatformUserID == nil || *acct.PlatformUserID == identity.PlatformUserID || legacyRebindIdentityMatches(acct, identity)
+}
+
+func legacyRebindIdentityMatches(acct *account.Account, identity bindIdentity) bool {
+	if acct == nil || acct.PlatformUserID == nil || identity.IdentitySource == "" || identity.IdentitySource == "cookie_fallback" {
+		return false
+	}
+	storedID := strings.TrimSpace(*acct.PlatformUserID)
+	returnedID := strings.TrimSpace(identity.PlatformUserID)
+	if len(storedID) != 32 || storedID == returnedID || strings.TrimSpace(acct.Nickname) == "" || strings.TrimSpace(identity.Nickname) == "" {
+		return false
+	}
+	for _, char := range storedID {
+		if !((char >= '0' && char <= '9') || (char >= 'a' && char <= 'f') || (char >= 'A' && char <= 'F')) {
+			return false
+		}
+	}
+	return strings.TrimSpace(acct.Nickname) == strings.TrimSpace(identity.Nickname)
 }
 
 func decodeResult(response *sidecar.Response, target any) error {

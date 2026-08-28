@@ -3,12 +3,15 @@ package asynqworker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/capability"
@@ -29,8 +32,11 @@ type conversationListItem struct {
 	PlatformConversationID string  `json:"platform_conversation_id"`
 	PlatformUserID         string  `json:"peer_platform_user_id"`
 	DisplayName            string  `json:"peer_display_name"`
+	AvatarURL              string  `json:"peer_avatar_url"`
 	Channel                string  `json:"channel"`
+	ConversationType       string  `json:"conversation_type"`
 	LastMessageAt          *string `json:"last_message_at"`
+	StreakDays             *int    `json:"streak_days"`
 }
 
 func conversationsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(context.Context, *asynq.Task) error {
@@ -105,6 +111,10 @@ func conversationsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(
 		var items []conversation.SyncItem
 		seen := make(map[string]struct{})
 		var cursor *string
+		// The message panel is the single source of truth. It returns the mixed
+		// conversation inventory; direct/group is only metadata used by routing
+		// and presentation, never a separate crawl path.
+		groupOnly := false
 		err = deps.Sessions.WithTempFile(ctx, acct.ID, acct.UserPublicID, acct.PublicID, func(path string) error {
 			for page := 0; page < maxConversationSyncPages; page++ {
 				if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, now); cancelled || err != nil {
@@ -116,7 +126,7 @@ func conversationsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(
 					Op: sidecar.OpsConversationsList, DeadlineMS: 120_000,
 					Input: map[string]any{
 						"session": map[string]any{"kind": "playwright_storage_state_file", "path": path, "profile_dir": profileDir},
-						"cursor":  cursor, "limit": 100,
+						"cursor":  cursor, "limit": 100, "group_only": groupOnly,
 					},
 				})
 				if callErr != nil {
@@ -128,7 +138,7 @@ func conversationsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(
 				if err := decodeResult(response, &result); err != nil {
 					return conversationsResultError{}
 				}
-				pageItems, err := normalizeConversationItems(result.Items, seen)
+				pageItems, err := normalizeConversationItems(filterConversationListItems(result.Items, groupOnly), seen)
 				if err != nil {
 					return conversationsResultError{}
 				}
@@ -166,17 +176,54 @@ func conversationsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, now)
 			return finishFriendsFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible, now)
 		}
+		selfPeerCount := countSelfConversationPeers(items, acct.PlatformUserID)
+		if selfPeerCount > 0 {
+			// A direct conversation can never target the currently authenticated
+			// account. Reject the whole snapshot so a parser regression cannot
+			// replace valid peers with the account owner's identity.
+			slog.Warn("conversation sync rejected self peers", "item_count", len(items), "self_peer_count", selfPeerCount)
+			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, apperr.CodeAdapterIncompatible, now)
+			return finishFriendsFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible, now)
+		}
 		if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "fetched", Payload: mustJSON(map[string]int{"count": len(items)}), CreatedAt: now()}); err != nil {
 			return err
 		}
 		if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "syncing", Payload: json.RawMessage(`{}`), CreatedAt: now()}); err != nil {
 			return err
 		}
-		if err := commitConversationSyncSuccess(ctx, deps.Tx, deps.Jobs, deps.Conversations, claimed, acct.ID, items, now); err != nil {
+		if err := commitConversationSyncSuccess(ctx, deps.Tx, deps.Jobs, deps.Conversations, claimed, acct.ID, items, groupOnly, now); err != nil {
+			logConversationSyncCommitFailure(err, len(items))
 			return fail(apperr.CodeInternal)
 		}
 		return nil
 	}
+}
+
+func countSelfConversationPeers(items []conversation.SyncItem, selfPlatformUserID *string) int {
+	if selfPlatformUserID == nil || strings.TrimSpace(*selfPlatformUserID) == "" {
+		return 0
+	}
+	selfID := strings.TrimSpace(*selfPlatformUserID)
+	count := 0
+	for _, item := range items {
+		if item.ConversationType == "direct" && strings.TrimSpace(item.PlatformUserID) == selfID {
+			count++
+		}
+	}
+	return count
+}
+
+func filterConversationListItems(items []conversationListItem, groupOnly bool) []conversationListItem {
+	if !groupOnly {
+		return items
+	}
+	filtered := make([]conversationListItem, 0, len(items))
+	for _, item := range items {
+		if strings.TrimSpace(item.ConversationType) == "group" {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
 }
 
 func normalizeConversationItems(items []conversationListItem, seen map[string]struct{}) ([]conversation.SyncItem, error) {
@@ -184,7 +231,7 @@ func normalizeConversationItems(items []conversationListItem, seen map[string]st
 	for _, item := range items {
 		conversationID := strings.TrimSpace(item.PlatformConversationID)
 		platformUserID := strings.TrimSpace(item.PlatformUserID)
-		if conversationID == "" || len(conversationID) > 512 || platformUserID == "" || len(platformUserID) > 256 {
+		if conversationID == "" || len(conversationID) > 512 || len(platformUserID) > 256 {
 			return nil, fmt.Errorf("conversation sync: stable platform ids are required")
 		}
 		if _, exists := seen[conversationID]; exists {
@@ -193,6 +240,19 @@ func normalizeConversationItems(items []conversationListItem, seen map[string]st
 		channel := strings.TrimSpace(item.Channel)
 		if channel != "consumer" && channel != "creator" {
 			return nil, fmt.Errorf("conversation sync: unsupported channel %q", channel)
+		}
+		conversationType := strings.TrimSpace(item.ConversationType)
+		if conversationType == "" {
+			conversationType = "unknown"
+		}
+		if conversationType != "direct" && conversationType != "group" && conversationType != "unknown" {
+			return nil, fmt.Errorf("conversation sync: unsupported conversation type %q", conversationType)
+		}
+		if conversationType == "direct" && platformUserID == "" {
+			return nil, fmt.Errorf("conversation sync: direct conversations require a peer id")
+		}
+		if item.StreakDays != nil && (*item.StreakDays < 0 || *item.StreakDays > 10000) {
+			return nil, fmt.Errorf("conversation sync: invalid streak days")
 		}
 		var lastMessageAt *time.Time
 		if item.LastMessageAt != nil && strings.TrimSpace(*item.LastMessageAt) != "" {
@@ -211,23 +271,54 @@ func normalizeConversationItems(items []conversationListItem, seen map[string]st
 			PlatformConversationID: conversationID,
 			PlatformUserID:         platformUserID,
 			DisplayName:            string(displayName),
+			AvatarURL:              normalizeAvatarURL(item.AvatarURL),
 			Channel:                channel,
+			ConversationType:       conversationType,
 			LastMessageAt:          lastMessageAt,
+			StreakDays:             item.StreakDays,
 		})
 	}
 	return out, nil
 }
 
-func commitConversationSyncSuccess(ctx context.Context, tx job.TxManager, jobs job.Repository, conversations conversation.SyncRepository, claimed *job.Job, accountID int64, items []conversation.SyncItem, now func() time.Time) error {
+func normalizeAvatarURL(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) > 2048 || (!strings.HasPrefix(value, "https://") && !strings.HasPrefix(value, "http://")) {
+		return ""
+	}
+	return value
+}
+
+func commitConversationSyncSuccess(ctx context.Context, tx job.TxManager, jobs job.Repository, conversations conversation.SyncRepository, claimed *job.Job, accountID int64, items []conversation.SyncItem, groupOnly bool, now func() time.Time) error {
 	return tx.WithinTx(ctx, func(tctx context.Context) error {
-		if err := jobs.Finish(tctx, claimed.ID, job.StatusSucceeded, nil, now()); err != nil {
+		syncAt := now()
+		if err := jobs.Finish(tctx, claimed.ID, job.StatusSucceeded, nil, syncAt); err != nil {
 			return err
 		}
-		if err := conversations.SyncBatch(tctx, accountID, items, now()); err != nil {
+		var syncErr error
+		if groupRepo, ok := conversations.(conversation.GroupSyncRepository); groupOnly && ok {
+			syncErr = groupRepo.ReplaceGroupBatch(tctx, accountID, items, syncAt)
+		} else if snapshotRepo, ok := conversations.(conversation.SnapshotSyncRepository); ok {
+			syncErr = snapshotRepo.SyncSnapshot(tctx, accountID, items, syncAt)
+		} else {
+			syncErr = conversations.SyncBatch(tctx, accountID, items, syncAt)
+		}
+		if err := syncErr; err != nil {
 			return err
 		}
-		return jobs.AppendEvent(tctx, claimed.ID, job.JobEvent{EventType: "success", Payload: mustJSON(map[string]int{"count": len(items)}), CreatedAt: now()})
+		return jobs.AppendEvent(tctx, claimed.ID, job.JobEvent{EventType: "success", Payload: mustJSON(map[string]int{"count": len(items)}), CreatedAt: syncAt})
 	})
+}
+
+func logConversationSyncCommitFailure(err error, itemCount int) {
+	// Keep the worker log useful without emitting platform IDs, peer IDs, or
+	// database error details that may contain user data.
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		slog.Error("conversation sync commit failed", "item_count", itemCount, "error_type", fmt.Sprintf("%T", err), "sqlstate", pgErr.Code, "constraint", pgErr.ConstraintName)
+		return
+	}
+	slog.Error("conversation sync commit failed", "item_count", itemCount, "error_type", fmt.Sprintf("%T", err))
 }
 
 type conversationsResultError struct{}

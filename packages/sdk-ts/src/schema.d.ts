@@ -525,6 +525,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * @deprecated
+         * @description Compatibility endpoint. Schedules the unified message-panel conversation sync and never crawls the follower list.
+         */
         post: operations["syncAccountFriends"];
         delete?: never;
         options?: never;
@@ -635,6 +639,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * @deprecated
+         * @description Compatibility projection of direct conversations. Use the unified conversations endpoint for all session types.
+         */
         get: operations["listFriends"];
         put?: never;
         post?: never;
@@ -912,6 +920,40 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mini/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Register a mini-program client with local account credentials and return a refresh token in the response body. */
+        post: operations["miniPasswordRegister"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mini/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Authenticate a mini-program client with local account credentials and return a refresh token in the response body. */
+        post: operations["miniPasswordLogin"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1511,13 +1553,20 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
-            friend_id: string;
+            friend_id: string | null;
             friend_display_name: string;
             friend_nickname: string;
             /** Format: uri */
             friend_avatar_url?: string | null;
+            streak_days: number;
+            spark_enabled: boolean;
+            /** Format: date-time */
+            last_sent_at: string | null;
             /** @enum {string} */
             platform_identity_status: "pending" | "resolved" | "ambiguous" | "missing";
+            /** @enum {string} */
+            conversation_type?: "direct" | "group" | "unknown";
+            spark_supported?: boolean;
             /** @enum {string} */
             channel: "consumer" | "creator";
             /** Format: date-time */
@@ -2844,6 +2893,7 @@ export interface operations {
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
                 include_archived?: boolean;
+                group_only?: boolean;
             };
             header?: never;
             path: {
@@ -3396,6 +3446,56 @@ export interface operations {
         };
         responses: {
             /** @description Authenticated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    miniPasswordRegister: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Registered mini-program session */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
+    miniPasswordLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Authenticated mini-program session */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -355,7 +355,9 @@ export async function checkAccountSession(accessToken: string, accountId: string
 }
 
 export async function syncAccountFriends(accessToken: string, accountId: string, idempotencyKey = crypto.randomUUID()) {
-  const { data, error } = await api.POST('/accounts/{accountId}/friends-sync', {
+  // Compatibility name for older clients. The server schedules the unified
+  // message-panel conversation sync; no friend/follower crawl is performed.
+  const { data, error } = await api.POST('/accounts/{accountId}/conversations-sync', {
     headers: { Authorization: `Bearer ${accessToken}`, 'Idempotency-Key': idempotencyKey },
     params: { path: { accountId }, header: { 'Idempotency-Key': idempotencyKey } },
   })
@@ -448,15 +450,31 @@ export async function updateNotificationPreferences(accessToken: string, wechat_
 }
 
 export async function listFriends(accessToken: string, accountId: string, options?: { limit?: number; cursor?: string }) {
-  const { data, error } = await api.GET('/accounts/{accountId}/friends', {
+  // Compatibility projection for older clients. Conversations are the only
+  // source of platform relationship data now.
+  const { data, error } = await api.GET('/accounts/{accountId}/conversations', {
     headers: { Authorization: `Bearer ${accessToken}` },
-    params: { path: { accountId }, query: options },
+    params: { path: { accountId }, query: { ...options, include_archived: true, group_only: false } },
   })
-  if (error) throwApiError(error, 'friends failed')
-  return data
+  if (error) throwApiError(error, 'conversations failed')
+  return {
+    next_cursor: data.next_cursor,
+    items: data.items.filter((item) => item.conversation_type !== 'group').map((item) => ({
+      id: item.friend_id ?? item.id,
+      platform_identity_status: item.friend_id ? item.platform_identity_status : 'missing',
+      display_name: item.friend_display_name,
+      nickname: item.friend_nickname,
+      short_id: null,
+      avatar_url: item.friend_avatar_url,
+      streak_days: item.streak_days,
+      has_conversation: true,
+      spark_enabled: item.spark_enabled,
+      last_sent_at: item.last_sent_at,
+    })),
+  }
 }
 
-export async function listConversations(accessToken: string, accountId: string, options?: { limit?: number; cursor?: string; include_archived?: boolean }) {
+export async function listConversations(accessToken: string, accountId: string, options?: { limit?: number; cursor?: string; include_archived?: boolean; group_only?: boolean }) {
   const { data, error } = await api.GET('/accounts/{accountId}/conversations', {
     headers: { Authorization: `Bearer ${accessToken}` },
     params: { path: { accountId }, query: options },

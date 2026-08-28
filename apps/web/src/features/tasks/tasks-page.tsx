@@ -7,12 +7,12 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Inpu
 import { Filter, Plus, Search } from 'lucide-react'
 
 import { getToken } from '@/auth/session'
+import { directFriendsFromConversations, listAllConversationsForAccount } from '../conversations/conversation-pagination'
 import { TaskEditorDrawer } from './task-editor-drawer'
 import { TaskTable } from './task-table'
 import type { Account, Friend, MessageTemplate, Task, TaskDraft } from './task-types'
 import { getTaskPageState } from './task-page-state'
 import { useAccountsQuery } from '../accounts/use-accounts-query'
-import { listAllFriendsForAccount } from '../friends/friend-pagination'
 import { SelectField } from '@/components/select-field'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 
@@ -48,8 +48,8 @@ export function TasksPage() {
   const tasks = tasksQ.data?.pages.flatMap((page) => page.items) ?? []
   const friendQueries = useQueries({
     queries: accounts.map((account) => ({
-      queryKey: ['task-friends', account.id],
-      queryFn: () => listAllFriendsForAccount(token as string, account.id),
+      queryKey: ['task-conversations', account.id],
+      queryFn: async () => directFriendsFromConversations(await listAllConversationsForAccount(token as string, account.id)),
       enabled: !!token,
     })),
   })
@@ -197,7 +197,7 @@ export function TasksPage() {
         </CardContent>
       </Card>
       {editor && <TaskEditorDrawer draft={editor.draft} accounts={accounts} friends={editorFriends} templates={templates} templatesHasNextPage={templatesQ.hasNextPage} templatesLoadingMore={templatesQ.isFetchingNextPage} onTemplatesLoadMore={() => void templatesQ.fetchNextPage()} creatorFirstMessageAllowed={creatorFirstMessageAllowed} creatorFirstMessageLoading={entitlementQ.isLoading} saving={busyTaskId === (editor.draft.id ?? 'new')} onChange={(patch) => setEditor((current) => current ? { ...current, draft: { ...current.draft, ...patch } } : current)} onAccountChange={changeEditorAccount} onTemplateApply={applyTemplate} onClose={() => setEditor(null)} onSave={() => void saveTask()} />}
-      <ConfirmDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !busyTaskId) setDeleteTarget(null) }} title="删除火花任务？" description="删除后，这个任务的发送配置将不再保留，需要重新创建。" impact="正在执行或等待执行的任务也会停止，不会影响抖音账号和好友数据。" confirmLabel="删除任务" confirmVariant="destructive" pending={busyTaskId === deleteTarget?.id} onConfirm={() => void removeTask()} />
+      <ConfirmDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !busyTaskId) setDeleteTarget(null) }} title="删除火花任务？" description="删除后，这个任务的发送配置将不再保留，需要重新创建。" impact="正在执行或等待执行的任务也会停止，不会影响抖音账号和会话数据。" confirmLabel="删除任务" confirmVariant="destructive" pending={busyTaskId === deleteTarget?.id} onConfirm={() => void removeTask()} />
       <ConfirmDialog open={!!runTarget} onOpenChange={(open) => { if (!open && !busyTaskId) setRunTarget(null) }} title="确认发送一次消息？" description={runTarget ? `将向“${friends.get(runTarget.friend_id)?.nickname || friends.get(runTarget.friend_id)?.display_name || '好友'}”发送：${runTarget.message.body || (runTarget.message.kind === 'sticker' ? '贴纸消息' : '未填写内容')}` : '确认立即执行这条任务吗？'} impact="这会真实调用抖音发送消息，发送后无法撤回。发送前系统仍会再次校验会话身份、账号状态和发送权益。" confirmLabel="确认发送" pending={busyTaskId === runTarget?.id} onConfirm={() => { if (runTarget) void runTask(runTarget) }} />
     </div>
   )

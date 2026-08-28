@@ -350,8 +350,9 @@ func (s *Service) requestSessionCheck(ctx context.Context, userID int64, publicI
 		outbox.KindSessionCheckBrowser, false, idempotencyKey)
 }
 
-// RequestFriendsSync is entitlement-gated (docs/06: friends sync is a gated
-// entry point).
+// RequestFriendsSync is kept as a compatibility entry point for older clients.
+// The implementation now schedules the unified message-panel conversation
+// sync; the follower/friend crawler is no longer part of the product flow.
 func (s *Service) RequestFriendsSync(ctx context.Context, userID int64, publicID uuid.UUID) (uuid.UUID, error) {
 	return s.requestFriendsSync(ctx, userID, publicID, "")
 }
@@ -361,24 +362,7 @@ func (s *Service) RequestFriendsSyncWithKey(ctx context.Context, userID int64, p
 }
 
 func (s *Service) requestFriendsSync(ctx context.Context, userID int64, publicID uuid.UUID, idempotencyKey string) (uuid.UUID, error) {
-	acct, err := s.repo.GetOwned(ctx, userID, publicID)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	if acct.BindingStatus != BindingBound {
-		return uuid.Nil, apperr.Conflict(apperr.CodeConflict, "account is not bound")
-	}
-	dec, err := s.gate.Authorize(ctx, entitlement.AuthorizationRequest{
-		UserID: userID, Action: entitlement.ActionFriendsSync,
-	})
-	if err != nil {
-		return uuid.Nil, err
-	}
-	if !dec.Allowed {
-		return uuid.Nil, gateErr(dec.ReasonCode)
-	}
-	return s.createPlatformJob(ctx, acct, "account.friends_sync.browser",
-		outbox.KindFriendsSyncBrowser, false, idempotencyKey)
+	return s.requestConversationsSync(ctx, userID, publicID, idempotencyKey)
 }
 
 // RequestConversationsSync starts an account-scoped conversation crawl. It

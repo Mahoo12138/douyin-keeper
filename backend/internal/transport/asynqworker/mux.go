@@ -57,7 +57,7 @@ func NewMux(loader PayloadLoader, log *slog.Logger) *asynq.ServeMux {
 	return newMux(loader, nil, nil, nil, nil, log)
 }
 
-// SessionCheckDeps wires the session-check, friend/conversation sync and browser-send jobs.
+// SessionCheckDeps wires the session-check, conversation sync and browser-send jobs.
 // Sidecar availability/capability checks remain the final execution gate.
 type SessionCheckDeps struct {
 	Jobs     job.Repository
@@ -185,8 +185,10 @@ func newMux(loader PayloadLoader, sessionDeps *SessionCheckDeps, qrDeps *QRBindD
 			register(kind, sessionCheckHandler(loader, *sessionDeps, log))
 			continue
 		}
-		if kind == asynqqueue.KindFriendsSyncBrowser && sessionDeps != nil && sessionDeps.Friends != nil {
-			register(kind, friendsSyncHandler(loader, *sessionDeps))
+		if kind == asynqqueue.KindFriendsSyncBrowser && sessionDeps != nil && sessionDeps.Conversations != nil {
+			// Legacy queue messages are intentionally routed through the unified
+			// message-panel sync so an old client cannot trigger follower crawling.
+			register(kind, conversationsSyncHandler(loader, *sessionDeps))
 			continue
 		}
 		if kind == asynqqueue.KindConversationsSyncBrowser && sessionDeps != nil && sessionDeps.Conversations != nil {

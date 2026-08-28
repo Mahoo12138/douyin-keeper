@@ -33,7 +33,7 @@ go -C backend run ./cmd/worker-interactive
 
 sidecar 使用 v1 NDJSON 协议，支持：
 
-- QR / SMS 登录及登录态导出
+- 抖音 Web QR / SMS 登录及登录态导出
 - 会话校验
 - 好友分页滚动同步
 - 会话列表、归档

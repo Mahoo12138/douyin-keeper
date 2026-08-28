@@ -759,6 +759,8 @@ paths:
   /accounts/{accountId}/friends-sync:
     post:
       operationId: syncAccountFriends
+      deprecated: true
+      description: Compatibility endpoint. Schedules the unified message-panel conversation sync and never crawls the follower list.
       parameters:
       - $ref: '#/components/parameters/AccountId'
       - name: Idempotency-Key
@@ -891,6 +893,8 @@ paths:
   /accounts/{accountId}/friends:
     get:
       operationId: listFriends
+      deprecated: true
+      description: Compatibility projection of direct conversations. Use the unified conversations endpoint for all session types.
       parameters:
       - $ref: '#/components/parameters/AccountId'
       - $ref: '#/components/parameters/Limit'
@@ -922,6 +926,11 @@ paths:
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       - name: include_archived
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - name: group_only
         in: query
         required: false
         schema:
@@ -3014,6 +3023,9 @@ components:
       - friend_id
       - friend_display_name
       - friend_nickname
+      - streak_days
+      - spark_enabled
+      - last_sent_at
       - platform_identity_status
       - channel
       - archived
@@ -3023,7 +3035,9 @@ components:
           type: string
           format: uuid
         friend_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
         friend_display_name:
           type: string
@@ -3034,6 +3048,16 @@ components:
           - string
           - 'null'
           format: uri
+        streak_days:
+          type: integer
+          minimum: 0
+        spark_enabled:
+          type: boolean
+        last_sent_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
         platform_identity_status:
           type: string
           enum:
@@ -3041,6 +3065,14 @@ components:
           - resolved
           - ambiguous
           - missing
+        conversation_type:
+          type: string
+          enum:
+          - direct
+          - group
+          - unknown
+        spark_supported:
+          type: boolean
         channel:
           type: string
           enum:
