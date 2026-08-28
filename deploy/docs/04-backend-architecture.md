@@ -44,7 +44,7 @@ Auth 使用短生命周期 Access Token + 可撤销 Refresh Session。PC 的 Ref
 - Risk Action；
 - Adapter 健康检查。
 
-### Playwright Sidecar
+### Node.js Playwright Sidecar
 
 职责限定：
 
@@ -291,7 +291,7 @@ keeper-backend  = Go API + Web C 端 + Admin
 keeper-worker   = Scheduler/Workers + Playwright/Protocol Sidecar runtime
 ```
 
-`worker-interactive / worker-browser / worker-light / scheduler` 使用同一个 Worker 镜像，通过不同 `command` 启动，继续保持进程和资源池隔离。Sidecar 默认作为 Worker 容器内的受控子进程运行，不单独暴露网络服务；未来需要更强沙箱时可以再拆为独立容器。
+`worker-interactive / worker-browser / worker-light / scheduler` 使用同一个 Worker 镜像，通过不同 `command` 启动，继续保持进程和资源池隔离。Node.js Playwright Sidecar 默认作为 Worker 容器内的受控子进程运行，不单独暴露网络服务；它按账号公共 UUID 打开独立 persistent Profile，Profile 目录只允许 Worker 运行用户访问。
 
 PostgreSQL 与 Redis 不对宿主机公网暴露。Redis 启用 AOF；PostgreSQL/Redis 都使用持久化 volume。
 

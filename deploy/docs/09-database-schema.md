@@ -592,10 +592,10 @@ CREATE TABLE capability_snapshots (
   capability      TEXT NOT NULL,
   status          TEXT NOT NULL
                   CHECK (status IN ('available','degraded','unavailable','unknown')),
-  adapter          TEXT,
+  adapter          TEXT NOT NULL DEFAULT 'browser.consumer',
   error_code       TEXT,
   checked_at       TIMESTAMPTZ NOT NULL,
-  PRIMARY KEY(account_id, capability)
+  PRIMARY KEY(account_id, capability, adapter)
 );
 
 CREATE TABLE adapter_health (
@@ -610,7 +610,10 @@ CREATE TABLE adapter_health (
 );
 ```
 
-全局 `adapter_health.protocol.im = open` 时，Resolver 不应让每个账号再次试错。
+同一账号的同一 capability 可以分别由 Browser 与 Protocol Adapter 探测，因此快照主键必须包含
+`adapter`；历史 `NULL` adapter 迁移为 `browser.consumer`。Resolver 与发送 Worker 必须按目标
+Adapter 精确读取，不能让一个 Adapter 的 unavailable 结果覆盖另一个 Adapter。全局
+`adapter_health.protocol.im = open` 时，Resolver 不应让每个账号再次试错。
 
 ## 10. Risk / Audit / Settings
 

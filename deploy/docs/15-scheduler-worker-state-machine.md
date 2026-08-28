@@ -754,7 +754,7 @@ Scheduler 周期任务：
 ### Binding Cleanup
 
 - 超时 binding Account；
-- 临时 Login Profile cleanup；
+- 临时 session export 文件 cleanup；账号级 persistent Profile 只在解除绑定、显式重置或保留策略清理时删除；
 - pending job timeout。
 
 ### Risk Expiry

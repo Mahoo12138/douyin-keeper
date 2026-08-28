@@ -432,7 +432,8 @@ GET /health/ready
 建议语义：
 
 - `/health/live`：进程自身仍工作，不依赖外部组件；
-- `/health/ready`：PostgreSQL/Redis 可用，Schema 版本满足当前程序要求。
+- `/health/ready`：PostgreSQL/Redis 可用，且 `schema_migrations` 已应用当前二进制内嵌的最新
+  migration；只 Ping 数据库但未完成迁移时仍返回 `503`，避免流量进入不完整 Schema。
 
 Worker 不对公网开 HTTP，可通过：
 
