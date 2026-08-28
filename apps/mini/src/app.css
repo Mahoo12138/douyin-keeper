@@ -272,25 +272,26 @@ page {
 @media (prefers-reduced-motion: reduce) { .home-reveal { animation: none; } .home-page .mini-button { transition: none; } }
 
 /* Account module */
-.account-page { min-height: 100vh; padding-bottom: 140rpx; background: #f8fbfa; }
+.account-page { min-height: 100vh; padding: 34rpx 24rpx 140rpx; background: #f4f8f6; }
 .account-page-header { display: flex; align-items: center; justify-content: space-between; }
 .account-page-kicker { display: block; color: #94a19b; font-size: 21rpx; }
 .account-page-title { display: block; margin-top: 6rpx; color: #14211b; font-size: 40rpx; font-weight: 700; }
 .account-add-button, .account-more-button, .account-back-button { display: flex; align-items: center; justify-content: center; margin: 0; padding: 0; border: 0; color: #17231d; background: #fff; line-height: 1; }
-.account-add-button { width: 76rpx; height: 76rpx; border: 1rpx solid #dfeae4; border-radius: 22rpx; color: #19af74; font-size: 42rpx; font-weight: 300; box-shadow: 0 10rpx 24rpx rgba(36, 100, 75, .06); }
+.account-add-button { width: 68rpx; height: 68rpx; border: 0; border-radius: 20rpx; color: #fff; background: #18b979; font-size: 38rpx; font-weight: 300; box-shadow: 0 10rpx 22rpx rgba(24, 185, 121, .2); }
 .account-add-button::after, .account-more-button::after, .account-back-button::after, .account-card::after { display: none; }
-.account-quota { position: relative; margin-top: 28rpx; padding: 24rpx; border-radius: 24rpx; color: #24402f; background: linear-gradient(135deg, #edfbf5 0%, #f7fbef 100%); }
+.account-quota { position: relative; margin-top: 24rpx; padding: 22rpx 20rpx 18rpx; border: 1rpx solid #e0ece5; border-radius: 22rpx; color: #24402f; background: #fff; box-shadow: 0 10rpx 24rpx rgba(35, 86, 65, .045); }
 .account-quota-label, .account-quota-caption { display: block; color: #789183; font-size: 21rpx; }
 .account-quota-value { display: block; margin-top: 10rpx; color: #183b2c; font-size: 48rpx; font-weight: 700; line-height: 1; }
 .account-quota-total { color: #87a194; font-size: 28rpx; font-weight: 500; }
 .account-quota-caption { margin-top: 8rpx; }
-.account-quota-action { position: absolute; top: 24rpx; right: 24rpx; margin: 0; padding: 10rpx 18rpx; border: 0; border-radius: 999rpx; color: #fff; background: #1abd7c; font-size: 21rpx; line-height: 1.4; }
+.account-quota-action { position: absolute; top: 20rpx; right: 20rpx; display: flex; align-items: center; justify-content: center; width: auto; min-width: 120rpx; height: 52rpx; margin: 0; padding: 0 16rpx; border: 0; border-radius: 999rpx; color: #fff; background: #1abd7c; font-size: 20rpx; line-height: 1; }
 .account-quota-action::after { display: none; }
-.account-quota-line { height: 10rpx; margin-top: 22rpx; overflow: hidden; border-radius: 999rpx; background: #dbece4; }
+.account-quota-line { height: 8rpx; margin-top: 20rpx; overflow: hidden; border-radius: 999rpx; background: #dbece4; }
 .account-quota-line View { height: 100%; border-radius: inherit; background: #1cbd7c; }
 .account-inline-error { margin-top: 16rpx; padding: 16rpx 18rpx; border-radius: 14rpx; color: #b83f3f; background: #fff1f1; font-size: 22rpx; line-height: 1.5; }
 .account-operation-status { margin-top: 16rpx; padding: 16rpx 18rpx; border-radius: 14rpx; color: #2467a4; background: #eff7ff; font-size: 22rpx; line-height: 1.5; }
-.account-card { position: relative; display: flex; align-items: flex-start; width: 100%; margin: 18rpx 0 0; padding: 20rpx; border: 1rpx solid #e4ece8; border-radius: 22rpx; color: #18221d; background: #fff; box-shadow: 0 12rpx 26rpx rgba(35, 86, 65, .05); text-align: left; }
+.account-card { position: relative; display: block; width: 100%; margin: 18rpx 0 0; padding: 22rpx 20rpx; border: 1rpx solid #e0ebe5; border-radius: 24rpx; color: #18221d; background: #fff; box-shadow: 0 12rpx 28rpx rgba(35, 86, 65, .055); text-align: left; }
+.account-card-main { display: flex; align-items: flex-start; width: 100%; }
 .account-card-copy { min-width: 0; flex: 1; margin-left: 18rpx; }
 .account-card-top { display: flex; align-items: center; gap: 12rpx; }
 .account-card-name { max-width: 270rpx; overflow: hidden; font-size: 29rpx; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
@@ -298,8 +299,8 @@ page {
 .account-tag-bound { color: #07865b; background: #e3f9ed; }
 .account-tag-binding { color: #a16e16; background: #fff3d8; }
 .account-tag-unbound, .account-tag-released { color: #7e8c86; background: #f0f3f1; }
-.account-card-status { display: flex; align-items: center; gap: 7rpx; margin-top: 10rpx; color: #6e7d75; font-size: 21rpx; }
-.account-card-stats { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 18rpx; padding-top: 16rpx; border-top: 1rpx solid #edf1ef; text-align: center; }
+.account-card-status { display: flex; align-items: center; gap: 7rpx; margin-top: 8rpx; color: #6e7d75; font-size: 21rpx; }
+.account-card-stats { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 20rpx; padding-top: 18rpx; border-top: 1rpx solid #edf1ef; text-align: center; }
 .account-card-stats View { border-right: 1rpx solid #edf1ef; }
 .account-card-stats .muted { display: block; margin-top: 4rpx; font-size: 19rpx; }
 .account-chevron { align-self: center; margin-left: 10rpx; color: #8b9892; font-size: 44rpx; font-weight: 300; }
@@ -370,6 +371,10 @@ page {
 .account-skeleton-header { width: 62%; height: 84rpx; }
 .account-skeleton-quota { height: 190rpx; margin-top: 28rpx; }
 .account-skeleton-card { height: 240rpx; margin-top: 18rpx; }
+
+.account-page .account-add-button, .account-page .account-quota-action, .account-page .account-card, .account-page .account-add-card, .account-page .account-primary-button, .account-page .account-secondary-button { transition: transform 140ms cubic-bezier(.23, 1, .32, 1), background-color 140ms ease, border-color 140ms ease, color 140ms ease; }
+.account-page .account-add-button:active, .account-page .account-quota-action:active, .account-page .account-card:active, .account-page .account-add-card:active, .account-page .account-primary-button:active, .account-page .account-secondary-button:active { transform: scale(.97); }
+@media (prefers-reduced-motion: reduce) { .account-page .account-add-button, .account-page .account-quota-action, .account-page .account-card, .account-page .account-add-card, .account-page .account-primary-button, .account-page .account-secondary-button { transition: none; } }
 
 /* Account binding flow */
 .account-binding-page { padding-top: 26rpx; text-align: center; }
