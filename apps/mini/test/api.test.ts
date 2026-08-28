@@ -537,4 +537,28 @@ describe('mini API auth recovery', () => {
       vi.unstubAllGlobals()
     }
   })
+
+  it('resumes H5 event streaming from the last received event id', async () => {
+    const firstRead = vi.fn()
+      .mockResolvedValueOnce({ done: false, value: new TextEncoder().encode('event: qr_ready\nid: 7\ndata: {"format":"data_url"}\n\n') })
+      .mockResolvedValueOnce({ done: true, value: undefined })
+    const secondRead = vi.fn().mockResolvedValue({ done: true, value: undefined })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, body: { getReader: () => ({ read: firstRead }) } })
+      .mockResolvedValueOnce({ ok: true, body: { getReader: () => ({ read: secondRead }) } })
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const stream = streamJobEvents('access-1', 'job-resume', () => undefined, { retryDelayMs: 1, maxReconnectAttempts: 1 })
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      stream.abort()
+
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+        headers: { Accept: 'text/event-stream', Authorization: 'Bearer access-1', 'Last-Event-ID': '7' },
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })

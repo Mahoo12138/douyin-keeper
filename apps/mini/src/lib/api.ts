@@ -170,7 +170,43 @@ export type JobEvent = {
   payload: Record<string, unknown>
 }
 
-export function streamJobEvents(token: string, jobId: string, onEvent: (event: JobEvent) => void) {
+export type JobEventStreamOptions = {
+  signal?: AbortSignal
+  retryDelayMs?: number
+  maxReconnectAttempts?: number
+}
+
+function normalizeJobEventStreamOptions(options?: AbortSignal | JobEventStreamOptions): JobEventStreamOptions {
+  if (!options) return {}
+  if (typeof AbortSignal !== 'undefined' && options instanceof AbortSignal) return { signal: options }
+  return options as JobEventStreamOptions
+}
+
+export function streamJobEvents(
+  token: string,
+  jobId: string,
+  onEvent: (event: JobEvent) => void,
+  signalOrOptions?: AbortSignal | JobEventStreamOptions,
+) {
+  const options = normalizeJobEventStreamOptions(signalOrOptions)
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+  const signal = controller?.signal
+  let stopped = false
+  let lastEventId = 0
+  let reconnectAttempts = 0
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+  const stop = () => {
+    if (stopped) return
+    stopped = true
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    reconnectTimer = null
+    controller?.abort()
+  }
+
+  const externalAbort = () => stop()
+  options.signal?.addEventListener('abort', externalAbort, { once: true })
+
   let buffer = ''
   const decoder = new TextDecoder()
   const consumeSSEChunk = (chunk: ArrayBuffer | Uint8Array) => {
@@ -183,6 +219,7 @@ export function streamJobEvents(token: string, jobId: string, onEvent: (event: J
       const data = frame.match(/^data:\s*(.+)$/m)?.[1]
       if (!eventType || !data) return
       try {
+        if (eventId > lastEventId) lastEventId = eventId
         onEvent({ eventType, eventId, payload: JSON.parse(data) as Record<string, unknown> })
       } catch {
         // Ignore malformed frames; the polling fallback still observes job state.
@@ -191,23 +228,50 @@ export function streamJobEvents(token: string, jobId: string, onEvent: (event: J
   }
 
   if (typeof window !== 'undefined' && typeof fetch === 'function' && typeof AbortController !== 'undefined') {
-    const controller = new AbortController()
-    void fetch(`${API_BASE_URL}/jobs/${jobId}/events`, {
-      method: 'GET',
-      headers: { Accept: 'text/event-stream', Authorization: `Bearer ${token}` },
-      signal: controller.signal,
-    }).then(async (response) => {
-      if (!response.ok || !response.body) return
-      const reader = response.body.getReader()
-      while (true) {
-        const result = await reader.read()
-        if (result.done) break
-        consumeSSEChunk(result.value)
+    const retryDelay = Math.max(0, options.retryDelayMs ?? 1000)
+    const maxReconnectAttempts = options.maxReconnectAttempts ?? Number.POSITIVE_INFINITY
+
+    const scheduleReconnect = () => {
+      if (stopped || reconnectAttempts >= maxReconnectAttempts) return
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null
+        if (stopped) return
+        reconnectAttempts += 1
+        void connect()
+      }, retryDelay)
+    }
+
+    const connect = async () => {
+      if (stopped) return
+      const headers: Record<string, string> = {
+        Accept: 'text/event-stream',
+        Authorization: `Bearer ${token}`,
       }
-    }).catch(() => {
-      // Polling observes the terminal job state when the stream is unavailable.
-    })
-    return { abort: () => controller.abort() }
+      if (lastEventId > 0) headers['Last-Event-ID'] = String(lastEventId)
+      try {
+        const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/events`, {
+          method: 'GET',
+          headers,
+          signal: signal ?? undefined,
+        })
+        if (!response.ok || !response.body) {
+          scheduleReconnect()
+          return
+        }
+        const reader = response.body.getReader()
+        while (!stopped) {
+          const result = await reader.read()
+          if (result.done) break
+          consumeSSEChunk(result.value)
+        }
+        if (!stopped) scheduleReconnect()
+      } catch {
+        if (!stopped) scheduleReconnect()
+      }
+    }
+
+    void connect()
+    return { abort: stop }
   }
 
   const task = Taro.request<string>({
@@ -222,7 +286,7 @@ export function streamJobEvents(token: string, jobId: string, onEvent: (event: J
     },
   })
   task.onChunkReceived(({ data }) => consumeSSEChunk(data))
-  return { abort: () => task.abort() }
+  return { abort: () => { stop(); task.abort() } }
 }
 
 export function cancelJob(token: string, jobId: string) {
