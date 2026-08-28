@@ -10,7 +10,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { clearSession, getAccessToken, getRefreshToken, setSession } from '../src/lib/session'
+import { clearPendingBinding, clearSession, getAccessToken, getPendingBinding, getRefreshToken, setPendingBinding, setSession } from '../src/lib/session'
 
 describe('mini auth session storage', () => {
   beforeEach(() => storage.clear())
@@ -36,5 +36,21 @@ describe('mini auth session storage', () => {
 
     expect(getAccessToken()).toBeNull()
     expect(getRefreshToken()).toBeNull()
+  })
+
+  it('persists a pending binding job and clears it with the session', () => {
+    setPendingBinding({ job_id: 'job-1', method: 'qr', account_id: 'account-1' })
+
+    expect(getPendingBinding()).toEqual({ job_id: 'job-1', method: 'qr', account_id: 'account-1' })
+
+    clearSession()
+    expect(getPendingBinding()).toBeNull()
+  })
+
+  it('clears a pending binding explicitly', () => {
+    setPendingBinding({ job_id: 'job-1', method: 'sms' })
+    clearPendingBinding()
+
+    expect(getPendingBinding()).toBeNull()
   })
 })

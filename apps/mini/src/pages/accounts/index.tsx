@@ -4,7 +4,7 @@ import Taro, { useDidShow } from '@tarojs/taro'
 
 import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, listAccounts, listFriends, MiniApiError, myEntitlement, pauseAccount, resumeAccount, streamJobEvents, submitSMSVerification, syncAccountFriends } from '@/lib/api'
 import type { JobEvent } from '@/lib/api'
-import { getAccessToken } from '@/lib/session'
+import { clearPendingBinding, getAccessToken, getPendingBinding, setPendingBinding } from '@/lib/session'
 import { bindingEventState } from '@/features/accounts/binding-events'
 import { effectiveCapabilities } from '@/features/accounts/capability-utils'
 import { accountBindingError } from '@/features/accounts/account-error-utils'
@@ -84,7 +84,18 @@ export default function Accounts() {
     }
   }, [])
 
-  useDidShow(() => { void load() })
+  useDidShow(() => {
+    const pending = getPendingBinding()
+    if (pending) {
+      setBindingJobId(pending.job_id)
+      setBindingMethod(pending.method)
+      setBindingAccountId(pending.account_id ?? '')
+      setBindingStep(3)
+      setBindingStatus('正在恢复绑定任务，请稍候')
+      setScreen(pending.method === 'qr' ? 'qr' : 'progress')
+    }
+    void load()
+  })
 
   useEffect(() => {
     if (!bindingJobId) return
@@ -97,6 +108,7 @@ export default function Accounts() {
         if (!active) return
         setBindingStatus(jobStatusLabel(job.status))
         if (job.status === 'succeeded') {
+          clearPendingBinding()
           setBindingJobId('')
           setBindingStatus('绑定成功，正在刷新账号')
           const freshAccounts = await load()
@@ -108,6 +120,7 @@ export default function Accounts() {
             setScreen('success')
           }
         } else if (job.status === 'failed' || job.status === 'cancelled') {
+          clearPendingBinding()
           setBindingJobId('')
           setBindingStatus('')
           if (active) {
@@ -119,7 +132,16 @@ export default function Accounts() {
           }
         }
       } catch (cause) {
-        if (active) setError(cause instanceof Error ? cause.message : '绑定状态查询失败')
+        if (!active) return
+        if (cause instanceof MiniApiError && cause.statusCode === 404) {
+          clearPendingBinding()
+          setBindingJobId('')
+          setBindingStatus('')
+          setError('绑定任务已失效，请重新开始。')
+          setScreen('method')
+          return
+        }
+        setError(cause instanceof Error ? cause.message : '绑定状态查询失败')
       }
     }
     void poll()
@@ -258,6 +280,7 @@ export default function Accounts() {
     try {
       const job = await createAccountBinding(token, bindingMethod, { phone: bindingMethod === 'sms' ? bindingPhone.trim() : undefined, accountId: bindingAccountId || undefined, idempotencyKey: createIdempotencyKey() })
       setBindingJobId(job.job_id)
+      setPendingBinding({ job_id: job.job_id, method: bindingMethod, ...(bindingAccountId ? { account_id: bindingAccountId } : {}) })
       setBindingStatus('绑定任务已创建，等待后端进度')
       setScreen(bindingMethod === 'qr' ? 'qr' : 'progress')
     } catch (cause) {
@@ -337,6 +360,7 @@ export default function Accounts() {
     setBusy('cancel')
     try {
       await cancelJob(token, bindingJobId)
+      clearPendingBinding()
       setBindingJobId('')
       setBindingStatus('')
       await load()
