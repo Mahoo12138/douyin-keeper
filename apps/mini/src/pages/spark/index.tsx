@@ -7,6 +7,7 @@ import { cancelJob, getJob, listAccounts, listFriends, listMessageTemplates, lis
 import { AccountTabs } from '@/components/account-tabs'
 import { accountTabLabel } from '@/components/account-tab-utils'
 import { createIdempotencyKey, selectAccountId } from '@/features/home/home-utils'
+import { jobErrorMessage } from '@/features/job-error-utils'
 import { enabledTaskCount, replaceFriend, replaceTask, taskDraftError, taskForFriend, taskTimeInput, taskTimePayload, templatePickerIndex } from '@/features/spark/spark-utils'
 import { MiniButton as Button } from '@/components/mini-button'
 
@@ -99,7 +100,7 @@ export default function Spark() {
           await load(selectedAccountIdRef.current, showArchived)
           if (active) await Taro.showToast({ title: platformArchiveJob.archived ? '平台归档完成' : '平台恢复完成', icon: 'success' })
         } else if (active) {
-          setError(job.error_code || (job.status === 'cancelled' ? '平台归档请求已取消' : '平台归档未完成，请重试。'))
+          setError(jobErrorMessage(job.error_code, job.status === 'cancelled' ? '平台归档请求已取消' : '平台归档未完成，请重试。'))
         }
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : '平台归档状态查询失败')
@@ -135,7 +136,7 @@ export default function Spark() {
           await load(selectedAccountIdRef.current, showArchived)
           if (active) await Taro.showToast({ title: '会话同步完成', icon: 'success' })
         } else if (active) {
-          setError(job.error_code || (job.status === 'cancelled' ? '会话同步请求已取消' : '会话同步失败，请重试。'))
+          setError(jobErrorMessage(job.error_code, job.status === 'cancelled' ? '会话同步请求已取消' : '会话同步失败，请重试。'))
         }
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : '会话同步状态查询失败')

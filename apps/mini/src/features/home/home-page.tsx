@@ -7,6 +7,7 @@ import { getAccessToken } from '@/lib/session'
 import { createIdempotencyKey, homeAccountStatus, homeOverallStatus, homeTaskStatus, nextEnabledTask, selectAccountId } from '@/features/home/home-utils'
 import { openMeNotifications } from '@/features/navigation/mini-navigation'
 import { notificationBodyLabel, notificationPriorityLabel } from '@/features/notification/notification-utils'
+import { jobErrorMessage } from '@/features/job-error-utils'
 import { productDayKey, productDayRange, productHour, PRODUCT_TIMEZONE } from '@/features/time/time-utils'
 import { accountTabLabel } from '@/components/account-tab-utils'
 import { MiniButton as Button } from '@/components/mini-button'
@@ -105,7 +106,7 @@ export function HomePage() {
           await load()
           if (active) await Taro.showToast({ title: homeJob.action === 'send' ? '任务执行完成' : '登录态检查完成', icon: 'success' })
         } else if (active) {
-          setError(job.error_code || (homeJob.action === 'send' ? '任务执行失败，请查看执行记录。' : '登录态检查失败，请重试。'))
+          setError(jobErrorMessage(job.error_code, homeJob.action === 'send' ? '任务执行失败，请查看执行记录。' : '登录态检查失败，请重试。'))
         }
       } catch (cause) {
         if (!active) return

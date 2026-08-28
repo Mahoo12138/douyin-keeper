@@ -9,6 +9,7 @@ import { bindingEventState } from '@/features/accounts/binding-events'
 import { effectiveCapabilities } from '@/features/accounts/capability-utils'
 import { accountBindingError } from '@/features/accounts/account-error-utils'
 import { createIdempotencyKey } from '@/features/home/home-utils'
+import { jobErrorMessage } from '@/features/job-error-utils'
 import { accountTabLabel } from '@/components/account-tab-utils'
 import { MiniButton as Button } from '@/components/mini-button'
 import avatarChen from '@/assets/home/avatar-chen.png'
@@ -112,7 +113,7 @@ export default function Accounts() {
           if (active) {
             await load()
             if (active) {
-              setError(job.error_code || (job.status === 'cancelled' ? '绑定任务已取消，请重新开始。' : '绑定任务未完成，请重试。'))
+              setError(jobErrorMessage(job.error_code, job.status === 'cancelled' ? '绑定任务已取消，请重新开始。' : '绑定任务未完成，请重试。'))
               setScreen('method')
             }
           }
@@ -161,7 +162,7 @@ export default function Accounts() {
           await load()
           if (active) await Taro.showToast({ title: accountJob.action === 'friends' ? '会话同步完成' : '登录态检查完成', icon: 'success' })
         } else if (active) {
-          setError(job.error_code || (accountJob.action === 'friends' ? '会话同步失败，请重试。' : '登录态检查失败，请重试。'))
+          setError(jobErrorMessage(job.error_code, accountJob.action === 'friends' ? '会话同步失败，请重试。' : '登录态检查失败，请重试。'))
         }
       } catch (cause) {
         if (!active) return
@@ -279,7 +280,7 @@ export default function Accounts() {
     if (state) {
       setBindingStatus(state.status)
       setBindingStep(state.step)
-      if (state.error) setError(typeof event.payload.code === 'string' ? event.payload.code : state.error)
+      if (state.error) setError(jobErrorMessage(typeof event.payload.code === 'string' ? event.payload.code : '', state.error))
       setScreen(state.screen)
     } else if (event.eventType === 'qr_ready') {
       setQrValue(typeof event.payload.value === 'string' ? event.payload.value : '')
@@ -299,7 +300,7 @@ export default function Accounts() {
       setBindingStep(4)
       setScreen('progress')
     } else if (event.eventType === 'error') {
-      setError(typeof event.payload.code === 'string' ? event.payload.code : '绑定失败，请重试')
+      setError(jobErrorMessage(typeof event.payload.code === 'string' ? event.payload.code : '', '绑定失败，请重试'))
     }
   }
 

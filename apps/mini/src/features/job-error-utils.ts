@@ -1,0 +1,35 @@
+const jobErrorLabels: Record<string, string> = {
+  ACCOUNT_BUSY: '账号正在处理其他任务，请稍后再试。',
+  ACCOUNT_COOLDOWN_ACTIVE: '账号处于冷却期，请稍后再试。',
+  ACCOUNT_IDENTITY_MISMATCH: '登录账号与目标账号不一致，原有登录态未改变。',
+  ACCOUNT_IDENTITY_UNRESOLVED: '暂未确认抖音账号身份，请重新登录。',
+  ACCOUNT_PAUSED: '账号任务已暂停，请先恢复任务。',
+  ACCOUNT_QUOTA_EXCEEDED: '账号数量已达当前权益上限，请升级配额后再试。',
+  ACCOUNT_RELEASED: '账号已解除绑定，请刷新账号列表。',
+  ADAPTER_INCOMPATIBLE: '发送通道暂不兼容，请稍后再试。',
+  ADAPTER_UNAVAILABLE: '发送通道暂不可用，请稍后再试。',
+  BROWSER_SELECTOR_CHANGED: '平台页面结构发生变化，请稍后重试。',
+  CHALLENGE_REQUIRED: '需要完成抖音安全验证后才能继续。',
+  CONVERSATION_NOT_FOUND: '会话不存在或已失效，请刷新后重试。',
+  DAILY_SEND_QUOTA_EXCEEDED: '今日发送额度已用完，请明天再试。',
+  ENTITLEMENT_EXPIRED: '当前权益已过期，请续期后再试。',
+  ENTITLEMENT_REQUIRED: '当前操作需要有效权益，请先开通权益。',
+  FEATURE_NOT_ENTITLED: '当前权益暂不支持此功能。',
+  FRIEND_AMBIGUOUS: '找到多个匹配会话，请确认目标后重试。',
+  FRIEND_IDENTITY_UNRESOLVED: '会话身份尚未确认，请同步会话后重试。',
+  FRIEND_NOT_FOUND: '会话不存在或已失效，请刷新后重试。',
+  JOB_NOT_CANCELABLE: '当前任务已不能取消。',
+  NETWORK_TIMEOUT: '网络连接超时，请稍后重试。',
+  OUTCOME_UNKNOWN: '执行结果暂待确认，请稍后查看记录。',
+  PLATFORM_RATE_LIMITED: '平台操作频率受限，请稍后再试。',
+  QR_EXPIRED: '二维码已过期，请刷新后重试。',
+  SESSION_EXPIRED: '账号登录状态已过期，请重新登录抖音账号。',
+  SMS_CODE_EXPIRED: '短信验证码已过期，请重新获取。',
+  TARGET_IDENTITY_MISMATCH: '会话身份不匹配，请刷新后重试。',
+  TASK_QUOTA_EXCEEDED: '任务额度已达上限，请升级配额后再试。',
+  UNSUPPORTED_PROTOCOL_VERSION: '当前协议版本暂不支持，请稍后再试。',
+}
+
+export function jobErrorMessage(code: string | null | undefined, fallback = '任务执行失败，请稍后重试。') {
+  return (code && jobErrorLabels[code]) || fallback
+}
