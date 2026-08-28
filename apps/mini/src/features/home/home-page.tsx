@@ -6,7 +6,7 @@ import { checkAccountSession, getJob, getMe, getSendJob, listAccounts, listNotif
 import { getAccessToken } from '@/lib/session'
 import { createIdempotencyKey, homeAccountStatus, homeOverallStatus, homeTaskStatus, nextEnabledTask, selectAccountId } from '@/features/home/home-utils'
 import { openMeNotifications } from '@/features/navigation/mini-navigation'
-import { notificationPriorityLabel } from '@/features/notification/notification-utils'
+import { notificationBodyLabel, notificationPriorityLabel } from '@/features/notification/notification-utils'
 import { productDayKey, productDayRange, productHour, PRODUCT_TIMEZONE } from '@/features/time/time-utils'
 import { accountTabLabel } from '@/components/account-tab-utils'
 import { MiniButton as Button } from '@/components/mini-button'
@@ -236,7 +236,7 @@ export function HomePage() {
 
     <View className="home-quick-actions"><Button className="home-primary-button" disabled={!nextTask || runBusy} onClick={() => void runNextTask()}><Text className="quick-action-icon">↯</Text>{runBusy ? '加入中…' : nextTask ? '立即执行下一项' : '暂无可执行任务'}</Button><Button className="home-secondary-button" onClick={() => Taro.switchTab({ url: '/pages/tasks/index' })}>管理会话与任务</Button></View>
 
-    {data.notifications.length > 0 && <View className="home-card notification-card compact-notification-card"><View className="home-card-heading"><Text className="home-card-title">风险提醒</Text><Button className="home-card-link-button" disabled={notificationBusy !== null} onClick={() => void markAllRead()}>{notificationBusy === 'all' ? '处理中…' : '全部已读'}</Button></View>{data.notifications.map((item) => <View className={`compact-notification ${item.read_at ? '' : 'compact-notification-unread'}`} key={item.id}><View className="compact-notification-copy"><Text className="compact-notification-title">{item.title}</Text><Text className="muted">{item.body}</Text></View><View><Text className={`notification-priority notification-priority-${item.priority}`}>{notificationPriorityLabel(item.priority)}</Text>{!item.read_at && <Button className="notification-read-button" disabled={notificationBusy !== null} onClick={() => void markRead(item.id)}>{notificationBusy === item.id ? '处理中…' : '已读'}</Button>}</View></View>)}</View>}
+    {data.notifications.length > 0 && <View className="home-card notification-card compact-notification-card"><View className="home-card-heading"><Text className="home-card-title">风险提醒</Text><Button className="home-card-link-button" disabled={notificationBusy !== null} onClick={() => void markAllRead()}>{notificationBusy === 'all' ? '处理中…' : '全部已读'}</Button></View>{data.notifications.map((item) => <View className={`compact-notification ${item.read_at ? '' : 'compact-notification-unread'}`} key={item.id}><View className="compact-notification-copy"><Text className="compact-notification-title">{item.title}</Text><Text className="muted">{notificationBodyLabel(item.body)}</Text></View><View><Text className={`notification-priority notification-priority-${item.priority}`}>{notificationPriorityLabel(item.priority)}</Text>{!item.read_at && <Button className="notification-read-button" disabled={notificationBusy !== null} onClick={() => void markRead(item.id)}>{notificationBusy === item.id ? '处理中…' : '已读'}</Button>}</View></View>)}</View>}
   </View>
 }
 
