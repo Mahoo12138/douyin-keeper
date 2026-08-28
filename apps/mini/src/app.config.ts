@@ -1,6 +1,7 @@
 export default defineAppConfig({
   pages: ['pages/index/index', 'pages/spark/index', 'pages/tasks/index', 'pages/accounts/index', 'pages/history/index', 'pages/login/index'],
   window: {
+    navigationStyle: 'custom',
     backgroundTextStyle: 'light',
     navigationBarBackgroundColor: '#ffffff',
     navigationBarTitleText: '抖音火花助手',

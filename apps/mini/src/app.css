@@ -500,9 +500,6 @@ page {
 .onboarding-progress-value { width: 62%; height: 100%; border-radius: inherit; background: #1cbd7c; animation: onboarding-progress 900ms ease-out both; }
 .onboarding-progress-label { display: block; margin-top: 14rpx; color: #8ba197; font-size: 19rpx; }
 .onboarding-welcome { display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 42rpx 36rpx 54rpx; }
-.onboarding-page-indicator { display: grid; grid-template-columns: 38rpx 72rpx 38rpx 72rpx 38rpx; align-items: center; justify-content: center; gap: 10rpx; color: #9baea4; font-size: 21rpx; }
-.onboarding-page-indicator View { height: 2rpx; background: #cce8da; }
-.onboarding-indicator-active { display: flex; align-items: center; justify-content: center; width: 38rpx; height: 38rpx; border-radius: 50%; color: #fff; background: #1cbd7c; font-weight: 700; }
 .welcome-hero { display: block; width: 620rpx; height: 620rpx; margin: 26rpx auto 0; text-align: left; }
 .welcome-title { display: block; margin-top: 14rpx; color: #1b2a22; font-size: 34rpx; font-weight: 650; }
 .welcome-brand { display: block; margin-top: 7rpx; color: #1b2a22; font-size: 42rpx; font-weight: 720; }
@@ -510,9 +507,6 @@ page {
 .welcome-copy { display: block; margin-top: 18rpx; color: #82978b; font-size: 23rpx; line-height: 1.7; white-space: pre-line; }
 .welcome-actions { width: 100%; margin: 160rpx auto 0; max-width: 560rpx; }
 .welcome-actions .me-primary-button, .welcome-actions .me-secondary-button { margin-top: 14rpx; }
-.welcome-dots { display: flex; justify-content: center; gap: 10rpx; margin-top: 44rpx; }
-.welcome-dot { display: block; width: 10rpx; height: 10rpx; border-radius: 50%; background: #c5ddd2; }
-.welcome-dot-active { width: 26rpx; border-radius: 999rpx; background: #2d7bf0; }
 .auth-back-button { display: block; margin: 0 0 12rpx; padding: 0; border: 0; color: #6d8a7c; background: transparent; font-size: 21rpx; line-height: 1.5; text-align: left; }
 .auth-back-button::after { display: none; }
 .auth-mascot { display: block; width: 190rpx; height: 190rpx; margin: 0 auto; text-align: left; }
@@ -828,3 +822,13 @@ page {
 .spark-reveal-5 { animation-delay: 180ms; }
 @keyframes spark-reveal-in { from { opacity: 0; transform: translateY(8rpx); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .spark-reveal { animation: none; } .spark-page .mini-button, .spark-page .account-tab, .spark-page .spark-view-tab, .spark-page .spark-archive-button, .spark-page .conversation-platform-button, .spark-page .conversation-platform-cancel, .spark-page .conversation-sync-button, .spark-page .conversation-sync-cancel, .spark-page .conversation-sync-bind, .spark-page .spark-task-edit-button { transition: none; } }
+
+/* The native WeChat title bar is disabled in app.config.ts. Keep page content below the status area. */
+.mini-page { padding-top: calc(16rpx + env(safe-area-inset-top)); }
+.home-page { padding-top: calc(38rpx + env(safe-area-inset-top)); }
+.me-page { padding-top: calc(34rpx + env(safe-area-inset-top)); }
+.me-auth-page { padding-top: calc(82rpx + env(safe-area-inset-top)); }
+.task-page { padding-top: calc(34rpx + env(safe-area-inset-top)); }
+.spark-page { padding-top: calc(34rpx + env(safe-area-inset-top)); }
+.onboarding-splash { padding-top: calc(64rpx + env(safe-area-inset-top)); }
+.onboarding-welcome { padding-top: calc(42rpx + env(safe-area-inset-top)); }
