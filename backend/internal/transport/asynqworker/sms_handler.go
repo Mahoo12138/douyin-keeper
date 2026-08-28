@@ -225,9 +225,18 @@ func smsBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context,
 			if verified.State == "authenticated" && verified.SessionExported {
 				return completeBind(ctx, deps, claimed, acct, exportPath, verified.Identity)
 			}
-			if err := appendSMSCodeInvalidEvent(ctx, deps.Jobs, claimed.ID, deps.Now); err != nil {
-				return err
+			// "waiting" means the platform accepted the submit action but has
+			// not exposed an authenticated session yet. It is not evidence that
+			// the code was invalid; keep the job waiting for another poll/code.
+			if verified.State == "waiting" {
+				if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{
+					EventType: "sms_verification_pending", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now(),
+				}); err != nil {
+					return err
+				}
+				continue
 			}
+			return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
 		}
 		return fail(apperr.CodeSMSExpired)
 	}

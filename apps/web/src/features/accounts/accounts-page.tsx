@@ -7,7 +7,7 @@ import {
   deleteAccount,
   pauseAccount,
   resumeAccount,
-  syncAccountFriends,
+  syncAccountConversations,
 } from '@douyin-keeper/sdk-ts'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Skeleton } from '@douyin-keeper/ui-web'
 import { ShieldAlert, Trash2 } from 'lucide-react'
@@ -36,10 +36,10 @@ export function AccountsPage() {
     enabled: !!token && !!selectedAccountId,
   })
 
-  async function runAccountAction(account: Account, action: 'session' | 'friends' | 'pause' | 'resume') {
+  async function runAccountAction(account: Account, action: 'session' | 'conversations' | 'pause' | 'resume') {
     if (!token) return
-    if (action === 'friends' && !canSyncFriends(account)) {
-      toast.error('当前账号会话已过期，请重新登录后再同步好友')
+    if (action === 'conversations' && !canSyncFriends(account)) {
+      toast.error('当前账号会话已过期，请重新登录后再同步会话')
       return
     }
     const key = `${account.id}:${action}`
@@ -52,8 +52,8 @@ export function AccountsPage() {
         await resumeAccount(token, account.id)
         toast.success('账号任务已恢复')
       } else {
-        const job = action === 'session' ? await checkAccountSession(token, account.id) : await syncAccountFriends(token, account.id)
-        toast.success(action === 'session' ? '会话检查已开始' : '好友同步已开始')
+        const job = action === 'session' ? await checkAccountSession(token, account.id) : await syncAccountConversations(token, account.id)
+        toast.success(action === 'session' ? '会话检查已开始' : '会话同步已开始')
         await waitForJobEvents(token, job.job_id)
       }
       await queryClient.invalidateQueries({ queryKey: ['accounts'] })
@@ -92,7 +92,7 @@ export function AccountsPage() {
         <div>
           <p className="text-sm font-medium text-primary">账号中心</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">抖音账号</h1>
-          <p className="mt-1 text-sm text-muted-foreground">管理登录状态、能力快照与好友同步。</p>
+          <p className="mt-1 text-sm text-muted-foreground">管理登录状态、能力快照与消息会话同步。</p>
         </div>
         <AccountBindingFlow />
       </div>
@@ -115,7 +115,7 @@ export function AccountsPage() {
                 busyAction={busyAction}
                 onSelect={(accountId) => setSelectedAccountId((current) => current === accountId ? null : accountId)}
                 onSession={(account) => void runAccountAction(account, 'session')}
-                onFriends={(account) => void runAccountAction(account, 'friends')}
+                onConversations={(account) => void runAccountAction(account, 'conversations')}
                 onPause={(account) => void runAccountAction(account, account.paused_at ? 'resume' : 'pause')}
                 onRelease={(account) => setReleaseTarget(account)}
               />

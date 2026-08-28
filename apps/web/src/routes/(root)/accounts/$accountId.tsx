@@ -3,7 +3,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { ArrowLeft, CheckCircle2, Clock3, History, ListChecks, RefreshCw, Send, ShieldCheck, Smartphone, UsersRound } from 'lucide-react'
-import { accountCapabilities, checkAccountSession, listFriends, listSendIntents, listTasks, syncAccountFriends, updateFriend, type components } from '@douyin-keeper/sdk-ts'
+import { accountCapabilities, checkAccountSession, listConversations, listSendIntents, listTasks, syncAccountConversations, updateFriend, type components } from '@douyin-keeper/sdk-ts'
 import { Avatar, AvatarFallback, AvatarImage, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from '@douyin-keeper/ui-web'
 
 import { getToken } from '@/auth/session'
@@ -17,6 +17,7 @@ import { todayRange } from '@/features/dashboard/dashboard-utils'
 import { flattenPageItems } from '@/lib/query-utils'
 import { FriendTable } from '@/features/friends/friend-table'
 import type { Friend, SparkTask } from '@/features/friends/friend-types'
+import { directFriendsFromConversations } from '@/features/conversations/conversation-pagination'
 import { HistoryDetailDrawer } from '@/features/history/history-detail-drawer'
 
 type Tab = 'overview' | 'friends' | 'tasks' | 'history' | 'capabilities'
@@ -29,11 +30,11 @@ function AccountDetailPage() {
 	const { accountId } = Route.useParams()
 	const queryClient = useQueryClient()
 	const [tab, setTab] = useState<Tab>('overview')
-	const [busyAction, setBusyAction] = useState<'session' | 'friends' | null>(null)
+	const [busyAction, setBusyAction] = useState<'session' | 'conversations' | null>(null)
 	const [pendingFriendId, setPendingFriendId] = useState<string | null>(null)
 	const [selectedIntent, setSelectedIntent] = useState<Intent | null>(null)
 	const accountsQ = useAccountsQuery(token, { loadAll: true })
-	const friendsQ = useInfiniteQuery({ queryKey: ['account-friends', accountId], queryFn: ({ pageParam }) => listFriends(token as string, accountId, { limit: 50, cursor: pageParam }), initialPageParam: undefined as string | undefined, getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined, enabled: !!token })
+	const friendsQ = useInfiniteQuery({ queryKey: ['account-conversations', accountId], queryFn: ({ pageParam }) => listConversations(token as string, accountId, { limit: 50, cursor: pageParam, include_archived: true, group_only: false }), initialPageParam: undefined as string | undefined, getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined, enabled: !!token })
 	const tasksQ = useInfiniteQuery({ queryKey: ['tasks'], queryFn: ({ pageParam }) => listTasks(token as string, { limit: 50, cursor: pageParam }), initialPageParam: undefined as string | undefined, getNextPageParam: (lastPage) => lastPage?.next_cursor ?? undefined, enabled: !!token })
 	const intentsQ = useInfiniteQuery({ queryKey: ['send-intents', 'account', accountId], queryFn: ({ pageParam }) => listSendIntents(token as string, { account_id: accountId, limit: 50, cursor: pageParam }), initialPageParam: undefined as string | undefined, getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined, enabled: !!token })
 	const today = todayRange()
@@ -45,7 +46,8 @@ function AccountDetailPage() {
 	}, [todayIntentsQ.fetchNextPage, todayIntentsQ.hasNextPage, todayIntentsQ.isFetchingNextPage])
 
 	const account = accountsQ.accounts.find((item) => item.id === accountId)
-	const friends = friendsQ.data?.pages.flatMap((page) => page.items) ?? []
+	const conversations = friendsQ.data?.pages.flatMap((page) => page.items) ?? []
+	const friends = directFriendsFromConversations(conversations)
 	const tasks = tasksForAccount(flattenPageItems(tasksQ.data?.pages ?? []), accountId)
 	const intents = flattenPageItems(intentsQ.data?.pages ?? [])
 	const todayIntents = flattenPageItems(todayIntentsQ.data?.pages ?? [])
@@ -53,20 +55,20 @@ function AccountDetailPage() {
 	const todayIntentStats = summarizeAccountIntents(todayIntents)
 	const friendMap = friendsById(friends)
 
-	async function runAccountAction(action: 'session' | 'friends') {
+	async function runAccountAction(action: 'session' | 'conversations') {
 		if (!token) return
-		if (action === 'friends' && !canSyncFriends(account)) {
-			toast.error('当前账号会话已过期，请重新登录后再同步好友')
+		if (action === 'conversations' && !canSyncFriends(account)) {
+			toast.error('当前账号会话已过期，请重新登录后再同步会话')
 			return
 		}
 		setBusyAction(action)
 		try {
-			const job = action === 'session' ? await checkAccountSession(token, accountId) : await syncAccountFriends(token, accountId)
+			const job = action === 'session' ? await checkAccountSession(token, accountId) : await syncAccountConversations(token, accountId)
 			await waitForJobEvents(token, job.job_id)
-			toast.success(action === 'session' ? '会话检查已完成' : '好友同步已完成')
+			toast.success(action === 'session' ? '会话检查已完成' : '会话同步已完成')
 			await Promise.all([
 				queryClient.invalidateQueries({ queryKey: ['accounts'] }),
-				queryClient.invalidateQueries({ queryKey: ['account-friends', accountId] }),
+				queryClient.invalidateQueries({ queryKey: ['account-conversations', accountId] }),
 				queryClient.invalidateQueries({ queryKey: ['account-capabilities', accountId] }),
 			])
 		} catch (error) {
@@ -80,7 +82,7 @@ function AccountDetailPage() {
 		setPendingFriendId(friend.id)
 		try {
 			await updateFriend(token as string, friend.id, enabled)
-			await queryClient.invalidateQueries({ queryKey: ['account-friends', accountId] })
+			await queryClient.invalidateQueries({ queryKey: ['account-conversations', accountId] })
 			toast.success(enabled ? '已开启火花维护' : '已关闭火花维护')
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : '火花开关更新失败')
@@ -101,7 +103,7 @@ function AccountDetailPage() {
 					<Avatar className="size-14"><AvatarImage src={account.avatar_url ?? undefined} alt={`${account.nickname || '抖音账号'}头像`} /><AvatarFallback><Smartphone className="size-5" /></AvatarFallback></Avatar>
 					<div className="min-w-0"><p className="text-sm font-medium text-primary">账号详情</p><h1 className="mt-1 truncate text-2xl font-semibold tracking-tight">{account.nickname || '未命名账号'}</h1><div className="mt-2 flex flex-wrap gap-1.5"><StatusBadge label={bindingLabel(account.binding_status)} variant={account.binding_status === 'bound' ? 'success' : 'muted'} /><StatusBadge label={sessionLabel(account.session_status)} variant={account.session_status === 'valid' ? 'success' : account.session_status === 'expired' ? 'destructive' : 'warning'} /><StatusBadge label={riskLabel(account.risk_status)} variant={account.risk_status === 'normal' ? 'success' : account.risk_status === 'paused' ? 'destructive' : 'warning'} /></div></div>
 				</div>
-				<div className="flex flex-wrap gap-2 sm:justify-end"><Button variant="outline" onClick={() => void runAccountAction('session')} disabled={busyAction !== null}><RefreshCw className={busyAction === 'session' ? 'animate-spin' : ''} />检查登录态</Button><Button onClick={() => void runAccountAction('friends')} disabled={busyAction !== null || !canSyncFriends(account)} title={!canSyncFriends(account) ? '请重新登录后再同步好友' : undefined}><UsersRound />同步好友</Button></div>
+				<div className="flex flex-wrap gap-2 sm:justify-end"><Button variant="outline" onClick={() => void runAccountAction('session')} disabled={busyAction !== null}><RefreshCw className={busyAction === 'session' ? 'animate-spin' : ''} />检查登录态</Button><Button onClick={() => void runAccountAction('conversations')} disabled={busyAction !== null || !canSyncFriends(account)} title={!canSyncFriends(account) ? '请重新登录后再同步会话' : undefined}><UsersRound />同步会话</Button></div>
 			</div>
 
 			<Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} id="account-detail-tabs">
@@ -112,7 +114,7 @@ function AccountDetailPage() {
 				<TabsContent value="friends">{tab === 'friends' && <FriendsTab friends={friends} tasks={tasks} accountId={accountId} loading={friendsQ.isLoading || tasksQ.isLoading} error={friendsQ.isError || tasksQ.isError} pendingFriendId={pendingFriendId} onToggle={toggleFriend} onRetry={() => { void friendsQ.refetch(); void tasksQ.refetch() }} hasNextPage={friendsQ.hasNextPage} fetchingNextPage={friendsQ.isFetchingNextPage} onLoadMore={() => void friendsQ.fetchNextPage()} tasksHasNextPage={tasksQ.hasNextPage} tasksFetchingNextPage={tasksQ.isFetchingNextPage} onTasksLoadMore={() => void tasksQ.fetchNextPage()} />}</TabsContent>
 				<TabsContent value="tasks">{tab === 'tasks' && <TasksTab tasks={tasks} friends={friendMap} loading={tasksQ.isLoading || friendsQ.isLoading} error={tasksQ.isError || friendsQ.isError} onRetry={() => { void tasksQ.refetch(); void friendsQ.refetch() }} hasNextPage={tasksQ.hasNextPage} fetchingNextPage={tasksQ.isFetchingNextPage} onLoadMore={() => void tasksQ.fetchNextPage()} />}</TabsContent>
 				<TabsContent value="history">{tab === 'history' && <HistoryTab intents={intents} loading={intentsQ.isLoading} error={intentsQ.isError} onRetry={() => void intentsQ.refetch()} onSelect={setSelectedIntent} hasNextPage={intentsQ.hasNextPage} fetchingNextPage={intentsQ.isFetchingNextPage} onLoadMore={() => void intentsQ.fetchNextPage()} />}</TabsContent>
-				<TabsContent value="capabilities">{tab === 'capabilities' && <div className="space-y-4"><CapabilityPanel account={account} capabilities={(capabilitiesQ.data?.items ?? []) as Capability[]} loading={capabilitiesQ.isLoading} error={capabilitiesQ.isError} /><Card><CardHeader><CardTitle className="text-base">登录与能力说明</CardTitle><CardDescription>能力快照只描述当前账号是否可用，不展示 Session、Cookie 或平台内部凭据。</CardDescription></CardHeader><CardContent className="grid gap-3 text-sm sm:grid-cols-2"><Fact label="上次会话检查" value={formatDate(account.last_session_check_at)} /><Fact label="上次好友同步" value={formatDate(account.last_friend_sync_at)} /></CardContent></Card></div>}</TabsContent>
+				<TabsContent value="capabilities">{tab === 'capabilities' && <div className="space-y-4"><CapabilityPanel account={account} capabilities={(capabilitiesQ.data?.items ?? []) as Capability[]} loading={capabilitiesQ.isLoading} error={capabilitiesQ.isError} /><Card><CardHeader><CardTitle className="text-base">登录与能力说明</CardTitle><CardDescription>能力快照只描述当前账号是否可用，不展示 Session、Cookie 或平台内部凭据。</CardDescription></CardHeader><CardContent className="grid gap-3 text-sm sm:grid-cols-2"><Fact label="上次会话检查" value={formatDate(account.last_session_check_at)} /><Fact label="上次会话同步" value={formatDate(account.last_friend_sync_at)} /></CardContent></Card></div>}</TabsContent>
 			</Tabs>
 			{selectedIntent && <HistoryDetailDrawer intent={selectedIntent} token={token as string} onClose={() => setSelectedIntent(null)} />}
 		</div>
@@ -121,7 +123,7 @@ function AccountDetailPage() {
 
 const tabs: Array<{ value: Tab; label: string }> = [
 	{ value: 'overview', label: '概览' },
-	{ value: 'friends', label: '好友' },
+	{ value: 'friends', label: '会话' },
 	{ value: 'tasks', label: '任务' },
 	{ value: 'history', label: '记录' },
 	{ value: 'capabilities', label: '登录与能力' },
@@ -129,11 +131,11 @@ const tabs: Array<{ value: Tab; label: string }> = [
 
 function OverviewTab({ account, intents, stats, intentsLoading, intentsError, onRetry }: { account: Account; intents: Intent[]; stats: ReturnType<typeof summarizeAccountIntents>; intentsLoading: boolean; intentsError: boolean; onRetry: () => void }) {
 	const next = intents.filter((intent) => ['pending', 'queued', 'running', 'retry_wait'].includes(intent.status)).sort((left, right) => new Date(left.scheduled_at).getTime() - new Date(right.scheduled_at).getTime())[0]
-	return <div className="space-y-4"><div className="grid gap-3 sm:grid-cols-4"><SummaryCard icon={<Send />} label="今日成功" value={intentsLoading || intentsError ? '—' : stats.succeeded} /><SummaryCard icon={<Clock3 />} label="待处理" value={intentsLoading || intentsError ? '—' : stats.pending} tone={stats.pending ? 'warning' : undefined} /><SummaryCard icon={<ShieldCheck />} label="失败" value={intentsLoading || intentsError ? '—' : stats.failed} tone={stats.failed ? 'danger' : undefined} /><SummaryCard icon={<CheckCircle2 />} label="跳过/取消" value={intentsLoading || intentsError ? '—' : stats.skipped} /></div><div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><Card><CardHeader><CardTitle>账号状态</CardTitle><CardDescription>登录态、同步和风险状态。</CardDescription></CardHeader><CardContent className="grid gap-3 text-sm sm:grid-cols-2"><Fact label="绑定状态" value={bindingLabel(account.binding_status)} /><Fact label="Session" value={sessionLabel(account.session_status)} /><Fact label="风险状态" value={riskLabel(account.risk_status)} /><Fact label="最近会话检查" value={formatDate(account.last_session_check_at)} /><Fact label="最近好友同步" value={formatDate(account.last_friend_sync_at)} /><Fact label="暂停时间" value={formatDate(account.paused_at)} /></CardContent></Card><Card><CardHeader><CardTitle>下一次任务</CardTitle><CardDescription>当前账号最近的待执行计划。</CardDescription></CardHeader><CardContent>{intentsError ? <DetailError text="发送记录暂时不可用" onRetry={onRetry} /> : intentsLoading ? <DetailListLoading /> : next ? <div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 text-primary" /><div><p className="font-medium">{next.friend.display_name}</p><p className="mt-1 text-sm text-muted-foreground">{formatDate(next.scheduled_at)} · {next.task?.body || (next.task?.message_kind === 'sticker' ? '贴纸消息' : '任务')}</p><Badge className="mt-3" variant="muted">{next.status === 'running' ? '执行中' : '等待执行'}</Badge></div></div> : <EmptyPanel icon={<Clock3 />} text="当前没有待执行计划" />}</CardContent></Card></div></div>
+	return <div className="space-y-4"><div className="grid gap-3 sm:grid-cols-4"><SummaryCard icon={<Send />} label="今日成功" value={intentsLoading || intentsError ? '—' : stats.succeeded} /><SummaryCard icon={<Clock3 />} label="待处理" value={intentsLoading || intentsError ? '—' : stats.pending} tone={stats.pending ? 'warning' : undefined} /><SummaryCard icon={<ShieldCheck />} label="失败" value={intentsLoading || intentsError ? '—' : stats.failed} tone={stats.failed ? 'danger' : undefined} /><SummaryCard icon={<CheckCircle2 />} label="跳过/取消" value={intentsLoading || intentsError ? '—' : stats.skipped} /></div><div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><Card><CardHeader><CardTitle>账号状态</CardTitle><CardDescription>登录态、同步和风险状态。</CardDescription></CardHeader><CardContent className="grid gap-3 text-sm sm:grid-cols-2"><Fact label="绑定状态" value={bindingLabel(account.binding_status)} /><Fact label="Session" value={sessionLabel(account.session_status)} /><Fact label="风险状态" value={riskLabel(account.risk_status)} /><Fact label="最近会话检查" value={formatDate(account.last_session_check_at)} /><Fact label="最近会话同步" value={formatDate(account.last_friend_sync_at)} /><Fact label="暂停时间" value={formatDate(account.paused_at)} /></CardContent></Card><Card><CardHeader><CardTitle>下一次任务</CardTitle><CardDescription>当前账号最近的待执行计划。</CardDescription></CardHeader><CardContent>{intentsError ? <DetailError text="发送记录暂时不可用" onRetry={onRetry} /> : intentsLoading ? <DetailListLoading /> : next ? <div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 text-primary" /><div><p className="font-medium">{next.friend.display_name}</p><p className="mt-1 text-sm text-muted-foreground">{formatDate(next.scheduled_at)} · {next.task?.body || (next.task?.message_kind === 'sticker' ? '贴纸消息' : '任务')}</p><Badge className="mt-3" variant="muted">{next.status === 'running' ? '执行中' : '等待执行'}</Badge></div></div> : <EmptyPanel icon={<Clock3 />} text="当前没有待执行计划" />}</CardContent></Card></div></div>
 }
 
 function FriendsTab({ friends, tasks, accountId, loading, error, pendingFriendId, onToggle, onRetry, hasNextPage, fetchingNextPage, onLoadMore, tasksHasNextPage, tasksFetchingNextPage, onTasksLoadMore }: { friends: Friend[]; tasks: SparkTask[]; accountId: string; loading: boolean; error: boolean; pendingFriendId: string | null; onToggle: (friend: Friend, enabled: boolean) => void; onRetry: () => void; hasNextPage: boolean; fetchingNextPage: boolean; onLoadMore: () => void; tasksHasNextPage?: boolean; tasksFetchingNextPage: boolean; onTasksLoadMore: () => void }) {
-	return <Card><CardHeader><CardTitle className="flex items-center gap-2"><UsersRound className="size-4" />账号好友</CardTitle><CardDescription>{friends.length ? `已加载 ${friends.length} 位好友；可直接调整火花维护开关。` : '好友同步后会出现在这里。'}</CardDescription></CardHeader><CardContent>{loading ? <DetailListLoading /> : error ? <DetailError text="好友数据暂时不可用" onRetry={onRetry} /> : friends.length ? <><div className="overflow-x-auto"><FriendTable friends={friends} tasks={tasks} accountId={accountId} pendingFriendId={pendingFriendId} onToggle={onToggle} /></div>{(hasNextPage || tasksHasNextPage) && <div className="mt-4 flex flex-wrap justify-center gap-2">{hasNextPage && <Button variant="outline" onClick={onLoadMore} disabled={fetchingNextPage}>{fetchingNextPage ? '加载好友中…' : '加载更多好友'}</Button>}{tasksHasNextPage && <Button variant="outline" onClick={onTasksLoadMore} disabled={tasksFetchingNextPage}>{tasksFetchingNextPage ? '加载任务中…' : '加载更多任务状态'}</Button>}</div>}</> : <><EmptyPanel icon={<UsersRound />} text="还没有同步好友" />{hasNextPage && <PaginationButton label="加载更多好友" loadingLabel="加载好友中…" loading={fetchingNextPage} onClick={onLoadMore} />}</>}</CardContent></Card>
+	return <Card><CardHeader><CardTitle className="flex items-center gap-2"><UsersRound className="size-4" />会话</CardTitle><CardDescription>{friends.length ? `已加载 ${friends.length} 条会话；直接会话与群聊都可调整火花维护。` : '会话同步后会出现在这里。'}</CardDescription></CardHeader><CardContent>{loading ? <DetailListLoading /> : error ? <DetailError text="会话数据暂时不可用" onRetry={onRetry} /> : friends.length ? <><div className="overflow-x-auto"><FriendTable friends={friends} tasks={tasks} accountId={accountId} pendingFriendId={pendingFriendId} onToggle={onToggle} /></div>{(hasNextPage || tasksHasNextPage) && <div className="mt-4 flex flex-wrap justify-center gap-2">{hasNextPage && <Button variant="outline" onClick={onLoadMore} disabled={fetchingNextPage}>{fetchingNextPage ? '加载会话中…' : '加载更多会话'}</Button>}{tasksHasNextPage && <Button variant="outline" onClick={onTasksLoadMore} disabled={tasksFetchingNextPage}>{tasksFetchingNextPage ? '加载任务中…' : '加载更多任务状态'}</Button>}</div>}</> : <><EmptyPanel icon={<UsersRound />} text="还没有同步会话" />{hasNextPage && <PaginationButton label="加载更多会话" loadingLabel="加载会话中…" loading={fetchingNextPage} onClick={onLoadMore} />}</>}</CardContent></Card>
 }
 
 function TasksTab({ tasks, friends, loading, error, onRetry, hasNextPage, fetchingNextPage, onLoadMore }: { tasks: SparkTask[]; friends: Map<string, Friend>; loading: boolean; error: boolean; onRetry: () => void; hasNextPage?: boolean; fetchingNextPage: boolean; onLoadMore: () => void }) {

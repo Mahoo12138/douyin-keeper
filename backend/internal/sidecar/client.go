@@ -25,6 +25,9 @@ const (
 	OpsLoginSMSStart        = "login.sms.start"
 	OpsLoginSMSVerify       = "login.sms.verify"
 	OpsSessionValidate      = "session.validate"
+	// OpsFriendsList is retained as a source-compatibility symbol for older
+	// integrations, but it is no longer supported by the Node sidecar. All
+	// relationship data must come from the message-panel conversation inventory.
 	OpsFriendsList          = "friends.list"
 	OpsConversationsList    = "conversations.list"
 	OpsConversationsArchive = "conversations.archive"
@@ -98,7 +101,7 @@ const (
 func IsKnownOperation(op string) bool {
 	switch op {
 	case OpsHealthCheck, OpsLoginQRStart, OpsLoginQRPoll, OpsLoginQRCancel, OpsLoginSMSStart,
-		OpsLoginSMSVerify, OpsSessionValidate, OpsFriendsList, OpsConversationsList,
+		OpsLoginSMSVerify, OpsSessionValidate, OpsConversationsList,
 		OpsConversationsArchive, OpsMessageSendText, OpsMessageSendSticker, OpsMessageSendFirst:
 		return true
 	default:

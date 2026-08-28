@@ -4,7 +4,7 @@ export const adminJobTypeOptions = [
   { value: 'account.relogin.qr', label: '扫码重新登录' },
   { value: 'account.relogin.sms', label: '短信重新登录' },
   { value: 'account.session_check.browser', label: '登录态检查' },
-  { value: 'account.friends_sync.browser', label: '好友同步' },
+  { value: 'account.friends_sync.browser', label: '会话同步（兼容）' },
   { value: 'conversation.archive.browser', label: '平台会话归档' },
   { value: 'send.dispatch', label: '发送调度' },
   { value: 'send.browser', label: 'Browser 发送' },

@@ -105,7 +105,7 @@ function BindingPage({ binding }: { binding: BindingController }) {
         <div>
           <p className="text-sm font-medium text-primary">账号中心</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">绑定抖音账号</h1>
-          <p className="mt-1 text-sm text-muted-foreground">选择一种登录方式完成绑定。绑定成功后将自动开始首次好友同步。</p>
+          <p className="mt-1 text-sm text-muted-foreground">选择一种登录方式完成绑定。绑定成功后将自动从消息面板同步会话。</p>
         </div>
       </div>
 
@@ -221,10 +221,14 @@ function useAccountBinding(accountId?: string, onSuccess?: () => void) {
       setBinding((current) => current?.jobId === jobId ? { ...current, status } : current)
       return
     }
+    if (event.event_type === 'sms_verification_pending') {
+      setBinding((current) => current?.jobId === jobId ? { ...current, status: 'scanned' } : current)
+      return
+    }
     if (event.event_type === 'success') {
       bindingAbort.current?.abort()
       setBinding(null)
-      toast.success(accountId ? '重新登录成功，好友同步已开始' : '抖音账号绑定成功，首次好友同步已开始')
+      toast.success(accountId ? '重新登录成功，会话同步已开始' : '抖音账号绑定成功，会话同步已开始')
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
       onSuccess?.()
       return
@@ -241,10 +245,12 @@ function useAccountBinding(accountId?: string, onSuccess?: () => void) {
   async function submitSMSCode(code: string) {
     if (!token || !binding?.jobId) return
     setSubmittingCode(true)
+    setBinding((current) => current ? { ...current, status: 'scanned' } : current)
     try {
       await submitSMSVerification(token, binding.jobId, code)
       toast.success('验证码已提交，正在验证')
     } catch (error) {
+      setBinding((current) => current ? { ...current, status: 'waiting_user' } : current)
       toast.error(error instanceof Error ? error.message : '验证码提交失败')
     } finally {
       setSubmittingCode(false)

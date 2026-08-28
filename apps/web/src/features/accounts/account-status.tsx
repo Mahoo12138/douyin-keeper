@@ -23,7 +23,7 @@ export function capabilityLabel(name: string) {
     'login.qr': '扫码登录',
     'login.sms': '短信验证码登录',
     'session.validate': '会话验证',
-    'friends.sync': '好友同步',
+    'friends.sync': '会话同步',
     'message.send.text.existing': '已有会话发送文字',
     'message.send.text.first': '首次发送文字',
     'message.send.sticker.existing': '已有会话发送贴纸',
