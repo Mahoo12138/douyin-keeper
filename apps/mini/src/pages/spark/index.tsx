@@ -329,14 +329,99 @@ export default function Spark() {
   const visibleTasks = data.tasks.filter((task) => task.account_id === selectedAccountId)
   const visibleFriends = data.friends.filter((friend) => showArchived ? friend.archived : !friend.archived)
 
-  return <View className="mini-page"><View className="mini-hero card"><Text className="eyebrow">M4 · 会话与火花</Text><Text className="title mini-hero-title">维护会话火花</Text><Text className="muted">按账号查看直接会话与群聊，分别控制火花维护和每日任务。</Text></View><AccountTabs accounts={data.accounts} selectedId={selectedAccountId} onSelect={(id) => void chooseAccount(id)} /><View className="conversation-view-tabs"><Button className={`conversation-view-tab ${!showArchived ? 'conversation-view-tab-active' : ''}`} onClick={() => void changeArchiveView(false)}>当前会话</Button><Button className={`conversation-view-tab ${showArchived ? 'conversation-view-tab-active' : ''}`} onClick={() => void changeArchiveView(true)}>已归档</Button></View><View className="section-title"><Text>{selectedAccount ? accountTabLabel(selectedAccount) : '当前账号'}</Text><Text className="muted">{visibleFriends.length} 个{showArchived ? '已归档会话' : '会话'} · {enabledTaskCount(visibleTasks)} 个任务启用</Text></View><ConversationSyncControls busy={busyKey !== ''} active={conversationSyncJob !== null} cancelable={conversationSyncJob?.cancelable ?? false} available={selectedAccount?.binding_status === 'bound'} status={conversationSyncStatus} onSync={() => void syncConversations()} onCancel={() => void cancelConversationSync()} onBind={() => Taro.switchTab({ url: '/pages/accounts/index' })} />{error && <View className="card error-card"><Text>{error}</Text></View>}{visibleFriends.length === 0 ? <View className="card empty-card"><Text className="card-title">{showArchived ? '暂无已归档会话' : '还没有会话'}</Text><Text className="muted">{showArchived ? '归档后的会话会显示在这里，可随时恢复。' : '先完成账号绑定，再同步消息面板会话。'}</Text></View> : <View>{visibleFriends.map((friend) => { const task = taskForFriend(visibleTasks, friend.id); const platformBusy = platformArchiveJob?.conversationId === friend.conversation_id; return <View className="spark-friend-group" key={`${friend.conversation_id}:${friend.id}`}><FriendCard friend={friend} task={task} templates={templates} busyKey={busyKey} editingTaskId={editingTaskId} taskDraft={taskDraft} onFriendToggle={(enabled) => void toggleFriend(friend.id, enabled)} onTaskToggle={task ? (enabled) => void toggleTask(task.id, enabled) : undefined} onEditTask={task ? () => openTaskEditor(task) : undefined} onDraftChange={setTaskDraft} onSaveTask={task ? () => void saveTask(task) : undefined} onCancelTask={closeTaskEditor} onArchive={() => void toggleArchive(friend)} /><PlatformArchiveControls archived={friend.archived} busy={busyKey !== ''} active={platformBusy} status={platformBusy ? platformArchiveStatus : ''} onRequest={() => void requestPlatformArchive(friend)} onCancel={() => void cancelPlatformArchive()} /></View> })}</View>}</View>
+  return <View className="mini-page spark-page">
+    <View className="spark-header">
+      <View>
+        <Text className="spark-eyebrow">M4 · 会话与火花</Text>
+        <Text className="spark-title">会话维护</Text>
+        <Text className="spark-subtitle">按账号管理直接会话与群聊，让火花和每日任务各自保持清晰。</Text>
+      </View>
+      <View className="spark-header-mark"><Text>✦</Text></View>
+    </View>
+
+    <View className="spark-account-card">
+      <View className="spark-section-heading">
+        <View>
+          <Text className="spark-section-kicker">当前账号</Text>
+          <Text className="spark-section-title">{selectedAccount ? accountTabLabel(selectedAccount) : '选择账号'}</Text>
+        </View>
+        <Text className="spark-account-state">{selectedAccount?.binding_status === 'bound' ? '已连接' : '待绑定'}</Text>
+      </View>
+      <AccountTabs accounts={data.accounts} selectedId={selectedAccountId} onSelect={(id) => void chooseAccount(id)} />
+    </View>
+
+    <View className="spark-control-card">
+      <View className="spark-control-heading">
+        <View>
+          <Text className="spark-section-kicker">会话总览</Text>
+          <Text className="spark-section-title">{visibleFriends.length} 个{showArchived ? '已归档会话' : '活跃会话'}</Text>
+        </View>
+        <Text className="spark-task-count">{enabledTaskCount(visibleTasks)} 个任务运行中</Text>
+      </View>
+      <View className="spark-view-tabs">
+        <Button className={`spark-view-tab ${!showArchived ? 'spark-view-tab-active' : ''}`} onClick={() => void changeArchiveView(false)}>当前会话</Button>
+        <Button className={`spark-view-tab ${showArchived ? 'spark-view-tab-active' : ''}`} onClick={() => void changeArchiveView(true)}>已归档</Button>
+      </View>
+      <ConversationSyncControls busy={busyKey !== ''} active={conversationSyncJob !== null} cancelable={conversationSyncJob?.cancelable ?? false} available={selectedAccount?.binding_status === 'bound'} status={conversationSyncStatus} onSync={() => void syncConversations()} onCancel={() => void cancelConversationSync()} onBind={() => Taro.switchTab({ url: '/pages/accounts/index' })} />
+    </View>
+
+    {error && <View className="spark-error"><Text className="spark-error-mark">!</Text><Text>{error}</Text></View>}
+
+    {visibleFriends.length === 0 ? <View className="spark-empty-card">
+      <View className="spark-empty-icon"><Text>⌁</Text></View>
+      <Text className="spark-empty-title">{showArchived ? '暂无已归档会话' : '还没有会话'}</Text>
+      <Text className="muted">{showArchived ? '归档后的会话会显示在这里，可随时恢复。' : '先完成账号绑定，再同步消息面板会话。'}</Text>
+    </View> : <View className="spark-list">
+      {visibleFriends.map((friend, index) => {
+        const task = friend.conversation_type === 'direct' ? taskForFriend(visibleTasks, friend.id) : undefined
+        const platformBusy = platformArchiveJob?.conversationId === friend.conversation_id
+        return <View className={`spark-friend-group spark-reveal spark-reveal-${Math.min(index + 1, 5)}`} key={`${friend.conversation_id}:${friend.id}`}>
+          <FriendCard friend={friend} task={task} templates={templates} busyKey={busyKey} editingTaskId={editingTaskId} taskDraft={taskDraft} onFriendToggle={friend.conversation_type === 'direct' ? (enabled) => void toggleFriend(friend.id, enabled) : undefined} onTaskToggle={task ? (enabled) => void toggleTask(task.id, enabled) : undefined} onEditTask={task ? () => openTaskEditor(task) : undefined} onDraftChange={setTaskDraft} onSaveTask={task ? () => void saveTask(task) : undefined} onCancelTask={closeTaskEditor} onArchive={() => void toggleArchive(friend)} />
+          <PlatformArchiveControls archived={friend.archived} busy={busyKey !== ''} active={platformBusy} status={platformBusy ? platformArchiveStatus : ''} onRequest={() => void requestPlatformArchive(friend)} onCancel={() => void cancelPlatformArchive()} />
+        </View>
+      })}
+    </View>}
+  </View>
 }
 
-function FriendCard({ friend, task, templates, busyKey, editingTaskId, taskDraft, onFriendToggle, onTaskToggle, onEditTask, onDraftChange, onSaveTask, onCancelTask, onArchive }: { friend: SparkData['friends'][number]; task?: SparkData['tasks'][number]; templates: MessageTemplate[]; busyKey: string; editingTaskId: string; taskDraft: TaskDraft | null; onFriendToggle: (enabled: boolean) => void; onTaskToggle?: (enabled: boolean) => void; onEditTask?: () => void; onDraftChange: (draft: TaskDraft | null) => void; onSaveTask?: () => void; onCancelTask: () => void; onArchive: () => void }) {
+function FriendCard({ friend, task, templates, busyKey, editingTaskId, taskDraft, onFriendToggle, onTaskToggle, onEditTask, onDraftChange, onSaveTask, onCancelTask, onArchive }: { friend: SparkData['friends'][number]; task?: SparkData['tasks'][number]; templates: MessageTemplate[]; busyKey: string; editingTaskId: string; taskDraft: TaskDraft | null; onFriendToggle?: (enabled: boolean) => void; onTaskToggle?: (enabled: boolean) => void; onEditTask?: () => void; onDraftChange: (draft: TaskDraft | null) => void; onSaveTask?: () => void; onCancelTask: () => void; onArchive: () => void }) {
   const friendBusy = busyKey === `friend:${friend.id}`
   const taskBusy = task ? busyKey === `task:${task.id}` : false
-  const identityLabel = friend.conversation_type === 'group' ? '群聊会话' : friend.platform_identity_status === 'resolved' ? '身份已确认' : friend.platform_identity_status === 'pending' ? '身份待确认' : '需处理'
-  return <View className="card friend-card"><View className="card-heading"><View><Text className="card-title">{friend.nickname || friend.display_name}</Text><Text className="muted">{friend.short_id ? `抖音号 ${friend.short_id}` : identityLabel}</Text></View><Text className="streak-badge">{friend.streak_days} 天火花</Text></View><Text className="muted">{friend.has_conversation ? '已有会话' : '暂无会话'} · {friend.last_sent_at ? `上次发送 ${formatDate(friend.last_sent_at)}` : '还未发送'}</Text><View className="toggle-row"><View><Text className="toggle-title">火花维护</Text><Text className="muted">{friend.spark_enabled ? '每日保持火花' : '暂不维护'}</Text></View><Switch checked={friend.spark_enabled} disabled={friend.archived || friend.spark_supported === false || friendBusy} color="#1f5bd8" onChange={(event) => onFriendToggle(event.detail.value)} /></View>{task ? <View className="task-panel"><View className="toggle-row"><View><Text className="toggle-title">每日任务</Text><Text className="muted">{task.window_start.slice(0, 5)}–{task.window_end.slice(0, 5)} · {task.timezone}</Text></View><Switch checked={task.enabled} disabled={friend.archived || taskBusy} color="#15966b" onChange={(event) => onTaskToggle?.(event.detail.value)} /></View><Text className="task-message">{task.message.body || (task.message.kind === 'sticker' ? '贴纸消息' : '未填写消息')}</Text><Button className="task-edit-button" disabled={busyKey !== '' || friend.archived} onClick={onEditTask}>{editingTaskId === task.id ? '收起编辑' : '编辑任务'}</Button>{editingTaskId === task.id && taskDraft && <View className="task-editor"><View className="task-time-grid"><View><Text className="history-label">开始时间</Text><Input className="task-input" value={taskDraft.windowStart} onInput={(event) => onDraftChange({ ...taskDraft, windowStart: event.detail.value })} placeholder="19:30" /></View><View><Text className="history-label">结束时间</Text><Input className="task-input" value={taskDraft.windowEnd} onInput={(event) => onDraftChange({ ...taskDraft, windowEnd: event.detail.value })} placeholder="22:30" /></View></View>{templates.length > 0 && <SparkTemplatePicker templates={templates} selectedKind={taskDraft.messageKind} selectedBody={taskDraft.message} onSelect={(template) => onDraftChange({ ...taskDraft, messageKind: template.kind, message: template.body })} />}<Text className="history-label">{taskDraft.messageKind === 'sticker' ? '贴纸 ID' : '消息内容'}</Text>{taskDraft.messageKind === 'sticker' ? <Input className="task-input task-message-input" value={taskDraft.message} maxlength={200} onInput={(event) => onDraftChange({ ...taskDraft, message: event.detail.value })} placeholder="输入贴纸 ID" /> : <Textarea className="task-textarea" value={taskDraft.message} maxlength={500} onInput={(event) => onDraftChange({ ...taskDraft, message: event.detail.value })} placeholder="输入每天要发送的文字" /> }<View className="task-editor-actions"><Button className="task-cancel-button" onClick={onCancelTask}>取消</Button><Button className="mini-button primary-button task-save-button" disabled={busyKey === `task-save:${task.id}`} onClick={onSaveTask}>{busyKey === `task-save:${task.id}` ? '保存中…' : '保存任务'}</Button></View></View>}</View> : <View className="task-panel"><Text className="muted">{friend.archived ? '已归档，会话恢复后可继续配置任务。' : '尚未配置每日任务，请在“任务”页创建。'}</Text></View>}<Button className="conversation-archive-button" disabled={busyKey === `archive:${friend.conversation_id}`} onClick={onArchive}>{busyKey === `archive:${friend.conversation_id}` ? '处理中…' : friend.archived ? '恢复会话' : '归档会话'}</Button></View>
+  const isGroup = friend.conversation_type === 'group'
+  const identityLabel = isGroup ? '群聊会话' : friend.platform_identity_status === 'resolved' ? '身份已确认' : friend.platform_identity_status === 'pending' ? '身份待确认' : '需处理'
+  const displayName = friend.nickname || friend.display_name || '未命名会话'
+  const canManageSpark = Boolean(onFriendToggle) && !isGroup
+  return <View className="spark-conversation-card">
+    <View className="spark-card-heading">
+      <View className="spark-identity">
+        <View className={`spark-avatar ${isGroup ? 'spark-avatar-group' : 'spark-avatar-direct'}`}><Text>{isGroup ? '群' : '聊'}</Text></View>
+        <View className="spark-identity-copy">
+          <Text className="spark-card-title">{displayName}</Text>
+          <Text className="spark-card-caption">{friend.short_id ? `抖音号 ${friend.short_id}` : identityLabel} · {friend.channel === 'creator' ? '创作者侧' : '消费者侧'}</Text>
+        </View>
+      </View>
+      <Text className={`spark-streak ${friend.archived ? 'spark-streak-muted' : ''}`}>{friend.archived ? '已归档' : `${friend.streak_days} 天火花`}</Text>
+    </View>
+    <View className="spark-meta-row">
+      <Text className="spark-meta-item">{friend.has_conversation ? '已有会话' : '暂无会话'}</Text>
+      <Text className="spark-meta-separator">·</Text>
+      <Text className="spark-meta-item">{friend.last_sent_at ? `上次发送 ${formatDate(friend.last_sent_at)}` : '暂无最近发送'}</Text>
+    </View>
+
+    {canManageSpark ? <View className="spark-action-panel">
+      <View className="spark-action-copy"><Text className="spark-action-title">火花维护</Text><Text className="spark-action-caption">{friend.spark_enabled ? '每日自动保持火花' : '已暂停自动维护'}</Text></View>
+      <Switch checked={friend.spark_enabled} disabled={friend.archived || friend.spark_supported === false || friendBusy} color="#18b978" onChange={(event) => onFriendToggle?.(event.detail.value)} />
+    </View> : <View className="spark-disabled-panel"><Text className="spark-disabled-title">{isGroup ? '群聊暂不参与火花维护' : '该会话暂不支持火花维护'}</Text><Text className="spark-disabled-caption">可继续查看会话，归档状态也能单独管理。</Text></View>}
+
+    {task ? <View className="spark-task-panel">
+      <View className="spark-task-heading"><View><Text className="spark-task-kicker">每日任务</Text><Text className="spark-task-time">{task.window_start.slice(0, 5)}–{task.window_end.slice(0, 5)} · {task.timezone}</Text></View><Switch checked={task.enabled} disabled={friend.archived || taskBusy} color="#18b978" onChange={(event) => onTaskToggle?.(event.detail.value)} /></View>
+      <Text className="spark-task-message">{task.message.body || (task.message.kind === 'sticker' ? '贴纸消息' : '未填写消息')}</Text>
+      <Button className="spark-task-edit-button" disabled={busyKey !== '' || friend.archived} onClick={onEditTask}>{editingTaskId === task.id ? '收起编辑' : '编辑任务'}</Button>
+      {editingTaskId === task.id && taskDraft && <View className="task-editor"><View className="task-time-grid"><View><Text className="history-label">开始时间</Text><Input className="task-input" value={taskDraft.windowStart} onInput={(event) => onDraftChange({ ...taskDraft, windowStart: event.detail.value })} placeholder="19:30" /></View><View><Text className="history-label">结束时间</Text><Input className="task-input" value={taskDraft.windowEnd} onInput={(event) => onDraftChange({ ...taskDraft, windowEnd: event.detail.value })} placeholder="22:30" /></View></View>{templates.length > 0 && <SparkTemplatePicker templates={templates} selectedKind={taskDraft.messageKind} selectedBody={taskDraft.message} onSelect={(template) => onDraftChange({ ...taskDraft, messageKind: template.kind, message: template.body })} />}<Text className="history-label">{taskDraft.messageKind === 'sticker' ? '贴纸 ID' : '消息内容'}</Text>{taskDraft.messageKind === 'sticker' ? <Input className="task-input task-message-input" value={taskDraft.message} maxlength={200} onInput={(event) => onDraftChange({ ...taskDraft, message: event.detail.value })} placeholder="输入贴纸 ID" /> : <Textarea className="task-textarea" value={taskDraft.message} maxlength={500} onInput={(event) => onDraftChange({ ...taskDraft, message: event.detail.value })} placeholder="输入每天要发送的文字" /> }<View className="task-editor-actions"><Button className="task-cancel-button" onClick={onCancelTask}>取消</Button><Button className="mini-button primary-button task-save-button" disabled={busyKey === `task-save:${task.id}`} onClick={onSaveTask}>{busyKey === `task-save:${task.id}` ? '保存中…' : '保存任务'}</Button></View></View>}
+    </View> : <View className="spark-task-panel spark-task-panel-empty"><Text className="spark-task-kicker">每日任务</Text><Text className="spark-task-empty">{friend.archived ? '恢复会话后可继续配置任务。' : '尚未配置，请在“任务”页创建。'}</Text></View>}
+
+    <View className="spark-card-actions"><Button className="spark-archive-button" disabled={busyKey === `archive:${friend.conversation_id}`} onClick={onArchive}>{busyKey === `archive:${friend.conversation_id}` ? '处理中…' : friend.archived ? '恢复会话' : '归档会话'}</Button></View>
+  </View>
 }
 
 function PlatformArchiveControls({ archived, busy, active, status, onRequest, onCancel }: { archived: boolean; busy: boolean; active: boolean; status: string; onRequest: () => void; onCancel: () => void }) {
@@ -356,9 +441,9 @@ function SparkTemplatePicker({ templates, selectedKind, selectedBody, onSelect }
   return <View className="task-template-picker"><Text className="history-label">从模板套用</Text><Picker mode="selector" range={labels} value={selectedIndex} onChange={(event) => { const template = templates[Number(event.detail.value) - 1]; if (template) onSelect(template) }}><View className="task-picker-control"><Text>{labels[selectedIndex]}</Text><Text className="task-picker-arrow">›</Text></View></Picker><Text className="muted">套用后仍可继续编辑，任务保存当前内容快照。</Text></View>
 }
 
-function GuestSpark() { return <View className="mini-page"><View className="card empty-card"><Text className="card-title">请先登录</Text><Text className="muted">登录后才能查看直接会话与群聊的火花开关。</Text><Button className="mini-button primary-button" onClick={() => Taro.switchTab({ url: '/pages/login/index' })}>去登录 / 绑定</Button></View></View> }
-function EmptySpark() { return <View className="mini-page"><View className="card empty-card"><Text className="card-title">还没有可管理的账号</Text><Text className="muted">请先在 PC 端绑定抖音账号并同步消息面板会话。</Text></View></View> }
-function ErrorSpark({ message, onRetry }: { message: string; onRetry: () => void }) { return <View className="mini-page"><View className="card empty-card"><Text className="card-title">火花列表暂时不可用</Text><Text className="muted">{message || '请检查网络连接后重试。'}</Text><Button className="mini-button secondary-button" onClick={onRetry}>重新加载</Button></View></View> }
-function LoadingSpark() { return <View className="mini-page"><View className="card loading-card"><View className="loading-line loading-line-wide" /><View className="loading-line" /><View className="loading-block" /></View><View className="card loading-card"><View className="loading-line" /><View className="loading-block" /></View></View> }
+function GuestSpark() { return <View className="mini-page spark-page"><View className="spark-empty-card"><View className="spark-empty-icon"><Text>↗</Text></View><Text className="spark-empty-title">请先登录</Text><Text className="muted">登录后才能查看直接会话与群聊的火花开关。</Text><Button className="mini-button primary-button" onClick={() => Taro.switchTab({ url: '/pages/login/index' })}>去登录 / 绑定</Button></View></View> }
+function EmptySpark() { return <View className="mini-page spark-page"><View className="spark-empty-card"><View className="spark-empty-icon"><Text>⌁</Text></View><Text className="spark-empty-title">还没有可管理的账号</Text><Text className="muted">请先在 PC 端绑定抖音账号并同步消息面板会话。</Text></View></View> }
+function ErrorSpark({ message, onRetry }: { message: string; onRetry: () => void }) { return <View className="mini-page spark-page"><View className="spark-empty-card"><View className="spark-empty-icon spark-empty-icon-error"><Text>!</Text></View><Text className="spark-empty-title">会话暂时不可用</Text><Text className="muted">{message || '请检查网络连接后重试。'}</Text><Button className="mini-button secondary-button" onClick={onRetry}>重新加载</Button></View></View> }
+function LoadingSpark() { return <View className="mini-page spark-page"><View className="spark-loading-heading"><View className="loading-line loading-line-wide" /><View className="loading-line" /></View><View className="spark-loading-card"><View className="loading-line" /><View className="loading-block" /></View><View className="spark-loading-card"><View className="loading-line" /><View className="loading-block" /></View></View> }
 function formatDate(value: string) { return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(new Date(value)) }
 function jobStatusLabel(value: string) { return value === 'waiting_user' ? '等待用户操作' : value === 'running' ? '执行中' : value === 'succeeded' ? '已完成' : value === 'failed' ? '执行失败' : value === 'cancelled' ? '已取消' : '排队中' }

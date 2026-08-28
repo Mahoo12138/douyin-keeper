@@ -709,3 +709,81 @@ page {
 .task-skeleton-header { width: 60%; height: 84rpx; }
 .task-skeleton-tabs { height: 76rpx; margin-top: 24rpx; }
 .task-skeleton-card { height: 250rpx; margin-top: 18rpx; }
+
+/* Conversation module: a calm control surface for sessions and spark tasks. */
+.spark-page { box-sizing: border-box; min-height: 100vh; padding: 34rpx 24rpx 168rpx; background: #f5f8f6; }
+.spark-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18rpx; }
+.spark-eyebrow, .spark-section-kicker, .spark-task-kicker { display: block; color: #8b9a91; font-size: 19rpx; letter-spacing: 1rpx; text-transform: uppercase; }
+.spark-eyebrow { color: #159d68; font-weight: 700; }
+.spark-title { display: block; margin-top: 7rpx; color: #17261e; font-size: 38rpx; font-weight: 700; letter-spacing: -1rpx; }
+.spark-subtitle { display: block; max-width: 560rpx; margin-top: 8rpx; color: #7b8c82; font-size: 22rpx; line-height: 1.6; }
+.spark-header-mark { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 68rpx; height: 68rpx; border-radius: 22rpx; color: #fff; background: #19b979; box-shadow: 0 10rpx 20rpx rgba(25, 185, 121, .2); font-size: 34rpx; }
+.spark-account-card, .spark-control-card { margin-top: 28rpx; padding: 22rpx; border: 1rpx solid #dfe9e3; border-radius: 26rpx; background: #fff; box-shadow: 0 12rpx 28rpx rgba(39, 100, 76, .05); }
+.spark-control-card { margin-top: 16rpx; }
+.spark-section-heading, .spark-control-heading, .spark-card-heading, .spark-task-heading { display: flex; align-items: center; justify-content: space-between; gap: 18rpx; }
+.spark-section-title { display: block; margin-top: 5rpx; color: #18271f; font-size: 29rpx; font-weight: 650; }
+.spark-account-state, .spark-task-count { flex: 0 0 auto; padding: 8rpx 12rpx; border-radius: 999rpx; color: #0b9461; background: #e2f8ec; font-size: 19rpx; }
+.spark-task-count { color: #71827a; background: #f0f5f2; }
+.spark-page .account-tabs { gap: 10rpx; margin: 20rpx 0 0; padding: 0; }
+.spark-page .account-tab { min-width: 0; margin: 0; padding: 0 18rpx; border: 1rpx solid #e1ebe5; border-radius: 14rpx; color: #73847a; background: #fbfdfc; font-size: 22rpx; line-height: 62rpx; }
+.spark-page .account-tab-active { border-color: #a8e4c4; color: #0d9461; background: #edfbf4; box-shadow: 0 0 0 2rpx #e2f8ec; }
+.spark-view-tabs { display: flex; gap: 8rpx; margin-top: 20rpx; padding: 4rpx; border-radius: 14rpx; background: #f1f6f3; }
+.spark-view-tab { flex: 1; margin: 0; padding: 0; border: 0; border-radius: 10rpx; color: #829189; background: transparent; font-size: 23rpx; line-height: 58rpx; }
+.spark-view-tab-active { color: #138f60; background: #fff; box-shadow: 0 4rpx 12rpx rgba(39, 100, 76, .08); }
+.spark-sync-button, .spark-sync-status, .spark-sync-unavailable { margin-top: 16rpx; }
+.conversation-sync-button { border-color: #bce8d1; color: #139865; background: #f9fefb; line-height: 62rpx; }
+.conversation-sync-status { color: #287b5d; background: #effaf4; }
+.conversation-sync-unavailable { border: 1rpx solid #e7eee9; border-radius: 14rpx; background: #f8fbf9; }
+.spark-error { display: flex; align-items: flex-start; gap: 10rpx; margin-top: 16rpx; padding: 16rpx 18rpx; border: 1rpx solid #f1d8d8; border-radius: 16rpx; color: #b43c3c; background: #fff5f5; font-size: 22rpx; line-height: 1.5; }
+.spark-error-mark { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 28rpx; height: 28rpx; border-radius: 50%; color: #fff; background: #db6b6b; font-size: 18rpx; font-weight: 700; }
+.spark-list { margin-top: 18rpx; }
+.spark-friend-group { margin-top: 14rpx; }
+.spark-conversation-card { padding: 24rpx 22rpx 20rpx; border: 1rpx solid #e0eae4; border-radius: 24rpx; background: #fff; box-shadow: 0 10rpx 24rpx rgba(36, 79, 63, .045); }
+.spark-identity { display: flex; align-items: center; min-width: 0; flex: 1; gap: 14rpx; }
+.spark-avatar { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 66rpx; height: 66rpx; border-radius: 21rpx; font-size: 25rpx; font-weight: 700; }
+.spark-avatar-direct { color: #128b5c; background: #dff8ea; }
+.spark-avatar-group { color: #5579b9; background: #eaf1ff; }
+.spark-identity-copy { min-width: 0; flex: 1; }
+.spark-card-title { display: block; overflow: hidden; color: #1b2a22; font-size: 28rpx; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.spark-card-caption { display: block; margin-top: 6rpx; overflow: hidden; color: #8a9990; font-size: 20rpx; text-overflow: ellipsis; white-space: nowrap; }
+.spark-streak { flex: 0 0 auto; padding: 7rpx 11rpx; border-radius: 999rpx; color: #a16d19; background: #fff3d8; font-size: 19rpx; }
+.spark-streak-muted { color: #829087; background: #eef3f0; }
+.spark-meta-row { display: flex; align-items: center; gap: 8rpx; margin-top: 18rpx; padding-bottom: 18rpx; border-bottom: 1rpx solid #edf2ef; }
+.spark-meta-item, .spark-meta-separator { color: #8a9990; font-size: 20rpx; }
+.spark-meta-separator { color: #c0cbc4; }
+.spark-action-panel, .spark-disabled-panel { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; margin-top: 18rpx; padding: 16rpx 18rpx; border-radius: 16rpx; background: #f4fbf7; }
+.spark-action-copy { min-width: 0; }
+.spark-action-title, .spark-disabled-title { display: block; color: #2c4034; font-size: 24rpx; font-weight: 650; }
+.spark-action-caption, .spark-disabled-caption { display: block; margin-top: 5rpx; color: #8a9990; font-size: 20rpx; }
+.spark-disabled-panel { display: block; background: #f7faf8; }
+.spark-disabled-title { color: #63756a; font-size: 22rpx; }
+.spark-disabled-caption { margin-top: 5rpx; }
+.spark-task-panel { margin-top: 12rpx; padding: 18rpx; border-radius: 16rpx; background: #f8faf9; }
+.spark-task-panel-empty { padding-top: 16rpx; padding-bottom: 16rpx; }
+.spark-task-kicker { color: #64776c; font-size: 20rpx; letter-spacing: 0; text-transform: none; }
+.spark-task-time { display: block; margin-top: 5rpx; color: #85948b; font-size: 20rpx; }
+.spark-task-message { display: block; margin-top: 14rpx; padding: 12rpx 14rpx; border-radius: 11rpx; color: #45584b; background: #fff; font-size: 22rpx; line-height: 1.5; }
+.spark-task-empty { display: block; margin-top: 7rpx; color: #8a9990; font-size: 21rpx; }
+.spark-task-edit-button { display: block; width: 100%; margin-top: 13rpx; padding: 0; border: 0; color: #159d68; background: transparent; font-size: 21rpx; line-height: 1.5; text-align: left; }
+.spark-card-actions { margin-top: 16rpx; }
+.spark-archive-button { display: block; width: 100%; margin: 0; padding: 0; border: 1rpx solid #dce8e1; border-radius: 12rpx; color: #6c7d73; background: #fff; font-size: 22rpx; line-height: 58rpx; }
+.conversation-platform-button { margin-top: 8rpx; border-color: #cfe7db; color: #188e60; background: #f5fcf8; }
+.conversation-platform-status { margin-top: 8rpx; color: #247b59; background: #effaf4; }
+.spark-empty-card { margin-top: 18rpx; padding: 54rpx 24rpx; border: 1rpx dashed #cfe4d6; border-radius: 24rpx; background: #fbfefc; text-align: center; }
+.spark-empty-icon { display: flex; align-items: center; justify-content: center; width: 72rpx; height: 72rpx; margin: 0 auto 18rpx; border-radius: 24rpx; color: #159d68; background: #e3f9ed; font-size: 40rpx; }
+.spark-empty-icon-error { color: #d04a4a; background: #fff0f0; }
+.spark-empty-title { display: block; color: #1d2d24; font-size: 29rpx; font-weight: 650; }
+.spark-empty-card .muted { margin-top: 9rpx; }
+.spark-empty-card .mini-button { margin-top: 28rpx; }
+.spark-loading-heading { padding: 10rpx 0 20rpx; }
+.spark-loading-card { min-height: 250rpx; margin-top: 14rpx; padding: 24rpx 22rpx; border-radius: 24rpx; background: #fff; }
+.spark-page .mini-button, .spark-page .account-tab, .spark-page .spark-view-tab, .spark-page .spark-archive-button, .spark-page .conversation-platform-button, .spark-page .conversation-platform-cancel, .spark-page .conversation-sync-button, .spark-page .conversation-sync-cancel, .spark-page .conversation-sync-bind, .spark-page .spark-task-edit-button { transition: transform 140ms cubic-bezier(.23, 1, .32, 1); }
+.spark-page .mini-button:active, .spark-page .account-tab:active, .spark-page .spark-view-tab:active, .spark-page .spark-archive-button:active, .spark-page .conversation-platform-button:active, .spark-page .conversation-platform-cancel:active, .spark-page .conversation-sync-button:active, .spark-page .conversation-sync-cancel:active, .spark-page .conversation-sync-bind:active, .spark-page .spark-task-edit-button:active { transform: scale(.97); }
+.spark-reveal { animation: spark-reveal-in 260ms cubic-bezier(.23, 1, .32, 1) both; }
+.spark-reveal-1 { animation-delay: 0ms; }
+.spark-reveal-2 { animation-delay: 45ms; }
+.spark-reveal-3 { animation-delay: 90ms; }
+.spark-reveal-4 { animation-delay: 135ms; }
+.spark-reveal-5 { animation-delay: 180ms; }
+@keyframes spark-reveal-in { from { opacity: 0; transform: translateY(8rpx); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .spark-reveal { animation: none; } .spark-page .mini-button, .spark-page .account-tab, .spark-page .spark-view-tab, .spark-page .spark-archive-button, .spark-page .conversation-platform-button, .spark-page .conversation-platform-cancel, .spark-page .conversation-sync-button, .spark-page .conversation-sync-cancel, .spark-page .conversation-sync-bind, .spark-page .spark-task-edit-button { transition: none; } }
