@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Image, Text, View } from '@tarojs/components'
+import { Text, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 
 import { getMe, listAccounts, listNotifications, listSendIntents, listTasks, MiniApiError } from '@/lib/api'
@@ -8,6 +8,8 @@ import { selectAccountId } from '@/features/home/home-utils'
 import { openLoginPage, openMeNotifications } from '@/features/navigation/mini-navigation'
 import { accountTabLabel } from '@/components/account-tab-utils'
 import { MiniButton as Button } from '@/components/mini-button'
+import { MiniRemoteImage } from '@/components/mini-remote-image'
+import { miniAssetUrl } from '@/lib/mini-assets'
 import { productDayKey, productDayRange, PRODUCT_TIMEZONE } from '@/features/time/time-utils'
 import {
   USE_MOCK_HOME,
@@ -19,12 +21,10 @@ import {
   mockUserDisplayName,
   type MockHomeAccount,
 } from '@/features/home/home-mock'
-import avatarChen from '@/assets/home/avatar-chen.png'
-import avatarJasper from '@/assets/home/avatar-jasper.png'
-import avatarMiles from '@/assets/home/avatar-miles.png'
-import bellIcon from '@/assets/home/icon-bell.png'
-import emptyGiftBox from '@/assets/home/empty-gift-box.png'
 
+const avatarChen = miniAssetUrl('home/avatar-chen.png')
+const avatarJasper = miniAssetUrl('home/avatar-jasper.png')
+const avatarMiles = miniAssetUrl('home/avatar-miles.png')
 type AccountRow = { id: string; name: string; subtitle: string; online: boolean; statusText: string; avatarSrc: string }
 type Metric = { label: string; value: number; tone: 'green' | 'amber' | 'red' }
 type RiskAlert = { id: string; tone: 'amber' | 'red'; icon: string; title: string; desc: string; action: string; target: 'accounts' | 'tasks' | 'none' }
@@ -39,7 +39,7 @@ type HomeView = {
   unreadCount: number
 }
 
-const AVATARS: Record<MockHomeAccount['avatar'], string> = { chen: avatarChen, jasper: avatarJasper, miles: avatarMiles }
+const AVATARS: Record<MockHomeAccount['avatar'], string> = { chen: 'home/avatar-chen.png', jasper: 'home/avatar-jasper.png', miles: 'home/avatar-miles.png' }
 
 function mockView(): HomeView {
   const accounts = mockHomeAccounts.map((item) => ({
@@ -217,14 +217,14 @@ export function HomePage() {
       <View className="home-header-actions">
         <Button className="home-more-button" onClick={openSwitcher}><Text className="home-more-dots">•••</Text></Button>
         <Button className="home-notification-button" onClick={openMeNotifications}>
-          <Image className="home-bell" src={bellIcon} mode="aspectFit" />
+          <MiniRemoteImage className="home-bell" name="home/icon-bell.png" mode="aspectFit" />
           {view.unreadCount > 0 && <Text className="home-notification-badge">{Math.min(9, view.unreadCount)}</Text>}
         </Button>
       </View>
     </View>
 
     {activeAccount && <View className="home-account-card home-reveal home-reveal-2" onClick={openSwitcher}>
-      <View className="home-account-avatar"><Image className="home-account-avatar-image" src={activeAccount.avatarSrc} mode="aspectFill" /></View>
+      <View className="home-account-avatar"><MiniRemoteImage className="home-account-avatar-image" src={activeAccount.avatarSrc} mode="aspectFill" /></View>
       <View className="home-account-copy">
         <View className="home-account-name-row">
           <Text className="home-account-name">{activeAccount.name}</Text>
@@ -298,7 +298,7 @@ export function HomePage() {
         </View>
         <View className="home-sheet-list">
           {view.accounts.map((account) => <Button className={`home-sheet-row ${account.id === activeAccount?.id ? 'home-sheet-row-active' : ''}`} key={account.id} onClick={() => { if (USE_MOCK_HOME) selectAccount(account.id); else { setSelectedAccountId(account.id); closeSwitcher() } }}>
-            <View className="home-sheet-avatar"><Image className="home-sheet-avatar-image" src={account.avatarSrc} mode="aspectFill" /></View>
+            <View className="home-sheet-avatar"><MiniRemoteImage className="home-sheet-avatar-image" src={account.avatarSrc} mode="aspectFill" /></View>
             <View className="home-sheet-copy">
               <Text className="home-sheet-name">{account.name}</Text>
               <Text className="home-sheet-id">{account.subtitle}</Text>
@@ -317,7 +317,7 @@ export function HomePage() {
 function EmptyHome() {
   return <View className="mini-page home-page home-empty-state">
     <View className="home-header"><Text className="home-brand">Douyin Keeper</Text></View>
-    <View className="home-empty-illustration"><Image className="home-empty-illustration-image" src={emptyGiftBox} mode="aspectFit" /></View>
+    <View className="home-empty-illustration"><MiniRemoteImage className="home-empty-illustration-image" name="home/empty-gift-box.png" mode="aspectFit" /></View>
     <Text className="home-empty-title">还没有添加抖音账号</Text>
     <Text className="home-empty-copy">添加账号后，即可查看状态、管理任务{'\n'}与好友互动，开启高效管理之旅</Text>
     <Button className="home-primary-button" onClick={() => void Taro.switchTab({ url: '/pages/accounts/index' })}>添加抖音账号</Button>

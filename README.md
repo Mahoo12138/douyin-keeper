@@ -122,6 +122,16 @@ same API target. For testing on a physical device, create
 with the development machine's LAN IP. Start the API with `go run ./cmd/api`
 from `backend/`, then open `apps/mini/dist` in WeChat Developer Tools.
 
+The mini program keeps only the lightweight tabbar icons locally. Other
+illustrations and fallback avatars are published by the PC web project under
+`apps/web/public/mini-assets` and loaded through `MiniRemoteImage`. Configure
+`TARO_APP_ASSET_BASE_URL` for each mini-program build, for example
+`https://keeper.example.com/mini-assets`; the development fallback is
+`http://127.0.0.1:5173/mini-assets`. The fallback is intentionally absolute
+so Weapp never tries to load a bundled-relative path. Build the PC web project before testing
+remote images, and add the asset origin to WeChat's request/download domain
+allowlist for a real device.
+
 ## Deploy
 
 See `docs/16-deployment-packaging.md` and `deploy/compose/docker-compose.yml`. Two business images
