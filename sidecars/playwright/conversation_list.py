@@ -113,12 +113,10 @@ EXTRACT_JS = r"""
     const timeNode = row.querySelector?.('time[datetime], [data-last-message-at]');
     const lastMessageAt = attr(timeNode, ['datetime', 'data-last-message-at']) ||
       attr(row, ['data-last-message-at']);
-    const channel = attr(row, ['data-channel']) || 'consumer';
     result.push({
       platform_conversation_id: conversationID || null,
       peer_platform_user_id: peerID || null,
       peer_display_name: displayName,
-      channel,
       last_message_at: lastMessageAt || null,
       _row_key: rowKey || displayName,
     });
@@ -196,9 +194,6 @@ def _normalize_items(raw_items):
         if not isinstance(display_name, str):
             display_name = ""
         display_name = display_name.strip()[:128]
-        channel = raw.get("channel")
-        if not isinstance(channel, str) or not channel.strip():
-            channel = "consumer"
         last_message_at = raw.get("last_message_at")
         if not isinstance(last_message_at, str) or not last_message_at.strip():
             last_message_at = None
@@ -209,7 +204,6 @@ def _normalize_items(raw_items):
             "platform_conversation_id": conversation_id,
             "peer_platform_user_id": peer_id,
             "peer_display_name": display_name,
-            "channel": channel.strip()[:32],
             "last_message_at": last_message_at,
         })
     return items

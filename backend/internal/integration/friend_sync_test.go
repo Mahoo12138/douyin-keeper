@@ -64,7 +64,7 @@ func TestFriendSyncIsIdempotentAndPreservesUserState(t *testing.T) {
 	second := []friend.SyncItem{
 		{PlatformUserID: &platformOne, IdentityStatus: friend.IdentityResolved, DisplayName: "One renamed", StreakDays: 4},
 		{IdentityStatus: friend.IdentityPending, DisplayName: "Unknown", Conversation: &friend.ConversationSnapshot{
-			PlatformConversationID: conversationID, Channel: "consumer",
+			PlatformConversationID: conversationID,
 		}},
 	}
 	if err := tx.WithinTx(ctx, func(tctx context.Context) error {

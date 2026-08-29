@@ -15,8 +15,7 @@ func TestNormalizeFriendItems(t *testing.T) {
 			PlatformUserID: &platformID, IdentityStatus: "resolved", DisplayName: "A",
 			StreakDays: 3, Conversation: &struct {
 				PlatformConversationID string `json:"platform_conversation_id"`
-				Channel                string `json:"channel"`
-			}{PlatformConversationID: "conversation-1", Channel: "consumer"},
+			}{PlatformConversationID: "conversation-1"},
 		},
 		{IdentityStatus: "pending", DisplayName: "Unknown"},
 	})

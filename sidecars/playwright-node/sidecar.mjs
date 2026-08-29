@@ -8,7 +8,7 @@
  */
 
 import { chmod, mkdir, readFile } from "node:fs/promises";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, mkdirSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { dirname, isAbsolute } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -17,18 +17,31 @@ import { isAuthenticatedPage } from "./auth-state.mjs";
 import { qrLoginState, smsLoginRequiresFreshContext, smsLoginSurfaceState } from "./login-state.mjs";
 import { decodeProtobuf, summarizeProtobuf } from "./conversation-wire.mjs";
 import {
+  applyConversationHydrationCache,
   collectorItemsAfterSequence,
+  conversationInventoryIdentityCount,
+  conversationVerificationNeedsRescan,
+  conversationRowHydrationKey,
+  conversationRowInventoryKey,
   filterConversationRows,
+  filterStrangerConversationInventory,
   finalizeConversationInventory,
+  identityRecordsMatchDisplayName,
+  identityRecordsMatchPeer,
+  isMutualFriendRelationship,
   mergeConversationInventoryCandidate,
-  selectClickedConversationIdentity,
+  missingConversationInventoryIndexes,
+  selectConversationHydrationBatch,
+  selectClickedConversationIdentityFromSources,
+  shouldRejectConversationInventoryReplacement,
 } from "./conversation-utils.mjs";
 import { scrollConversationListDOM } from "./conversation-scroll.mjs";
 import { clickConversationListRowByIndex, describeConversationListRowByIndex } from "./conversation-click.mjs";
+import { CHAT_URL, waitForConversationList } from "./conversation-route.mjs";
 import {
   collectJSONStreakCandidates,
   parseConversationStreakText,
-  readConversationListStreakDays,
+  readConversationListStreakSnapshot,
   selectConversationStreakDays,
 } from "./conversation-streak.mjs";
 
@@ -36,7 +49,6 @@ const PROTOCOL_VERSION = 1;
 const ADAPTER = "browser.consumer";
 const ADAPTER_VERSION = "node-0.2.0";
 const HOME_URL = "https://www.douyin.com/";
-const CHAT_URL = "https://www.douyin.com/chat?isPopup=1";
 const SELF_URL = "https://www.douyin.com/user/self";
 const SESSION_COOKIE_NAMES = new Set(["sessionid", "sessionid_ss", "sid_tt"]);
 const CHALLENGE_TEXTS = ["安全验证", "滑动验证", "人机验证", "身份验证"];
@@ -75,10 +87,33 @@ const DEBUG_LOG_ENABLED = ["1", "true", "yes", "on"].includes(String(process.env
 const DEBUG_LOG_EVENTS = new Set(String(process.env.PLAYWRIGHT_SIDECAR_DEBUG_EVENTS ?? "").split(",").map((value) => value.trim()).filter(Boolean));
 const DEBUG_LOG_FILE = String(process.env.PLAYWRIGHT_SIDECAR_LOG_FILE ?? "").trim();
 const STREAK_SOURCE_PROBE = ["1", "true", "yes", "on"].includes(String(process.env.PLAYWRIGHT_STREAK_SOURCE_PROBE ?? "").toLowerCase());
-const DEBUG_LOG_STREAM = DEBUG_LOG_ENABLED && DEBUG_LOG_FILE
-  ? createWriteStream(DEBUG_LOG_FILE, { flags: "a", mode: 0o600 })
-  : null;
-if (DEBUG_LOG_STREAM) void chmod(DEBUG_LOG_FILE, 0o600).catch(() => {});
+let DEBUG_LOG_STREAM = null;
+if (DEBUG_LOG_ENABLED && DEBUG_LOG_FILE) {
+  try {
+    mkdirSync(dirname(DEBUG_LOG_FILE), { recursive: true, mode: 0o700 });
+    DEBUG_LOG_STREAM = createWriteStream(DEBUG_LOG_FILE, { flags: "a", mode: 0o600 });
+    DEBUG_LOG_STREAM.on("error", (error) => {
+      console.error(JSON.stringify({
+        time: new Date().toISOString(),
+        level: "ERROR",
+        component: "playwright-sidecar",
+        event: "debug_log_file_error",
+        error_code: String(error?.code || ""),
+        error_name: String(error?.name || "Error"),
+      }));
+    });
+    void chmod(DEBUG_LOG_FILE, 0o600).catch(() => {});
+  } catch (error) {
+    console.error(JSON.stringify({
+      time: new Date().toISOString(),
+      level: "ERROR",
+      component: "playwright-sidecar",
+      event: "debug_log_file_open_failed",
+      error_code: String(error?.code || ""),
+      error_name: String(error?.name || "Error"),
+    }));
+  }
+}
 
 function safeURL(target) {
   try {
@@ -1099,6 +1134,27 @@ async function openMessagePanel(page, { groupOnly = false } = {}) {
   return false;
 }
 
+async function openConversationRoute(page, { groupOnly = false } = {}) {
+  await page.goto(CHAT_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
+  debugLog("conversations_chat_route_loaded", { group_only: groupOnly, url: safeURL(page) });
+  if (await challengeVisible(page)) {
+    throw protocolError("CHALLENGE_REQUIRED", "platform challenge is required");
+  }
+  if (await waitForConversationList(page)) {
+    debugLog("conversations_list_ready", { source: "direct_chat_route", group_only: groupOnly, url: safeURL(page) });
+    return "direct_chat_route";
+  }
+
+  // Compatibility path for a platform rollout that renders the route shell
+  // but leaves the popup closed. The normal path never clicks the header.
+  debugLog("conversations_direct_route_list_missing", { group_only: groupOnly, url: safeURL(page) });
+  if (await openMessagePanel(page, { groupOnly }) && await waitForConversationList(page, 8000)) {
+    debugLog("conversations_list_ready", { source: "message_entry_fallback", group_only: groupOnly, url: safeURL(page) });
+    return "message_entry_fallback";
+  }
+  return "";
+}
+
 async function openGroupConversationTab(page) {
   const candidates = [
     page.locator("[role='tab']:has-text('群聊'), [role='tab']:has-text('群组')"),
@@ -1155,6 +1211,8 @@ function collectConversationIdentityRecords(value, records, depth = 0, path = "$
     "conversation_short_id", "conversationshortid", "user_id", "userid",
     "conv_short_id", "conv_short_id_str", "uid", "sec_uid", "secuid", "sec_user_id", "secuserid",
     "type", "conversation_type", "conversationtype", "conv_type", "conversation_kind", "conversationkind",
+    "follow_status", "follower_status", "mate_relation", "mate_status", "new_friend_type",
+    "social_relation_type", "social_relation_sub_type", "is_block", "is_blocked",
     "avatar_url", "avatarurl", "avatar_thumb", "avatarthumb", "avatar_larger", "avatarlarger", "avatar_medium", "avatarmedium",
   ]);
   const labelKeys = new Set(["nickname", "display_name", "username", "user_name", "name", "title", "conversation_name", "conversationname", "group_name", "groupname"]);
@@ -1623,7 +1681,6 @@ function resolveRowsFromProtobuf(rows, binaryResponses, records, authoritativeGr
         peer_platform_user_id: candidate.peerID || null,
       peer_display_name: candidate.groupName || labels[0] || "群聊",
       peer_avatar_url: candidate.avatarURL || null,
-        channel: "consumer",
         conversation_type: conversationType,
         last_message_at: null,
       });
@@ -1745,7 +1802,7 @@ function resolveRowsFromNetworkRecords(rows, records) {
     if (!displayName) return row;
     const matches = entries.filter((entry) => {
       const labels = labelsForEntry(entry);
-      return labels.some((label) => label === displayName || label.includes(displayName) || displayName.includes(label));
+      return labels.some((label) => label === displayName);
     });
     const candidates = [];
     for (const entry of matches) {
@@ -1786,7 +1843,6 @@ function resolveRowsFromNetworkRecords(rows, records) {
       peer_platform_user_id: null,
       peer_display_name: [...metadata.labels][0] || "群聊",
       peer_avatar_url: metadata.avatar_url || null,
-      channel: "consumer",
       conversation_type: "group",
       last_message_at: null,
     });
@@ -1864,6 +1920,14 @@ function attachConversationCollector(page) {
         }
         const decoded = decodeProtobuf(body);
         const summary = summarizeProtobuf(decoded);
+        const requestBody = response.request().postDataBuffer?.() || null;
+        const requestDecoded = requestBody?.length ? decodeProtobuf(requestBody) : null;
+        const requestConversationIDs = [...new Set([
+          ...(requestDecoded?.ok ? protobufLeaves(requestDecoded.fields)
+            .filter((leaf) => leaf.kind === "string" && isConversationID(leaf.text))
+            .map((leaf) => leaf.text) : []),
+          ...((requestBody?.toString("utf8") || "").match(/\d+(?::\d+){2,}/g) || []),
+        ])];
         debugLog("conversations_binary_response", {
           path: pathname,
           status: response.status(),
@@ -1872,12 +1936,16 @@ function attachConversationCollector(page) {
           byte_length: body.length,
           body_sha256: sha256(body),
           protobuf: summary,
+          request_byte_length: requestBody?.length || 0,
+          request_protobuf: requestDecoded ? summarizeProtobuf(requestDecoded) : null,
+          request_conversation_id_hashes: requestConversationIDs.map((value) => textHash(value)).slice(0, 20),
         });
         if (!decoded.ok) return;
         if (standardBinaryResponse || STREAK_SOURCE_PROBE) {
           collector.binaryResponses.push({
             path: pathname,
             decoded,
+            request_conversation_ids: requestConversationIDs,
             sequence: ++collector.binarySequence,
           });
           if (collector.binaryResponses.length > 80) collector.binaryResponses.splice(0, collector.binaryResponses.length - 80);
@@ -2013,9 +2081,50 @@ async function extractConversationRows(page) {
         if (parts.length >= 3 && parts[1] === "2") return "group";
         return "unknown";
       };
-      const titles = [...document.querySelectorAll(".conversationConversationItemtitle")];
-      const wrappers = [...document.querySelectorAll(".conversationConversationItemwrapper")];
-      const fallbackRows = [...document.querySelectorAll("[class*='conversationConversationItem'], [data-conversation-id], [data-conversationid], [data-conv-id], [data-conversation], [data-conversation-key]")];
+      const list = document.querySelector(".conversationConversationListwrapper");
+      const hasClassFragment = (node, fragment) => String(node?.className || "").includes(fragment);
+      const closestClassFragment = (node, fragment) => {
+        let current = node;
+        while (current) {
+          if (hasClassFragment(current, fragment)) return current;
+          if (current === list) break;
+          current = current.parentElement;
+        }
+        return null;
+      };
+      const descendantClassFragment = (node, fragment) => node?.querySelector?.(`[class*="${fragment}"]`) || null;
+      const indexedSlotKinds = new Map();
+      const indexedSlotDiagnostics = [];
+      for (const node of [...list?.querySelectorAll?.("[data-index]") || []]) {
+        const index = attr(node, ["data-index"]);
+        if (!/^\d+$/.test(index)) continue;
+        const strangerNode = closestClassFragment(node, "conversationStrangerBoxwrapper")
+          || descendantClassFragment(node, "conversationStrangerBoxwrapper");
+        const conversationNode = closestClassFragment(node, "conversationConversationItemwrapper")
+          || descendantClassFragment(node, "conversationConversationItemwrapper");
+        const kind = strangerNode ? "stranger" : (conversationNode ? "conversation" : "unknown");
+        const titleNode = node.querySelector(".conversationConversationItemtitle, .conversationStrangerBoxtitle");
+        indexedSlotKinds.set(index, kind);
+        indexedSlotDiagnostics.push({
+          data_index: Number(index),
+          kind,
+          title: text(titleNode),
+          stranger_marker_found: Boolean(strangerNode),
+          conversation_marker_found: Boolean(conversationNode),
+          slot_class: String(node.className || "").slice(0, 160),
+          stranger_class: String(strangerNode?.className || "").slice(0, 160),
+          conversation_class: String(conversationNode?.className || "").slice(0, 160),
+        });
+      }
+      const titles = [...list?.querySelectorAll?.(".conversationConversationItemtitle") || []]
+        .filter((node) => !closestClassFragment(node, "conversationStrangerBoxwrapper")
+          && Boolean(closestClassFragment(node, "conversationConversationItemwrapper")));
+      const wrappers = [...list?.querySelectorAll?.(".conversationConversationItemwrapper") || []]
+        .filter((node) => !closestClassFragment(node, "conversationStrangerBoxwrapper")
+          && !descendantClassFragment(node, "conversationStrangerBoxwrapper"));
+      const fallbackRows = [...list?.querySelectorAll?.("[class*='conversationConversationItem'], [data-conversation-id], [data-conversationid], [data-conv-id], [data-conversation], [data-conversation-key]") || []]
+        .filter((node) => !closestClassFragment(node, "conversationStrangerBoxwrapper")
+          && !descendantClassFragment(node, "conversationStrangerBoxwrapper"));
       // The message panel virtualizes rows. The title selector can still
       // match detached/recycled title nodes, so prefer the stable row wrapper
       // and resolve its title inside that wrapper.
@@ -2057,9 +2166,20 @@ async function extractConversationRows(page) {
           }
           return "";
         };
-        const conversation = firstAttr(["data-conversation-id", "data-conversationid", "data-conv-id", "data-conversation", "data-conversation-key", "data-id"])
-          || reactFields.conversation
-          || hrefs(uniqueNodes).map((href) => queryValue(href, ["conversation_id", "conversationId", "conversation-id", "conv_id", "convId"])).find(Boolean) || "";
+        const explicitConversation = firstAttr(["data-conversation-id", "data-conversationid", "data-conv-id", "data-conversation", "data-conversation-key"]);
+        const genericDataID = firstAttr(["data-id"]);
+        const hrefConversation = hrefs(uniqueNodes)
+          .map((href) => queryValue(href, ["conversation_id", "conversationId", "conversation-id", "conv_id", "convId"]))
+          .find(Boolean) || "";
+        // React Fiber also contains neighboring virtual-row state. Its first
+        // conversation-looking value changes as chats are selected, so it is
+        // diagnostic only and must never seed a row identity.
+        const conversation = explicitConversation
+          || (isConversationIdentifier(genericDataID) ? genericDataID : "")
+          || hrefConversation;
+        const conversationSource = explicitConversation
+          ? "explicit_attribute"
+          : (isConversationIdentifier(genericDataID) ? "validated_data_id" : (hrefConversation ? "href" : "missing"));
         const explicitType = firstAttr(["data-conversation-type", "data-conversationtype", "data-conv-type", "data-type"]);
         const typeFromClass = uniqueNodes.some((node) => /group|群聊|multi/i.test(typeof node.className === "string" ? node.className : "")) ? "group" : "unknown";
         const peer = firstAttr(["data-sec-uid", "data-sec_uid", "data-secuid", "data-user-id", "data-uid", "data-userid", "data-peer-id", "data-peer-uid"])
@@ -2082,6 +2202,7 @@ async function extractConversationRows(page) {
           unique_node_count: uniqueNodes.length,
           react_prop_key_count: reactFields.react_prop_key_count,
           react_conversation_present: Boolean(reactFields.conversation),
+          accepted_conversation_source: conversationSource,
           react_peer_present: Boolean(reactFields.peer),
           react_type: reactFields.type || "unknown",
         });
@@ -2092,10 +2213,10 @@ async function extractConversationRows(page) {
           peer_platform_user_id: peer || null,
           peer_avatar_url: avatar || null,
           peer_display_name: displayName,
-          channel: attr(row, ["data-channel"]) || "consumer",
           conversation_type: conversationType(explicitType) !== "unknown" ? conversationType(explicitType) : (conversationType(reactFields.type) !== "unknown" ? conversationType(reactFields.type) : (conversationType(conversation) !== "unknown" ? conversationType(conversation) : typeFromClass)),
           last_message_at: attr(timeNode, ["datetime", "data-last-message-at"]) || attr(row, ["data-last-message-at"]) || null,
           data_index: firstAttr(["data-index"]) || null,
+          _conversation_source: conversationSource,
           _row_key: firstAttr(["data-index", "data-key"]) || `${displayName}:${sourceIndex}`,
           _source_index: sourceIndex,
         });
@@ -2125,6 +2246,11 @@ async function extractConversationRows(page) {
         wrapper_title_nonempty_count: wrapperTitleTextLengths.filter(Boolean).length,
         wrapper_title_text_lengths: wrapperTitleTextLengths.slice(0, 40),
         source_count: source.length,
+        indexed_slot_count: indexedSlotKinds.size,
+        normal_conversation_slot_count: [...indexedSlotKinds.values()].filter((kind) => kind === "conversation").length,
+        filtered_stranger_slot_count: [...indexedSlotKinds.values()].filter((kind) => kind === "stranger").length,
+        unknown_indexed_slot_count: [...indexedSlotKinds.values()].filter((kind) => kind === "unknown").length,
+        indexed_slot_diagnostics: indexedSlotDiagnostics.slice(0, 40),
         row_diagnostics: rowDiagnostics.slice(0, 40),
         pushed_row_count: pushedRowCount,
         fallback_count: fallbackRows.length,
@@ -2188,9 +2314,9 @@ async function readOpenConversationName(page, fallback = "") {
   }
 }
 
-async function scrollConversationPanel(page) {
+async function scrollConversationPanel(page, action = "next") {
   try {
-    return await page.evaluate(scrollConversationListDOM);
+    return await page.evaluate(scrollConversationListDOM, action);
   } catch {
     return {
       moved: false,
@@ -2220,16 +2346,6 @@ async function clickConversationRow(page, row) {
   } catch {
     return false;
   }
-}
-
-function conversationRowHydrationKey(row) {
-  const dataIndex = String(row?.data_index || "").trim();
-  if (/^\d+$/.test(dataIndex)) return `index:${dataIndex}`;
-  const conversationID = String(row?.platform_conversation_id || "").trim();
-  if (conversationID) return `conversation:${conversationID}`;
-  const peerID = String(row?.peer_platform_user_id || "").trim();
-  if (peerID) return `peer:${peerID}`;
-  return `row:${String(row?._row_key || row?._source_index || "unknown")}`;
 }
 
 function decorateConversationRowFromIdentityRecords(row, records) {
@@ -2262,9 +2378,19 @@ function decorateConversationRowFromIdentityRecords(row, records) {
   };
 }
 
-async function hydrateConversationRows(page, rows, collector, clickedDataIndexes) {
+function binaryResponsesMatchDisplayName(responses, displayName) {
+  const expected = String(displayName || "").replace(/\s+/g, " ").trim();
+  if (!expected) return false;
+  return (responses || []).some((response) => protobufLeaves(response?.decoded?.fields || [])
+    .some((leaf) => leaf.kind === "string"
+      && String(leaf.text || "").replace(/\s+/g, " ").trim() === expected));
+}
+
+async function hydrateConversationRows(page, rows, collector, clickedDataIndexes, unsupportedHydrationKeys, scanContext = {}) {
   const updates = new Map();
-  for (const row of rows || []) {
+  const hydrationBatch = selectConversationHydrationBatch(rows, clickedDataIndexes, unsupportedHydrationKeys);
+  let rejectionReason = "";
+  for (const row of hydrationBatch) {
     const dataIndex = String(row?.data_index || "").trim();
     const hydrationKey = conversationRowHydrationKey(row);
     if (clickedDataIndexes.has(hydrationKey)) continue;
@@ -2273,11 +2399,14 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
     const streakSequence = collector.streakSequence;
     const target = await describeConversationListRowByIndex(page, dataIndex);
     debugLog("conversation_row_click_begin", {
+      scan_pass: scanContext.scanPass,
+      scan_round: scanContext.round,
       data_index: /^\d+$/.test(dataIndex) ? dataIndex : null,
       source_index: Number.isInteger(Number(row?._source_index)) ? Number(row._source_index) : null,
       title_hash: textHash(target.title || row.peer_display_name),
       title_length: String(target.title || row.peer_display_name || "").length,
       conversation_id_hash: textHash(row.platform_conversation_id),
+      conversation_id_source: row._conversation_source || "unknown",
       peer_id_hash: textHash(row.peer_platform_user_id),
       target_found: target.target_found === true,
       target_reason: target.reason || "",
@@ -2289,16 +2418,33 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
       list_rect: target.list_rect || null,
       row_class: target.row_class || "",
     });
-    const domStreakDays = await readConversationListStreakDays(page, dataIndex);
+    const expectedTitle = String(row?.peer_display_name || "").replace(/\s+/g, " ").trim();
+    const targetTitle = String(target?.title || "").replace(/\s+/g, " ").trim();
+    if (!target.target_found || !expectedTitle || targetTitle !== expectedTitle) {
+      rejectionReason = !target.target_found ? "target_not_found" : "dom_title_changed";
+      debugLog("conversation_row_click_rejected", {
+        data_index: /^\d+$/.test(dataIndex) ? dataIndex : null,
+        reason: !target.target_found ? "target_not_found" : "dom_title_changed",
+        expected_title_hash: textHash(expectedTitle),
+        actual_title_hash: textHash(targetTitle),
+      });
+      continue;
+    }
+    const domStreak = await readConversationListStreakSnapshot(page, dataIndex);
+    const domStreakDays = domStreak?.days ?? null;
     const clicked = await clickConversationRow(page, row);
     debugLog("conversation_row_click_result", {
       data_index: /^\d+$/.test(dataIndex) ? dataIndex : null,
       conversation_id_hash: textHash(row.platform_conversation_id),
       clicked,
       dom_streak_days: domStreakDays,
+      dom_streak_activated_today: domStreak?.activated_today ?? null,
+      dom_streak_icon_kind: domStreak?.icon_kind || "missing",
     });
-    if (!clicked) continue;
-    clickedDataIndexes.add(hydrationKey);
+    if (!clicked) {
+      rejectionReason = "click_failed";
+      continue;
+    }
     await page.waitForTimeout(850);
     await flushConversationCollector(collector);
     const newRecords = collector.records.slice(recordCount);
@@ -2316,13 +2462,19 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
         if (days !== null) interfaceStreakCandidates.push(days);
       }
     }
-    const streak = selectConversationStreakDays(interfaceStreakCandidates, domStreakDays);
+    const streak = selectConversationStreakDays(interfaceStreakCandidates, domStreakDays, {
+      // Binary text leaves can mention a fire/streak number that belongs to a
+      // different object in the same response. Until a candidate is tied to
+      // an explicit JSON streak field, the indexed DOM row is authoritative.
+      interfaceScoped: interfaceStreakPaths.length > 0,
+    });
     const responsePaths = [...new Set([
       ...newRecords.map((record) => record?.response_path),
       ...newBinaryResponses.map((response) => response?.path),
     ].filter(Boolean))];
     let hydrated = decorateConversationRowFromIdentityRecords(row, newRecords);
     hydrated.streak_days = streak.days;
+    hydrated.streak_activated_today = domStreak?.activated_today ?? null;
     hydrated = resolveRowsFromNetworkRecords([hydrated], newRecords).rows[0] || hydrated;
     const protobuf = resolveRowsFromProtobuf([hydrated], newBinaryResponses, newRecords, new Set());
     const sameID = String(hydrated.platform_conversation_id || "").trim();
@@ -2337,26 +2489,114 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
           ? protobufRow.peer_display_name
           : hydrated.peer_display_name,
         peer_platform_user_id: protobufRow.peer_platform_user_id || hydrated.peer_platform_user_id || null,
+        streak_days: streak.days,
+        streak_activated_today: domStreak?.activated_today ?? null,
       };
     }
-    const clickedIdentity = selectClickedConversationIdentity(
-      hydrated.platform_conversation_id,
-      newBinaryResponses
-        .filter((response) => response?.path === "/v2/conversation/get_info_list")
-        .flatMap((response) => [...new Set(protobufLeaves(response?.decoded?.fields || [])
+    const conversationIDsForPath = (path) => newBinaryResponses
+      .filter((response) => response?.path === path)
+      .flatMap((response) => [
+        ...(response?.request_conversation_ids || []),
+        ...protobufLeaves(response?.decoded?.fields || [])
           .filter((leaf) => leaf.kind === "string" && isConversationID(leaf.text))
-          .map((leaf) => leaf.text))]
-          .map((conversationID) => ({
-            conversationID,
-            conversationType: conversationTypeFromID(conversationID),
-          }))),
+          .map((leaf) => leaf.text),
+      ]);
+    const clickedIdentity = selectClickedConversationIdentityFromSources(
+      hydrated.platform_conversation_id,
+      conversationIDsForPath("/v2/conversation/get_info_list"),
+      conversationIDsForPath("/v1/conversation/participants_list"),
     );
-    if (clickedIdentity.authoritative) {
+    const responseMatchesTitle = identityRecordsMatchDisplayName(newRecords, expectedTitle)
+      || binaryResponsesMatchDisplayName(newBinaryResponses, expectedTitle);
+    const responseMatchesPeer = identityRecordsMatchPeer(newRecords, row.peer_platform_user_id);
+    const responseHasParticipantList = newBinaryResponses
+      .some((response) => /\/v1\/conversation\/participants_list(?:\/|$)/i.test(response?.path || ""));
+    const responseIsClickedGroup = clickedIdentity.authoritative
+      && (clickedIdentity.conversationType === "group" || responseHasParticipantList);
+    const responseMatchesDOM = responseMatchesTitle || responseMatchesPeer || responseIsClickedGroup;
+    const relationshipKeys = [
+      "follow_status", "follower_status", "mate_relation", "mate_status", "new_friend_type",
+      "social_relation_type", "social_relation_sub_type", "is_block", "is_blocked",
+    ];
+    const relationshipRecords = newRecords.filter((record) =>
+      /\/aweme\/v1\/web\/user\/profile\/scene(?:\/|$)/i.test(record?.response_path || "")
+      && (identityRecordsMatchDisplayName([record], expectedTitle)
+        || identityRecordsMatchPeer([record], row.peer_platform_user_id)));
+    const relationship = {};
+    for (const key of relationshipKeys) {
+      const value = relationshipRecords
+        .map((record) => String(record?.identity?.[key] ?? "").trim())
+        .find(Boolean);
+      if (value !== undefined) relationship[key] = value;
+    }
+    debugLog("conversation_peer_relationship_observed", {
+      scan_pass: scanContext.scanPass,
+      scan_round: scanContext.round,
+      data_index: /^\d+$/.test(dataIndex) ? dataIndex : null,
+      title_hash: textHash(expectedTitle),
+      conversation_id_hash: textHash(clickedIdentity.conversationID || hydrated.platform_conversation_id),
+      relationship_record_count: relationshipRecords.length,
+      relationship,
+    });
+    hydrated._peer_relationship = relationship;
+    debugLog("conversation_clicked_response_correlation", {
+      scan_pass: scanContext.scanPass,
+      scan_round: scanContext.round,
+      data_index: /^\d+$/.test(dataIndex) ? dataIndex : null,
+      expected_title_hash: textHash(expectedTitle),
+      dom_conversation_id_hash: textHash(row.platform_conversation_id),
+      dom_conversation_id_source: row._conversation_source || "unknown",
+      dom_peer_id_hash: textHash(row.peer_platform_user_id),
+      candidate_conversation_id_hash: textHash(clickedIdentity.conversationID),
+      candidate_conversation_type: clickedIdentity.conversationType,
+      candidate_authoritative: clickedIdentity.authoritative,
+      response_matches_title: responseMatchesTitle,
+      response_matches_peer: responseMatchesPeer,
+      response_has_participant_list: responseHasParticipantList,
+      response_matches_dom: responseMatchesDOM,
+      get_info_conversation_id_hashes: [...new Set(conversationIDsForPath("/v2/conversation/get_info_list"))]
+        .map((value) => textHash(value)).slice(0, 20),
+      participant_conversation_id_hashes: [...new Set(conversationIDsForPath("/v1/conversation/participants_list"))]
+        .map((value) => textHash(value)).slice(0, 20),
+      response_paths: responsePaths.slice(0, 20),
+    });
+    if (clickedIdentity.authoritative && responseMatchesDOM) {
       hydrated = {
         ...hydrated,
         platform_conversation_id: clickedIdentity.conversationID,
-        conversation_type: clickedIdentity.conversationType,
+        conversation_type: responseIsClickedGroup ? "group" : clickedIdentity.conversationType,
       };
+    } else if (clickedIdentity.authoritative) {
+      debugLog("conversation_clicked_identity_rejected", {
+        data_index: /^\d+$/.test(dataIndex) ? dataIndex : null,
+        reason: "response_name_mismatch",
+        expected_title_hash: textHash(expectedTitle),
+        candidate_conversation_id_hash: textHash(clickedIdentity.conversationID),
+        new_json_record_count: newRecords.length,
+        new_binary_response_count: newBinaryResponses.length,
+        response_matches_peer: responseMatchesPeer,
+        response_is_clicked_group: responseIsClickedGroup,
+      });
+    }
+    const hydratedType = conversationTypeFromValue(hydrated.conversation_type) !== "unknown"
+      ? conversationTypeFromValue(hydrated.conversation_type)
+      : conversationTypeFromID(hydrated.platform_conversation_id);
+    const stableIdentity = Boolean(String(hydrated.platform_conversation_id || "").trim())
+      && (hydratedType === "group" || Boolean(String(hydrated.peer_platform_user_id || "").trim()));
+    if (!stableIdentity) {
+      rejectionReason = "stable_identity_missing";
+      debugLog("conversation_row_hydration_rejected", {
+        data_index: /^\d+$/.test(dataIndex) ? dataIndex : null,
+        reason: "stable_identity_missing",
+        expected_title_hash: textHash(expectedTitle),
+        response_matches_title: responseMatchesTitle,
+        response_matches_peer: responseMatchesPeer,
+        response_is_clicked_group: responseIsClickedGroup,
+        conversation_id_present: Boolean(hydrated.platform_conversation_id),
+        peer_id_present: Boolean(hydrated.peer_platform_user_id),
+        conversation_type: hydratedType,
+      });
+      continue;
     }
     if (STREAK_SOURCE_PROBE && Number.isInteger(domStreakDays) && domStreakDays > 0) {
       const probeMatches = probeConversationStreakResponses(
@@ -2364,7 +2604,7 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
         hydrated.platform_conversation_id,
         domStreakDays,
       );
-      debugLog("DEBUG-streak-source-match", {
+      debugLog("conversation_streak_source_probe", {
         data_index: /^\d+$/.test(dataIndex) ? dataIndex : null,
         conversation_id_hash: textHash(hydrated.platform_conversation_id),
         response_count: collector.binaryResponses.length,
@@ -2372,11 +2612,14 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
         matches: probeMatches,
       });
     }
+    clickedDataIndexes.add(hydrationKey);
     updates.set(hydrationKey, hydrated);
     debugLog("conversation_row_hydrated", {
       data_index: /^\d+$/.test(dataIndex) ? dataIndex : null,
       source_index: Number.isInteger(Number(row?._source_index)) ? Number(row._source_index) : null,
       hydration_key_hash: textHash(hydrationKey),
+      conversation_id_hash: textHash(hydrated.platform_conversation_id),
+      conversation_id_source: hydrated._conversation_source || "response",
       title_hash: textHash(hydrated.peer_display_name),
       title_length: String(hydrated.peer_display_name || "").length,
       conversation_id_present: Boolean(hydrated.platform_conversation_id),
@@ -2384,6 +2627,8 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
       avatar_present: Boolean(hydrated.peer_avatar_url),
       streak_days_present: hydrated.streak_days !== null,
       streak_days: hydrated.streak_days,
+      streak_activated_today: hydrated.streak_activated_today ?? null,
+      streak_icon_kind: domStreak?.icon_kind || "missing",
       streak_source: streak.source,
       dom_streak_days: domStreakDays,
       interface_streak_candidates: [...new Set(interfaceStreakCandidates)].slice(0, 20),
@@ -2394,7 +2639,12 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
       response_paths: responsePaths.slice(0, 20),
     });
   }
-  return updates;
+  return {
+    updates,
+    snapshotConsumed: hydrationBatch.length > 0,
+    attemptedKey: hydrationBatch.length ? conversationRowHydrationKey(hydrationBatch[0]) : "",
+    rejectionReason,
+  };
 }
 
 async function listConversations(input) {
@@ -2403,19 +2653,10 @@ async function listConversations(input) {
   const groupOnly = input?.group_only === true;
   return withSession(input, async (page) => {
     const collector = attachConversationCollector(page);
-    await page.goto(HOME_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
-    debugLog("conversations_home_loaded", { url: safeURL(page) });
-    await page.waitForTimeout(1800);
-    let opened = await openMessagePanel(page, { groupOnly });
-    if (!opened) {
-      debugLog("conversations_chat_route_fallback", { url: safeURL(page) });
-      await page.goto(CHAT_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
-      await page.waitForTimeout(1500);
-      opened = await openMessagePanel(page, { groupOnly });
-    }
-    debugLog("conversations_panel_opened", { opened, group_only: groupOnly, url: safeURL(page) });
-    if (!opened) throw protocolError("BROWSER_SELECTOR_CHANGED", "message panel entry is unavailable");
-    await page.waitForTimeout(1500);
+    const panelSource = await openConversationRoute(page, { groupOnly });
+    debugLog("conversations_panel_opened", { opened: Boolean(panelSource), source: panelSource || "missing", group_only: groupOnly, url: safeURL(page) });
+    if (!panelSource) throw protocolError("BROWSER_SELECTOR_CHANGED", "conversation list is unavailable on the chat route");
+    await page.waitForTimeout(500);
     if (groupOnly) await openGroupConversationTab(page);
     const seen = new Map();
     const seenQuality = new Map();
@@ -2425,12 +2666,67 @@ async function listConversations(input) {
     const authoritativeGroupIDs = new Set();
     const namedGroupIDs = new Set();
     const clickedDataIndexes = new Set();
+    const unsupportedHydrationKeys = new Set();
+    const hydrationFailureCounts = new Map();
+    const hydrationCache = new Map();
+    const nonMutualDirectConversationIDs = new Set();
+    const observedDataIndexes = new Set();
+    const currentPassIndexState = new Map();
+    const loggedDOMSlots = new Set();
     let stuck = 0;
     let bottomStable = 0;
-    for (let round = 0; round < 60; round += 1) {
+    let scanPass = 0;
+    let passHadHydration = false;
+    for (let round = 0; round < 140; round += 1) {
       const previousSeenCount = seen.size;
       await flushConversationCollector(collector);
       const scan = await extractConversationRows(page);
+      const indexedSlotDiagnostics = new Map((scan.indexed_slot_diagnostics || [])
+        .map((slot) => [String(slot?.data_index ?? ""), slot]));
+      for (const slot of scan.indexed_slot_diagnostics || []) {
+        if (slot?.kind !== "stranger") continue;
+        const slotSignature = `stranger:${scanPass}:${slot.data_index}:${slot.title}`;
+        if (loggedDOMSlots.has(slotSignature)) continue;
+        loggedDOMSlots.add(slotSignature);
+        debugLog("conversation_stranger_filtered", {
+          scan_pass: scanPass + 1,
+          scan_round: round + 1,
+          data_index: Number.isSafeInteger(slot.data_index) ? slot.data_index : null,
+          title_hash: textHash(slot.title),
+          title_length: String(slot.title || "").length,
+          stranger_marker_found: slot.stranger_marker_found === true,
+          conversation_marker_found: slot.conversation_marker_found === true,
+          slot_class: slot.slot_class || "",
+          stranger_class: slot.stranger_class || "",
+          conversation_class: slot.conversation_class || "",
+          reason: "conversationStrangerBoxwrapper",
+        });
+      }
+      for (const row of scan.rows || []) {
+        const dataIndex = String(row?.data_index || "").trim();
+        const slotDiagnostic = indexedSlotDiagnostics.get(dataIndex);
+        const slotSignature = `${scanPass}:${dataIndex}:${row.peer_display_name}:${row.platform_conversation_id}:${row.peer_platform_user_id}`;
+        if (/^\d+$/.test(dataIndex) && !loggedDOMSlots.has(slotSignature)) {
+          loggedDOMSlots.add(slotSignature);
+          debugLog("conversation_dom_slot_observed", {
+            scan_pass: scanPass + 1,
+            scan_round: round + 1,
+            data_index: Number(dataIndex),
+            title_hash: textHash(row.peer_display_name),
+            title_length: String(row.peer_display_name || "").length,
+            conversation_id_hash: textHash(row.platform_conversation_id),
+            conversation_id_present: Boolean(row.platform_conversation_id),
+            conversation_id_source: row._conversation_source || "unknown",
+            peer_id_hash: textHash(row.peer_platform_user_id),
+            peer_id_present: Boolean(row.peer_platform_user_id),
+            avatar_present: Boolean(row.peer_avatar_url),
+            conversation_type: conversationTypeFromValue(row.conversation_type),
+            dom_slot_kind: slotDiagnostic?.kind || "unknown",
+            stranger_marker_found: slotDiagnostic?.stranger_marker_found === true,
+            conversation_marker_found: slotDiagnostic?.conversation_marker_found === true,
+          });
+        }
+      }
       const domGroupRows = (scan.rows || [])
         .filter((row) => row?.conversation_type === "group")
         .map((row) => ({
@@ -2440,41 +2736,81 @@ async function listConversations(input) {
           conversation_id_length: String(row.platform_conversation_id || "").length,
         }));
       if (domGroupRows.length) debugLog("conversations_dom_group_rows", { round: round + 1, rows: domGroupRows });
-      const hydratedRows = await hydrateConversationRows(page, scan.rows || [], collector, clickedDataIndexes);
-      for (const row of scan.rows || []) {
-        const hydrated = hydratedRows.get(conversationRowHydrationKey(row));
-        if (hydrated) Object.assign(row, hydrated);
-      }
-      const resolvedNetwork = resolveRowsFromNetworkRecords(scan.rows || [], collector.records);
-      const domRowsByConversationID = new Map(
-        (scan.rows || [])
-          .filter((row) => row?.platform_conversation_id && row?.peer_display_name)
-          .map((row) => [String(row.platform_conversation_id), row]),
-      );
-      const networkRows = (resolvedNetwork.rows || []).map((row) => {
-        const domRow = domRowsByConversationID.get(String(row.platform_conversation_id || ""));
-        if (!domRow) return row;
-        return {
-          ...row,
-          peer_platform_user_id: domRow.peer_platform_user_id || row.peer_platform_user_id,
-          peer_display_name: domRow.peer_display_name || row.peer_display_name,
-          conversation_type: domRow.conversation_type !== "unknown" ? domRow.conversation_type : row.conversation_type,
-        };
+      scan.rows = applyConversationHydrationCache(scan.rows || [], hydrationCache);
+      const hydrationIdentityCountBefore = conversationInventoryIdentityCount(hydrationCache.values());
+      const hydration = await hydrateConversationRows(page, scan.rows, collector, clickedDataIndexes, unsupportedHydrationKeys, {
+        scanPass: scanPass + 1,
+        round: round + 1,
       });
-      for (const domRow of scan.rows || []) {
-        if (!domRow?.platform_conversation_id || networkRows.some((row) => row.platform_conversation_id === domRow.platform_conversation_id)) continue;
-        networkRows.push(domRow);
+      const hydratedRows = hydration.updates;
+      for (const [key, hydrated] of hydratedRows) hydrationCache.set(key, hydrated);
+      const hydrationIdentityCountAfter = conversationInventoryIdentityCount(hydrationCache.values());
+      scan.rows = applyConversationHydrationCache(scan.rows, hydrationCache);
+      for (const row of scan.rows) {
+        const inventoryKey = conversationRowInventoryKey(row);
+        if (!/^index:\d+$/.test(inventoryKey)) continue;
+        currentPassIndexState.set(inventoryKey, {
+          data_index: Number(inventoryKey.slice(6)),
+          title_hash: textHash(row.peer_display_name),
+          hydration_key_hash: textHash(conversationRowHydrationKey(row)),
+          hydration_cache_hit: hydrationCache.has(conversationRowHydrationKey(row)),
+          resolved: false,
+          stored: false,
+        });
       }
+      const trustedDOMRows = scan.rows.filter((row) => hydrationCache.has(conversationRowHydrationKey(row)));
+      // Global response collectors are diagnostic only. A row has already
+      // been enriched from the responses triggered by its own click; applying
+      // the accumulated response pool again can attach another row's identity
+      // after the virtual list reorders.
+      const resolvedNetwork = resolveRowsFromNetworkRecords([], collector.records);
       const networkGroupIDs = new Set(resolvedNetwork.group_conversation_ids || []);
-      const resolvedProtobuf = resolveRowsFromProtobuf(networkRows, collector.binaryResponses, collector.records, networkGroupIDs);
-      const rows = resolvedProtobuf.rows || [];
-      // The network conversation inventory is authoritative. Protobuf probes
-      // also observe the mixed message panel and can produce extra candidates
-      // from direct conversations, so only use them as a fallback when the
-      // inventory endpoint has not yielded any group IDs yet.
-      const groupIDs = resolvedNetwork.group_conversation_ids?.length
-        ? resolvedNetwork.group_conversation_ids
-        : resolvedProtobuf.group_conversation_ids || [];
+      const resolvedProtobuf = resolveRowsFromProtobuf([], collector.binaryResponses, collector.records, networkGroupIDs);
+      // DOM data-index rows are the authoritative inventory. Interface and
+      // protobuf responses may enrich a clicked row, but they must never add
+      // an extra conversation that was not rendered by the message panel.
+      const rows = trustedDOMRows;
+      for (const row of rows) {
+        const state = currentPassIndexState.get(conversationRowInventoryKey(row));
+        if (state) state.resolved = true;
+      }
+      if (hydration.snapshotConsumed) {
+        if (hydrationIdentityCountAfter > hydrationIdentityCountBefore) passHadHydration = true;
+        if (!hydratedRows.size && hydration.attemptedKey) {
+          const failureCount = (hydrationFailureCounts.get(hydration.attemptedKey) || 0) + 1;
+          hydrationFailureCounts.set(hydration.attemptedKey, failureCount);
+          if (failureCount >= 3) {
+            unsupportedHydrationKeys.add(hydration.attemptedKey);
+            debugLog("conversation_dom_row_unsupported", {
+              scan_pass: scanPass + 1,
+              scan_round: round + 1,
+              hydration_key_hash: textHash(hydration.attemptedKey),
+              failure_count: failureCount,
+              reason: hydration.rejectionReason || "stable_identity_unavailable",
+            });
+          }
+        }
+        debugLog("conversation_dom_snapshot_consumed", {
+          scan_pass: scanPass + 1,
+          scan_round: round + 1,
+          hydrated_count: hydratedRows.size,
+          hydrated_identity_count: hydrationIdentityCountAfter,
+          new_unique_identity_count: Math.max(0, hydrationIdentityCountAfter - hydrationIdentityCountBefore),
+          clicked_key_count: clickedDataIndexes.size,
+          reason: "virtual_list_may_reorder_after_click",
+        });
+        await page.waitForTimeout(120);
+        continue;
+      }
+      for (const row of scan.rows || []) {
+        const dataIndex = String(row?.data_index || "").trim();
+        if (/^\d+$/.test(dataIndex) && !unsupportedHydrationKeys.has(conversationRowHydrationKey(row))) {
+          observedDataIndexes.add(Number(dataIndex));
+        }
+      }
+      const groupIDs = rows
+        .filter((row) => conversationTypeFromValue(row.conversation_type) === "group")
+        .map((row) => row.platform_conversation_id);
       for (const conversationID of groupIDs) {
         if (conversationID) authoritativeGroupIDs.add(conversationID);
       }
@@ -2521,6 +2857,11 @@ async function listConversations(input) {
         const idType = conversationTypeFromID(row.platform_conversation_id);
         const rowType = idType !== "unknown" ? idType : declaredType;
         if (row.platform_conversation_id && (row.peer_platform_user_id || rowType === "group")) {
+          const mutualFriend = rowType === "direct"
+            ? isMutualFriendRelationship(row._peer_relationship)
+            : null;
+          if (mutualFriend === false) nonMutualDirectConversationIDs.add(String(row.platform_conversation_id).trim());
+          if (mutualFriend === true) nonMutualDirectConversationIDs.delete(String(row.platform_conversation_id).trim());
           const clean = {
             platform_conversation_id: String(row.platform_conversation_id).trim().slice(0, 512),
             peer_platform_user_id: row.peer_platform_user_id ? String(row.peer_platform_user_id).trim().slice(0, 256) : null,
@@ -2528,20 +2869,36 @@ async function listConversations(input) {
               ? String(row.peer_avatar_url).trim().slice(0, 2048)
               : null,
             peer_display_name: String(row.peer_display_name || (rowType === "group" ? "群聊" : "")).trim().slice(0, 128),
-            channel: String(row.channel || "consumer").trim().slice(0, 32) || "consumer",
             conversation_type: rowType.slice(0, 32) || "unknown",
             last_message_at: row.last_message_at ? String(row.last_message_at).trim().slice(0, 128) : null,
             streak_days: Number.isSafeInteger(row.streak_days) && row.streak_days >= 0 && row.streak_days <= 10000
               ? row.streak_days
               : null,
+            streak_activated_today: typeof row.streak_activated_today === "boolean"
+              ? row.streak_activated_today
+              : null,
           };
           if (clean.platform_conversation_id && (clean.peer_platform_user_id || clean.conversation_type === "group")) {
             const accepted = filterConversationRows([clean], groupOnly);
             if (accepted.length) {
-              const existing = seen.get(clean.platform_conversation_id);
-              const existingQuality = seenQuality.get(clean.platform_conversation_id) || 0;
+              const inventoryKey = conversationRowInventoryKey(row);
+              const existing = seen.get(inventoryKey);
+              const existingQuality = seenQuality.get(inventoryKey) || 0;
               const incomingQuality = Number(/^[0-9]+$/.test(String(row?.data_index || ""))) * 2
                 + Number(Number.isInteger(Number(row?._source_index)));
+              if (shouldRejectConversationInventoryReplacement(seen, inventoryKey, existing, clean)) {
+                debugLog("conversation_inventory_virtual_overlap_rejected", {
+                  data_index: /^index:\d+$/.test(inventoryKey) ? Number(inventoryKey.slice(6)) : null,
+                  existing_conversation_id_hash: textHash(existing.platform_conversation_id),
+                  incoming_conversation_id_hash: textHash(clean.platform_conversation_id),
+                  existing_peer_id_hash: textHash(existing.peer_platform_user_id),
+                  incoming_peer_id_hash: textHash(clean.peer_platform_user_id),
+                  existing_title_hash: textHash(existing.peer_display_name),
+                  incoming_title_hash: textHash(clean.peer_display_name),
+                  reason: "incoming_identity_already_owned_by_another_index",
+                });
+                continue;
+              }
               const merged = mergeConversationInventoryCandidate(
                 existing,
                 clean,
@@ -2561,11 +2918,15 @@ async function listConversations(input) {
                   incoming_title_hash: textHash(clean.peer_display_name),
                   existing_streak_days: existing.streak_days,
                   incoming_streak_days: clean.streak_days,
+                  existing_streak_activated_today: existing.streak_activated_today ?? null,
+                  incoming_streak_activated_today: clean.streak_activated_today,
                 });
               }
-              seen.set(clean.platform_conversation_id, merged);
-              seenQuality.set(clean.platform_conversation_id, Math.max(
-                seenQuality.get(clean.platform_conversation_id) || 0,
+              seen.set(inventoryKey, merged);
+              const state = currentPassIndexState.get(inventoryKey);
+              if (state) state.stored = true;
+              seenQuality.set(inventoryKey, Math.max(
+                seenQuality.get(inventoryKey) || 0,
                 incomingQuality,
               ));
             }
@@ -2594,6 +2955,10 @@ async function listConversations(input) {
         title_text_lengths: scan.title_text_lengths,
         wrapper_title_text_lengths: scan.wrapper_title_text_lengths,
         source_count: scan.source_count,
+        indexed_slot_count: scan.indexed_slot_count,
+        normal_conversation_slot_count: scan.normal_conversation_slot_count,
+        filtered_stranger_slot_count: scan.filtered_stranger_slot_count,
+        unknown_indexed_slot_count: scan.unknown_indexed_slot_count,
         row_diagnostics: scan.row_diagnostics,
         pushed_row_count: scan.pushed_row_count,
         fallback_count: scan.fallback_count,
@@ -2623,11 +2988,176 @@ async function listConversations(input) {
         seen_count: seen.size,
         at_bottom: lastScroll.at_bottom,
       });
-      if ((bottomStable >= 2 && stable >= 1) || (!lastScroll.target_found && round >= 2)) break;
+      const passComplete = (bottomStable >= 2 && stable >= 1) || (!lastScroll.target_found && round >= 2);
+      const hydratedIdentityCount = conversationInventoryIdentityCount(hydrationCache.values());
+      const verificationNeedsRescan = conversationVerificationNeedsRescan(
+        seen.size,
+        hydratedIdentityCount,
+        passHadHydration,
+      );
+      if (passComplete && verificationNeedsRescan && lastScroll.target_found) {
+        debugLog("conversations_verification_rescan_required", {
+          scan_pass: scanPass + 1,
+          inventory_count: seen.size,
+          hydration_cache_size: hydrationCache.size,
+          hydrated_identity_count: hydratedIdentityCount,
+          pass_had_hydration: passHadHydration,
+          underfilled: seen.size < hydratedIdentityCount,
+          scroll_height: lastScroll.scroll_height || null,
+          highest_observed_data_index: observedDataIndexes.size ? Math.max(...observedDataIndexes) : null,
+        });
+        scanPass += 1;
+        if (scanPass > 4) {
+          debugLog("conversations_scan_failed_unstable_verification", {
+            completed_passes: scanPass,
+            clicked_key_count: clickedDataIndexes.size,
+            hydration_cache_size: hydrationCache.size,
+            hydrated_identity_count: hydratedIdentityCount,
+          });
+          throw protocolError("BROWSER_SELECTOR_CHANGED", "conversation panel did not reach a read-only verification pass", false);
+        }
+        seen.clear();
+        seenQuality.clear();
+        observedDataIndexes.clear();
+        currentPassIndexState.clear();
+        loggedDOMSlots.clear();
+        stable = 0;
+        stuck = 0;
+        bottomStable = 0;
+        passHadHydration = false;
+        await page.goto(CHAT_URL, { waitUntil: "domcontentloaded", timeout: 30000 });
+        const routeReady = await waitForConversationList(page, 15000);
+        const reset = routeReady
+          ? await scrollConversationPanel(page, "top")
+          : { moved: false, reason: "conversation_route_not_ready", target_found: false, position_verified: false };
+        debugLog("conversations_dom_rescan_started", {
+          pass: scanPass + 1,
+          reset_moved: reset.moved,
+          reset_reason: reset.reason,
+          target_found: reset.target_found,
+          position_verified: reset.position_verified,
+          route_ready: routeReady,
+        });
+        await page.waitForTimeout(900);
+        continue;
+      }
+      if (passComplete) break;
     }
     await flushConversationCollector(collector);
-    const inventoryValues = [...seen.values()].filter((row) => String(row?.platform_conversation_id || "").trim());
+    const numericInventoryIndex = (key) => {
+      const match = String(key || "").match(/^index:(\d+)$/);
+      return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+    };
+    const allInventoryEntries = [...seen.entries()]
+      .sort((left, right) => numericInventoryIndex(left[0]) - numericInventoryIndex(right[0]));
+    const strangerConversationIDs = new Set();
+    for (const response of collector.binaryResponses || []) {
+      if (!/\/v1\/stranger\/get_conversation_list(?:\/|$)/i.test(response?.path || "")) continue;
+      for (const conversationID of response?.request_conversation_ids || []) {
+        if (isConversationID(conversationID)) strangerConversationIDs.add(String(conversationID).trim());
+      }
+      for (const leaf of protobufLeaves(response?.decoded?.fields || [])) {
+        if (leaf.kind === "string" && isConversationID(leaf.text)) strangerConversationIDs.add(String(leaf.text).trim());
+      }
+    }
+    const conversationIDKeys = [
+      "conversation_id", "conversationid", "conv_id", "convid",
+      "conversation_short_id", "conversationshortid", "conv_short_id", "conv_short_id_str",
+    ];
+    for (const record of collector.records || []) {
+      if (!/\/v1\/stranger\/get_conversation_list(?:\/|$)/i.test(record?.response_path || "")) continue;
+      for (const key of conversationIDKeys) {
+        const conversationID = String(record?.identity?.[key] || "").trim();
+        if (isConversationID(conversationID)) strangerConversationIDs.add(conversationID);
+      }
+    }
+    for (const conversationID of nonMutualDirectConversationIDs) strangerConversationIDs.add(conversationID);
+    const strangerInventory = filterStrangerConversationInventory(allInventoryEntries, strangerConversationIDs);
+    const inventoryEntries = strangerInventory.kept;
+    debugLog("conversations_stranger_identity_filter", {
+      stranger_identity_count: strangerConversationIDs.size,
+      profile_non_mutual_identity_count: nonMutualDirectConversationIDs.size,
+      filtered_inventory_count: strangerInventory.filtered.length,
+      retained_inventory_count: inventoryEntries.length,
+      stranger_conversation_id_hashes: [...strangerConversationIDs].map((id) => textHash(id)).slice(0, 80),
+    });
+    for (const [key, row] of strangerInventory.filtered) {
+      debugLog("conversation_stranger_filtered", {
+        scan_pass: scanPass + 1,
+        scan_round: null,
+        data_index: /^index:\d+$/.test(key) ? Number(key.slice(6)) : null,
+        title_hash: textHash(row.peer_display_name),
+        title_length: String(row.peer_display_name || "").length,
+        conversation_id_hash: textHash(row.platform_conversation_id),
+        peer_id_hash: textHash(row.peer_platform_user_id),
+        conversation_type: conversationTypeFromValue(row.conversation_type),
+        reason: nonMutualDirectConversationIDs.has(String(row.platform_conversation_id || ""))
+          ? "profile_scene_non_mutual"
+          : "stranger_inventory_endpoint",
+      });
+    }
+    const inventoryValues = inventoryEntries
+      .map(([, row]) => row)
+      .filter((row) => String(row?.platform_conversation_id || "").trim());
+    const observedNumericIndexes = [...observedDataIndexes].sort((left, right) => left - right);
+    const missingIndexes = missingConversationInventoryIndexes(observedDataIndexes, new Set(seen.keys()));
+    if (missingIndexes.length) {
+      debugLog("conversations_scan_failed_incomplete_dom_inventory", {
+        observed_index_count: observedNumericIndexes.length,
+        highest_data_index: observedNumericIndexes.at(-1),
+        hydrated_index_count: [...seen.keys()].filter((key) => /^index:\d+$/.test(key)).length,
+        missing_indexes: missingIndexes.slice(0, 40),
+        missing_index_states: missingIndexes
+          .map((index) => currentPassIndexState.get(`index:${index}`) || { data_index: index, not_observed_in_latest_scan_state: true })
+          .slice(0, 40),
+      });
+      throw protocolError("BROWSER_SELECTOR_CHANGED", "conversation panel contains rows whose identity could not be verified", false, {
+        observed_index_count: observedNumericIndexes.length,
+        highest_data_index: observedNumericIndexes.at(-1),
+        missing_index_count: missingIndexes.length,
+      });
+    }
+    const duplicateConversationIDs = [...inventoryValues.reduce((counts, row) => {
+      const id = String(row.platform_conversation_id || "").trim();
+      counts.set(id, (counts.get(id) || 0) + 1);
+      return counts;
+    }, new Map()).entries()].filter(([, count]) => count > 1);
+    const duplicateDirectPeers = [...inventoryValues.reduce((counts, row) => {
+      const peer = row.conversation_type === "direct" ? String(row.peer_platform_user_id || "").trim() : "";
+      if (peer) counts.set(peer, (counts.get(peer) || 0) + 1);
+      return counts;
+    }, new Map()).entries()].filter(([, count]) => count > 1);
+    if (duplicateConversationIDs.length || duplicateDirectPeers.length) {
+      const duplicateConversationIDSet = new Set(duplicateConversationIDs.map(([id]) => id));
+      const duplicateDirectPeerSet = new Set(duplicateDirectPeers.map(([id]) => id));
+      debugLog("conversations_scan_failed_duplicate_identity", {
+        duplicate_conversation_id_count: duplicateConversationIDs.length,
+        duplicate_direct_peer_count: duplicateDirectPeers.length,
+        duplicate_conversation_id_hashes: duplicateConversationIDs.map(([id, count]) => ({ hash: textHash(id), count })).slice(0, 20),
+        duplicate_direct_peer_hashes: duplicateDirectPeers.map(([id, count]) => ({ hash: textHash(id), count })).slice(0, 20),
+        duplicate_rows: inventoryEntries
+          .filter(([, row]) => duplicateConversationIDSet.has(String(row.platform_conversation_id || ""))
+            || duplicateDirectPeerSet.has(String(row.peer_platform_user_id || "")))
+          .map(([key, row]) => ({
+            data_index: /^index:\d+$/.test(key) ? Number(key.slice(6)) : null,
+            conversation_id_hash: textHash(row.platform_conversation_id),
+            peer_id_hash: textHash(row.peer_platform_user_id),
+            title_hash: textHash(row.peer_display_name),
+            title_length: String(row.peer_display_name || "").length,
+            conversation_type: row.conversation_type,
+          }))
+          .slice(0, 40),
+      });
+      throw protocolError("BROWSER_SELECTOR_CHANGED", "conversation panel identity correlation produced duplicates", false, {
+        duplicate_conversation_id_count: duplicateConversationIDs.length,
+        duplicate_direct_peer_count: duplicateDirectPeers.length,
+      });
+    }
     const values = finalizeConversationInventory(inventoryValues, groupOnly, authoritativeGroupIDs);
+    const qualityByConversationID = new Map(inventoryEntries.map(([key, row]) => [
+      String(row?.platform_conversation_id || ""),
+      seenQuality.get(key) || 0,
+    ]));
     const cursorIndex = cursor ? values.findIndex((item) => item.platform_conversation_id === cursor) : -1;
     if (cursor && cursorIndex < 0) throw protocolError("INVALID_REQUEST", "conversation cursor is no longer available", false, { operation: "conversations.list", reason: "cursor_not_found" });
     if (!values.length) {
@@ -2658,6 +3188,9 @@ async function listConversations(input) {
       avatar_count: values.filter((item) => item.peer_avatar_url).length,
       streak_known_count: values.filter((item) => Number.isInteger(item.streak_days)).length,
       streak_nonzero_count: values.filter((item) => Number.isInteger(item.streak_days) && item.streak_days > 0).length,
+      streak_activated_today_count: values.filter((item) => item.streak_activated_today === true).length,
+      streak_not_activated_today_count: values.filter((item) => item.streak_activated_today === false).length,
+      streak_activation_unknown_count: values.filter((item) => item.streak_activated_today === null || item.streak_activated_today === undefined).length,
       group_avatar_count: values.filter((item) => item.conversation_type === "group" && item.peer_avatar_url).length,
       named_group_id_matches: [...namedGroupIDs].filter((conversationID) => authoritativeGroupIDs.has(conversationID)).length,
       has_next: Boolean(next),
@@ -2673,7 +3206,8 @@ async function listConversations(input) {
       avatar_present: Boolean(item.peer_avatar_url),
       conversation_type: conversationTypeFromValue(item.conversation_type),
       streak_days: item.streak_days,
-      quality: seenQuality.get(item.platform_conversation_id) || 0,
+      streak_activated_today: item.streak_activated_today ?? null,
+      quality: qualityByConversationID.get(item.platform_conversation_id) || 0,
     }));
     return { items, next_cursor: next };
   });
@@ -2700,9 +3234,7 @@ async function sendText(input) {
     throw protocolError("INVALID_REQUEST", "target and message.text are required");
   }
   return withSession(input, async (page) => {
-    await page.goto("https://www.douyin.com/chat?isPopup=1", { waitUntil: "domcontentloaded", timeout: 60000 });
-    await page.waitForTimeout(1500);
-    await openMessagePanel(page);
+    if (!await openConversationRoute(page)) throw protocolError("BROWSER_SELECTOR_CHANGED", "conversation list is unavailable on the chat route");
     if (!await clickConversation(page, target.platform_conversation_id, target.platform_user_id)) {
       throw protocolError("CONVERSATION_NOT_FOUND", "conversation was not found");
     }
@@ -2732,9 +3264,7 @@ async function archiveConversation(input) {
     throw protocolError("INVALID_REQUEST", "target and archived are required");
   }
   return withSession(input, async (page) => {
-    await page.goto("https://www.douyin.com/chat?isPopup=1", { waitUntil: "domcontentloaded", timeout: 60000 });
-    await page.waitForTimeout(1200);
-    await openMessagePanel(page);
+    if (!await openConversationRoute(page)) throw protocolError("BROWSER_SELECTOR_CHANGED", "conversation list is unavailable on the chat route");
     if (!await clickConversation(page, target.platform_conversation_id, target.platform_user_id)) throw protocolError("CONVERSATION_NOT_FOUND", "conversation was not found");
     const menu = page.locator("button[aria-label*='更多'], [aria-label*='更多'], [title*='更多'], button");
     const count = Math.min(await menu.count(), 20);
@@ -2765,9 +3295,7 @@ async function sendSticker(input) {
   const stickerID = input?.message?.sticker_id;
   if (!target || typeof target.platform_conversation_id !== "string" || typeof stickerID !== "string" || !stickerID.trim()) throw protocolError("INVALID_REQUEST", "target and message.sticker_id are required");
   return withSession(input, async (page) => {
-    await page.goto("https://www.douyin.com/chat?isPopup=1", { waitUntil: "domcontentloaded", timeout: 60000 });
-    await page.waitForTimeout(1200);
-    await openMessagePanel(page);
+    if (!await openConversationRoute(page)) throw protocolError("BROWSER_SELECTOR_CHANGED", "conversation list is unavailable on the chat route");
     if (!await clickConversation(page, target.platform_conversation_id, target.platform_user_id)) throw protocolError("CONVERSATION_NOT_FOUND", "conversation was not found");
     await clickText(page, ["表情", "emoji"]);
     const clicked = await page.evaluate((wanted) => {

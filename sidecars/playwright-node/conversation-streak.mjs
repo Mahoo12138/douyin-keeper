@@ -30,17 +30,33 @@ export function collectJSONStreakCandidates(value, depth = 0, output = []) {
   return output;
 }
 
-export function selectConversationStreakDays(interfaceCandidates, domCandidate) {
+export function selectConversationStreakDays(interfaceCandidates, domCandidate, options = {}) {
   const uniqueInterface = [...new Set((interfaceCandidates || [])
     .filter((value) => Number.isSafeInteger(value) && value >= 0 && value <= 10000))];
-  if (uniqueInterface.length === 1) return { days: uniqueInterface[0], source: "interface" };
   if (Number.isSafeInteger(domCandidate) && domCandidate >= 0 && domCandidate <= 10000) {
     return { days: domCandidate, source: "dom" };
+  }
+  if (options.interfaceScoped !== false && uniqueInterface.length === 1) {
+    return { days: uniqueInterface[0], source: "interface" };
   }
   return { days: null, source: "missing" };
 }
 
-export async function readConversationListStreakDays(page, dataIndex) {
+export function classifyConversationStreakIconSource(value) {
+  let source = String(value || "").trim().toLowerCase();
+  try { source = decodeURIComponent(source); } catch {}
+  if (!source) return { activatedToday: null, kind: "missing" };
+  if (source.includes("gray")) return { activatedToday: false, kind: "gray" };
+  if (source.includes("/flame_icon/couple/normal_couple.png")) {
+    return { activatedToday: true, kind: "couple" };
+  }
+  if (source.includes("/flame_icon/normal/normal_normal.png")) {
+    return { activatedToday: true, kind: "normal" };
+  }
+  return { activatedToday: null, kind: "unknown" };
+}
+
+export async function readConversationListStreakSnapshot(page, dataIndex) {
   const index = String(dataIndex ?? "").trim();
   if (!/^\d+$/.test(index)) return null;
   const locator = page.locator(`.conversationConversationListwrapper [data-index="${index}"]`);
@@ -49,23 +65,43 @@ export async function readConversationListStreakDays(page, dataIndex) {
     for (let position = count - 1; position >= 0; position -= 1) {
       const anchor = locator.nth(position);
       if (!await anchor.isVisible().catch(() => false)) continue;
-      const text = await anchor.evaluate((node) => {
+      const snapshot = await anchor.evaluate((node) => {
+        const stranger = node.closest(".conversationStrangerBoxwrapper")
+          || node.querySelector(".conversationStrangerBoxwrapper");
         const scope = node.closest(".conversationConversationItemwrapper")
-          || node.querySelector(".conversationConversationItemwrapper")
-          || node;
+          || node.querySelector(".conversationConversationItemwrapper");
+        if (stranger || !scope) return { normalConversation: false, text: "", iconSource: "" };
         const exact = scope.querySelector(".commonStreaknormalText");
-        if (exact?.textContent?.trim()) return exact.textContent.trim();
+        let streakText = exact?.textContent?.trim() || "";
         const classFallback = scope.querySelector('[class*="commonStreak"], [class*="streak" i], [class*="flame" i]');
-        if (classFallback?.textContent?.trim()) return classFallback.textContent.trim();
-        const semantic = [...scope.querySelectorAll("span,div,p")]
-          .map((item) => (item.textContent || "").replace(/\s+/g, " ").trim())
-          .find((value) => value.length <= 80 && /(?:火花|连续聊天|streak|flame|🔥)/i.test(value) && /\d/.test(value));
-        return semantic || "";
+        if (!streakText && classFallback?.textContent?.trim()) streakText = classFallback.textContent.trim();
+        if (!streakText) {
+          streakText = [...scope.querySelectorAll("span,div,p")]
+            .map((item) => (item.textContent || "").replace(/\s+/g, " ").trim())
+            .find((value) => value.length <= 80 && /(?:火花|连续聊天|streak|flame|🔥)/i.test(value) && /\d/.test(value)) || "";
+        }
+        const icon = scope.querySelector("img.commonStreakicon");
+        return {
+          normalConversation: true,
+          text: streakText,
+          iconSource: icon?.currentSrc || icon?.getAttribute("src") || "",
+        };
       });
-      return parseConversationStreakText(text);
+      if (!snapshot.normalConversation) continue;
+      const icon = classifyConversationStreakIconSource(snapshot.iconSource);
+      return {
+        days: parseConversationStreakText(snapshot.text) ?? 0,
+        activated_today: icon.activatedToday,
+        icon_kind: icon.kind,
+      };
     }
   } catch {
     return null;
   }
   return null;
+}
+
+export async function readConversationListStreakDays(page, dataIndex) {
+  const snapshot = await readConversationListStreakSnapshot(page, dataIndex);
+  return snapshot?.days ?? null;
 }

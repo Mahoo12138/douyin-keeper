@@ -35,7 +35,7 @@ func TestConversationListCursorPageIsStableAndScoped(t *testing.T) {
 		items = append(items, friend.SyncItem{
 			PlatformUserID: &platformIDs[index], IdentityStatus: friend.IdentityResolved,
 			DisplayName: "分页会话", Nickname: "分页会话",
-			Conversation: &friend.ConversationSnapshot{PlatformConversationID: conversationID, Channel: "consumer"},
+			Conversation: &friend.ConversationSnapshot{PlatformConversationID: conversationID},
 		})
 	}
 	if err := postgres.NewFriendRepo(pool).SyncBatch(ctx, acct.ID, items, platformIDs, conversationIDs, time.Now()); err != nil {

@@ -1,8 +1,8 @@
 import { Avatar, AvatarFallback, AvatarImage, Badge, Switch, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@douyin-keeper/ui-web'
-import { MessageCircle, Smartphone } from 'lucide-react'
+import { CircleHelp, Flame, MessageCircle, Smartphone } from 'lucide-react'
 
 import type { Friend, SparkTask } from './friend-types'
-import { formatFriendDate, TaskStatusBadge } from './friend-status'
+import { formatFriendDate, streakBadgePresentation, TaskStatusBadge } from './friend-status'
 import { taskForFriend } from './friend-filters'
 
 export function FriendTable({ friends, tasks, accountId, pendingFriendId, bulkBusy = false, selectedFriendIds = [], onSelectFriend = () => {}, onSelectAll = () => {}, selectionEnabled = false, onToggle }: {
@@ -36,6 +36,7 @@ export function FriendTable({ friends, tasks, accountId, pendingFriendId, bulkBu
       <TableBody>
         {friends.map((friend) => {
           const task = taskForFriend(tasks, accountId, friend.id)
+          const streak = streakBadgePresentation(friend.streak_days, friend.streak_activated_today)
           return (
             <TableRow key={friend.id}>
               {selectionEnabled && <TableCell className="pl-5"><input type="checkbox" checked={selected.has(friend.id)} disabled={bulkBusy || friend.platform_identity_status !== 'resolved'} onChange={(event) => onSelectFriend(friend.id, event.target.checked)} aria-label={`选择${friend.nickname || friend.display_name}`} /></TableCell>}
@@ -56,7 +57,12 @@ export function FriendTable({ friends, tasks, accountId, pendingFriendId, bulkBu
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2 whitespace-nowrap">
-                  <Badge variant={friend.streak_days > 0 ? 'success' : 'muted'}>{friend.streak_days} 天</Badge>
+                  <Badge variant={streak.variant} title={streak.statusLabel} aria-label={`${friend.streak_days} 天，${streak.statusLabel}`}>
+                    {streak.state === 'activated' ? <Flame className="mr-1 size-3.5 fill-current" aria-hidden="true" /> : null}
+                    {streak.state === 'pending' ? <Flame className="mr-1 size-3.5" aria-hidden="true" /> : null}
+                    {streak.state === 'unknown' ? <CircleHelp className="mr-1 size-3.5" aria-hidden="true" /> : null}
+                    {friend.streak_days} 天
+                  </Badge>
                   {friend.has_conversation && <MessageCircle className="size-4 text-muted-foreground" aria-label="已有会话" />}
                 </div>
               </TableCell>

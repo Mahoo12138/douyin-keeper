@@ -16,7 +16,7 @@ func TestNormalizeConversationItemsUsesStableIdentityAndTimestamp(t *testing.T) 
 	seen := map[string]struct{}{}
 	items, err := normalizeConversationItems([]conversationListItem{{
 		PlatformConversationID: " conversation-1 ", PlatformUserID: " peer-1 ",
-		DisplayName: "对端", AvatarURL: "https://p.example/avatar.jpg", Channel: "consumer", LastMessageAt: &stamp,
+		DisplayName: "对端", AvatarURL: "https://p.example/avatar.jpg", LastMessageAt: &stamp,
 	}}, seen)
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +35,7 @@ func TestNormalizeConversationItemsUsesStableIdentityAndTimestamp(t *testing.T) 
 func TestNormalizeConversationItemsDropsInvalidAvatarURL(t *testing.T) {
 	items, err := normalizeConversationItems([]conversationListItem{{
 		PlatformConversationID: "conversation-1", PlatformUserID: "peer-1",
-		AvatarURL: "javascript:alert(1)", Channel: "consumer",
+		AvatarURL: "javascript:alert(1)",
 	}}, map[string]struct{}{})
 	if err != nil {
 		t.Fatal(err)
@@ -47,9 +47,10 @@ func TestNormalizeConversationItemsDropsInvalidAvatarURL(t *testing.T) {
 
 func TestNormalizeConversationItemsCarriesValidatedStreakDays(t *testing.T) {
 	streakDays := 27
+	activatedToday := true
 	items, err := normalizeConversationItems([]conversationListItem{{
 		PlatformConversationID: "conversation-1", PlatformUserID: "peer-1",
-		Channel: "consumer", StreakDays: &streakDays,
+		StreakDays: &streakDays, StreakActivatedToday: &activatedToday,
 	}}, map[string]struct{}{})
 	if err != nil {
 		t.Fatal(err)
@@ -57,11 +58,14 @@ func TestNormalizeConversationItemsCarriesValidatedStreakDays(t *testing.T) {
 	if len(items) != 1 || items[0].StreakDays == nil || *items[0].StreakDays != 27 {
 		t.Fatalf("streak days = %+v, want 27", items)
 	}
+	if items[0].StreakActivatedToday == nil || !*items[0].StreakActivatedToday {
+		t.Fatalf("streak activated today = %+v, want true", items[0].StreakActivatedToday)
+	}
 
 	invalid := -1
 	if _, err := normalizeConversationItems([]conversationListItem{{
 		PlatformConversationID: "conversation-2", PlatformUserID: "peer-2",
-		Channel: "consumer", StreakDays: &invalid,
+		StreakDays: &invalid,
 	}}, map[string]struct{}{}); err == nil {
 		t.Fatal("negative streak days should fail closed")
 	}
@@ -70,21 +74,27 @@ func TestNormalizeConversationItemsCarriesValidatedStreakDays(t *testing.T) {
 func TestNormalizeConversationItemsRejectsUnsafePages(t *testing.T) {
 	seen := map[string]struct{}{"conversation-1": {}}
 	if _, err := normalizeConversationItems([]conversationListItem{{
-		PlatformConversationID: "conversation-1", PlatformUserID: "peer-1", Channel: "consumer",
+		PlatformConversationID: "conversation-1", PlatformUserID: "peer-1",
 	}}, seen); err == nil {
 		t.Fatal("duplicate conversation id should fail closed")
 	}
 	invalid := "not-a-timestamp"
 	if _, err := normalizeConversationItems([]conversationListItem{{
-		PlatformConversationID: "conversation-2", PlatformUserID: "peer-2", Channel: "consumer", LastMessageAt: &invalid,
+		PlatformConversationID: "conversation-2", PlatformUserID: "peer-2", LastMessageAt: &invalid,
 	}}, map[string]struct{}{}); err == nil {
 		t.Fatal("invalid timestamp should fail closed")
+	}
+	if _, err := normalizeConversationItems([]conversationListItem{
+		{PlatformConversationID: "conversation-3", PlatformUserID: "peer-3", ConversationType: "direct"},
+		{PlatformConversationID: "conversation-4", PlatformUserID: "peer-3", ConversationType: "direct"},
+	}, map[string]struct{}{}); err == nil {
+		t.Fatal("duplicate direct peer identity should fail closed")
 	}
 }
 
 func TestNormalizeConversationItemsRetainsGroupWithoutPeerIdentity(t *testing.T) {
 	items, err := normalizeConversationItems([]conversationListItem{{
-		PlatformConversationID: "0:2:group-1", DisplayName: "群聊", Channel: "consumer", ConversationType: "group",
+		PlatformConversationID: "0:2:group-1", DisplayName: "群聊", ConversationType: "group",
 	}}, map[string]struct{}{})
 	if err != nil {
 		t.Fatal(err)

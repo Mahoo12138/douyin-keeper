@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/mahoo12138/douyin-keeper/backend/internal/apperr"
 	"github.com/mahoo12138/douyin-keeper/backend/internal/infra/cryptox"
 )
 
@@ -122,6 +123,30 @@ func TestWithTempFileRemovesFileOnCallbackError(t *testing.T) {
 	}
 	if repo.validated {
 		t.Fatal("must not mark failed validation as validated")
+	}
+}
+
+func TestWithTempFileReportsMismatchedEncryptionKeyAsExpiredSession(t *testing.T) {
+	repo := &fakeRepo{}
+	userID, accountID := uuid.New(), uuid.New()
+	sealed, err := testCipher(t).Seal([]byte(`{"cookies":[]}`), aad(userID, accountID, KeyVersion))
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.stored = &Stored{ID: 3, AccountID: 9, KeyVersion: KeyVersion, CipherAlgorithm: CipherAlgorithm,
+		Ciphertext: sealed, AADVersion: AADVersion}
+	otherCipher, err := cryptox.NewCipherFromHexKey("1111111111111111111111111111111111111111111111111111111111111111")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := NewService(repo, fakeTx{}, otherCipher, t.TempDir())
+	err = svc.WithTempFile(context.Background(), 9, userID, accountID, func(string) error {
+		t.Fatal("callback must not run when the session cannot be decrypted")
+		return nil
+	})
+	app, ok := apperr.As(err)
+	if !ok || app.Code != apperr.CodeSessionExpired {
+		t.Fatalf("error = %v, want %s", err, apperr.CodeSessionExpired)
 	}
 }
 

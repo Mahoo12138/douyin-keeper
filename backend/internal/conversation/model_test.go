@@ -15,7 +15,7 @@ type repositoryStub struct {
 
 func (r *repositoryStub) ListByAccountOwned(_ context.Context, _ int64, _ uuid.UUID, filter ListFilter) ([]*Conversation, error) {
 	r.filter = filter
-	return []*Conversation{{ID: uuid.New(), Channel: "consumer"}}, nil
+	return []*Conversation{{ID: uuid.New()}}, nil
 }
 
 func (r *repositoryStub) ListByAccountOwnedPage(_ context.Context, _ int64, _ uuid.UUID, filter ListFilter) ([]*Conversation, error) {

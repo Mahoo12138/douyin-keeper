@@ -51,14 +51,13 @@ describe('spark view helpers', () => {
   })
 
   it('preserves conversation metadata when the legacy friend endpoint responds', () => {
-    const friends = [{ ...makeFriend('group-target', false), conversation_type: 'group' as const, spark_supported: true, channel: 'consumer' as const }]
+    const friends = [{ ...makeFriend('group-target', false), conversation_type: 'group' as const, spark_supported: true }]
     const updated = makeFriend('group-target', true)
 
     expect(replaceFriend(friends, updated)[0]).toMatchObject({
       spark_enabled: true,
       conversation_type: 'group',
       spark_supported: true,
-      channel: 'consumer',
     })
   })
 

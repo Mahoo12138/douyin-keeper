@@ -3024,10 +3024,10 @@ components:
       - friend_display_name
       - friend_nickname
       - streak_days
+      - streak_activated_today
       - spark_enabled
       - last_sent_at
       - platform_identity_status
-      - channel
       - archived
       - archived_at
       properties:
@@ -3051,6 +3051,11 @@ components:
         streak_days:
           type: integer
           minimum: 0
+        streak_activated_today:
+          description: Whether the platform flame icon shows today's conversation as activated; null when the icon was not recognized.
+          type:
+          - boolean
+          - 'null'
         spark_enabled:
           type: boolean
         last_sent_at:
@@ -3073,11 +3078,6 @@ components:
           - unknown
         spark_supported:
           type: boolean
-        channel:
-          type: string
-          enum:
-          - consumer
-          - creator
         last_message_at:
           type:
           - string

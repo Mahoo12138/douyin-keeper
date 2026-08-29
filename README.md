@@ -33,6 +33,22 @@ reference/            # vendored upstream projects, for study only
 
 Prereqs: Go 1.24+, Docker, Node 20+ / pnpm.
 
+For the complete local application test environment, use the bundled test
+configuration and startup script. PostgreSQL and Redis must already be running;
+the script starts only the API, workers, browser sidecar, and frontend processes.
+`.env.test` is ignored by Git.
+
+```bash
+cp .env.test.example .env.test
+pnpm test:env start
+```
+
+The `start` command stays in the foreground and monitors all application
+processes. Press `Ctrl+C` to stop them; PostgreSQL and Redis are not stopped.
+
+Use `pnpm test:env status`, `pnpm test:env logs`, `pnpm test:env stop`, or
+`pnpm test:env restart` to manage the environment.
+
 ```bash
 # 1. env (never commit .env)
 Copy-Item .env.example .env   # msys/bash: cp .env.example .env

@@ -204,8 +204,8 @@ describe('mini API auth recovery', () => {
       statusCode: 200,
       data: {
         items: [
-          { id: 'conversation-group', conversation_type: 'group', spark_supported: true, channel: 'consumer', friend_id: null, friend_display_name: '项目群', friend_nickname: '', friend_avatar_url: null, streak_days: 0, spark_enabled: false, last_sent_at: null, platform_identity_status: 'missing' },
-          { id: 'conversation-direct', conversation_type: 'direct', spark_supported: true, channel: 'consumer', friend_id: 'friend-1', friend_display_name: '小明', friend_nickname: '明明', friend_avatar_url: null, streak_days: 2, spark_enabled: true, last_sent_at: null, platform_identity_status: 'resolved' },
+          { id: 'conversation-group', conversation_type: 'group', spark_supported: true, friend_id: null, friend_display_name: '项目群', friend_nickname: '', friend_avatar_url: null, streak_days: 0, spark_enabled: false, last_sent_at: null, platform_identity_status: 'missing' },
+          { id: 'conversation-direct', conversation_type: 'direct', spark_supported: true, friend_id: 'friend-1', friend_display_name: '小明', friend_nickname: '明明', friend_avatar_url: null, streak_days: 2, spark_enabled: true, last_sent_at: null, platform_identity_status: 'resolved' },
         ],
         next_cursor: null,
       },

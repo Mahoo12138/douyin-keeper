@@ -11,6 +11,13 @@ export function taskLabel(task: SparkTask | undefined) {
   return task.enabled ? '任务已启用' : '任务已停用'
 }
 
+export function streakBadgePresentation(days: number, activatedToday: boolean | null | undefined) {
+  if (days <= 0) return { variant: 'muted' as const, state: 'none' as const, statusLabel: '尚未形成火花' }
+  if (activatedToday === true) return { variant: 'success' as const, state: 'activated' as const, statusLabel: '今日已激活' }
+  if (activatedToday === false) return { variant: 'muted' as const, state: 'pending' as const, statusLabel: '今日未激活' }
+  return { variant: 'warning' as const, state: 'unknown' as const, statusLabel: '今日状态待确认' }
+}
+
 export function FriendStatusBadge({ friend }: { friend: Friend }) {
   const variant = friend.platform_identity_status === 'resolved' ? 'success' : friend.platform_identity_status === 'ambiguous' ? 'warning' : 'muted'
   return <Badge variant={variant}>{identityLabel(friend.platform_identity_status)}</Badge>

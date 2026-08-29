@@ -16,6 +16,7 @@ backend/bin/
 
 # env — never commit real secrets
 .env
+.env.test
 .env.local
 .env.development.local
 
@@ -23,6 +24,7 @@ backend/bin/
 apps/mini/miniprogram_npm/
 apps/mini/.tem/
 apps/mini/.swc/
+apps/mini/project.private.config.json
 
 # Editor / OS
 .idea/
@@ -40,3 +42,5 @@ sidecars/protocol/node_modules/
 
 # Session scratch (never commit)
 *.storage_state.json
+.runtime/
+logs/*.log

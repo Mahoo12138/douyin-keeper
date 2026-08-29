@@ -26,7 +26,7 @@ export function TaskTable({
     <Table className="min-w-[960px]">
       <TableHeader>
         <TableRow>
-          <TableHead className="pl-5">好友</TableHead>
+          <TableHead className="pl-5">会话</TableHead>
           <TableHead>账号</TableHead>
           <TableHead>时间窗口</TableHead>
           <TableHead>内容</TableHead>
@@ -48,7 +48,7 @@ export function TaskTable({
             <TableRow key={task.id}>
               <TableCell className="pl-5">
                 <div className="min-w-[155px]">
-                  <div className="font-medium">{friend?.nickname || friend?.display_name || '好友'}</div>
+                  <div className="font-medium">{friend?.nickname || friend?.display_name || '会话'}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{identityLabel}</div>
                 </div>
               </TableCell>
@@ -64,7 +64,7 @@ export function TaskTable({
               <TableCell>
                 <div className="flex items-center gap-2 whitespace-nowrap">
                   <Badge variant={task.enabled ? 'success' : 'muted'}>{task.enabled ? '每日启用' : '已停用'}</Badge>
-                  <Switch checked={task.enabled} disabled={busy} onCheckedChange={(enabled) => onToggle(task, enabled)} aria-label={`${friend?.nickname || '好友'}任务开关`} />
+                  <Switch checked={task.enabled} disabled={busy} onCheckedChange={(enabled) => onToggle(task, enabled)} aria-label={`${friend?.nickname || '会话'}任务开关`} />
                 </div>
               </TableCell>
               <TableCell className="pr-5">

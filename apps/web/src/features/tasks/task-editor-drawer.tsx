@@ -7,7 +7,7 @@ import { SelectField } from '@/components/select-field'
 export function TaskEditorDrawer({
   draft,
   accounts,
-  friends,
+  conversations,
   templates,
   templatesHasNextPage,
   templatesLoadingMore,
@@ -23,7 +23,7 @@ export function TaskEditorDrawer({
 }: {
   draft: TaskDraft
   accounts: Account[]
-  friends: Friend[]
+  conversations: Friend[]
   templates: MessageTemplate[]
   templatesHasNextPage?: boolean
   templatesLoadingMore?: boolean
@@ -57,8 +57,8 @@ export function TaskEditorDrawer({
             {draft.id && <p className="text-xs text-muted-foreground">已创建任务不能更换账号。</p>}
           </div>
           <div className="space-y-1.5">
-            <SelectField id="task-friend" label="好友" value={draft.friendId} onChange={(value) => onChange({ friendId: value })} disabled={!!draft.id} options={friends.map((friend) => ({ value: friend.id, label: friend.nickname || friend.display_name }))} />
-            {draft.id && <p className="text-xs text-muted-foreground">已创建任务不能更换好友。</p>}
+            <SelectField id="task-conversation" label="会话" value={draft.friendId} onChange={(value) => onChange({ friendId: value })} disabled={!!draft.id} options={conversations.map((conversation) => ({ value: conversation.id, label: conversation.nickname || conversation.display_name }))} />
+            {draft.id && <p className="text-xs text-muted-foreground">已创建任务不能更换会话。</p>}
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5"><Label htmlFor="task-window-start">开始时间</Label><Input id="task-window-start" type="time" value={draft.windowStart} onChange={(event) => onChange({ windowStart: event.target.value })} /></div>

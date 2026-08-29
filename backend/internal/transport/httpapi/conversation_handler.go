@@ -21,12 +21,12 @@ type ConversationView struct {
 	FriendNickname         string     `json:"friend_nickname"`
 	FriendAvatarURL        *string    `json:"friend_avatar_url"`
 	StreakDays             int        `json:"streak_days"`
+	StreakActivatedToday   *bool      `json:"streak_activated_today"`
 	SparkEnabled           bool       `json:"spark_enabled"`
 	LastSentAt             *time.Time `json:"last_sent_at"`
 	PlatformIdentityStatus string     `json:"platform_identity_status"`
 	ConversationType       string     `json:"conversation_type"`
 	SparkSupported         bool       `json:"spark_supported"`
-	Channel                string     `json:"channel"`
 	LastMessageAt          *time.Time `json:"last_message_at"`
 	LastSyncedAt           *time.Time `json:"last_synced_at"`
 	Archived               bool       `json:"archived"`
@@ -195,10 +195,11 @@ func conversationView(item *conversation.Conversation) ConversationView {
 	return ConversationView{
 		ID: item.ID, FriendID: item.FriendID, FriendDisplayName: item.FriendDisplayName,
 		FriendNickname: item.FriendNickname, FriendAvatarURL: item.FriendAvatarURL,
-		StreakDays: item.StreakDays, SparkEnabled: item.SparkEnabled, LastSentAt: item.LastSentAt,
+		StreakDays: item.StreakDays, StreakActivatedToday: item.StreakActivatedToday,
+		SparkEnabled: item.SparkEnabled, LastSentAt: item.LastSentAt,
 		PlatformIdentityStatus: item.PlatformIdentityStatus, ConversationType: item.ConversationType,
-		SparkSupported: item.SparkSupported, Channel: item.Channel,
-		LastMessageAt: item.LastMessageAt, LastSyncedAt: item.LastSyncedAt,
+		SparkSupported: item.SparkSupported,
+		LastMessageAt:  item.LastMessageAt, LastSyncedAt: item.LastSyncedAt,
 		Archived: item.ArchivedAt != nil, ArchivedAt: item.ArchivedAt,
 	}
 }

@@ -1,4 +1,4 @@
-export function scrollConversationListDOM() {
+export function scrollConversationListDOM(action = "next") {
   const selector = ".conversationConversationListwrapper";
   const visible = (node) => {
     if (!node) return false;
@@ -63,15 +63,15 @@ export function scrollConversationListDOM() {
   const before = target.scrollTop;
   const maxScrollTop = Math.max(0, target.scrollHeight - target.clientHeight);
   const step = Math.max(320, Math.floor(target.clientHeight * 0.85));
-  const next = Math.min(maxScrollTop, before + step);
+  const next = action === "top" ? 0 : Math.min(maxScrollTop, before + step);
   target.scrollTop = next;
   target.dispatchEvent(new Event("scroll", { bubbles: true }));
   return {
-    moved: target.scrollTop > before,
+    moved: target.scrollTop !== before,
     at_bottom: target.scrollTop >= maxScrollTop - 8,
     target_found: true,
     position_verified: true,
-    reason: "exact_conversation_list_selected",
+    reason: action === "top" ? "exact_conversation_list_reset" : "exact_conversation_list_selected",
     selector,
     selector_match_count: matches.length,
     visible_match_count: visibleMatches.length,

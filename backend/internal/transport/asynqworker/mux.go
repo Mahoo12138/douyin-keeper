@@ -329,6 +329,14 @@ func sessionCheckHandler(loader PayloadLoader, deps SessionCheckDeps, log *slog.
 			if app, ok := apperr.As(err); ok {
 				code = app.Code
 			}
+			if log != nil {
+				log.Error("session check execution failed",
+					"job_public_id", claimed.PublicID,
+					"account_public_id", acct.PublicID,
+					"error_code", code,
+					"err", err,
+				)
+			}
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, code, deps.Now)
 			return finishSessionCheckFailure(ctx, deps, claimed, acct.ID, code)
 		}

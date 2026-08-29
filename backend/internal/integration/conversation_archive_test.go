@@ -31,7 +31,7 @@ func TestConversationArchiveIsScopedReversibleAndHiddenByDefault(t *testing.T) {
 	friends := postgres.NewFriendRepo(pool)
 	if err := friends.SyncBatch(ctx, acct.ID, []friend.SyncItem{{
 		PlatformUserID: &platformID, IdentityStatus: friend.IdentityResolved, DisplayName: "归档好友",
-		Conversation: &friend.ConversationSnapshot{PlatformConversationID: conversationID, Channel: "consumer"},
+		Conversation: &friend.ConversationSnapshot{PlatformConversationID: conversationID},
 	}}, []string{platformID}, []string{conversationID}, time.Now()); err != nil {
 		t.Fatal(err)
 	}

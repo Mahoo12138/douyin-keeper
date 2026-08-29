@@ -117,7 +117,11 @@ func (s *Service) open(ctx context.Context, accountID int64, userPublicID, accou
 	}
 	plaintext, err := s.cipher.Open(stored.Ciphertext, aad(userPublicID, accountPublicID, stored.KeyVersion))
 	if err != nil {
-		return nil, nil, apperr.Wrap(apperr.CodeInternal, apperr.KindInternal, "session decryption failed", err)
+		// A worker cannot safely execute browser actions when the persisted
+		// envelope was encrypted with another key (a common local/test restart
+		// mistake). Surface this as an unusable login state instead of a generic
+		// INTERNAL_ERROR so callers can require a fresh login and fail closed.
+		return nil, nil, apperr.Wrap(apperr.CodeSessionExpired, apperr.KindUnauthenticated, "session decryption failed", err)
 	}
 	return plaintext, stored, nil
 }

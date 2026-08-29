@@ -45,9 +45,6 @@ func (r *ConversationRepo) SyncBatch(ctx context.Context, accountID int64, items
 		if item.PlatformConversationID == "" {
 			return fmt.Errorf("conversation sync: stable platform ids are required")
 		}
-		if item.Channel != "consumer" && item.Channel != "creator" {
-			return fmt.Errorf("conversation sync: unsupported channel %q", item.Channel)
-		}
 		conversationType := item.ConversationType
 		if conversationType == "" {
 			conversationType = "unknown"
@@ -70,11 +67,11 @@ func (r *ConversationRepo) SyncBatch(ctx context.Context, accountID int64, items
 		}
 		_, err := From(ctx, r.pool).Exec(ctx, `
 			INSERT INTO conversations (public_id, account_id, friend_id, platform_conversation_id,
-				channel, conversation_type, peer_platform_user_id, peer_display_name,
-				last_message_at, last_synced_at, created_at, updated_at)
+				conversation_type, peer_platform_user_id, peer_display_name,
+				last_message_at, streak_activated_today, last_synced_at, created_at, updated_at)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10,$10)
 			ON CONFLICT (account_id, platform_conversation_id) DO UPDATE SET
-				friend_id=EXCLUDED.friend_id, channel=EXCLUDED.channel,
+				friend_id=EXCLUDED.friend_id,
 				conversation_type=EXCLUDED.conversation_type,
 				peer_platform_user_id=EXCLUDED.peer_platform_user_id,
 				peer_display_name=CASE
@@ -84,10 +81,11 @@ func (r *ConversationRepo) SyncBatch(ctx context.Context, accountID int64, items
 					ELSE EXCLUDED.peer_display_name
 				END,
 				last_message_at=COALESCE(EXCLUDED.last_message_at, conversations.last_message_at),
+				streak_activated_today=EXCLUDED.streak_activated_today,
 				last_synced_at=EXCLUDED.last_synced_at, updated_at=EXCLUDED.updated_at,
 				archived_at=NULL`,
-			uuid.New(), accountID, friendID, item.PlatformConversationID, item.Channel, conversationType,
-			peerID, item.DisplayName, item.LastMessageAt, at)
+			uuid.New(), accountID, friendID, item.PlatformConversationID, conversationType,
+			peerID, item.DisplayName, item.LastMessageAt, item.StreakActivatedToday, at)
 		if err != nil {
 			return err
 		}
@@ -126,8 +124,8 @@ func (r *ConversationRepo) upsertConversationFriend(ctx context.Context, account
 	}
 	err := From(ctx, r.pool).QueryRow(ctx, `
 		INSERT INTO friends (public_id, account_id, platform_user_id, identity_status,
-			display_name, nickname, avatar_url, streak_days, has_conversation, last_seen_at, created_at, updated_at)
-		VALUES ($1,$2,$3,'resolved',$4,$4,$5,COALESCE($6,0),true,$7,$7,$7)
+			display_name, nickname, avatar_url, streak_days, has_conversation, spark_enabled, last_seen_at, created_at, updated_at)
+		VALUES ($1,$2,$3,'resolved',$4,$4,$5,COALESCE($6,0),true,COALESCE($6,0) > 0,$7,$7,$7)
 		ON CONFLICT (account_id, platform_user_id)
 		WHERE platform_user_id IS NOT NULL AND deleted_at IS NULL
 		DO UPDATE SET
@@ -136,6 +134,11 @@ func (r *ConversationRepo) upsertConversationFriend(ctx context.Context, account
 			nickname=CASE WHEN EXCLUDED.nickname <> '' THEN EXCLUDED.nickname ELSE friends.nickname END,
 			avatar_url=CASE WHEN NULLIF(EXCLUDED.avatar_url, '') IS NOT NULL THEN EXCLUDED.avatar_url ELSE friends.avatar_url END,
 			streak_days=COALESCE($6, friends.streak_days),
+			spark_enabled=CASE
+				WHEN friends.spark_enabled_overridden THEN friends.spark_enabled
+				WHEN $6 IS NULL THEN friends.spark_enabled
+				ELSE $6 > 0
+			END,
 			has_conversation=true, last_seen_at=EXCLUDED.last_seen_at,
 			updated_at=EXCLUDED.updated_at, deleted_at=NULL
 		RETURNING id`, uuid.New(), accountID, platformUserID, displayName, item.AvatarURL, item.StreakDays, at).Scan(&friendID)
@@ -150,10 +153,10 @@ func (r *ConversationRepo) ListByAccountOwned(ctx context.Context, userID int64,
 		SELECT c.public_id, a.public_id, COALESCE(f.public_id, '00000000-0000-0000-0000-000000000000'::uuid),
 			COALESCE(NULLIF(f.display_name, ''), c.peer_display_name),
 			COALESCE(NULLIF(f.nickname, ''), c.peer_display_name), f.avatar_url,
-			COALESCE(f.streak_days, 0), COALESCE(f.spark_enabled, false), f.last_sent_at,
+			COALESCE(f.streak_days, 0), c.streak_activated_today, COALESCE(f.spark_enabled, false), f.last_sent_at,
 			CASE WHEN f.id IS NOT NULL THEN f.identity_status ELSE CASE WHEN c.peer_platform_user_id <> '' THEN 'resolved' ELSE 'missing' END END,
 			c.conversation_type, (c.conversation_type = 'group' OR f.id IS NOT NULL),
-			c.channel, c.last_message_at, c.last_synced_at, c.archived_at
+			c.last_message_at, c.last_synced_at, c.archived_at
 		FROM conversations c
 		JOIN douyin_accounts a ON a.id = c.account_id
 		LEFT JOIN friends f ON f.id = c.friend_id AND f.account_id = c.account_id
@@ -173,9 +176,9 @@ func (r *ConversationRepo) ListByAccountOwned(ctx context.Context, userID int64,
 		var friendID uuid.UUID
 		if err := rows.Scan(&item.ID, &item.AccountID, &friendID,
 			&item.FriendDisplayName, &item.FriendNickname, &item.FriendAvatarURL,
-			&item.StreakDays, &item.SparkEnabled, &item.LastSentAt,
+			&item.StreakDays, &item.StreakActivatedToday, &item.SparkEnabled, &item.LastSentAt,
 			&item.PlatformIdentityStatus, &item.ConversationType, &item.SparkSupported,
-			&item.Channel, &item.LastMessageAt, &item.LastSyncedAt, &item.ArchivedAt); err != nil {
+			&item.LastMessageAt, &item.LastSyncedAt, &item.ArchivedAt); err != nil {
 			return nil, err
 		}
 		if friendID != uuid.Nil {
@@ -191,10 +194,10 @@ func (r *ConversationRepo) ListByAccountOwnedPage(ctx context.Context, userID in
 		SELECT c.id, c.public_id, a.public_id, COALESCE(f.public_id, '00000000-0000-0000-0000-000000000000'::uuid),
 			COALESCE(NULLIF(f.display_name, ''), c.peer_display_name),
 			COALESCE(NULLIF(f.nickname, ''), c.peer_display_name), f.avatar_url,
-			COALESCE(f.streak_days, 0), COALESCE(f.spark_enabled, false), f.last_sent_at,
+			COALESCE(f.streak_days, 0), c.streak_activated_today, COALESCE(f.spark_enabled, false), f.last_sent_at,
 			CASE WHEN f.id IS NOT NULL THEN f.identity_status ELSE CASE WHEN c.peer_platform_user_id <> '' THEN 'resolved' ELSE 'missing' END END,
 			c.conversation_type, (c.conversation_type = 'group' OR f.id IS NOT NULL),
-			c.channel, c.last_message_at, c.last_synced_at, c.archived_at
+			c.last_message_at, c.last_synced_at, c.archived_at
 		FROM conversations c
 		JOIN douyin_accounts a ON a.id = c.account_id
 		LEFT JOIN friends f ON f.id = c.friend_id AND f.account_id = c.account_id
@@ -215,9 +218,9 @@ func (r *ConversationRepo) ListByAccountOwnedPage(ctx context.Context, userID in
 		var friendID uuid.UUID
 		if err := rows.Scan(&item.InternalID, &item.ID, &item.AccountID, &friendID,
 			&item.FriendDisplayName, &item.FriendNickname, &item.FriendAvatarURL,
-			&item.StreakDays, &item.SparkEnabled, &item.LastSentAt,
+			&item.StreakDays, &item.StreakActivatedToday, &item.SparkEnabled, &item.LastSentAt,
 			&item.PlatformIdentityStatus, &item.ConversationType, &item.SparkSupported,
-			&item.Channel, &item.LastMessageAt, &item.LastSyncedAt, &item.ArchivedAt); err != nil {
+			&item.LastMessageAt, &item.LastSyncedAt, &item.ArchivedAt); err != nil {
 			return nil, err
 		}
 		if friendID != uuid.Nil {
@@ -276,10 +279,10 @@ func (r *ConversationRepo) getByOwnedID(ctx context.Context, userID int64, accou
 		SELECT c.public_id, a.public_id, COALESCE(f.public_id, '00000000-0000-0000-0000-000000000000'::uuid),
 			COALESCE(NULLIF(f.display_name, ''), c.peer_display_name),
 			COALESCE(NULLIF(f.nickname, ''), c.peer_display_name), f.avatar_url,
-			COALESCE(f.streak_days, 0), COALESCE(f.spark_enabled, false), f.last_sent_at,
+			COALESCE(f.streak_days, 0), c.streak_activated_today, COALESCE(f.spark_enabled, false), f.last_sent_at,
 			CASE WHEN f.id IS NOT NULL THEN f.identity_status ELSE CASE WHEN c.peer_platform_user_id <> '' THEN 'resolved' ELSE 'missing' END END,
 			c.conversation_type, (c.conversation_type = 'group' OR f.id IS NOT NULL),
-			c.channel, c.last_message_at, c.last_synced_at, c.archived_at
+			c.last_message_at, c.last_synced_at, c.archived_at
 		FROM conversations c
 		JOIN douyin_accounts a ON a.id = c.account_id
 		LEFT JOIN friends f ON f.id = c.friend_id AND f.account_id = c.account_id AND f.deleted_at IS NULL
@@ -287,9 +290,9 @@ func (r *ConversationRepo) getByOwnedID(ctx context.Context, userID int64, accou
 		  AND a.deleted_at IS NULL`,
 		accountPublicID, userID, conversationPublicID, id).Scan(
 		&item.ID, &item.AccountID, &friendID, &item.FriendDisplayName, &item.FriendNickname,
-		&item.FriendAvatarURL, &item.StreakDays, &item.SparkEnabled, &item.LastSentAt,
+		&item.FriendAvatarURL, &item.StreakDays, &item.StreakActivatedToday, &item.SparkEnabled, &item.LastSentAt,
 		&item.PlatformIdentityStatus, &item.ConversationType, &item.SparkSupported,
-		&item.Channel, &item.LastMessageAt, &item.LastSyncedAt, &item.ArchivedAt)
+		&item.LastMessageAt, &item.LastSyncedAt, &item.ArchivedAt)
 	if err == pgx.ErrNoRows {
 		return nil, apperr.NotFound(apperr.CodeNotFound, "conversation not found")
 	}

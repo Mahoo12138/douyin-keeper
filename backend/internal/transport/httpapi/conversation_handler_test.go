@@ -12,12 +12,14 @@ import (
 
 func TestConversationViewKeepsPlatformIdentityOutOfResponse(t *testing.T) {
 	now := time.Date(2026, 8, 24, 9, 0, 0, 0, time.UTC)
+	activatedToday := true
 	friendID := uuid.New()
 	view := conversationView(&conversation.Conversation{
 		ID: uuid.New(), FriendID: &friendID, FriendDisplayName: "Jasmine", FriendNickname: "小雅",
-		PlatformIdentityStatus: "resolved", Channel: "consumer", LastMessageAt: &now, LastSyncedAt: &now, ArchivedAt: &now,
+		StreakActivatedToday:   &activatedToday,
+		PlatformIdentityStatus: "resolved", LastMessageAt: &now, LastSyncedAt: &now, ArchivedAt: &now,
 	})
-	if view.FriendDisplayName != "Jasmine" || view.Channel != "consumer" || view.LastMessageAt == nil || !view.Archived || view.ArchivedAt == nil {
+	if view.FriendDisplayName != "Jasmine" || view.StreakActivatedToday == nil || !*view.StreakActivatedToday || view.LastMessageAt == nil || !view.Archived || view.ArchivedAt == nil {
 		t.Fatalf("conversation view = %+v", view)
 	}
 }

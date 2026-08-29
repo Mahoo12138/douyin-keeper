@@ -33,10 +33,10 @@ type conversationListItem struct {
 	PlatformUserID         string  `json:"peer_platform_user_id"`
 	DisplayName            string  `json:"peer_display_name"`
 	AvatarURL              string  `json:"peer_avatar_url"`
-	Channel                string  `json:"channel"`
 	ConversationType       string  `json:"conversation_type"`
 	LastMessageAt          *string `json:"last_message_at"`
 	StreakDays             *int    `json:"streak_days"`
+	StreakActivatedToday   *bool   `json:"streak_activated_today"`
 }
 
 func conversationsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(context.Context, *asynq.Task) error {
@@ -165,6 +165,12 @@ func conversationsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(
 			if app, ok := apperr.As(err); ok {
 				code = app.Code
 			}
+			slog.Error("conversation sync execution failed",
+				"job_public_id", claimed.PublicID,
+				"account_public_id", acct.PublicID,
+				"error_code", code,
+				"err", err,
+			)
 			observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, code, now)
 			return finishFriendsFailure(ctx, deps, claimed, acct.ID, code, now)
 		}
@@ -237,10 +243,6 @@ func normalizeConversationItems(items []conversationListItem, seen map[string]st
 		if _, exists := seen[conversationID]; exists {
 			return nil, fmt.Errorf("conversation sync: duplicate conversation id")
 		}
-		channel := strings.TrimSpace(item.Channel)
-		if channel != "consumer" && channel != "creator" {
-			return nil, fmt.Errorf("conversation sync: unsupported channel %q", channel)
-		}
 		conversationType := strings.TrimSpace(item.ConversationType)
 		if conversationType == "" {
 			conversationType = "unknown"
@@ -250,6 +252,13 @@ func normalizeConversationItems(items []conversationListItem, seen map[string]st
 		}
 		if conversationType == "direct" && platformUserID == "" {
 			return nil, fmt.Errorf("conversation sync: direct conversations require a peer id")
+		}
+		if conversationType == "direct" {
+			peerKey := "direct-peer:" + platformUserID
+			if _, exists := seen[peerKey]; exists {
+				return nil, fmt.Errorf("conversation sync: duplicate direct peer identity")
+			}
+			seen[peerKey] = struct{}{}
 		}
 		if item.StreakDays != nil && (*item.StreakDays < 0 || *item.StreakDays > 10000) {
 			return nil, fmt.Errorf("conversation sync: invalid streak days")
@@ -272,10 +281,10 @@ func normalizeConversationItems(items []conversationListItem, seen map[string]st
 			PlatformUserID:         platformUserID,
 			DisplayName:            string(displayName),
 			AvatarURL:              normalizeAvatarURL(item.AvatarURL),
-			Channel:                channel,
 			ConversationType:       conversationType,
 			LastMessageAt:          lastMessageAt,
 			StreakDays:             item.StreakDays,
+			StreakActivatedToday:   item.StreakActivatedToday,
 		})
 	}
 	return out, nil

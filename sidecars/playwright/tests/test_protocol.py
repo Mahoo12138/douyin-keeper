@@ -286,7 +286,6 @@ def test_conversation_list_normalizes_only_stable_identity_rows():
             "platform_conversation_id": "conversation-1",
             "peer_platform_user_id": "user-1",
             "peer_display_name": "  Jasmine  ",
-            "channel": "consumer",
             "last_message_at": "2026-08-25T10:00:00Z",
         },
         {"platform_conversation_id": "conversation-1", "peer_platform_user_id": "user-1"},
@@ -297,7 +296,6 @@ def test_conversation_list_normalizes_only_stable_identity_rows():
         "platform_conversation_id": "conversation-1",
         "peer_platform_user_id": "user-1",
         "peer_display_name": "Jasmine",
-        "channel": "consumer",
         "last_message_at": "2026-08-25T10:00:00Z",
     }]
 

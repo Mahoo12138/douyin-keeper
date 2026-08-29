@@ -144,7 +144,6 @@ Session 独立出账号表，便于版本化和轮换：
 - `account_id`
 - `friend_id`
 - `platform_conversation_id`
-- `channel`
 - `last_message_at`
 - `last_synced_at`
 - `archived_at`（用户侧会话索引的归档时间；不代表抖音平台状态）
@@ -152,7 +151,6 @@ Session 独立出账号表，便于版本化和轮换：
 关键约束：
 
 - `UNIQUE(account_id, platform_conversation_id)`
-- `UNIQUE(account_id, friend_id, channel)`
 
 ## 7. SparkTask
 

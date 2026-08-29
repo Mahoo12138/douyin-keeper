@@ -216,7 +216,6 @@ internal/transport/httpapi/entitlement_handler.go
 
 - platform conversation identity；
 - friend/conversation 一致性；
-- consumer/creator channel。
 - 用户侧归档状态的查询与恢复。
 
 不负责直接操作抖音平台归档；平台侧动作必须通过版本化 Sidecar 能力和 Job 流程接入。

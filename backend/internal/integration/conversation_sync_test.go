@@ -41,13 +41,14 @@ func TestConversationSyncIsIdempotentAndPreservesLocalState(t *testing.T) {
 	messageAt := time.Now().UTC().Truncate(time.Microsecond)
 	syncAt := messageAt.Add(time.Minute)
 	streakDays := 27
+	streakActivatedToday := true
 	item := conversation.SyncItem{
 		PlatformConversationID: platformConversationID,
 		PlatformUserID:         platformUserID,
 		DisplayName:            "初始昵称",
-		Channel:                "consumer",
 		LastMessageAt:          &messageAt,
 		StreakDays:             &streakDays,
+		StreakActivatedToday:   &streakActivatedToday,
 	}
 	duplicate := item
 	duplicate.PlatformConversationID = "conversation-sync-duplicate-" + uuid.NewString()
@@ -83,7 +84,6 @@ func TestConversationSyncIsIdempotentAndPreservesLocalState(t *testing.T) {
 	groupItem := conversation.SyncItem{
 		PlatformConversationID: "0:2:" + uuid.NewString(),
 		DisplayName:            "测试群聊",
-		Channel:                "consumer",
 		ConversationType:       "group",
 	}
 	if err := tx.WithinTx(ctx, func(tctx context.Context) error {
@@ -135,6 +135,9 @@ func TestConversationSyncIsIdempotentAndPreservesLocalState(t *testing.T) {
 	if directCount != 3 || !updatedDirect || refreshed == nil || refreshed.FriendID == nil || refreshed.LastSyncedAt == nil {
 		t.Fatalf("conversation snapshot was not refreshed: %+v", refreshed)
 	}
+	if refreshed.StreakActivatedToday == nil || !*refreshed.StreakActivatedToday {
+		t.Fatalf("conversation streak activation was not persisted: %+v", refreshed)
+	}
 	if group == nil || !group.SparkSupported || group.FriendID == nil {
 		t.Fatalf("group conversation should be retained and spark-enabled: %+v", group)
 	}
@@ -165,5 +168,74 @@ func TestConversationSyncIsIdempotentAndPreservesLocalState(t *testing.T) {
 	}
 	if visible, err := conversations.ListByAccountOwned(ctx, userID, acct.PublicID, conversation.ListFilter{Limit: 10}); err != nil || len(visible) != 3 {
 		t.Fatalf("archived conversation should remain hidden: err=%v items=%+v", err, visible)
+	}
+}
+
+func TestConversationSyncDefaultsMaintenanceForNewStreakAndPreservesUserChoice(t *testing.T) {
+	ctx := context.Background()
+	userID := newUser(t)
+	accounts := postgres.NewAccountRepo(pool)
+	acct := &account.Account{
+		PublicID: uuid.New(), UserID: userID, BindingStatus: account.BindingBound,
+		SessionStatus: account.SessionValid, RiskStatus: account.RiskNormal,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	if err := accounts.Create(ctx, acct); err != nil {
+		t.Fatal(err)
+	}
+
+	conversations := postgres.NewConversationRepo(pool)
+	friends := postgres.NewFriendRepo(pool)
+	tx := postgres.NewTxManager(pool)
+	platformUserID := "conversation-streak-" + uuid.NewString()
+	item := conversation.SyncItem{
+		PlatformConversationID: "conversation-streak-" + uuid.NewString(),
+		PlatformUserID:         platformUserID,
+		DisplayName:            "已有火花会话",
+	}
+	if err := tx.WithinTx(ctx, func(tctx context.Context) error {
+		return conversations.SyncBatch(tctx, acct.ID, []conversation.SyncItem{item}, time.Now().UTC())
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	items, err := friends.ListByAccountOwned(ctx, userID, acct.PublicID)
+	if err != nil || len(items) != 1 || items[0].SparkEnabled {
+		t.Fatalf("new conversation without a streak should not enable maintenance: err=%v friends=%+v", err, items)
+	}
+	streakDays := 9
+	item.StreakDays = &streakDays
+	if err := tx.WithinTx(ctx, func(tctx context.Context) error {
+		return conversations.SyncBatch(tctx, acct.ID, []conversation.SyncItem{item}, time.Now().UTC().Add(time.Minute))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	items, err = friends.ListByAccountOwned(ctx, userID, acct.PublicID)
+	if err != nil || len(items) != 1 || !items[0].SparkEnabled {
+		t.Fatalf("later streak discovery should enable maintenance by default: err=%v friends=%+v", err, items)
+	}
+	streakDays = 0
+	if err := tx.WithinTx(ctx, func(tctx context.Context) error {
+		return conversations.SyncBatch(tctx, acct.ID, []conversation.SyncItem{item}, time.Now().UTC().Add(2*time.Minute))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	items, err = friends.ListByAccountOwned(ctx, userID, acct.PublicID)
+	if err != nil || len(items) != 1 || items[0].StreakDays != 0 || items[0].SparkEnabled {
+		t.Fatalf("an explicit zero streak should clear stale days and auto-enabled maintenance: err=%v friends=%+v", err, items)
+	}
+	if err := friends.UpdateSparkEnabled(ctx, items[0].ID, false); err != nil {
+		t.Fatal(err)
+	}
+	streakDays = 10
+	if err := tx.WithinTx(ctx, func(tctx context.Context) error {
+		return conversations.SyncBatch(tctx, acct.ID, []conversation.SyncItem{item}, time.Now().UTC().Add(3*time.Minute))
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	items, err = friends.ListByAccountOwned(ctx, userID, acct.PublicID)
+	if err != nil || len(items) != 1 || items[0].SparkEnabled {
+		t.Fatalf("later sync should preserve a manual maintenance opt-out: err=%v friends=%+v", err, items)
 	}
 }

@@ -57,7 +57,11 @@ export function ConversationsPage() {
   const syncMutation = useMutation({
     mutationFn: async () => { const job = await syncAccountConversations(token as string, accountId as string); await waitForJobEvents(token as string, job.job_id) },
     onSuccess: async () => { await Promise.all([queryClient.invalidateQueries({ queryKey: ['conversations', accountId] }), queryClient.invalidateQueries({ queryKey: ['accounts'] })]); toast.success('会话同步完成') },
-    onError: (error) => toast.error(error instanceof Error ? error.message : '会话同步失败'),
+    onError: async (error) => {
+      await queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      const code = error instanceof Error ? error.message : ''
+      toast.error(code === 'SESSION_EXPIRED' ? '当前账号登录状态已过期，请重新登录后再同步会话' : code || '会话同步失败')
+    },
   })
   const archiveMutation = useMutation({
     mutationFn: ({ conversationId, archived }: { conversationId: string; archived: boolean }) => setConversationArchived(token as string, accountId as string, conversationId, archived),

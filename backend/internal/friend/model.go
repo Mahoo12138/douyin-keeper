@@ -59,7 +59,6 @@ type SyncItem struct {
 
 type ConversationSnapshot struct {
 	PlatformConversationID string
-	Channel                string
 }
 
 type ListFilter struct {
@@ -99,7 +98,6 @@ type SyncRepository interface {
 type SendTarget struct {
 	PlatformUserID         string
 	PlatformConversationID string
-	Channel                string
 }
 
 // SendTargetRepository exposes only the stable, already-resolved routing data

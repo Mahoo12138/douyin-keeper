@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -101,7 +100,9 @@ func (r *FriendRepo) GetOwned(ctx context.Context, userID int64, publicID uuid.U
 
 func (r *FriendRepo) UpdateSparkEnabled(ctx context.Context, friendID int64, enabled bool) error {
 	_, err := From(ctx, r.pool).Exec(ctx, `
-		UPDATE friends SET spark_enabled=$2, updated_at=now() WHERE id=$1 AND deleted_at IS NULL`,
+		UPDATE friends
+		SET spark_enabled=$2, spark_enabled_overridden=true, updated_at=now()
+		WHERE id=$1 AND deleted_at IS NULL`,
 		friendID, enabled)
 	return err
 }
@@ -113,12 +114,12 @@ func (r *FriendRepo) GetSendTarget(ctx context.Context, accountID, friendID int6
 	var conversationType string
 	if err := From(ctx, r.pool).QueryRow(ctx, `
 		SELECT f.platform_user_id, f.identity_status, c.platform_conversation_id,
-			c.channel, c.conversation_type
+			c.conversation_type
 		FROM friends f
 		JOIN conversations c ON c.friend_id=f.id AND c.account_id=f.account_id
 		WHERE f.id=$1 AND f.account_id=$2 AND f.deleted_at IS NULL
 		ORDER BY c.updated_at DESC LIMIT 1`, friendID, accountID).
-		Scan(&platformUserID, &identityStatus, &target.PlatformConversationID, &target.Channel, &conversationType); err != nil {
+		Scan(&platformUserID, &identityStatus, &target.PlatformConversationID, &conversationType); err != nil {
 		return nil, mapNoRows(err, apperr.CodeNotFound, "friend not found")
 	}
 	groupTarget := conversationType == "group" && platformUserID != nil && strings.HasPrefix(*platformUserID, "__conversation__:")
@@ -250,18 +251,14 @@ func (r *FriendRepo) insertFriend(ctx context.Context, accountID int64, item fri
 }
 
 func (r *FriendRepo) upsertConversation(ctx context.Context, accountID, friendID int64, item friend.ConversationSnapshot, at time.Time) error {
-	channel := item.Channel
-	if channel != "consumer" && channel != "creator" {
-		return fmt.Errorf("friend sync: unsupported conversation channel %q", channel)
-	}
 	_, err := From(ctx, r.pool).Exec(ctx, `
 		INSERT INTO conversations (public_id, account_id, friend_id, platform_conversation_id,
-			channel, last_synced_at, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$6,$6)
+			last_synced_at, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$5,$5)
 		ON CONFLICT (account_id, platform_conversation_id) DO UPDATE SET
-			friend_id=EXCLUDED.friend_id, channel=EXCLUDED.channel,
+			friend_id=EXCLUDED.friend_id,
 			last_synced_at=EXCLUDED.last_synced_at, updated_at=EXCLUDED.updated_at`,
-		uuid.New(), accountID, friendID, item.PlatformConversationID, channel, at)
+		uuid.New(), accountID, friendID, item.PlatformConversationID, at)
 	return err
 }
 

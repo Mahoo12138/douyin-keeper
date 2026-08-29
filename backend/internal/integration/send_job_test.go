@@ -35,7 +35,7 @@ func TestSendJobClaimAndFinishPreserveTargetState(t *testing.T) {
 		return friends.SyncBatch(tctx, acct.ID, []friend.SyncItem{{
 			PlatformUserID: &platformID, IdentityStatus: friend.IdentityResolved,
 			DisplayName: "Send Target", HasConversation: true,
-			Conversation: &friend.ConversationSnapshot{PlatformConversationID: conversationID, Channel: "consumer"},
+			Conversation: &friend.ConversationSnapshot{PlatformConversationID: conversationID},
 		}}, []string{platformID}, []string{conversationID}, when)
 	}); err != nil {
 		t.Fatal(err)

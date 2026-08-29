@@ -35,7 +35,6 @@ type friendsListItem struct {
 	HasConversation bool    `json:"has_conversation"`
 	Conversation    *struct {
 		PlatformConversationID string `json:"platform_conversation_id"`
-		Channel                string `json:"channel"`
 	} `json:"conversation"`
 }
 
@@ -265,7 +264,6 @@ func normalizeFriendItems(items []friendsListItem) ([]friend.SyncItem, []string,
 			}
 			conversation = &friend.ConversationSnapshot{
 				PlatformConversationID: strings.TrimSpace(item.Conversation.PlatformConversationID),
-				Channel:                strings.TrimSpace(item.Conversation.Channel),
 			}
 			seenConversations = append(seenConversations, conversation.PlatformConversationID)
 		}

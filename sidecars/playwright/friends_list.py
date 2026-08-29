@@ -265,7 +265,6 @@ EXTRACT_JS = r"""
       has_conversation: true,
       conversation: conversationId ? {
         platform_conversation_id: conversationId,
-        channel: 'consumer',
       } : null,
     });
   }

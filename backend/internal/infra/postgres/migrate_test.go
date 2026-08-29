@@ -10,7 +10,7 @@ func TestLatestMigrationVersionMatchesEmbeddedSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != "000011_conversation_per_platform_id.sql" {
+	if version != "000015_remove_conversation_channel.sql" {
 		t.Fatalf("latest migration = %q", version)
 	}
 }

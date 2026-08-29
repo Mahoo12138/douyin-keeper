@@ -1,17 +1,19 @@
 export async function clickConversationListRowByIndex(page, dataIndex) {
   const index = String(dataIndex || "").trim();
   if (!/^\d+$/.test(index)) return false;
-  const locator = page.locator(`.conversationConversationListwrapper [data-index="${index}"]`);
-  try {
-    const count = Math.min(await locator.count(), 4);
-    for (let position = count - 1; position >= 0; position -= 1) {
-      const row = locator.nth(position);
-      if (!await row.isVisible().catch(() => false)) continue;
-      await row.click({ timeout: 5000, force: true });
-      return true;
-    }
-  } catch {
-    return false;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const locator = page.locator(`.conversationConversationListwrapper [data-index="${index}"]`);
+    try {
+      const count = Math.min(await locator.count(), 4);
+      for (let position = count - 1; position >= 0; position -= 1) {
+        const row = locator.nth(position);
+        if (!await row.isVisible().catch(() => false)) continue;
+        await row.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {});
+        await row.click({ timeout: 5000, force: true });
+        return true;
+      }
+    } catch {}
+    await page.waitForTimeout(120);
   }
   return false;
 }

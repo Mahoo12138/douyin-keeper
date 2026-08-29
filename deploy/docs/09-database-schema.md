@@ -330,15 +330,12 @@ CREATE TABLE conversations (
   account_id                BIGINT NOT NULL REFERENCES douyin_accounts(id) ON DELETE CASCADE,
   friend_id                 BIGINT NOT NULL REFERENCES friends(id) ON DELETE CASCADE,
   platform_conversation_id  TEXT NOT NULL,
-  channel                   TEXT NOT NULL
-                            CHECK (channel IN ('consumer','creator')),
   last_message_at           TIMESTAMPTZ,
   last_synced_at            TIMESTAMPTZ,
   archived_at               TIMESTAMPTZ,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(account_id, platform_conversation_id),
-  UNIQUE(account_id, friend_id, channel)
+  UNIQUE(account_id, platform_conversation_id)
 );
 ```
 

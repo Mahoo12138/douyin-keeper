@@ -385,8 +385,7 @@ Result：
       "avatar_url": "https://...",
       "streak_days": 128,
       "conversation": {
-        "platform_conversation_id": "0:1:...",
-        "channel": "consumer"
+        "platform_conversation_id": "0:1:..."
       }
     }
   ],
@@ -427,7 +426,6 @@ Result：
       "platform_conversation_id": "0:1:...",
       "peer_platform_user_id": "987654321",
       "peer_display_name": "Jasmine",
-      "channel": "creator",
       "last_message_at": "2026-08-23T08:30:00Z"
     }
   ],

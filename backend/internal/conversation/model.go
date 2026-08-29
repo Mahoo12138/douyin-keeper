@@ -22,12 +22,12 @@ type Conversation struct {
 	FriendNickname         string
 	FriendAvatarURL        *string
 	StreakDays             int
+	StreakActivatedToday   *bool
 	SparkEnabled           bool
 	LastSentAt             *time.Time
 	PlatformIdentityStatus string
 	ConversationType       string
 	SparkSupported         bool
-	Channel                string
 	LastMessageAt          *time.Time
 	LastSyncedAt           *time.Time
 	ArchivedAt             *time.Time
@@ -53,10 +53,10 @@ type SyncItem struct {
 	PlatformUserID         string
 	DisplayName            string
 	AvatarURL              string
-	Channel                string
 	ConversationType       string
 	LastMessageAt          *time.Time
 	StreakDays             *int
+	StreakActivatedToday   *bool
 }
 
 // SyncRepository is the worker-only write slice for a complete conversation

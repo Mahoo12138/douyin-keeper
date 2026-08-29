@@ -409,7 +409,7 @@ function FriendCard({ friend, task, templates, busyKey, editingTaskId, taskDraft
         <View className={`spark-avatar ${isGroup ? 'spark-avatar-group' : 'spark-avatar-direct'}`}><Text>{isGroup ? '群' : '聊'}</Text></View>
         <View className="spark-identity-copy">
           <Text className="spark-card-title">{displayName}</Text>
-          <Text className="spark-card-caption">{friend.short_id ? `抖音号 ${friend.short_id}` : identityLabel} · {friend.channel === 'creator' ? '创作者侧' : '消费者侧'}</Text>
+          <Text className="spark-card-caption">{friend.short_id ? `抖音号 ${friend.short_id}` : identityLabel}</Text>
         </View>
       </View>
       <Text className={`spark-streak ${friend.archived ? 'spark-streak-muted' : ''}`}>{friend.archived ? '已归档' : `${friend.streak_days} 天火花`}</Text>

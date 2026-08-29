@@ -1559,6 +1559,8 @@ export interface components {
             /** Format: uri */
             friend_avatar_url?: string | null;
             streak_days: number;
+            /** @description Whether the platform flame icon shows today's conversation as activated; null when the icon was not recognized. */
+            streak_activated_today: boolean | null;
             spark_enabled: boolean;
             /** Format: date-time */
             last_sent_at: string | null;
@@ -1567,8 +1569,6 @@ export interface components {
             /** @enum {string} */
             conversation_type?: "direct" | "group" | "unknown";
             spark_supported?: boolean;
-            /** @enum {string} */
-            channel: "consumer" | "creator";
             /** Format: date-time */
             last_message_at?: string | null;
             /** Format: date-time */

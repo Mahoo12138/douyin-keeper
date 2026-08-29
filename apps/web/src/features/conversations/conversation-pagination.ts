@@ -27,6 +27,7 @@ export function conversationToFriend(item: Conversation): Friend {
     short_id: null,
     avatar_url: item.friend_avatar_url,
     streak_days: item.streak_days ?? 0,
+    streak_activated_today: item.streak_activated_today,
     has_conversation: true,
     spark_enabled: item.spark_enabled ?? false,
     last_sent_at: item.last_sent_at ?? null,

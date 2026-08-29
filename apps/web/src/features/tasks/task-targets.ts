@@ -1,7 +1,7 @@
 import type { Friend } from './task-types'
 
 export function selectableTaskConversations(conversations: Friend[], currentConversationId?: string) {
-  // A peer may have multiple platform conversation rows (consumer/creator),
+  // A peer may have multiple platform conversation rows,
   // but the task contract targets one stable friend projection.
   const seenFriendIds = new Set<string>()
   return conversations.filter((conversation) => {
