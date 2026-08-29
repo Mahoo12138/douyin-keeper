@@ -4,9 +4,12 @@ import type { components } from '@douyin-keeper/sdk-ts'
 import { visibleMiniAccounts } from '../features/accounts/account-utils'
 
 import { clearSession, getRefreshToken, setSession } from './session'
+import { resolveApiBaseUrl } from './api-config'
 
-const appEnv = typeof process !== 'undefined' ? process.env : undefined
-const API_BASE_URL = ((appEnv?.TARO_ENV === 'h5' ? appEnv.TARO_APP_H5_API_BASE_URL : appEnv?.TARO_APP_API_BASE_URL) || '/api/v1').replace(/\/$/, '')
+const API_BASE_URL = resolveApiBaseUrl(process.env.TARO_ENV, {
+  TARO_APP_API_BASE_URL: process.env.TARO_APP_API_BASE_URL,
+  TARO_APP_H5_API_BASE_URL: process.env.TARO_APP_H5_API_BASE_URL,
+})
 
 type Collection<T> = { items: T[]; next_cursor?: string | null }
 type ApiErrorBody = { error?: { code?: string; message?: string } }

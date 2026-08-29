@@ -21,7 +21,7 @@ export default defineConfig({
   outputRoot: 'dist',
   env: {
     ...injectedEnv,
-    TARO_APP_API_BASE_URL: JSON.stringify(appEnv.TARO_APP_API_BASE_URL || '/api/v1'),
+    TARO_APP_API_BASE_URL: JSON.stringify(appEnv.TARO_APP_API_BASE_URL || 'http://127.0.0.1:18080/api/v1'),
     TARO_APP_H5_API_BASE_URL: JSON.stringify('/api/v1'),
     TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID: JSON.stringify(appEnv.TARO_APP_WECHAT_NOTIFICATION_TEMPLATE_ID || ''),
   },

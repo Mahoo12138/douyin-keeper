@@ -493,7 +493,7 @@ page {
 .feature-dot { display: flex; align-items: center; justify-content: center; width: 28rpx; height: 28rpx; border-radius: 50%; color: #a3aea8; background: #e8eeeb; font-size: 16rpx; }
 .feature-dot-on { color: #fff; background: #1ab879; }
 .feature-state { margin-left: auto; color: #72a48b; font-size: 18rpx; }
-.me-inline-error { margin-top: 16rpx; padding: 16rpx 18rpx; border-radius: 14rpx; color: #b83f3f; background: #fff1f1; font-size: 22rpx; line-height: 1.5; }
+.me-inline-error { display: none; }
 .me-auth-page { padding-top: 82rpx; text-align: center; }
 .onboarding-page { min-height: 100vh; box-sizing: border-box; background: linear-gradient(180deg, #f8fffb 0%, #f2fbf7 100%); text-align: center; }
 .onboarding-splash { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64rpx 42rpx; }
@@ -840,4 +840,4 @@ page {
 .task-page { padding-top: calc(34rpx + env(safe-area-inset-top)); }
 .spark-page { padding-top: calc(34rpx + env(safe-area-inset-top)); }
 .onboarding-splash { padding-top: calc(64rpx + env(safe-area-inset-top)); }
-.onboarding-welcome { padding-top: calc(42rpx + env(safe-area-inset-top)); }
+.onboarding-welcome { padding-top: calc(70rpx + env(safe-area-inset-top)); }
