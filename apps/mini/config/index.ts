@@ -7,6 +7,7 @@ const injectedEnv = Object.fromEntries(
   Object.entries(appEnv).map(([key, value]) => [key, JSON.stringify(value)]),
 )
 const apiTarget = (appEnv.TARO_APP_API_BASE_URL || 'http://127.0.0.1:18080/api/v1').replace(/\/api\/v1\/?$/, '')
+const outputRoot = process.env.TARO_OUTPUT_ROOT || 'dist'
 
 export default defineConfig({
   projectName: 'douyin-keeper-mini',
@@ -18,7 +19,7 @@ export default defineConfig({
     828: 1.81 / 2,
   },
   sourceRoot: 'src',
-  outputRoot: 'dist',
+  outputRoot,
   env: {
     ...injectedEnv,
     TARO_APP_API_BASE_URL: JSON.stringify(appEnv.TARO_APP_API_BASE_URL || 'http://127.0.0.1:18080/api/v1'),
