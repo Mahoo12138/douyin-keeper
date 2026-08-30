@@ -109,8 +109,7 @@ export function HistoryPage() {
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="text-sm font-medium text-primary">M3 · 运行记录</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">发送记录</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">发送记录</h1>
           <p className="mt-1 text-sm text-muted-foreground">查看每日火花维护的执行结果和失败原因。</p>
         </div>
         {hasFilters && <Button variant="outline" onClick={clearFilters}><X />清除筛选</Button>}
@@ -171,7 +170,7 @@ function HistoryFilters({ search, onSearch, account, onAccount, friend, onFriend
   return <div className="grid gap-3 border-b pb-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.4fr)_repeat(2,minmax(140px,1fr))_repeat(2,minmax(135px,1fr))]">
     <div className="space-y-1.5"><Label htmlFor="history-search">搜索记录</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="history-search" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="账号、会话或失败原因" className="pl-9" /></div></div>
     <HistorySelect id="history-account" label="账号" value={account} onChange={onAccount} options={[{ value: 'all', label: '全部账号' }, ...accounts.map((item) => ({ value: item.id, label: item.nickname || '未命名账号' }))]} />
-    <HistorySelect id="history-friend" label="好友" value={friend} disabled={friendsLoading} onChange={onFriend} options={friendsLoading ? [{ value: 'all', label: '加载好友中…' }] : [{ value: 'all', label: '全部好友' }, ...friends.map(([value, label]) => ({ value, label }))]} />
+    <HistorySelect id="history-friend" label="会话" value={friend} disabled={friendsLoading} onChange={onFriend} options={friendsLoading ? [{ value: 'all', label: '加载会话中…' }] : [{ value: 'all', label: '全部会话' }, ...friends.map(([value, label]) => ({ value, label }))]} />
     <HistorySelect id="history-status" label="状态" value={status} onChange={(value) => onStatus(value as HistoryStatus | 'all')} options={statusOptions} />
     <div className="space-y-1.5"><Label htmlFor="history-from">开始日期</Label><DatePicker id="history-from" aria-label="开始日期" value={parseInputDate(fromDate)} onChange={(value) => onFromDate(formatInputDate(value))} /></div>
     <div className="space-y-1.5"><Label htmlFor="history-to">结束日期</Label><DatePicker id="history-to" aria-label="结束日期" value={parseInputDate(toDate)} onChange={(value) => onToDate(formatInputDate(value))} /></div>
@@ -195,7 +194,7 @@ function formatInputDate(value: Date | undefined) {
 }
 
 function HistoryTable({ items, onSelect }: { items: HistoryItem[]; onSelect: (item: HistoryItem) => void }) {
-  return <Table className="min-w-[760px]"><TableHeader><TableRow><TableHead className="pl-5">时间</TableHead><TableHead>账号 / 好友</TableHead><TableHead>任务</TableHead><TableHead>状态</TableHead><TableHead className="pr-5 text-right">详情</TableHead></TableRow></TableHeader><TableBody>{items.map((item) => <HistoryRow key={item.id} item={item} onSelect={onSelect} />)}</TableBody></Table>
+  return <Table className="min-w-[760px] table-fixed"><TableHeader><TableRow><TableHead className="w-[20%] pl-5">时间</TableHead><TableHead className="w-[24%]">账号 / 会话</TableHead><TableHead className="w-[16%]">任务</TableHead><TableHead className="w-[28%]">状态</TableHead><TableHead className="w-[12%] pr-5 text-right">详情</TableHead></TableRow></TableHeader><TableBody>{items.map((item) => <HistoryRow key={item.id} item={item} onSelect={onSelect} />)}</TableBody></Table>
 }
 
 function HistoryRow({ item, onSelect }: { item: HistoryItem; onSelect: (item: HistoryItem) => void }) {

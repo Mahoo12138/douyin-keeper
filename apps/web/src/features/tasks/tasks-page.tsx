@@ -216,7 +216,7 @@ export function TasksPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div><p className="text-sm font-medium text-primary">M3 · 自动维护</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">任务</h1><p className="mt-1 text-sm text-muted-foreground">为已开启火花维护的会话设置每日发送时间窗口和消息。</p></div>
+        <div><h1 className="text-2xl font-semibold tracking-tight">任务</h1><p className="mt-1 text-sm text-muted-foreground">为已开启火花维护的会话设置每日发送时间窗口和消息。</p></div>
         <Button onClick={openCreate} disabled={conversationsLoading}><Plus />{conversationsLoading ? '加载会话中…' : '新建任务'}</Button>
       </div>
       <Card><CardContent className="grid gap-4 p-5 sm:grid-cols-3"><div><div className="text-xs text-muted-foreground">任务总数</div><div className="mt-1 text-xl font-semibold">{tasks.length}</div></div><div><div className="text-xs text-muted-foreground">每日启用</div><div className="mt-1 text-xl font-semibold text-primary">{enabledCount}</div></div><div><div className="text-xs text-muted-foreground">当前筛选</div><div className="mt-1 text-xl font-semibold">{visibleTasks.length}</div></div></CardContent></Card>

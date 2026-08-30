@@ -145,7 +145,7 @@ export function ConversationsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div><p className="text-sm font-medium text-primary">M2 · 关系管理</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">会话</h1><p className="mt-1 text-sm text-muted-foreground">好友与群聊统一维护火花；数据全部来自抖音消息面板。</p></div>
+        <div><h1 className="text-2xl font-semibold tracking-tight">会话</h1><p className="mt-1 text-sm text-muted-foreground">好友与群聊统一维护火花；数据全部来自抖音消息面板。</p></div>
         <div className="flex flex-col items-start gap-2 sm:items-end">
           <Button variant="outline" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending || !accountId || !canSyncFriends(selectedAccount)} title={!canSyncFriends(selectedAccount) ? '请重新登录后再同步会话' : undefined}><RefreshCw className={syncMutation.isPending ? 'animate-spin' : undefined} />{syncMutation.isPending ? '同步中…' : '同步会话'}</Button>
           <p className="flex items-center gap-1.5 text-xs tabular-nums text-muted-foreground" aria-live="polite"><Clock3 className="size-3.5" />上次成功同步：{formatDate(selectedAccount?.last_friend_sync_at)}</p>
