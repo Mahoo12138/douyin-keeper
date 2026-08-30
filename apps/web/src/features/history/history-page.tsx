@@ -9,7 +9,6 @@ import { HistoryDetailDrawer } from './history-detail-drawer'
 import { friendOptionsFromFriends, listAllFriendsForAccount } from './history-utils'
 import { useAccountsQuery } from '../accounts/use-accounts-query'
 import { SelectField } from '@/components/select-field'
-import { jobErrorMessage } from '@/lib/job-error-message'
 
 type HistoryItem = components['schemas']['SendIntent']
 type HistoryStatus = HistoryItem['status']
@@ -194,16 +193,16 @@ function formatInputDate(value: Date | undefined) {
 }
 
 function HistoryTable({ items, onSelect }: { items: HistoryItem[]; onSelect: (item: HistoryItem) => void }) {
-  return <Table className="min-w-[760px] table-fixed"><TableHeader><TableRow><TableHead className="w-[20%] pl-5">时间</TableHead><TableHead className="w-[24%]">账号 / 会话</TableHead><TableHead className="w-[16%]">任务</TableHead><TableHead className="w-[28%]">状态</TableHead><TableHead className="w-[12%] pr-5 text-right">详情</TableHead></TableRow></TableHeader><TableBody>{items.map((item) => <HistoryRow key={item.id} item={item} onSelect={onSelect} />)}</TableBody></Table>
+  return <Table className="min-w-[760px] table-fixed"><TableHeader><TableRow><TableHead className="w-[20%] pl-5">时间</TableHead><TableHead className="w-[24%]">账号 / 会话</TableHead><TableHead className="w-[16%]">任务</TableHead><TableHead className="w-[22%]">状态</TableHead><TableHead className="w-[18%] pr-5 text-right">详情</TableHead></TableRow></TableHeader><TableBody>{items.map((item) => <HistoryRow key={item.id} item={item} onSelect={onSelect} />)}</TableBody></Table>
 }
 
 function HistoryRow({ item, onSelect }: { item: HistoryItem; onSelect: (item: HistoryItem) => void }) {
   const status = statusMeta[item.status]
-  return <TableRow><TableCell className="whitespace-nowrap pl-5 text-sm">{formatDateTime(item.scheduled_at)}</TableCell><TableCell><div className="font-medium">{item.friend.display_name}</div><div className="mt-1 text-xs text-muted-foreground">{item.account.nickname || '未命名账号'}</div></TableCell><TableCell><div className="text-sm">{taskLabel(item)}</div><div className="mt-1 text-xs text-muted-foreground">{item.intent_type === 'manual' ? '手动执行' : '定时执行'}</div></TableCell><TableCell><div className="max-w-72 space-y-1"><Badge variant={status.variant}>{status.label}</Badge>{item.error_code && <div className="text-xs leading-5 text-destructive">{jobErrorMessage(item.error_code)}</div>}</div></TableCell><TableCell className="pr-5 text-right"><Button variant="ghost" size="sm" onClick={() => onSelect(item)}>查看详情<ChevronRight /></Button></TableCell></TableRow>
+  return <TableRow><TableCell className="whitespace-nowrap pl-5 text-sm">{formatDateTime(item.scheduled_at)}</TableCell><TableCell><div className="font-medium">{item.friend.display_name}</div><div className="mt-1 text-xs text-muted-foreground">{item.account.nickname || '未命名账号'}</div></TableCell><TableCell><div className="text-sm">{taskLabel(item)}</div><div className="mt-1 text-xs text-muted-foreground">{item.intent_type === 'manual' ? '手动执行' : '定时执行'}</div></TableCell><TableCell><Badge variant={status.variant}>{status.label}</Badge></TableCell><TableCell className="pr-5 text-right"><Button variant="ghost" size="sm" onClick={() => onSelect(item)}>查看详情<ChevronRight /></Button></TableCell></TableRow>
 }
 
 function HistoryCards({ items, onSelect }: { items: HistoryItem[]; onSelect: (item: HistoryItem) => void }) {
-  return <div>{items.map((item) => { const status = statusMeta[item.status]; return <button key={item.id} type="button" onClick={() => onSelect(item)} className="w-full rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent/40"><div className="flex items-start justify-between gap-3"><div><div className="font-medium">{item.friend.display_name}</div><div className="mt-1 text-xs text-muted-foreground">{item.account.nickname || '未命名账号'} · {formatDateTime(item.scheduled_at)}</div></div><Badge variant={status.variant}>{status.label}</Badge></div><div className="mt-4 text-sm"><div className="text-xs text-muted-foreground">任务</div><div className="mt-1 truncate">{taskLabel(item)}</div></div>{item.error_code && <div className="mt-3 text-xs leading-5 text-destructive">{jobErrorMessage(item.error_code)}</div>}<div className="mt-3 flex items-center justify-end text-xs font-medium text-primary">查看详情<ChevronRight className="ml-1 size-3.5" /></div></button> })}</div>
+  return <div>{items.map((item) => { const status = statusMeta[item.status]; return <button key={item.id} type="button" onClick={() => onSelect(item)} className="w-full rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent/40"><div className="flex items-start justify-between gap-3"><div><div className="font-medium">{item.friend.display_name}</div><div className="mt-1 text-xs text-muted-foreground">{item.account.nickname || '未命名账号'} · {formatDateTime(item.scheduled_at)}</div></div><Badge variant={status.variant}>{status.label}</Badge></div><div className="mt-4 text-sm"><div className="text-xs text-muted-foreground">任务</div><div className="mt-1 truncate">{taskLabel(item)}</div></div><div className="mt-3 flex items-center justify-end text-xs font-medium text-primary">查看详情<ChevronRight className="ml-1 size-3.5" /></div></button> })}</div>
 }
 
 function HistoryLoading() {
