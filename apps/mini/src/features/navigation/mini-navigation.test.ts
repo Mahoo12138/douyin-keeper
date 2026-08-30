@@ -14,7 +14,7 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
-import { consumeMeScreenTarget, openLoginPage, openMeNotifications } from './mini-navigation'
+import { consumeMeScreenTarget, openLoginPage, openMeEntitlement, openMeNotifications } from './mini-navigation'
 
 describe('mini notification navigation', () => {
   beforeEach(() => {
@@ -34,6 +34,14 @@ describe('mini notification navigation', () => {
     openMeNotifications()
 
     expect(consumeMeScreenTarget()).toBe('notifications')
+    expect(consumeMeScreenTarget()).toBeNull()
+    expect(switchTab).toHaveBeenCalledWith({ url: '/pages/login/index' })
+  })
+
+  it('persists the entitlement target before switching to the My tab', () => {
+    openMeEntitlement()
+
+    expect(consumeMeScreenTarget()).toBe('entitlement')
     expect(consumeMeScreenTarget()).toBeNull()
     expect(switchTab).toHaveBeenCalledWith({ url: '/pages/login/index' })
   })

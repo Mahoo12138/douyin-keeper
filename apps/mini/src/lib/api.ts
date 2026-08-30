@@ -15,7 +15,7 @@ type Collection<T> = { items: T[]; next_cursor?: string | null }
 type ApiErrorBody = { error?: { code?: string; message?: string } }
 type RequestOptions = { token?: string | null; method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; data?: unknown; headers?: Record<string, string>; skipRefresh?: boolean }
 
-export type SparkFriend = components['schemas']['Friend'] & Pick<components['schemas']['Conversation'], 'conversation_type' | 'spark_supported' | 'archived' | 'archived_at'> & { conversation_id: components['schemas']['Conversation']['id'] }
+export type SparkFriend = components['schemas']['Friend'] & Pick<components['schemas']['Conversation'], 'conversation_type' | 'spark_supported' | 'last_message_at' | 'archived' | 'archived_at'> & { conversation_id: components['schemas']['Conversation']['id'] }
 
 async function listAllPages<T>(loadPage: (cursor?: string) => Promise<Collection<T>>): Promise<Collection<T>> {
   const items: T[] = []
@@ -353,6 +353,7 @@ export function listFriends(token: string, accountId: string, options: { include
         last_sent_at: item.last_sent_at,
         conversation_type: item.conversation_type,
         spark_supported: item.spark_supported,
+        last_message_at: item.last_message_at,
         archived: item.archived,
         archived_at: item.archived_at,
       })),
