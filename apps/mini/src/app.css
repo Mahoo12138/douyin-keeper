@@ -141,9 +141,7 @@ page {
 .home-header, .home-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; }
 .home-brand { display: block; color: #16231d; font-size: 36rpx; font-weight: 700; letter-spacing: -1rpx; }
 .home-header-actions { display: flex; align-items: center; gap: 16rpx; }
-.home-more-button, .home-notification-button { position: relative; display: flex; align-items: center; justify-content: center; width: 72rpx; height: 72rpx; margin: 0; padding: 0; border: 1rpx solid #e4ece7; border-radius: 24rpx; color: #22302a; background: #fff; line-height: 1; box-shadow: 0 8rpx 20rpx rgba(40, 102, 79, .05); }
-.home-more-button { width: 88rpx; }
-.home-more-dots { color: #5b6a62; font-size: 26rpx; font-weight: 700; letter-spacing: 2rpx; }
+.home-notification-button { position: relative; display: flex; align-items: center; justify-content: center; width: 72rpx; height: 72rpx; margin: 0; padding: 0; border: 1rpx solid #e4ece7; border-radius: 50%; color: #22302a; background: #fff; line-height: 1; box-shadow: 0 8rpx 20rpx rgba(40, 102, 79, .05); }
 .home-bell { display: block; width: 36rpx; height: 36rpx; }
 .home-notification-badge { position: absolute; top: -8rpx; right: -8rpx; min-width: 30rpx; height: 30rpx; padding: 0 8rpx; border: 3rpx solid #f6f8f7; border-radius: 999rpx; color: #fff; background: #f04438; font-size: 18rpx; line-height: 30rpx; text-align: center; }
 .home-account-card { display: flex; align-items: center; gap: 20rpx; margin-top: 30rpx; padding: 28rpx 24rpx; border: 1rpx solid #d9efe3; border-radius: 30rpx; background: linear-gradient(135deg, #f2fbf6 0%, #e3f7ec 100%); box-shadow: 0 14rpx 30rpx rgba(24, 140, 96, .08); }
@@ -186,6 +184,7 @@ page {
 .home-risk-action { flex: 0 0 auto; width: auto; margin: 0; padding: 0 24rpx; border: 0; border-radius: 999rpx; font-size: 21rpx; font-weight: 600; line-height: 58rpx; }
 .home-risk-action-amber { color: #c2711c; background: #fdeedd; }
 .home-risk-action-red { color: #e5484d; background: #fdecec; }
+.home-operation-status { margin-top: 18rpx; padding: 14rpx 18rpx; border: 1rpx solid #ccebdc; border-radius: 16rpx; color: #0b8f5a; background: #f1fbf6; font-size: 21rpx; text-align: center; }
 .home-recent-row { display: flex; align-items: center; gap: 16rpx; padding: 20rpx 0; border-bottom: 1rpx solid #f0f4f1; }
 .home-recent-row.home-row-last { border-bottom: 0; padding-bottom: 4rpx; }
 .home-recent-icon { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 64rpx; height: 64rpx; border-radius: 20rpx; font-size: 30rpx; }
@@ -235,7 +234,7 @@ page {
 .home-sheet-add-icon { font-size: 30rpx; line-height: 1; }
 .home-page .mini-button { transition: transform 140ms cubic-bezier(.23, 1, .32, 1); }
 .home-page .mini-button:active { transform: scale(.97); }
-.home-more-button::after, .home-notification-button::after, .home-card-link-button::after, .home-risk-action::after, .home-quick-item::after, .home-primary-button::after, .home-secondary-button::after, .home-sheet-manage::after, .home-sheet-row::after, .home-sheet-add::after { display: none; }
+.home-notification-button::after, .home-card-link-button::after, .home-risk-action::after, .home-quick-item::after, .home-primary-button::after, .home-secondary-button::after, .home-sheet-manage::after, .home-sheet-row::after, .home-sheet-add::after { display: none; }
 .home-reveal { animation: home-reveal-in 260ms cubic-bezier(.23, 1, .32, 1) both; }
 .home-reveal-1 { animation-delay: 0ms; }
 .home-reveal-2 { animation-delay: 35ms; }
@@ -467,14 +466,7 @@ page {
 .me-action-icon-amber { color: #e39c2c; background: #fff6e5; }
 .me-action-title { display: block; color: #243229; font-size: 24rpx; font-weight: 600; }
 .me-action .muted { display: block; max-width: 192rpx; margin-top: 5rpx; overflow: hidden; font-size: 19rpx; text-overflow: ellipsis; white-space: nowrap; }
-.me-feature-card, .me-panel, .me-auth-card { margin-top: 20rpx; padding: 24rpx; border: 1rpx solid #e5ece8; border-radius: 22rpx; background: #fff; box-shadow: 0 10rpx 24rpx rgba(35, 86, 65, .045); }
-.me-feature-heading-title { color: #1e2b24; font-size: 27rpx; font-weight: 650; }
-.me-feature-heading .muted { font-size: 20rpx; }
-.feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12rpx; margin-top: 18rpx; }
-.feature-item { display: flex; align-items: center; gap: 8rpx; padding: 12rpx; border-radius: 14rpx; color: #415048; background: #f7fbf9; font-size: 21rpx; }
-.feature-dot { display: flex; align-items: center; justify-content: center; width: 28rpx; height: 28rpx; border-radius: 50%; color: #a3aea8; background: #e8eeeb; font-size: 16rpx; }
-.feature-dot-on { color: #fff; background: #1ab879; }
-.feature-state { margin-left: auto; color: #72a48b; font-size: 18rpx; }
+.me-panel, .me-auth-card { margin-top: 20rpx; padding: 24rpx; border: 1rpx solid #e5ece8; border-radius: 22rpx; background: #fff; box-shadow: 0 10rpx 24rpx rgba(35, 86, 65, .045); }
 .me-inline-error { display: none; }
 .me-auth-page { padding-top: 82rpx; text-align: center; }
 .onboarding-page { min-height: 100vh; box-sizing: border-box; background: linear-gradient(180deg, #f8fffb 0%, #f2fbf7 100%); text-align: center; }
@@ -527,7 +519,6 @@ page {
 .quota-value-me { display: block; color: #24372b; font-size: 32rpx; font-weight: 700; }
 .quota-item-me .muted { display: block; margin-top: 5rpx; font-size: 20rpx; }
 .me-link-button { margin: 0; padding: 0; border: 0; color: #16a86e; background: transparent; font-size: 21rpx; line-height: 1.5; }
-.enabled-features { padding-bottom: 24rpx; }
 .history-panel { margin-top: 22rpx; }
 .history-timeline { position: relative; padding-left: 26rpx; }
 .history-timeline::before { position: absolute; top: 12rpx; bottom: 12rpx; left: 8rpx; border-left: 2rpx solid #dceee4; content: ''; }
@@ -696,16 +687,19 @@ page {
 @media (prefers-reduced-motion: reduce) { .task-page .task-template-link, .task-page .task-new-button, .task-page .task-filter-tabs Button, .task-page .task-primary-button, .task-page .task-secondary-button, .task-page .task-danger-button, .task-page .task-template-action { transition: none; } .task-skeleton { animation: none; } }
 
 /* Shared foundation components. These selectors stay WXSS-compatible. */
-.mini-navbar { display: flex; align-items: center; justify-content: space-between; min-height: 76rpx; color: #1b2a22; }
-.mini-navbar-leading, .mini-navbar-back, .mini-navbar-trailing { width: 62rpx; flex: 0 0 62rpx; }
-.mini-navbar-back { display: flex; align-items: center; justify-content: flex-start; height: 62rpx; margin: 0; padding: 0; border: 0; color: #1b2a22; background: transparent; font-size: 54rpx; font-weight: 300; line-height: 1; }
+.mini-navbar { box-sizing: border-box; width: 100%; color: #1b2a22; }
+.mini-navbar-row { display: flex; align-items: center; width: 100%; min-height: 76rpx; }
+.mini-navbar-leading { display: flex; align-items: center; width: 64rpx; flex: 0 0 64rpx; }
 .mini-navbar-copy { min-width: 0; flex: 1; text-align: center; }
+.mini-navbar-start .mini-navbar-leading { display: none; }
+.mini-navbar-start .mini-navbar-copy { text-align: left; }
 .mini-navbar-title, .mini-navbar-subtitle { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mini-navbar-title { font-size: 29rpx; font-weight: 650; }
 .mini-navbar-subtitle { margin-top: 4rpx; color: #8a9990; font-size: 18rpx; }
-.mini-navbar-trailing { display: flex; align-items: center; justify-content: flex-end; }
-.mini-navbar-spacer { width: 62rpx; height: 1rpx; }
-.mini-navbar-back::after, .mini-dialog-close::after, .mini-dialog-cancel::after, .mini-dialog-confirm::after { display: none; }
+.mini-navbar-actions { display: flex; align-items: center; justify-content: flex-end; flex: 0 0 auto; min-width: 64rpx; gap: 12rpx; }
+.mini-navbar-action { position: relative; display: flex; align-items: center; justify-content: center; flex: 0 0 64rpx; width: 64rpx; height: 64rpx; margin: 0; padding: 0; border: 1rpx solid #e1e9e4; border-radius: 50%; color: #25332b; background: #fff; font-size: 30rpx; line-height: 1; box-shadow: 0 8rpx 20rpx rgba(40, 102, 79, .05); }
+.mini-navbar-back { color: #33433a; background: rgba(255, 255, 255, .86); font-size: 48rpx; font-weight: 300; }
+.mini-navbar-action::after, .mini-dialog-close::after, .mini-dialog-cancel::after, .mini-dialog-confirm::after { display: none; }
 .mini-toast { position: fixed; z-index: 1000; right: 28rpx; bottom: 142rpx; left: 28rpx; display: flex; align-items: center; gap: 12rpx; min-height: 76rpx; padding: 0 18rpx; border: 1rpx solid #dfe9e3; border-radius: 18rpx; background: rgba(255, 255, 255, .98); box-shadow: 0 16rpx 34rpx rgba(36, 79, 63, .14); animation: mini-toast-in 180ms cubic-bezier(.23, 1, .32, 1) both; }
 .mini-toast-icon { display: flex; align-items: center; justify-content: center; width: 34rpx; height: 34rpx; flex: 0 0 auto; border-radius: 50%; color: #fff; background: #6f8c7d; font-size: 20rpx; font-weight: 700; }
 .mini-toast-message { min-width: 0; flex: 1; color: #304139; font-size: 23rpx; line-height: 1.45; }
@@ -743,7 +737,7 @@ page {
 .spark-eyebrow { color: #159d68; font-weight: 700; }
 .spark-title { display: block; margin-top: 7rpx; color: #17261e; font-size: 38rpx; font-weight: 700; letter-spacing: -1rpx; }
 .spark-subtitle { display: block; max-width: 560rpx; margin-top: 8rpx; color: #7b8c82; font-size: 22rpx; line-height: 1.6; }
-.spark-header-mark { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 68rpx; height: 68rpx; border-radius: 22rpx; color: #fff; background: #19b979; box-shadow: 0 10rpx 20rpx rgba(25, 185, 121, .2); font-size: 34rpx; }
+.spark-header-mark { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 68rpx; height: 68rpx; border-radius: 50%; color: #fff; background: #19b979; box-shadow: 0 10rpx 20rpx rgba(25, 185, 121, .2); font-size: 34rpx; }
 .spark-account-card, .spark-control-card { margin-top: 28rpx; padding: 22rpx; border: 1rpx solid #dfe9e3; border-radius: 26rpx; background: #fff; box-shadow: 0 12rpx 28rpx rgba(39, 100, 76, .05); }
 .spark-control-card { margin-top: 16rpx; }
 .spark-section-heading, .spark-control-heading, .spark-card-heading, .spark-task-heading { display: flex; align-items: center; justify-content: space-between; gap: 18rpx; }
@@ -814,12 +808,468 @@ page {
 @keyframes spark-reveal-in { from { opacity: 0; transform: translateY(8rpx); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .spark-reveal { animation: none; } .spark-page .mini-button, .spark-page .account-tab, .spark-page .spark-view-tab, .spark-page .spark-archive-button, .spark-page .conversation-platform-button, .spark-page .conversation-platform-cancel, .spark-page .conversation-sync-button, .spark-page .conversation-sync-cancel, .spark-page .conversation-sync-bind, .spark-page .spark-task-edit-button { transition: none; } }
 
-/* The native WeChat title bar is disabled in app.config.ts. Keep page content below the status area. */
-.mini-page { padding-top: calc(16rpx + env(safe-area-inset-top)); }
-.home-page { padding-top: calc(38rpx + env(safe-area-inset-top)); }
-.me-page { padding-top: calc(34rpx + env(safe-area-inset-top)); }
-.me-auth-page { padding-top: calc(82rpx + env(safe-area-inset-top)); }
-.task-page { padding-top: calc(34rpx + env(safe-area-inset-top)); }
-.spark-page { padding-top: calc(34rpx + env(safe-area-inset-top)); }
-.onboarding-splash { padding-top: calc(64rpx + env(safe-area-inset-top)); }
-.onboarding-welcome { padding-top: calc(70rpx + env(safe-area-inset-top)); }
+/* Conversation page refresh — faithful to the supplied airy iOS reference. */
+.spark-page {
+  overflow-x: hidden;
+  padding-right: 30rpx;
+  padding-bottom: 168rpx;
+  padding-left: 30rpx;
+  color: #161b18;
+  background:
+    radial-gradient(circle at 17% 8%, rgba(212, 246, 232, .46), transparent 31%),
+    linear-gradient(180deg, #f8fbfa 0%, #f5f8f7 100%);
+}
+.spark-page .mini-navbar { padding-bottom: 20rpx; }
+.spark-page .mini-navbar-copy { overflow: visible; }
+.spark-page-heading { padding-top: 20rpx; }
+.spark-title {
+  display: block;
+  margin: 0;
+  color: #111613;
+  font-size: 52rpx;
+  font-weight: 750;
+  letter-spacing: -2rpx;
+  line-height: 1.06;
+}
+.spark-subtitle {
+  display: block;
+  max-width: none;
+  margin-top: 14rpx;
+  color: #858c88;
+  font-size: 25rpx;
+  line-height: 1.3;
+}
+.spark-account-card {
+  margin-top: 34rpx;
+  padding: 14rpx 20rpx;
+  border: 0;
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 14rpx 38rpx rgba(50, 79, 66, .075);
+}
+.spark-account-main { display: flex; align-items: center; min-height: 92rpx; gap: 18rpx; }
+.spark-account-avatar {
+  overflow: hidden;
+  flex: 0 0 auto;
+  width: 92rpx;
+  height: 92rpx;
+  border: 4rpx solid #e8f7ef;
+  border-radius: 50%;
+  background: #def4e9;
+}
+.spark-account-avatar-image, .spark-avatar-image { display: block; width: 100%; height: 100%; border-radius: 50%; }
+.spark-account-copy { min-width: 0; flex: 1; }
+.spark-account-name {
+  display: block;
+  overflow: hidden;
+  color: #151a17;
+  font-size: 29rpx;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.spark-account-state {
+  display: inline-block;
+  margin-top: 10rpx;
+  padding: 7rpx 13rpx;
+  border-radius: 10rpx;
+  color: #0caf72;
+  background: #eaf8f2;
+  font-size: 20rpx;
+  line-height: 1;
+}
+.spark-account-actions { display: flex; flex: 0 0 auto; align-items: flex-end; flex-direction: column; }
+.conversation-sync-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 168rpx;
+  height: 56rpx;
+  margin: 0;
+  padding: 0 18rpx;
+  border: 2rpx solid #16b97c;
+  border-radius: 18rpx;
+  color: #0caf72;
+  background: #fff;
+  font-size: 22rpx;
+  font-weight: 600;
+  line-height: 1;
+}
+.conversation-sync-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  width: 32rpx;
+  height: 32rpx;
+  margin-right: 8rpx;
+  border-radius: 50%;
+  background: #e7f8f1;
+}
+.conversation-sync-icon image { width: 24rpx; height: 24rpx; border-radius: 50%; }
+.spark-account-switch {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: auto;
+  height: 40rpx;
+  margin: 5rpx 0 0;
+  padding: 0;
+  border: 0;
+  color: #232825;
+  background: transparent;
+  font-size: 21rpx;
+  line-height: 40rpx;
+}
+.spark-account-switch::after, .spark-search-clear::after, .spark-filter::after { display: none; }
+.spark-account-chevron { width: 26rpx; height: 26rpx; margin-left: 8rpx; border-radius: 50%; }
+.spark-last-sync { display: block; color: #999f9b; font-size: 18rpx; line-height: 1.1; }
+.spark-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12rpx; margin-top: 20rpx; }
+.spark-metric-card {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 112rpx;
+  padding: 12rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 11rpx 28rpx rgba(50, 79, 66, .065);
+}
+.spark-metric-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex: 0 0 auto;
+  width: 58rpx;
+  height: 58rpx;
+  margin-right: 11rpx;
+  border-radius: 50%;
+}
+.spark-metric-icon image { width: 32rpx; height: 32rpx; border-radius: 50%; }
+.spark-metric-icon-mint { background: #e6f7f0; }
+.spark-metric-icon-aqua { background: #e5f7f6; }
+.spark-metric-icon-blue { background: #edf0ff; }
+.spark-metric-label { display: block; overflow: hidden; color: #8b918d; font-size: 18rpx; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.spark-metric-value { display: block; margin-top: 8rpx; color: #0d110f; font-size: 34rpx; font-weight: 650; line-height: 1; }
+.spark-conversation-panel {
+  margin-top: 20rpx;
+  padding: 22rpx 18rpx 4rpx;
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 14rpx 38rpx rgba(50, 79, 66, .065);
+}
+.spark-search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 66rpx;
+  padding: 0 20rpx;
+  border-radius: 18rpx;
+  background: #f6f7f6;
+}
+.spark-search-icon { flex: 0 0 auto; width: 30rpx; height: 30rpx; margin-right: 12rpx; border-radius: 50%; }
+.spark-search-field input { min-width: 0; flex: 1; color: #28302b; font-size: 23rpx; }
+.spark-search-field input::placeholder { color: #a1a6a3; }
+.spark-search-clear { width: auto; margin: 0 0 0 12rpx; padding: 0; border: 0; color: #13aa72; background: transparent; font-size: 19rpx; line-height: 42rpx; }
+.spark-filter-list { display: flex; gap: 12rpx; overflow-x: auto; margin-top: 20rpx; padding-bottom: 18rpx; white-space: nowrap; }
+.spark-filter {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 104rpx;
+  height: 52rpx;
+  margin: 0;
+  padding: 0 22rpx;
+  border: 1rpx solid transparent;
+  border-radius: 999rpx;
+  color: #545b57;
+  background: #f5f6f5;
+  font-size: 21rpx;
+  line-height: 50rpx;
+}
+.spark-filter-active { border-color: #11b778; color: #09a86d; background: #f5fdfa; font-weight: 600; }
+.spark-list { margin: 0; border-top: 1rpx solid #eef1ef; }
+.spark-friend-group { margin: 0; border-bottom: 1rpx solid #edf0ee; }
+.spark-conversation-card { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.spark-conversation-row {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 116rpx 118rpx 82rpx;
+  align-items: center;
+  min-height: 116rpx;
+  gap: 8rpx;
+  padding: 8rpx 2rpx;
+}
+.spark-identity { display: flex; align-items: center; min-width: 0; gap: 14rpx; }
+.spark-avatar {
+  display: block;
+  overflow: hidden;
+  flex: 0 0 auto;
+  width: 70rpx;
+  height: 70rpx;
+  border: 2rpx solid #eef3f0;
+  border-radius: 50%;
+  background: #ebf6f1;
+}
+.spark-identity-copy { min-width: 0; flex: 1; }
+.spark-card-title { display: block; overflow: hidden; color: #151a17; font-size: 25rpx; font-weight: 650; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.spark-card-caption { display: block; overflow: hidden; margin-top: 9rpx; color: #9aa09c; font-size: 18rpx; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
+.spark-row-status { display: flex; align-items: flex-start; flex-direction: column; gap: 8rpx; }
+.spark-streak, .spark-task-state { display: inline-block; max-width: 112rpx; overflow: hidden; padding: 7rpx 11rpx; border-radius: 9rpx; font-size: 18rpx; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
+.spark-streak-cool { color: #13aaa4; background: #e9f8f6; }
+.spark-streak-warm { color: #ef751e; background: #fff2e8; }
+.spark-task-state { color: #8e9591; background: #f2f3f2; }
+.spark-task-state-active { color: #0aaa70; background: #e8f7f1; }
+.spark-last-activity { color: #929894; font-size: 19rpx; line-height: 1.25; text-align: right; }
+.spark-master-switch { display: flex; align-items: center; justify-content: flex-end; overflow: visible; }
+.spark-master-switch switch { width: 106rpx; transform: scale(.72); transform-origin: right center; }
+.spark-conversation-details { margin: 0 2rpx 18rpx 86rpx; padding: 16rpx; border-radius: 18rpx; background: #f8faf9; }
+.spark-meta-row { margin: 0; padding: 0 0 14rpx; border-bottom-color: #e8edea; }
+.spark-action-panel, .spark-disabled-panel { margin-top: 14rpx; }
+.spark-task-panel { margin-top: 14rpx; padding: 16rpx; background: #fff; }
+.spark-task-message { background: #f6f8f7; }
+.spark-task-edit-button { color: #0cae72; }
+.spark-card-actions { margin-top: 14rpx; }
+.spark-archive-button { border-color: #dce8e2; border-radius: 12rpx; color: #68786f; }
+.conversation-platform-button { margin: 0 20rpx 18rpx 106rpx; border-color: #bde7d1; border-radius: 12rpx; color: #119665; background: #f7fcf9; }
+.conversation-platform-status { margin: 0 20rpx 18rpx 106rpx; color: #247b59; background: #effaf4; }
+.conversation-sync-status, .conversation-sync-unavailable { max-width: 245rpx; margin: 0; padding: 10rpx 12rpx; border-radius: 12rpx; font-size: 18rpx; }
+.conversation-sync-unavailable .muted { display: none; }
+.conversation-sync-bind, .conversation-sync-cancel { font-size: 17rpx; }
+.spark-error { margin-top: 18rpx; }
+.spark-empty-card { margin: 0; padding: 42rpx 24rpx 50rpx; border: 0; border-radius: 0; background: transparent; }
+.spark-empty-image { display: block; width: 146rpx; height: 128rpx; margin: 0 auto 16rpx; border-radius: 50%; }
+.spark-empty-title { font-size: 27rpx; }
+.spark-standalone-empty { margin-top: 46rpx; border-radius: 28rpx; background: rgba(255, 255, 255, .94); box-shadow: 0 14rpx 38rpx rgba(50, 79, 66, .065); }
+.spark-loading-heading { width: 260rpx; }
+.spark-loading-card { margin-top: 20rpx; border-radius: 28rpx; box-shadow: 0 14rpx 38rpx rgba(50, 79, 66, .06); }
+.spark-page button, .spark-page .spark-conversation-row { transition: transform 140ms cubic-bezier(.23, 1, .32, 1), opacity 140ms ease-out; }
+.spark-page button:active, .spark-page .spark-conversation-row:active { transform: scale(.985); }
+@media (prefers-reduced-motion: reduce) { .spark-page button, .spark-page .spark-conversation-row { transition: none; } }
+
+/* The shared navbar measures the native WeChat capsule and status bar at
+ * runtime. Pages only own their content spacing; immersive onboarding screens
+ * still use the CSS safe-area fallback because they intentionally have no bar. */
+.mini-page, .home-page, .me-page, .task-page, .spark-page { box-sizing: border-box; padding-top: 0; }
+.me-auth-page { padding-top: calc(72rpx + env(safe-area-inset-top)); }
+.onboarding-splash { padding-top: calc(98rpx + env(safe-area-inset-top)); }
+.onboarding-welcome { padding-top: calc(104rpx + env(safe-area-inset-top)); }
+
+/* Account index refresh: keep the title and add action in the native capsule
+ * zone, then give the data cards the same calm, spacious rhythm as the new UI. */
+.account-index-page {
+  padding-top: 0;
+  padding-right: 30rpx;
+  padding-left: 30rpx;
+  background: #f4f8f6;
+}
+.account-index-page .account-page-header {
+  min-height: 82rpx;
+}
+.account-index-page .account-page-kicker {
+  color: #52635a;
+  font-size: 22rpx;
+  line-height: 1;
+}
+.account-index-page .account-page-title {
+  margin-top: 10rpx;
+  color: #122019;
+  font-size: 50rpx;
+  letter-spacing: -1rpx;
+  line-height: 1.05;
+}
+.account-index-page .account-add-button {
+  width: 82rpx;
+  height: 82rpx;
+  border-radius: 50%;
+  font-size: 48rpx;
+  box-shadow: 0 14rpx 28rpx rgba(24, 185, 121, .18);
+}
+.account-index-page .account-quota {
+  margin-top: 62rpx;
+  padding: 34rpx 34rpx 28rpx;
+  border: 0;
+  border-radius: 32rpx;
+  box-shadow: 0 16rpx 34rpx rgba(35, 86, 65, .065);
+}
+.account-index-page .account-quota-label {
+  color: #77837d;
+  font-size: 27rpx;
+}
+.account-index-page .account-quota-value {
+  margin-top: 16rpx;
+  color: #11af77;
+  font-size: 78rpx;
+  line-height: .95;
+}
+.account-index-page .account-quota-total {
+  color: #77817d;
+  font-size: 48rpx;
+}
+.account-index-page .account-quota-caption {
+  margin-top: 18rpx;
+  color: #77817d;
+  font-size: 27rpx;
+}
+.account-index-page .account-quota-action {
+  top: 102rpx;
+  right: 34rpx;
+  height: 78rpx;
+  min-width: 208rpx;
+  padding: 0 28rpx;
+  font-size: 29rpx;
+  font-weight: 600;
+}
+.account-index-page .account-quota-line {
+  height: 10rpx;
+  margin-top: 34rpx;
+  background: #e1eee8;
+}
+.account-index-page .account-inline-error {
+  margin-top: 20rpx;
+}
+.account-index-page .account-index-list {
+  margin-top: 30rpx;
+}
+.account-index-page .account-card {
+  margin-top: 0;
+  padding: 38rpx 32rpx 30rpx;
+  border: 0;
+  border-radius: 32rpx;
+  box-shadow: 0 16rpx 34rpx rgba(35, 86, 65, .065);
+}
+.account-index-page .account-card + .account-card {
+  margin-top: 22rpx;
+}
+.account-index-page .account-card-main {
+  align-items: center;
+}
+.account-index-page .account-card .avatar {
+  flex: 0 0 auto;
+  width: 144rpx;
+  height: 144rpx;
+  overflow: hidden;
+  border: 6rpx solid #eef8f3;
+  border-radius: 50%;
+  background: #e7f6ee;
+}
+.account-index-page .account-card .avatar-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.account-index-page .account-card-copy {
+  margin-left: 28rpx;
+}
+.account-index-page .account-card-name {
+  max-width: 360rpx;
+  color: #142019;
+  font-size: 37rpx;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.account-index-page .account-card-id {
+  display: block;
+  margin-top: 12rpx;
+  overflow: hidden;
+  color: #7b8580;
+  font-size: 25rpx;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-index-page .account-card-status-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 16rpx;
+}
+.account-index-page .account-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  color: #10a86f;
+  background: #e9f8f1;
+  font-size: 24rpx;
+  line-height: 1;
+  white-space: nowrap;
+}
+.account-index-page .account-status-pill-session-expired,
+.account-index-page .account-status-pill-session-unknown {
+  color: #a06f1d;
+  background: #fff4df;
+}
+.account-index-page .account-status-dot {
+  width: 14rpx;
+  height: 14rpx;
+  margin-right: 10rpx;
+  border-radius: 50%;
+  background: #25be80;
+}
+.account-index-page .account-chevron {
+  flex: 0 0 auto;
+  margin-left: 12rpx;
+  color: #68736d;
+  font-size: 58rpx;
+  line-height: 1;
+}
+.account-index-page .account-card-stats {
+  margin-top: 36rpx;
+  padding-top: 28rpx;
+}
+.account-index-page .account-card-stats View {
+  min-height: 82rpx;
+  border-right-color: #dce7e2;
+}
+.account-index-page .account-card-stat-last {
+  border-right: 0;
+}
+.account-index-page .account-card-stat-value {
+  display: block;
+  color: #12ae76;
+  font-size: 52rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+.account-index-page .account-card-stat-unit {
+  font-size: 30rpx;
+}
+.account-index-page .account-card-stats .muted {
+  margin-top: 14rpx;
+  color: #7a8580;
+  font-size: 25rpx;
+  line-height: 1;
+}
+.account-index-page .account-add-card {
+  min-height: 142rpx;
+  margin-top: 42rpx;
+  padding: 30rpx 32rpx;
+  border: 2rpx dashed #78cda6;
+  border-radius: 32rpx;
+  background: rgba(255, 255, 255, .62);
+}
+.account-index-page .account-add-card-plus {
+  width: 74rpx;
+  height: 74rpx;
+  margin-right: 26rpx;
+  color: #10ad75;
+  background: #e4f7ee;
+  font-size: 48rpx;
+}
+.account-index-page .account-add-card-title {
+  display: block;
+  color: #15241c;
+  font-size: 34rpx;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.account-index-page .account-add-card .muted {
+  margin-top: 12rpx;
+  color: #78857e;
+  font-size: 25rpx;
+  line-height: 1.1;
+}
