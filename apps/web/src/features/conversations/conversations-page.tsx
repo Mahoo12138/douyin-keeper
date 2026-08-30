@@ -3,12 +3,13 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { Link } from '@tanstack/react-router'
 import { listConversations, listTasks, requestPlatformConversationArchive, setConversationArchived, syncAccountConversations, type components, updateFriend, updateTask } from '@douyin-keeper/sdk-ts'
 import { Avatar, AvatarFallback, AvatarImage, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@douyin-keeper/ui-web'
-import { Archive, ArchiveRestore, CloudCog, Filter, MessageCircle, RefreshCw, Search, Settings2, Smartphone, X } from 'lucide-react'
+import { Archive, ArchiveRestore, Clock3, CloudCog, Filter, MessageCircle, RefreshCw, Search, Settings2, Smartphone, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { getToken } from '@/auth/session'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { SelectField } from '@/components/select-field'
+import { jobErrorMessageFromError } from '@/lib/job-error-message'
 import { waitForJobEvents } from '@/lib/job-progress'
 import { canSyncFriends } from '../accounts/account-detail-utils'
 import { useAccountsQuery } from '../accounts/use-accounts-query'
@@ -59,19 +60,18 @@ export function ConversationsPage() {
     onSuccess: async () => { await Promise.all([queryClient.invalidateQueries({ queryKey: ['conversations', accountId] }), queryClient.invalidateQueries({ queryKey: ['accounts'] })]); toast.success('会话同步完成') },
     onError: async (error) => {
       await queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      const code = error instanceof Error ? error.message : ''
-      toast.error(code === 'SESSION_EXPIRED' ? '当前账号登录状态已过期，请重新登录后再同步会话' : code || '会话同步失败')
+      toast.error(jobErrorMessageFromError(error, '会话同步失败，请确认账号登录状态后重试。'))
     },
   })
   const archiveMutation = useMutation({
     mutationFn: ({ conversationId, archived }: { conversationId: string; archived: boolean }) => setConversationArchived(token as string, accountId as string, conversationId, archived),
     onSuccess: (updated) => { void queryClient.invalidateQueries({ queryKey: ['conversations', accountId] }); toast.success(updated.archived ? '会话已归档' : '会话已恢复') },
-    onError: (error) => toast.error(error instanceof Error ? error.message : '更新会话归档状态失败'),
+    onError: (error) => toast.error(jobErrorMessageFromError(error, '更新会话归档状态失败，请稍后再试。')),
   })
   const platformArchiveMutation = useMutation({
     mutationFn: ({ conversationId, archived, idempotencyKey }: { conversationId: string; archived: boolean; idempotencyKey: IdempotencyKey }) => requestPlatformConversationArchive(token as string, accountId as string, conversationId, archived, idempotencyKey),
     onSuccess: () => { setPlatformArchiveTarget(null); toast.success('平台归档任务已提交，等待后台与适配器确认') },
-    onError: (error) => toast.error(error instanceof Error ? error.message : '提交平台归档任务失败；平台状态未改变'),
+    onError: (error) => toast.error(jobErrorMessageFromError(error, '提交平台归档任务失败，平台状态未改变。请稍后再试。')),
   })
 
   function selectAccount(nextAccountId: string) {
@@ -93,7 +93,7 @@ export function ConversationsPage() {
       await queryClient.invalidateQueries({ queryKey: ['conversations', accountId] })
       toast.success(enabled ? '已开启火花维护' : '已关闭火花维护')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '更新火花状态失败')
+      toast.error(jobErrorMessageFromError(error, '更新火花状态失败，请稍后再试。'))
     } finally {
       setPendingFriendId(null)
     }
@@ -146,7 +146,10 @@ export function ConversationsPage() {
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div><p className="text-sm font-medium text-primary">M2 · 关系管理</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">会话</h1><p className="mt-1 text-sm text-muted-foreground">好友与群聊统一维护火花；数据全部来自抖音消息面板。</p></div>
-        <Button variant="outline" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending || !accountId || !canSyncFriends(selectedAccount)} title={!canSyncFriends(selectedAccount) ? '请重新登录后再同步会话' : undefined}><RefreshCw className={syncMutation.isPending ? 'animate-spin' : undefined} />{syncMutation.isPending ? '同步中…' : '同步会话'}</Button>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <Button variant="outline" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending || !accountId || !canSyncFriends(selectedAccount)} title={!canSyncFriends(selectedAccount) ? '请重新登录后再同步会话' : undefined}><RefreshCw className={syncMutation.isPending ? 'animate-spin' : undefined} />{syncMutation.isPending ? '同步中…' : '同步会话'}</Button>
+          <p className="flex items-center gap-1.5 text-xs tabular-nums text-muted-foreground" aria-live="polite"><Clock3 className="size-3.5" />上次成功同步：{formatDate(selectedAccount?.last_friend_sync_at)}</p>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-4"><SummaryCard label="当前账号" value={selectedAccount?.nickname || '未命名账号'} /><SummaryCard label="会话总数" value={sessionCount} /><SummaryCard label="已开启火花" value={friends.filter((friend) => friend.spark_enabled).length} /><SummaryCard label="已归档" value={archivedCount} /></div>

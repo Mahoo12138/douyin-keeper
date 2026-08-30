@@ -1,19 +1,36 @@
-import type { Friend } from './task-types'
+import type { Conversation } from '../conversations/conversation-pagination'
 
-export function selectableTaskConversations(conversations: Friend[], currentConversationId?: string) {
-  // A peer may have multiple platform conversation rows,
-  // but the task contract targets one stable friend projection.
-  const seenFriendIds = new Set<string>()
+export function selectableTaskConversations(conversations: Conversation[], currentConversationId?: string) {
+  const seenTargetKeys = new Set<string>()
   return conversations.filter((conversation) => {
-    if (seenFriendIds.has(conversation.id)) return false
+    const targetKey = conversation.friend_id ?? conversation.id
+    if (seenTargetKeys.has(targetKey)) return false
     const selectable = conversation.id === currentConversationId
       || (
-        conversation.has_conversation
+        conversation.spark_supported
         && conversation.spark_enabled
-        && conversation.platform_identity_status === 'resolved'
+        && !conversation.archived
       )
     if (!selectable) return false
-    seenFriendIds.add(conversation.id)
+    seenTargetKeys.add(targetKey)
     return true
+  })
+}
+
+export function taskConversationOptions(conversations: Conversation[]) {
+  const counts = new Map<string, number>()
+  conversations.forEach((conversation) => {
+    const label = conversation.friend_nickname || conversation.friend_display_name || '未命名会话'
+    counts.set(label, (counts.get(label) ?? 0) + 1)
+  })
+  const indexes = new Map<string, number>()
+  return conversations.map((conversation) => {
+    const label = conversation.friend_nickname || conversation.friend_display_name || '未命名会话'
+    const index = (indexes.get(label) ?? 0) + 1
+    indexes.set(label, index)
+    return {
+      value: conversation.id,
+      label: (counts.get(label) ?? 0) > 1 ? `${label} · 会话 ${index}` : label,
+    }
   })
 }

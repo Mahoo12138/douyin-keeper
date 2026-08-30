@@ -43,6 +43,7 @@ func TestConversationSyncIsIdempotentAndPreservesLocalState(t *testing.T) {
 	streakDays := 27
 	streakActivatedToday := true
 	item := conversation.SyncItem{
+		PlatformComponentKey:   platformConversationID,
 		PlatformConversationID: platformConversationID,
 		PlatformUserID:         platformUserID,
 		DisplayName:            "初始昵称",
@@ -52,11 +53,22 @@ func TestConversationSyncIsIdempotentAndPreservesLocalState(t *testing.T) {
 	}
 	duplicate := item
 	duplicate.PlatformConversationID = "conversation-sync-duplicate-" + uuid.NewString()
+	duplicate.PlatformComponentKey = duplicate.PlatformConversationID
 	duplicate.DisplayName = ""
 	if err := tx.WithinTx(ctx, func(tctx context.Context) error {
 		return conversations.SyncBatch(tctx, acct.ID, []conversation.SyncItem{item, duplicate}, syncAt)
 	}); err != nil {
 		t.Fatal(err)
+	}
+	var storedComponentKey string
+	if err := pool.QueryRow(ctx, `
+		SELECT platform_component_key
+		FROM conversations
+		WHERE account_id=$1 AND platform_conversation_id=$2`, acct.ID, platformConversationID).Scan(&storedComponentKey); err != nil {
+		t.Fatal(err)
+	}
+	if storedComponentKey != platformConversationID {
+		t.Fatalf("stored component key = %q, want %q", storedComponentKey, platformConversationID)
 	}
 
 	friendItems, err := friends.ListByAccountOwned(ctx, userID, acct.PublicID)
@@ -71,6 +83,7 @@ func TestConversationSyncIsIdempotentAndPreservesLocalState(t *testing.T) {
 	// snapshot so task/send routing never depends on a separate friend crawl.
 	unknownItem := item
 	unknownItem.PlatformConversationID = "conversation-chat-only-" + uuid.NewString()
+	unknownItem.PlatformComponentKey = unknownItem.PlatformConversationID
 	unknownItem.PlatformUserID = "chat-only-" + uuid.NewString()
 	if err := tx.WithinTx(ctx, func(tctx context.Context) error {
 		return conversations.SyncBatch(tctx, acct.ID, []conversation.SyncItem{unknownItem}, syncAt)
@@ -86,6 +99,7 @@ func TestConversationSyncIsIdempotentAndPreservesLocalState(t *testing.T) {
 		DisplayName:            "测试群聊",
 		ConversationType:       "group",
 	}
+	groupItem.PlatformComponentKey = groupItem.PlatformConversationID
 	if err := tx.WithinTx(ctx, func(tctx context.Context) error {
 		return conversations.SyncBatch(tctx, acct.ID, []conversation.SyncItem{groupItem}, syncAt)
 	}); err != nil {
@@ -93,6 +107,7 @@ func TestConversationSyncIsIdempotentAndPreservesLocalState(t *testing.T) {
 	}
 	staleGroup := groupItem
 	staleGroup.PlatformConversationID = "0:2:stale-" + uuid.NewString()
+	staleGroup.PlatformComponentKey = staleGroup.PlatformConversationID
 	if err := tx.WithinTx(ctx, func(tctx context.Context) error {
 		return conversations.SyncBatch(tctx, acct.ID, []conversation.SyncItem{staleGroup}, syncAt)
 	}); err != nil {
@@ -193,6 +208,7 @@ func TestConversationSyncDefaultsMaintenanceForNewStreakAndPreservesUserChoice(t
 		PlatformUserID:         platformUserID,
 		DisplayName:            "已有火花会话",
 	}
+	item.PlatformComponentKey = item.PlatformConversationID
 	if err := tx.WithinTx(ctx, func(tctx context.Context) error {
 		return conversations.SyncBatch(tctx, acct.ID, []conversation.SyncItem{item}, time.Now().UTC())
 	}); err != nil {

@@ -104,9 +104,9 @@ export function GlobalHeader() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">{displayName}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">{identityQ.data?.role === 'admin' ? '管理员' : '普通用户'}</p>
-                    <DropdownMenuItem asChild className="mt-3 min-h-0 rounded-xl border border-primary/15 bg-background/80 p-0 hover:bg-background focus:bg-background"><Link to="/entitlement" className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left"><span className="min-w-0"><span className="flex items-center gap-1.5 text-xs font-medium"><span className={`size-1.5 rounded-full ${entitlementQ.data?.active ? 'bg-emerald-500' : 'bg-amber-500'}`} />{entitlementQ.data?.active ? '权益有效' : '未激活权益'}</span><span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{entitlementLabel}</span></span><ChevronRight className="size-3.5 shrink-0 text-muted-foreground" /></Link></DropdownMenuItem>
                   </div>
                 </div>
+                <DropdownMenuItem asChild className="mt-3 min-h-0 w-full rounded-xl border border-primary/15 bg-background/80 p-0 hover:bg-background focus:bg-background"><Link to="/entitlement" className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left"><span className="min-w-0"><span className="flex items-center gap-1.5 text-xs font-medium"><span className={`size-1.5 rounded-full ${entitlementQ.data?.active ? 'bg-emerald-500' : 'bg-amber-500'}`} />{entitlementQ.data?.active ? '权益有效' : '未激活权益'}</span><span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{entitlementLabel}</span></span><ChevronRight className="size-3.5 shrink-0 text-muted-foreground" /></Link></DropdownMenuItem>
               </div>
               <DropdownMenuLabel className="px-4 pb-1 pt-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">工作区</DropdownMenuLabel>
               <DropdownMenuGroup className="px-2 pb-2">

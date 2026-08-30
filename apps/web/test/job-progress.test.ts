@@ -4,9 +4,10 @@ import assert from 'node:assert/strict'
 import { getTerminalJobError } from '../src/lib/job-progress'
 import { waitForJobEvents } from '../src/lib/job-progress'
 
-test('maps terminal job errors to stable error-code messages', () => {
+test('maps terminal job errors to readable recovery messages', () => {
   const error = getTerminalJobError({ seq: 3, event_type: 'error', payload: { code: 'SESSION_EXPIRED' } })
-  assert.equal(error?.message, 'SESSION_EXPIRED')
+  assert.match(error?.message ?? '', /重新登录/)
+  assert.doesNotMatch(error?.message ?? '', /SESSION_EXPIRED/)
   assert.equal(getTerminalJobError({ seq: 4, event_type: 'started', payload: {} }), null)
 })
 

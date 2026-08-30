@@ -4,6 +4,7 @@ import { listNotifications, markAllNotificationsRead, markNotificationRead, type
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@douyin-keeper/ui-web'
 
 import { getToken } from '@/auth/session'
+import { userFacingNotificationBody } from '@/lib/job-error-message'
 import { flattenPageItems } from '@/lib/query-utils'
 
 type Notification = components['schemas']['Notification']
@@ -35,7 +36,7 @@ export function NotificationsPage() {
 function NotificationItem({ item, pending, onMarkRead }: { item: Notification; pending: boolean; onMarkRead: (id: string) => void }) {
   const unread = item.read_at === null
   const Icon = item.priority === 'critical' ? ShieldAlert : item.priority === 'warning' ? CircleAlert : Info
-  return <Card className={unread ? 'border-primary/30 bg-primary/[0.02]' : ''}><CardContent className="flex items-start gap-4 p-5"><div className={`mt-0.5 rounded-lg p-2 ${item.priority === 'critical' ? 'bg-destructive/10 text-destructive' : item.priority === 'warning' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400' : 'bg-muted text-muted-foreground'}`}><Icon className="size-4" /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="font-medium">{item.title}</h2>{unread && <Badge variant="default" className="px-1.5 py-0 text-[10px]">未读</Badge>}</div><p className="mt-1 text-sm leading-6 text-muted-foreground">{item.body}</p><p className="mt-2 text-xs text-muted-foreground">{formatDate(item.created_at)}</p></div>{unread && <Button variant="ghost" size="sm" className="shrink-0" disabled={pending} onClick={() => onMarkRead(item.id)}><Check />{pending ? '处理中…' : '标为已读'}</Button>}</CardContent></Card>
+  return <Card className={unread ? 'border-primary/30 bg-primary/[0.02]' : ''}><CardContent className="flex items-start gap-4 p-5"><div className={`mt-0.5 rounded-lg p-2 ${item.priority === 'critical' ? 'bg-destructive/10 text-destructive' : item.priority === 'warning' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400' : 'bg-muted text-muted-foreground'}`}><Icon className="size-4" /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="font-medium">{item.title}</h2>{unread && <Badge variant="default" className="px-1.5 py-0 text-[10px]">未读</Badge>}</div><p className="mt-1 text-sm leading-6 text-muted-foreground">{userFacingNotificationBody(item.body)}</p><p className="mt-2 text-xs text-muted-foreground">{formatDate(item.created_at)}</p></div>{unread && <Button variant="ghost" size="sm" className="shrink-0" disabled={pending} onClick={() => onMarkRead(item.id)}><Check />{pending ? '处理中…' : '标为已读'}</Button>}</CardContent></Card>
 }
 
 function NotificationLoading() {

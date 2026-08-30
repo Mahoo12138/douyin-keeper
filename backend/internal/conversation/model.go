@@ -49,6 +49,7 @@ type ListPage struct {
 // Platform IDs are the only identity keys; display names are refreshed for
 // presentation only.
 type SyncItem struct {
+	PlatformComponentKey   string
 	PlatformConversationID string
 	PlatformUserID         string
 	DisplayName            string

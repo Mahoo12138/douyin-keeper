@@ -1,11 +1,12 @@
 import { getJob, streamJobEvents, type JobEventEnvelope } from '@douyin-keeper/sdk-ts'
+import { jobErrorMessage } from './job-error-message'
 
 const defaultJobTimeoutMs = 120_000
 
 export function getTerminalJobError(event: JobEventEnvelope) {
   if (event.event_type !== 'error' && event.event_type !== 'cancelled') return null
   const code = typeof event.payload.code === 'string' ? event.payload.code : ''
-  if (code) return new Error(code)
+  if (code) return new Error(jobErrorMessage(code))
   return new Error(event.event_type === 'cancelled' ? '任务已取消' : '任务执行失败')
 }
 
@@ -34,7 +35,7 @@ export function waitForJobEvents(accessToken: string, jobId: string, timeoutMs =
           return
         }
         if (job.status === 'failed') {
-          settle(new Error(job.error_code ?? '任务执行失败'))
+          settle(new Error(jobErrorMessage(job.error_code)))
           return
         }
         if (job.status === 'cancelled') {

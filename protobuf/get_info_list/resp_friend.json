@@ -1,0 +1,352 @@
+{
+  "1": 610,
+  "2": 12189,
+  "3": 0,
+  "4": "OK",
+  "5": 0,
+  "6": {
+    "610": {
+      "1": {
+        "1": "0:1:106337616074:1412192206591501",
+        "2": "7561872239881224704",
+        "3": 1,
+        "4": "1laWxwIOwRJOwVmkdm56Hkam5YDfl38A9Wf5uFmDJaWTEKsMId0ChEwnO98Gollw4meQH4hIXNGtcZuPgMZaLpNlIae1V0vbeMFGimBOd0t2Ux97qZR98BVse",
+        "6": {
+          "1": [
+            {
+              "1": 106337616074,
+              "5": "MS4wLjABAAAAQqSkdC8D81UBKf8iRwCSpVMvQS0TL2dylM1lDdTSh0w"
+            },
+            {
+              "1": 1412192206591501,
+              "5": "MS4wLjABAAAA_RAmhKsMAuMR_bG4J0tjY-RyiSEcnqifK6agqf0WmvTKal-Ea7rvvawJ4d99YR4D"
+            }
+          ],
+          "2": 0
+        },
+        "7": 2,
+        "8": 1,
+        "10": 81706,
+        "50": {
+          "1": "0:1:106337616074:1412192206591501",
+          "2": "7561872239881224704",
+          "3": 1,
+          "4": 1772537084,
+          "5": "0x",
+          "6": "0x",
+          "7": "0x",
+          "8": 0,
+          "9": "0x",
+          "11": [
+            {
+              "1": "a:invitation_card_sent",
+              "2": "0x"
+            },
+            {
+              "1": "a:hit_unfollowed_familiar_msg_test",
+              "2": "1"
+            },
+            {
+              "1": "a:chat_theme",
+              "2": "c|0:1:106337616074:1412192206591501~default~1763472763"
+            },
+            {
+              "1": "a:consecutive_level",
+              "2": "normal"
+            },
+            {
+              "1": "a:achieve_task",
+              "2": "{\"action\":\"pull\",\"version\":1788035387}"
+            },
+            {
+              "1": "a:pet_elf_parenting",
+              "2": "{\"stage\":1,\"is_max\":false,\"pet_id\":101,\"card_info\":{\"1412192206591501\":{\"msg_id\":7563708840602584602,\"msg_id_str\":\"7563708840602584602\",\"pet_id\":101,\"create_time\":1761063204,\"invite_pet\":false,\"task_info\":null}},\"version\":1788035387,\"accept_msg_id\":7563708898000848418,\"set_default_stage_notice_ts\":{\"106337616074\":1763958094,\"1412192206591501\":1763311293},\"fe_achieve_update_time\":1763958115326,\"server_achieve_update_time\":1763958116365,\"accept_msg_id_str\":\"7563708898000848418\",\"incubate\":0,\"is_new_api\":1}"
+            },
+            {
+              "1": "a:pet_v2_feed_info",
+              "2": "1787555099"
+            },
+            {
+              "1": "a:pet_v2_current_image",
+              "2": "1786898469"
+            },
+            {
+              "1": "a:flame_props_version",
+              "2": "1765038294512"
+            },
+            {
+              "1": "a:freq_scene",
+              "2": "{\"scene\":\"c2c\",\"c2c_meta\":{\"status\":4,\"userId\":106337616074,\"serOpCnt\":0,\"notice_float\":false,\"text_msg_num\":0}}"
+            },
+            {
+              "1": "a:pet_elf_ids",
+              "2": "[101]"
+            },
+            {
+              "1": "a:elf_sticker_version",
+              "2": "100005"
+            },
+            {
+              "1": "a:pet_v2_closeness",
+              "2": "1787972397"
+            },
+            {
+              "1": "a:consecutive_chat_level",
+              "2": "normal"
+            },
+            {
+              "1": "a:relation_flame_inviting",
+              "2": "0x"
+            },
+            {
+              "1": "a:consecutive_chat_data",
+              "2": "{\"expire_time\":1788278400,\"can_recover_days\":3,\"flame_infos\":[{\"days\":305,\"start\":1788035377,\"end\":1788105600,\"level\":\"normal|couple\",\"text\":\"305\",\"state\":1,\"simplify_text\":\"305\",\"real_days\":305},{\"days\":305,\"start\":1788105600,\"end\":1788192000,\"level\":\"gray|couple\",\"text\":\"305\",\"state\":2,\"simplify_text\":\"305\",\"real_days\":305},{\"days\":305,\"start\":1788192000,\"end\":1788278400,\"level\":\"to_recover|couple\",\"text\":\"6 天后消失\",\"state\":3,\"recover_days\":1,\"recover_need_days\":3,\"text_styles\":[\"label\"],\"simplify_text\":\"待重燃\",\"recover_ddl\":6,\"real_days\":305},{\"days\":305,\"start\":1788278400,\"end\":1788364800,\"level\":\"to_recover|couple\",\"text\":\"5 天后消失\",\"state\":3,\"recover_days\":1,\"recover_need_days\":3,\"text_styles\":[\"label\"],\"simplify_text\":\"待重燃\",\"recover_ddl\":5,\"real_days\":305},{\"days\":305,\"start\":1788364800,\"end\":1788451200,\"level\":\"to_recover|couple\",\"text\":\"4 天后消失\",\"state\":3,\"recover_days\":1,\"recover_need_days\":3,\"text_styles\":[\"label\"],\"simplify_text\":\"待重燃\",\"recover_ddl\":4,\"real_days\":305},{\"days\":305,\"start\":1788451200,\"end\":1788537600,\"level\":\"to_recover|couple\",\"text\":\"3 天后消失\",\"state\":3,\"recover_days\":1,\"recover_need_days\":3,\"text_styles\":[\"label\"],\"simplify_text\":\"待重燃\",\"recover_ddl\":3,\"real_days\":305},{\"days\":305,\"start\":1788537600,\"end\":1788624000,\"level\":\"to_recover|couple\",\"text\":\"2 天后消失\",\"state\":3,\"recover_days\":1,\"recover_need_days\":3,\"text_styles\":[\"label\"],\"simplify_text\":\"待重燃\",\"recover_ddl\":2,\"real_days\":305},{\"days\":305,\"start\":1788624000,\"end\":1788710400,\"level\":\"to_recover|couple\",\"text\":\"1 天后消失\",\"state\":3,\"recover_days\":1,\"recover_need_days\":3,\"text_styles\":[\"label\"],\"simplify_text\":\"待重燃\",\"recover_ddl\":1,\"real_days\":305}],\"consecutive_count_info\":{\"consecutive_count\":305,\"expire_time\":1788192000},\"consecutive_relation_info\":{\"type\":\"couple\",\"create_time\":1770695964},\"update_time_ms\":1788035387215,\"trust_server\":1788035387,\"rcov_d\":3}"
+            },
+            {
+              "1": "a:pet_v2_deploy_status",
+              "2": "1785888956"
+            },
+            {
+              "1": "a:achieve_version",
+              "2": "1788035387"
+            },
+            {
+              "1": "a:consecutive_chat_level_new",
+              "2": "normal"
+            },
+            {
+              "1": "a:consecutive_chat",
+              "2": "305:1788035377:1788192000:1:1"
+            },
+            {
+              "1": "a:pet_v2_spark",
+              "2": "1787651183"
+            },
+            {
+              "1": "a:pet_v2_side_tag",
+              "2": "1787287804"
+            }
+          ],
+          "12": 1412192206591501,
+          "13": "MS4wLjABAAAA_RAmhKsMAuMR_bG4J0tjY-RyiSEcnqifK6agqf0WmvTKal-Ea7rvvawJ4d99YR4D",
+          "14": 0,
+          "15": 0,
+          "16": 0,
+          "17": 1412192206591501,
+          "18": 1760635617,
+          "40": 1,
+          "41": 0,
+          "42": [
+            {
+              "1": "a:pet_v2_side_tag",
+              "2": 1787287804640
+            },
+            {
+              "1": "a:pet_v2_spark",
+              "2": 1787651184007
+            },
+            {
+              "1": "a:relation_flame_inviting",
+              "2": 1788039059001
+            },
+            {
+              "1": "a:consecutive_chat_level",
+              "2": 1788035387706
+            },
+            {
+              "1": "a:pet_v2_closeness",
+              "2": 1787972398050
+            },
+            {
+              "1": "a:consecutive_chat",
+              "2": 1788035387706
+            },
+            {
+              "1": "a:consecutive_chat_level_new",
+              "2": 1788035387706
+            },
+            {
+              "1": "a:achieve_version",
+              "2": 1788035387706
+            },
+            {
+              "1": "a:pet_v2_deploy_status",
+              "2": 1785888956395
+            },
+            {
+              "1": "a:consecutive_chat_data",
+              "2": 1788035387706
+            },
+            {
+              "1": "a:freq_scene",
+              "2": 1788039059003
+            },
+            {
+              "1": "a:flame_props_version",
+              "2": 1765038294515
+            },
+            {
+              "1": "a:elf_sticker_version",
+              "2": 1777010320676
+            },
+            {
+              "1": "a:pet_elf_ids",
+              "2": 1788039059002
+            },
+            {
+              "1": "a:chat_theme",
+              "2": 1788039059003
+            },
+            {
+              "1": "a:hit_unfollowed_familiar_msg_test",
+              "2": 1788039059003
+            },
+            {
+              "1": "a:invitation_card_sent",
+              "2": 1788039059001
+            },
+            {
+              "1": "a:pet_v2_current_image",
+              "2": 1786898469173
+            },
+            {
+              "1": "a:pet_v2_feed_info",
+              "2": 1787555099095
+            },
+            {
+              "1": "a:pet_elf_parenting",
+              "2": 1788039059002
+            },
+            {
+              "1": "a:achieve_task",
+              "2": 1788035387870
+            },
+            {
+              "1": "a:consecutive_level",
+              "2": 1788035387706
+            }
+          ],
+          "43": 1,
+          "47": 0
+        },
+        "51": {
+          "1": "0:1:106337616074:1412192206591501",
+          "2": "7561872239881224704",
+          "3": 1,
+          "4": 0,
+          "5": 1672504015820000,
+          "6": 0,
+          "7": 1,
+          "8": 0,
+          "9": [
+            {
+              "1": "a:cell_sort_time",
+              "2": "1764696974"
+            },
+            {
+              "1": "s:mark_invisible_time",
+              "2": "1764329210"
+            },
+            {
+              "1": "has_accepted_opposite_message",
+              "2": "1"
+            },
+            {
+              "1": "a:chat_theme_write_version",
+              "2": "390600"
+            },
+            {
+              "1": "a:chat_theme",
+              "2": "u|0:1:106337616074:1412192206591501|106337616074~default~1784481803"
+            },
+            {
+              "1": "a:background_pictures_msg_v2",
+              "2": "0x"
+            },
+            {
+              "1": "a:msg_reaction_read_status",
+              "2": "0"
+            },
+            {
+              "1": "a:show_empty_conv",
+              "2": "1"
+            },
+            {
+              "1": "a:once_view_btn_image",
+              "2": "0"
+            }
+          ],
+          "10": 1784481804,
+          "11": 0,
+          "12": 1765387181112,
+          "13": 0,
+          "14": 161582,
+          "15": 0,
+          "16": 81706,
+          "17": {
+            "1": 50,
+            "2": 0
+          },
+          "32": [
+            {
+              "1": "a:once_view_btn_image",
+              "2": 1788039059009
+            },
+            {
+              "1": "a:background_pictures_msg_v2",
+              "2": 1788039059011
+            },
+            {
+              "1": "a:chat_theme",
+              "2": 1788039059011
+            },
+            {
+              "1": "a:chat_theme_write_version",
+              "2": 1788039059011
+            },
+            {
+              "1": "has_accepted_opposite_message",
+              "2": 1788039059011
+            },
+            {
+              "1": "s:mark_invisible_time",
+              "2": 1788039059011
+            },
+            {
+              "1": "a:cell_sort_time",
+              "2": 1788039059009
+            },
+            {
+              "1": "a:show_empty_conv",
+              "2": 1788039059009
+            },
+            {
+              "1": "a:msg_reaction_read_status",
+              "2": 1788039059009
+            }
+          ],
+          "33": 1
+        },
+        "60": {
+          "1": 3798190085666864,
+          "2": "MS4wLjABAAAAONTQkOGSKLAsNPBwRlMHigDutlGjRZfg6KVwv0hGGIks9DgiMENLXP91yJ6mMltX",
+          "3": 1,
+          "99": [
+            {
+              "1": "a:bot_perm",
+              "2": "1"
+            },
+            {
+              "1": "a:bot_type",
+              "2": "3"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "7": "202608300530588DC9D191D6E83D283140",
+  "10": 1788039058957,
+  "11": 1788039059035,
+  "13": 106337616074
+}

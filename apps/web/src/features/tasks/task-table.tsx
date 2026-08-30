@@ -1,12 +1,13 @@
 import { Badge, Button, Switch, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@douyin-keeper/ui-web'
 import { Play, Settings2, Trash2 } from 'lucide-react'
 
-import type { Account, Friend, Task } from './task-types'
+import type { Conversation } from '../conversations/conversation-pagination'
+import type { Account, Task } from './task-types'
 
 export function TaskTable({
   tasks,
   accounts,
-  friends,
+  conversations,
   busyTaskId,
   onToggle,
   onEdit,
@@ -15,7 +16,7 @@ export function TaskTable({
 }: {
   tasks: Task[]
   accounts: Account[]
-  friends: Map<string, Friend>
+  conversations: Map<string, Conversation>
   busyTaskId: string | null
   onToggle: (task: Task, enabled: boolean) => void
   onEdit: (task: Task) => void
@@ -37,19 +38,15 @@ export function TaskTable({
       <TableBody>
         {tasks.map((task) => {
           const account = accounts.find((item) => item.id === task.account_id)
-          const friend = friends.get(task.friend_id)
+          const conversation = conversations.get(task.friend_id)
           const busy = busyTaskId === task.id
-          const identityLabel = friend?.platform_identity_status === 'resolved'
-            ? '身份已确认'
-            : friend?.short_id
-              ? `抖音号 ${friend.short_id}`
-              : '身份信息待同步'
+          const conversationTypeLabel = conversation?.conversation_type === 'group' ? '群聊会话' : '直接会话'
           return (
             <TableRow key={task.id}>
               <TableCell className="pl-5">
                 <div className="min-w-[155px]">
-                  <div className="font-medium">{friend?.nickname || friend?.display_name || '会话'}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{identityLabel}</div>
+                  <div className="font-medium">{conversation?.friend_nickname || conversation?.friend_display_name || '会话'}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{conversationTypeLabel}</div>
                 </div>
               </TableCell>
               <TableCell className="whitespace-nowrap text-sm">{account?.nickname || '账号'}</TableCell>
@@ -59,12 +56,11 @@ export function TaskTable({
               </TableCell>
               <TableCell className="max-w-[220px]">
                 <div className="truncate text-sm">{task.message.body || (task.message.kind === 'sticker' ? '贴纸消息' : '未填写内容')}</div>
-                {task.allow_first_message && <div className="mt-1 text-xs text-amber-600">允许首聊</div>}
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2 whitespace-nowrap">
                   <Badge variant={task.enabled ? 'success' : 'muted'}>{task.enabled ? '每日启用' : '已停用'}</Badge>
-                  <Switch checked={task.enabled} disabled={busy} onCheckedChange={(enabled) => onToggle(task, enabled)} aria-label={`${friend?.nickname || '会话'}任务开关`} />
+                  <Switch checked={task.enabled} disabled={busy} onCheckedChange={(enabled) => onToggle(task, enabled)} aria-label={`${conversation?.friend_nickname || conversation?.friend_display_name || '会话'}任务开关`} />
                 </div>
               </TableCell>
               <TableCell className="pr-5">
@@ -75,7 +71,7 @@ export function TaskTable({
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => onRun(task)} disabled={busy}>
                     <Play />
-                    立即执行
+                    {busy ? '发送中…' : '立即执行'}
                   </Button>
                   <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => onDelete(task)} disabled={busy}>
                     <Trash2 />

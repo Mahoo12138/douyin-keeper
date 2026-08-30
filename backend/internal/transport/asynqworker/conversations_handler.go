@@ -29,6 +29,7 @@ type conversationsListResult struct {
 }
 
 type conversationListItem struct {
+	PlatformComponentKey   string  `json:"platform_component_key"`
 	PlatformConversationID string  `json:"platform_conversation_id"`
 	PlatformUserID         string  `json:"peer_platform_user_id"`
 	DisplayName            string  `json:"peer_display_name"`
@@ -115,6 +116,10 @@ func conversationsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(
 		// conversation inventory; direct/group is only metadata used by routing
 		// and presentation, never a separate crawl path.
 		groupOnly := false
+		selfPlatformUserID := ""
+		if acct.PlatformUserID != nil {
+			selfPlatformUserID = strings.TrimSpace(*acct.PlatformUserID)
+		}
 		err = deps.Sessions.WithTempFile(ctx, acct.ID, acct.UserPublicID, acct.PublicID, func(path string) error {
 			for page := 0; page < maxConversationSyncPages; page++ {
 				if cancelled, err := cancelIfRequested(ctx, deps.Jobs, claimed, now); cancelled || err != nil {
@@ -127,6 +132,7 @@ func conversationsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(
 					Input: map[string]any{
 						"session": map[string]any{"kind": "playwright_storage_state_file", "path": path, "profile_dir": profileDir},
 						"cursor":  cursor, "limit": 100, "group_only": groupOnly,
+						"self_platform_user_id": selfPlatformUserID,
 					},
 				})
 				if callErr != nil {
@@ -197,7 +203,7 @@ func conversationsSyncHandler(loader PayloadLoader, deps SessionCheckDeps) func(
 		if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{EventType: "syncing", Payload: json.RawMessage(`{}`), CreatedAt: now()}); err != nil {
 			return err
 		}
-		if err := commitConversationSyncSuccess(ctx, deps.Tx, deps.Jobs, deps.Conversations, claimed, acct.ID, items, groupOnly, now); err != nil {
+		if err := commitConversationSyncSuccess(ctx, deps.Tx, deps.Jobs, deps.Conversations, deps.Accounts, claimed, acct.ID, items, groupOnly, now); err != nil {
 			logConversationSyncCommitFailure(err, len(items))
 			return fail(apperr.CodeInternal)
 		}
@@ -235,10 +241,18 @@ func filterConversationListItems(items []conversationListItem, groupOnly bool) [
 func normalizeConversationItems(items []conversationListItem, seen map[string]struct{}) ([]conversation.SyncItem, error) {
 	out := make([]conversation.SyncItem, 0, len(items))
 	for _, item := range items {
+		componentKey := strings.TrimSpace(item.PlatformComponentKey)
 		conversationID := strings.TrimSpace(item.PlatformConversationID)
 		platformUserID := strings.TrimSpace(item.PlatformUserID)
-		if conversationID == "" || len(conversationID) > 512 || len(platformUserID) > 256 {
+		if componentKey == "" || len(componentKey) > 512 || conversationID == "" || len(conversationID) > 512 || len(platformUserID) > 256 {
 			return nil, fmt.Errorf("conversation sync: stable platform ids are required")
+		}
+		if componentKey != conversationID {
+			return nil, fmt.Errorf("conversation sync: component key does not match response conversation id")
+		}
+		componentSeenKey := "component-key:" + componentKey
+		if _, exists := seen[componentSeenKey]; exists {
+			return nil, fmt.Errorf("conversation sync: duplicate component key")
 		}
 		if _, exists := seen[conversationID]; exists {
 			return nil, fmt.Errorf("conversation sync: duplicate conversation id")
@@ -272,11 +286,13 @@ func normalizeConversationItems(items []conversationListItem, seen map[string]st
 			lastMessageAt = &parsed
 		}
 		seen[conversationID] = struct{}{}
+		seen[componentSeenKey] = struct{}{}
 		displayName := []rune(strings.TrimSpace(item.DisplayName))
 		if len(displayName) > 128 {
 			displayName = displayName[:128]
 		}
 		out = append(out, conversation.SyncItem{
+			PlatformComponentKey:   componentKey,
 			PlatformConversationID: conversationID,
 			PlatformUserID:         platformUserID,
 			DisplayName:            string(displayName),
@@ -298,7 +314,11 @@ func normalizeAvatarURL(value string) string {
 	return value
 }
 
-func commitConversationSyncSuccess(ctx context.Context, tx job.TxManager, jobs job.Repository, conversations conversation.SyncRepository, claimed *job.Job, accountID int64, items []conversation.SyncItem, groupOnly bool, now func() time.Time) error {
+type conversationSyncAccountWriter interface {
+	SetLastFriendSyncAt(context.Context, int64, time.Time) error
+}
+
+func commitConversationSyncSuccess(ctx context.Context, tx job.TxManager, jobs job.Repository, conversations conversation.SyncRepository, accounts conversationSyncAccountWriter, claimed *job.Job, accountID int64, items []conversation.SyncItem, groupOnly bool, now func() time.Time) error {
 	return tx.WithinTx(ctx, func(tctx context.Context) error {
 		syncAt := now()
 		if err := jobs.Finish(tctx, claimed.ID, job.StatusSucceeded, nil, syncAt); err != nil {
@@ -313,6 +333,9 @@ func commitConversationSyncSuccess(ctx context.Context, tx job.TxManager, jobs j
 			syncErr = conversations.SyncBatch(tctx, accountID, items, syncAt)
 		}
 		if err := syncErr; err != nil {
+			return err
+		}
+		if err := accounts.SetLastFriendSyncAt(tctx, accountID, syncAt); err != nil {
 			return err
 		}
 		return jobs.AppendEvent(tctx, claimed.ID, job.JobEvent{EventType: "success", Payload: mustJSON(map[string]int{"count": len(items)}), CreatedAt: syncAt})

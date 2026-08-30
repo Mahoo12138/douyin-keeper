@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAuthenticatedPage } from "../auth-state.mjs";
 import { qrLoginState } from "../login-state.mjs";
@@ -11,27 +11,38 @@ import { smsLoginRequiresFreshContext } from "../login-state.mjs";
 import { smsLoginSurfaceState } from "../login-state.mjs";
 import { decodeProtobuf, summarizeProtobuf } from "../conversation-wire.mjs";
 import {
+  canonicalConversationComponentKey,
+  extractGetInfoListConversations,
+  selectGetInfoConversationForComponentKey,
+} from "../conversation-get-info.mjs";
+import {
   applyConversationHydrationCache,
   collectorItemsAfterSequence,
   conversationInventoryIdentityCount,
   conversationVerificationNeedsRescan,
   conversationRowHydrationKey,
+  directConversationUIDFromComponentKey,
   filterConversationRows,
+  filterSelfConversationInventory,
   filterStrangerConversationInventory,
   finalizeConversationInventory,
   identityRecordsMatchDisplayName,
   identityRecordsMatchPeer,
-  isMutualFriendRelationship,
+  isValidDirectConversationRelationship,
   mergeConversationInventoryCandidate,
+  recordDirectConversationValidation,
+  resolveDirectConversationPeer,
   missingConversationInventoryIndexes,
   selectConversationHydrationBatch,
   selectClickedConversationIdentity,
   selectClickedConversationIdentityFromSources,
+  selectProfileSceneRelationshipForUID,
   shouldRejectConversationInventoryReplacement,
 } from "../conversation-utils.mjs";
 import { scrollConversationListDOM } from "../conversation-scroll.mjs";
-import { clickConversationListRowByIndex } from "../conversation-click.mjs";
+import { clickConversationListRowByIdentity, clickConversationListRowByIndex, describeConversationListRowByIndex } from "../conversation-click.mjs";
 import { CHAT_URL, waitForConversationList } from "../conversation-route.mjs";
+import { sendTextAndConfirm } from "../message-send.mjs";
 import {
   classifyConversationStreakIconSource,
   collectJSONStreakCandidates,
@@ -187,6 +198,72 @@ test("protobuf wire decoder rejects truncated payloads", () => {
   assert.equal(decoded.ok, false);
 });
 
+test("get_info_list fixtures expose the clicked React key at 6.610.1.1", async () => {
+  const fixtureRoot = join(root, "..", "..", "protobuf", "get_info_list");
+  const friend = extractGetInfoListConversations(JSON.parse(await readFile(join(fixtureRoot, "resp_friend.json"), "utf8")));
+  const group1 = extractGetInfoListConversations(JSON.parse(await readFile(join(fixtureRoot, "resp_group_1.json"), "utf8")));
+  const group2 = extractGetInfoListConversations(JSON.parse(await readFile(join(fixtureRoot, "resp_group_2.json"), "utf8")));
+
+  assert.equal(friend[0].componentKey, "0:1:106337616074:1412192206591501");
+  assert.equal(friend[0].platformConversationID, friend[0].componentKey);
+  assert.equal(friend[0].conversationType, "direct");
+  assert.equal(friend[0].streakDays, 305);
+  assert.equal(friend[0].streakActivatedToday, true);
+  assert.equal(group1[0].componentKey, "7429291530512384562");
+  assert.deepEqual(group2[0], group1[0]);
+  assert.equal(group1[0].displayName, "抖音记事本");
+  assert.equal(group1[0].streakDays, null);
+});
+
+test("direct conversation identity keeps the row peer when get_info returns the signed-in account", () => {
+  const selfPlatformUserID = "signed-in-account-sec-uid";
+  assert.equal(resolveDirectConversationPeer({
+    domPeerPlatformUserID: "actual-peer-sec-uid",
+    getInfoPeerPlatformUserID: selfPlatformUserID,
+    selfPlatformUserID,
+  }), "actual-peer-sec-uid");
+  assert.equal(resolveDirectConversationPeer({
+    domPeerPlatformUserID: "stale-peer-sec-uid",
+    getInfoPeerPlatformUserID: "authoritative-peer-sec-uid",
+    selfPlatformUserID,
+  }), "authoritative-peer-sec-uid");
+});
+
+test("self conversations are excluded without dropping a key-bound group", () => {
+  const entries = [
+    ["index:8", { platform_conversation_id: "0:1:self", conversation_type: "direct", peer_platform_user_id: "signed-in-account-sec-uid" }],
+    ["index:9", { platform_conversation_id: "0:1:peer", conversation_type: "direct", peer_platform_user_id: "actual-peer-sec-uid" }],
+    ["index:10", { platform_component_key: "7429291530512384562", platform_conversation_id: "7429291530512384562", conversation_type: "group", peer_platform_user_id: null, peer_display_name: "抖音记事本" }],
+  ];
+  const filtered = filterSelfConversationInventory(entries, "signed-in-account-sec-uid");
+  assert.deepEqual(filtered.filtered.map(([key]) => key), ["index:8"]);
+  assert.deepEqual(filtered.kept.map(([, row]) => row.peer_display_name || row.platform_conversation_id), ["0:1:peer", "抖音记事本"]);
+});
+
+test("get_info_list correlation accepts two consistent group responses and rejects another key", () => {
+  const message = (key, type = "2") => ({
+    ok: true,
+    fields: [{ field: 6, kind: "message", fields: [{ field: 610, kind: "message", fields: [{
+      field: 1,
+      kind: "message",
+      fields: [
+        { field: 1, kind: "string", text: key },
+        { field: 3, kind: "varint", value: type },
+        { field: 50, kind: "message", fields: [{ field: 1, kind: "string", text: key }] },
+      ],
+    }] }] }],
+  });
+  const responses = [
+    { path: "/v2/conversation/get_info_list", decoded: message("7429291530512384562") },
+    { path: "/v2/conversation/get_info_list", decoded: message("7429291530512384562") },
+  ];
+  const selected = selectGetInfoConversationForComponentKey(responses, "7429291530512384562&#x20;");
+  assert.equal(selected.componentKey, "7429291530512384562");
+  assert.equal(selected.responseCount, 2);
+  assert.equal(selectGetInfoConversationForComponentKey(responses, "7429291530512389999"), null);
+  assert.equal(canonicalConversationComponentKey("7429291530512384562&#x20;"), "7429291530512384562");
+});
+
 test("group-only conversation scans exclude direct and unknown rows", () => {
   const rows = filterConversationRows([
     { platform_conversation_id: "0:1:direct", conversation_type: "direct" },
@@ -237,11 +314,44 @@ test("stranger endpoint identities are excluded from the final conversation inve
   ]);
 });
 
-test("profile-scene relationship status distinguishes mutual friends from strangers", () => {
-  assert.equal(isMutualFriendRelationship({ follow_status: "2", follower_status: "1" }), true);
-  assert.equal(isMutualFriendRelationship({ follow_status: "0", follower_status: "0" }), false);
-  assert.equal(isMutualFriendRelationship({ follow_status: "1", follower_status: "0" }), false);
-  assert.equal(isMutualFriendRelationship({}), null);
+test("direct React keys expose the exact profile-scene uid", () => {
+  assert.equal(directConversationUIDFromComponentKey("0:1:106337616074:3493570909832505"), "3493570909832505");
+  assert.equal(directConversationUIDFromComponentKey("0:1:106337616074:3493570909832505&#x20;"), "3493570909832505");
+  assert.equal(directConversationUIDFromComponentKey("7429291530512384562"), "");
+  assert.equal(directConversationUIDFromComponentKey("0:2:106337616074:3493570909832505"), "");
+});
+
+test("profile-scene relationship is bound only by the direct React-key uid", () => {
+  const records = [
+    { response_path: "/aweme/v1/web/user/profile/scene/", identity: { uid: "111", follow_status: "2" } },
+    { response_path: "/aweme/v1/web/user/profile/scene/", identity: { uid: "3493570909832505", follow_status: "0", follower_status: "1" } },
+    { response_path: "/v2/conversation/get_info_list", identity: { uid: "3493570909832505", follow_status: "2" } },
+  ];
+  const selected = selectProfileSceneRelationshipForUID(records, "3493570909832505");
+  assert.equal(selected.matched, true);
+  assert.equal(selected.recordCount, 1);
+  assert.deepEqual(selected.relationship, { follow_status: "0", follower_status: "1" });
+  assert.equal(selectProfileSceneRelationshipForUID(records, "222").matched, false);
+});
+
+test("only follow_status 2 is a valid direct conversation relationship", () => {
+  assert.equal(isValidDirectConversationRelationship({ follow_status: "2", follower_status: "0" }), true);
+  assert.equal(isValidDirectConversationRelationship({ follow_status: "0", follower_status: "1" }), false);
+  assert.equal(isValidDirectConversationRelationship({ follow_status: "1" }), false);
+  assert.equal(isValidDirectConversationRelationship({}), null);
+});
+
+test("an exact valid profile observation survives a later response-free rescan", () => {
+  const valid = new Set();
+  const invalid = new Set();
+  recordDirectConversationValidation(valid, invalid, "0:1:viewer:peer", false, {});
+  assert.deepEqual([...invalid], ["0:1:viewer:peer"]);
+  recordDirectConversationValidation(valid, invalid, "0:1:viewer:peer", true, { follow_status: "2" });
+  assert.deepEqual([...valid], ["0:1:viewer:peer"]);
+  assert.deepEqual([...invalid], []);
+  recordDirectConversationValidation(valid, invalid, "0:1:viewer:peer", false, {});
+  assert.deepEqual([...valid], ["0:1:viewer:peer"]);
+  assert.deepEqual([...invalid], []);
 });
 
 test("lower-confidence protobuf inventory cannot overwrite a clicked DOM conversation", () => {
@@ -454,6 +564,14 @@ test("a named conversation keeps one hydration identity when the virtual list re
   );
 });
 
+test("React component key is the hydration identity ahead of title and virtual index", () => {
+  assert.equal(conversationRowHydrationKey({
+    platform_component_key: "0:1:106337616074:1412192206591501",
+    data_index: "44",
+    peer_display_name: "会变化的昵称",
+  }), "component:0:1:106337616074:1412192206591501");
+});
+
 test("conversation completeness follows observed DOM slots instead of inventing contiguous indexes", () => {
   assert.deepEqual(
     missingConversationInventoryIndexes(new Set([0, 2, 3]), new Set(["index:0", "index:2", "index:3"])),
@@ -604,6 +722,84 @@ test("conversation row clicks stay inside the conversation list when chat messag
     assert.equal(clicked, true);
     assert.equal(state.conversation, true);
     assert.equal(state.message, false);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("conversation row inspection reads and canonicalizes the nearest React Fiber key", async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`
+      <div class="conversationConversationListwrapper">
+        <div data-index="7"><div class="conversationConversationItemwrapper"><span class="conversationConversationItemtitle">抖音记事本</span></div></div>
+      </div>`);
+    await page.locator('[data-index="7"]').evaluate((node) => {
+      const row = node.querySelector(".conversationConversationItemwrapper");
+      row.__reactFiber$fixture = { key: null, return: { key: "7429291530512384562&#x20;", return: null } };
+    });
+    const details = await describeConversationListRowByIndex(page, "7");
+    assert.equal(details.platform_component_key, "7429291530512384562");
+  } finally {
+    await browser.close();
+  }
+});
+
+test("send routing finds a numeric group conversation by its React Fiber key", async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`
+      <div class="conversationConversationListwrapper">
+        <div data-index="3">
+          <div class="conversationConversationItemwrapper" onclick="window.clickedGroup = true; window.clickedGroupTrusted = event.isTrusted">
+            <span class="conversationConversationItemtitle">疯狂星期</span>
+          </div>
+        </div>
+      </div>`);
+    await page.locator('[data-index="3"]').evaluate((node) => {
+      node.__reactFiber$fixture = { key: null, return: { key: "7429291530512384562&#x20;", return: null } };
+    });
+    const clicked = await clickConversationListRowByIdentity(page, "7429291530512384562");
+    const state = await page.evaluate(() => ({
+      clickedGroup: window.clickedGroup === true,
+      trusted: window.clickedGroupTrusted === true,
+    }));
+    assert.equal(clicked, true);
+    assert.equal(state.clickedGroup, true);
+    assert.equal(state.trusted, true);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("text sending confirms a new visible bubble when the editor submits with Enter", async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`
+      <div class="messageMessageListwrapper"><div class="TextMessageTextpureText">旧消息</div></div>
+      <div class="messageEditorinputArea" contenteditable="true"></div>
+      <script>
+        const editor = document.querySelector('[contenteditable="true"]');
+        editor.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          const bubble = document.createElement('span');
+          bubble.className = 'TextMessageTextpureText';
+          bubble.textContent = editor.textContent;
+          document.querySelector('.messageMessageListwrapper').append(bubble);
+          editor.textContent = '';
+        });
+      </script>
+    `);
+    const result = await sendTextAndConfirm(page, page.locator("[contenteditable='true']"), "测试发送");
+    assert.deepEqual(result, {
+      confirmed: true,
+      platform_message_id: "",
+      confirmation_source: "browser_visible_message",
+    });
   } finally {
     await browser.close();
   }

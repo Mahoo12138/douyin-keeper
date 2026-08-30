@@ -18,6 +18,11 @@ export async function listAllConversationsForAccount(token: string, accountId: s
   return items
 }
 
+/**
+ * Compatibility projection for the existing account-detail conversation tab.
+ * Task configuration must use Conversation directly so it never loses the
+ * platform conversation identity.
+ */
 export function conversationToFriend(item: Conversation): Friend {
   return {
     id: item.friend_id ?? item.id,

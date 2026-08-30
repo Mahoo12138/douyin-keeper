@@ -9,6 +9,7 @@ import { HistoryDetailDrawer } from './history-detail-drawer'
 import { friendOptionsFromFriends, listAllFriendsForAccount } from './history-utils'
 import { useAccountsQuery } from '../accounts/use-accounts-query'
 import { SelectField } from '@/components/select-field'
+import { jobErrorMessage } from '@/lib/job-error-message'
 
 type HistoryItem = components['schemas']['SendIntent']
 type HistoryStatus = HistoryItem['status']
@@ -82,7 +83,6 @@ export function HistoryPage() {
       item.task_id ?? '',
       item.task?.body ?? '',
       item.error_code ?? '',
-      item.latest_job?.adapter ?? '',
     ].some((value) => value.toLocaleLowerCase('zh-CN').includes(query)))
   }, [items, search])
   const successCount = items.filter((item) => item.status === 'succeeded').length
@@ -169,7 +169,7 @@ function HistoryFilters({ search, onSearch, account, onAccount, friend, onFriend
   friendsLoading: boolean
 }) {
   return <div className="grid gap-3 border-b pb-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.4fr)_repeat(2,minmax(140px,1fr))_repeat(2,minmax(135px,1fr))]">
-    <div className="space-y-1.5"><Label htmlFor="history-search">搜索记录</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="history-search" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="账号、好友、通道或错误码" className="pl-9" /></div></div>
+    <div className="space-y-1.5"><Label htmlFor="history-search">搜索记录</Label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="history-search" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="账号、会话或失败原因" className="pl-9" /></div></div>
     <HistorySelect id="history-account" label="账号" value={account} onChange={onAccount} options={[{ value: 'all', label: '全部账号' }, ...accounts.map((item) => ({ value: item.id, label: item.nickname || '未命名账号' }))]} />
     <HistorySelect id="history-friend" label="好友" value={friend} disabled={friendsLoading} onChange={onFriend} options={friendsLoading ? [{ value: 'all', label: '加载好友中…' }] : [{ value: 'all', label: '全部好友' }, ...friends.map(([value, label]) => ({ value, label }))]} />
     <HistorySelect id="history-status" label="状态" value={status} onChange={(value) => onStatus(value as HistoryStatus | 'all')} options={statusOptions} />
@@ -195,16 +195,16 @@ function formatInputDate(value: Date | undefined) {
 }
 
 function HistoryTable({ items, onSelect }: { items: HistoryItem[]; onSelect: (item: HistoryItem) => void }) {
-  return <Table className="min-w-[900px]"><TableHeader><TableRow><TableHead className="pl-5">时间</TableHead><TableHead>账号 / 好友</TableHead><TableHead>任务</TableHead><TableHead>通道</TableHead><TableHead>状态</TableHead><TableHead className="pr-5 text-right">详情</TableHead></TableRow></TableHeader><TableBody>{items.map((item) => <HistoryRow key={item.id} item={item} onSelect={onSelect} />)}</TableBody></Table>
+  return <Table className="min-w-[760px]"><TableHeader><TableRow><TableHead className="pl-5">时间</TableHead><TableHead>账号 / 好友</TableHead><TableHead>任务</TableHead><TableHead>状态</TableHead><TableHead className="pr-5 text-right">详情</TableHead></TableRow></TableHeader><TableBody>{items.map((item) => <HistoryRow key={item.id} item={item} onSelect={onSelect} />)}</TableBody></Table>
 }
 
 function HistoryRow({ item, onSelect }: { item: HistoryItem; onSelect: (item: HistoryItem) => void }) {
   const status = statusMeta[item.status]
-  return <TableRow><TableCell className="whitespace-nowrap pl-5 text-sm">{formatDateTime(item.scheduled_at)}</TableCell><TableCell><div className="font-medium">{item.friend.display_name}</div><div className="mt-1 text-xs text-muted-foreground">{item.account.nickname || '未命名账号'}</div></TableCell><TableCell><div className="text-sm">{taskLabel(item)}</div><div className="mt-1 text-xs text-muted-foreground">{item.intent_type === 'manual' ? '手动执行' : '定时执行'}</div></TableCell><TableCell className="text-sm text-muted-foreground">{item.latest_job?.adapter || '待分配'}</TableCell><TableCell><div className="space-y-1"><Badge variant={status.variant}>{status.label}</Badge>{item.error_code && <div className="text-xs text-destructive">{item.error_code}</div>}</div></TableCell><TableCell className="pr-5 text-right"><Button variant="ghost" size="sm" onClick={() => onSelect(item)}>查看详情<ChevronRight /></Button></TableCell></TableRow>
+  return <TableRow><TableCell className="whitespace-nowrap pl-5 text-sm">{formatDateTime(item.scheduled_at)}</TableCell><TableCell><div className="font-medium">{item.friend.display_name}</div><div className="mt-1 text-xs text-muted-foreground">{item.account.nickname || '未命名账号'}</div></TableCell><TableCell><div className="text-sm">{taskLabel(item)}</div><div className="mt-1 text-xs text-muted-foreground">{item.intent_type === 'manual' ? '手动执行' : '定时执行'}</div></TableCell><TableCell><div className="max-w-72 space-y-1"><Badge variant={status.variant}>{status.label}</Badge>{item.error_code && <div className="text-xs leading-5 text-destructive">{jobErrorMessage(item.error_code)}</div>}</div></TableCell><TableCell className="pr-5 text-right"><Button variant="ghost" size="sm" onClick={() => onSelect(item)}>查看详情<ChevronRight /></Button></TableCell></TableRow>
 }
 
 function HistoryCards({ items, onSelect }: { items: HistoryItem[]; onSelect: (item: HistoryItem) => void }) {
-  return <div>{items.map((item) => { const status = statusMeta[item.status]; return <button key={item.id} type="button" onClick={() => onSelect(item)} className="w-full rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent/40"><div className="flex items-start justify-between gap-3"><div><div className="font-medium">{item.friend.display_name}</div><div className="mt-1 text-xs text-muted-foreground">{item.account.nickname || '未命名账号'} · {formatDateTime(item.scheduled_at)}</div></div><Badge variant={status.variant}>{status.label}</Badge></div><div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><div className="text-xs text-muted-foreground">任务</div><div className="mt-1 truncate">{taskLabel(item)}</div></div><div><div className="text-xs text-muted-foreground">通道</div><div className="mt-1 truncate">{item.latest_job?.adapter || '待分配'}</div></div></div>{item.error_code && <div className="mt-3 text-xs text-destructive">{item.error_code}</div>}<div className="mt-3 flex items-center justify-end text-xs font-medium text-primary">查看详情<ChevronRight className="ml-1 size-3.5" /></div></button> })}</div>
+  return <div>{items.map((item) => { const status = statusMeta[item.status]; return <button key={item.id} type="button" onClick={() => onSelect(item)} className="w-full rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent/40"><div className="flex items-start justify-between gap-3"><div><div className="font-medium">{item.friend.display_name}</div><div className="mt-1 text-xs text-muted-foreground">{item.account.nickname || '未命名账号'} · {formatDateTime(item.scheduled_at)}</div></div><Badge variant={status.variant}>{status.label}</Badge></div><div className="mt-4 text-sm"><div className="text-xs text-muted-foreground">任务</div><div className="mt-1 truncate">{taskLabel(item)}</div></div>{item.error_code && <div className="mt-3 text-xs leading-5 text-destructive">{jobErrorMessage(item.error_code)}</div>}<div className="mt-3 flex items-center justify-end text-xs font-medium text-primary">查看详情<ChevronRight className="ml-1 size-3.5" /></div></button> })}</div>
 }
 
 function HistoryLoading() {

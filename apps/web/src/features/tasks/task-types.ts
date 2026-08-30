@@ -8,7 +8,7 @@ export type MessageTemplate = components['schemas']['MessageTemplate']
 export type TaskDraft = {
   id?: string
   accountId: string
-  friendId: string
+  conversationId: string
   enabled: boolean
   timezone: string
   windowStart: string

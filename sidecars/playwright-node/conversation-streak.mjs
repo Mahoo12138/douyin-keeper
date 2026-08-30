@@ -33,6 +33,9 @@ export function collectJSONStreakCandidates(value, depth = 0, output = []) {
 export function selectConversationStreakDays(interfaceCandidates, domCandidate, options = {}) {
   const uniqueInterface = [...new Set((interfaceCandidates || [])
     .filter((value) => Number.isSafeInteger(value) && value >= 0 && value <= 10000))];
+  if (options.preferInterface === true && options.interfaceScoped !== false && uniqueInterface.length === 1) {
+    return { days: uniqueInterface[0], source: "interface" };
+  }
   if (Number.isSafeInteger(domCandidate) && domCandidate >= 0 && domCandidate <= 10000) {
     return { days: domCandidate, source: "dom" };
   }

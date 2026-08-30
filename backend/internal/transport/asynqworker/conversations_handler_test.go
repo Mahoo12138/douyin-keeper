@@ -15,13 +15,13 @@ func TestNormalizeConversationItemsUsesStableIdentityAndTimestamp(t *testing.T) 
 	stamp := "2026-08-25T10:11:12.123Z"
 	seen := map[string]struct{}{}
 	items, err := normalizeConversationItems([]conversationListItem{{
-		PlatformConversationID: " conversation-1 ", PlatformUserID: " peer-1 ",
+		PlatformComponentKey: " conversation-1 ", PlatformConversationID: " conversation-1 ", PlatformUserID: " peer-1 ",
 		DisplayName: "对端", AvatarURL: "https://p.example/avatar.jpg", LastMessageAt: &stamp,
 	}}, seen)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 1 || items[0].PlatformConversationID != "conversation-1" || items[0].PlatformUserID != "peer-1" {
+	if len(items) != 1 || items[0].PlatformComponentKey != "conversation-1" || items[0].PlatformConversationID != "conversation-1" || items[0].PlatformUserID != "peer-1" {
 		t.Fatalf("normalized item = %+v", items)
 	}
 	if items[0].AvatarURL != "https://p.example/avatar.jpg" {
@@ -34,7 +34,7 @@ func TestNormalizeConversationItemsUsesStableIdentityAndTimestamp(t *testing.T) 
 
 func TestNormalizeConversationItemsDropsInvalidAvatarURL(t *testing.T) {
 	items, err := normalizeConversationItems([]conversationListItem{{
-		PlatformConversationID: "conversation-1", PlatformUserID: "peer-1",
+		PlatformComponentKey: "conversation-1", PlatformConversationID: "conversation-1", PlatformUserID: "peer-1",
 		AvatarURL: "javascript:alert(1)",
 	}}, map[string]struct{}{})
 	if err != nil {
@@ -49,7 +49,7 @@ func TestNormalizeConversationItemsCarriesValidatedStreakDays(t *testing.T) {
 	streakDays := 27
 	activatedToday := true
 	items, err := normalizeConversationItems([]conversationListItem{{
-		PlatformConversationID: "conversation-1", PlatformUserID: "peer-1",
+		PlatformComponentKey: "conversation-1", PlatformConversationID: "conversation-1", PlatformUserID: "peer-1",
 		StreakDays: &streakDays, StreakActivatedToday: &activatedToday,
 	}}, map[string]struct{}{})
 	if err != nil {
@@ -64,7 +64,7 @@ func TestNormalizeConversationItemsCarriesValidatedStreakDays(t *testing.T) {
 
 	invalid := -1
 	if _, err := normalizeConversationItems([]conversationListItem{{
-		PlatformConversationID: "conversation-2", PlatformUserID: "peer-2",
+		PlatformComponentKey: "conversation-2", PlatformConversationID: "conversation-2", PlatformUserID: "peer-2",
 		StreakDays: &invalid,
 	}}, map[string]struct{}{}); err == nil {
 		t.Fatal("negative streak days should fail closed")
@@ -72,21 +72,26 @@ func TestNormalizeConversationItemsCarriesValidatedStreakDays(t *testing.T) {
 }
 
 func TestNormalizeConversationItemsRejectsUnsafePages(t *testing.T) {
+	if _, err := normalizeConversationItems([]conversationListItem{{
+		PlatformComponentKey: "component-1", PlatformConversationID: "conversation-1", PlatformUserID: "peer-1",
+	}}, map[string]struct{}{}); err == nil {
+		t.Fatal("a component key that does not match get_info_list should fail closed")
+	}
 	seen := map[string]struct{}{"conversation-1": {}}
 	if _, err := normalizeConversationItems([]conversationListItem{{
-		PlatformConversationID: "conversation-1", PlatformUserID: "peer-1",
+		PlatformComponentKey: "conversation-1", PlatformConversationID: "conversation-1", PlatformUserID: "peer-1",
 	}}, seen); err == nil {
 		t.Fatal("duplicate conversation id should fail closed")
 	}
 	invalid := "not-a-timestamp"
 	if _, err := normalizeConversationItems([]conversationListItem{{
-		PlatformConversationID: "conversation-2", PlatformUserID: "peer-2", LastMessageAt: &invalid,
+		PlatformComponentKey: "conversation-2", PlatformConversationID: "conversation-2", PlatformUserID: "peer-2", LastMessageAt: &invalid,
 	}}, map[string]struct{}{}); err == nil {
 		t.Fatal("invalid timestamp should fail closed")
 	}
 	if _, err := normalizeConversationItems([]conversationListItem{
-		{PlatformConversationID: "conversation-3", PlatformUserID: "peer-3", ConversationType: "direct"},
-		{PlatformConversationID: "conversation-4", PlatformUserID: "peer-3", ConversationType: "direct"},
+		{PlatformComponentKey: "conversation-3", PlatformConversationID: "conversation-3", PlatformUserID: "peer-3", ConversationType: "direct"},
+		{PlatformComponentKey: "conversation-4", PlatformConversationID: "conversation-4", PlatformUserID: "peer-3", ConversationType: "direct"},
 	}, map[string]struct{}{}); err == nil {
 		t.Fatal("duplicate direct peer identity should fail closed")
 	}
@@ -94,7 +99,7 @@ func TestNormalizeConversationItemsRejectsUnsafePages(t *testing.T) {
 
 func TestNormalizeConversationItemsRetainsGroupWithoutPeerIdentity(t *testing.T) {
 	items, err := normalizeConversationItems([]conversationListItem{{
-		PlatformConversationID: "0:2:group-1", DisplayName: "群聊", ConversationType: "group",
+		PlatformComponentKey: "0:2:group-1", PlatformConversationID: "0:2:group-1", DisplayName: "群聊", ConversationType: "group",
 	}}, map[string]struct{}{})
 	if err != nil {
 		t.Fatal(err)
@@ -134,19 +139,30 @@ func (r *conversationSyncStub) SyncBatch(ctx context.Context, _ int64, _ []conve
 	return nil
 }
 
+type conversationSyncAccountStub struct{ operations []string }
+
+func (r *conversationSyncAccountStub) SetLastFriendSyncAt(ctx context.Context, _ int64, _ time.Time) error {
+	r.operations = append(r.operations, bindOperation(ctx, "last_friend_sync"))
+	return nil
+}
+
 func TestCommitConversationSyncSuccessFinalizesJobBeforeSnapshot(t *testing.T) {
 	j := &bindJobRepoStub{}
 	repo := &conversationSyncStub{}
+	accounts := &conversationSyncAccountStub{}
 	now := func() time.Time { return time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC) }
 	claimed := &job.Job{ID: 20, PublicID: uuid.New(), Status: job.StatusRunning}
 
-	if err := commitConversationSyncSuccess(context.Background(), bindTxStub{}, j, repo, claimed, 42, nil, false, now); err != nil {
+	if err := commitConversationSyncSuccess(context.Background(), bindTxStub{}, j, repo, accounts, claimed, 42, nil, false, now); err != nil {
 		t.Fatal(err)
 	}
 	if len(j.operations) == 0 || j.operations[0] != "tx:finish" {
 		t.Fatalf("job operations = %#v, want transaction finish first", j.operations)
 	}
-	for _, operation := range append(j.operations, repo.operations...) {
+	if len(accounts.operations) != 1 || accounts.operations[0] != "tx:last_friend_sync" {
+		t.Fatalf("account operations = %#v, want last_friend_sync in transaction", accounts.operations)
+	}
+	for _, operation := range append(append(j.operations, repo.operations...), accounts.operations...) {
 		if len(operation) < len("tx:") || operation[:len("tx:")] != "tx:" {
 			t.Fatalf("conversation sync side effect escaped completion transaction: %q", operation)
 		}

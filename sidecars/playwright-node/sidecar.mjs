@@ -17,27 +17,36 @@ import { isAuthenticatedPage } from "./auth-state.mjs";
 import { qrLoginState, smsLoginRequiresFreshContext, smsLoginSurfaceState } from "./login-state.mjs";
 import { decodeProtobuf, summarizeProtobuf } from "./conversation-wire.mjs";
 import {
+  canonicalConversationComponentKey,
+  isConversationComponentKey,
+  selectGetInfoConversationForComponentKey,
+} from "./conversation-get-info.mjs";
+import {
   applyConversationHydrationCache,
   collectorItemsAfterSequence,
   conversationInventoryIdentityCount,
   conversationVerificationNeedsRescan,
   conversationRowHydrationKey,
   conversationRowInventoryKey,
+  directConversationUIDFromComponentKey,
   filterConversationRows,
+  filterSelfConversationInventory,
   filterStrangerConversationInventory,
   finalizeConversationInventory,
   identityRecordsMatchDisplayName,
   identityRecordsMatchPeer,
-  isMutualFriendRelationship,
   mergeConversationInventoryCandidate,
   missingConversationInventoryIndexes,
+  recordDirectConversationValidation,
   selectConversationHydrationBatch,
-  selectClickedConversationIdentityFromSources,
+  resolveDirectConversationPeer,
+  selectProfileSceneRelationshipForUID,
   shouldRejectConversationInventoryReplacement,
 } from "./conversation-utils.mjs";
 import { scrollConversationListDOM } from "./conversation-scroll.mjs";
-import { clickConversationListRowByIndex, describeConversationListRowByIndex } from "./conversation-click.mjs";
+import { clickConversationListRowByIdentity, clickConversationListRowByIndex, describeConversationListRowByIndex } from "./conversation-click.mjs";
 import { CHAT_URL, waitForConversationList } from "./conversation-route.mjs";
+import { sendTextAndConfirm } from "./message-send.mjs";
 import {
   collectJSONStreakCandidates,
   parseConversationStreakText,
@@ -2041,7 +2050,7 @@ async function extractConversationRows(page) {
       const text = (node) => (node?.textContent || "").replace(/\s+/g, " ").trim();
       const isConversationIdentifier = (value) => /^\d+(?::\d+){2,}$/.test(String(value || "").trim());
       const reactConversationFields = (nodes) => {
-        const result = { conversation: "", peer: "", type: "", avatar: "", react_prop_key_count: 0 };
+        const result = { component_key: "", conversation: "", peer: "", type: "", avatar: "", react_prop_key_count: 0 };
         const visited = new WeakSet();
         const visit = (value, keyHint = "", depth = 0) => {
           if (depth > 6 || value === null || value === undefined) return;
@@ -2067,6 +2076,18 @@ async function extractConversationRows(page) {
         for (const node of nodes) {
           for (const key of Object.keys(node || {}).filter((item) => /^__react(Props|Fiber)/.test(item))) {
             result.react_prop_key_count += 1;
+            if (!result.component_key && /^__reactFiber/.test(key)) {
+              let fiber = node[key];
+              for (let depth = 0; fiber && depth < 12; depth += 1, fiber = fiber.return) {
+                const candidate = String(fiber.key ?? "")
+                  .replace(/(?:&#x20;|&#32;|&nbsp;|\u00a0)+$/gi, "")
+                  .trim();
+                if (/^\d+(?::\d+){2,}$/.test(candidate) || /^\d{10,30}$/.test(candidate)) {
+                  result.component_key = candidate;
+                  break;
+                }
+              }
+            }
             visit(node[key], key, 0);
           }
         }
@@ -2201,6 +2222,7 @@ async function extractConversationRows(page) {
           display_name_length: displayName.length,
           unique_node_count: uniqueNodes.length,
           react_prop_key_count: reactFields.react_prop_key_count,
+          react_component_key_present: Boolean(reactFields.component_key),
           react_conversation_present: Boolean(reactFields.conversation),
           accepted_conversation_source: conversationSource,
           react_peer_present: Boolean(reactFields.peer),
@@ -2209,6 +2231,7 @@ async function extractConversationRows(page) {
         if (!displayName || displayName.length > 128) continue;
         const timeNode = row?.querySelector?.("time[datetime], [data-last-message-at]");
         rows.push({
+          platform_component_key: reactFields.component_key || null,
           platform_conversation_id: conversation || null,
           peer_platform_user_id: peer || null,
           peer_avatar_url: avatar || null,
@@ -2420,13 +2443,22 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
     });
     const expectedTitle = String(row?.peer_display_name || "").replace(/\s+/g, " ").trim();
     const targetTitle = String(target?.title || "").replace(/\s+/g, " ").trim();
-    if (!target.target_found || !expectedTitle || targetTitle !== expectedTitle) {
-      rejectionReason = !target.target_found ? "target_not_found" : "dom_title_changed";
+    const expectedComponentKey = canonicalConversationComponentKey(row?.platform_component_key);
+    const targetComponentKey = canonicalConversationComponentKey(target?.platform_component_key);
+    if (!target.target_found || !expectedTitle || targetTitle !== expectedTitle
+      || !isConversationComponentKey(expectedComponentKey) || targetComponentKey !== expectedComponentKey) {
+      rejectionReason = !target.target_found
+        ? "target_not_found"
+        : (!expectedTitle || targetTitle !== expectedTitle
+          ? "dom_title_changed"
+          : (!isConversationComponentKey(expectedComponentKey) ? "component_key_missing" : "component_key_changed"));
       debugLog("conversation_row_click_rejected", {
         data_index: /^\d+$/.test(dataIndex) ? dataIndex : null,
-        reason: !target.target_found ? "target_not_found" : "dom_title_changed",
+        reason: rejectionReason,
         expected_title_hash: textHash(expectedTitle),
         actual_title_hash: textHash(targetTitle),
+        expected_component_key_hash: textHash(expectedComponentKey),
+        actual_component_key_hash: textHash(targetComponentKey),
       });
       continue;
     }
@@ -2449,12 +2481,29 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
     await flushConversationCollector(collector);
     const newRecords = collector.records.slice(recordCount);
     const newBinaryResponses = collectorItemsAfterSequence(collector.binaryResponses, binarySequence);
+    const getInfo = selectGetInfoConversationForComponentKey(newBinaryResponses, expectedComponentKey);
+    if (!getInfo) {
+      rejectionReason = "get_info_component_key_mismatch";
+      debugLog("conversation_row_hydration_rejected", {
+        data_index: /^\d+$/.test(dataIndex) ? dataIndex : null,
+        reason: rejectionReason,
+        component_key_hash: textHash(expectedComponentKey),
+        new_binary_response_count: newBinaryResponses.length,
+        get_info_response_count: newBinaryResponses
+          .filter((response) => /\/v2\/conversation\/get_info_list(?:\/|$)/i.test(response?.path || "")).length,
+      });
+      continue;
+    }
     const newStreakCandidates = collectorItemsAfterSequence(collector.streakCandidates, streakSequence);
     const interfaceStreakCandidates = newStreakCandidates
       .map((candidate) => candidate.days);
     const interfaceStreakPaths = [...new Set(newStreakCandidates
       .map((candidate) => candidate.path)
       .filter(Boolean))];
+    if (Number.isSafeInteger(getInfo.streakDays)) {
+      interfaceStreakCandidates.unshift(getInfo.streakDays);
+      interfaceStreakPaths.unshift("/v2/conversation/get_info_list#6.610.1.50.11");
+    }
     for (const response of newBinaryResponses) {
       for (const leaf of protobufLeaves(response?.decoded?.fields || [])) {
         if (leaf.kind !== "string" || !/(火花|连续聊天|streak|flame|🔥)/i.test(String(leaf.text || ""))) continue;
@@ -2462,19 +2511,36 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
         if (days !== null) interfaceStreakCandidates.push(days);
       }
     }
-    const streak = selectConversationStreakDays(interfaceStreakCandidates, domStreakDays, {
-      // Binary text leaves can mention a fire/streak number that belongs to a
-      // different object in the same response. Until a candidate is tied to
-      // an explicit JSON streak field, the indexed DOM row is authoritative.
-      interfaceScoped: interfaceStreakPaths.length > 0,
-    });
+    const streak = Number.isSafeInteger(getInfo.streakDays)
+      ? { days: getInfo.streakDays, source: "get_info_list" }
+      : selectConversationStreakDays(interfaceStreakCandidates, domStreakDays, {
+        interfaceScoped: interfaceStreakPaths.length > 0,
+      });
     const responsePaths = [...new Set([
       ...newRecords.map((record) => record?.response_path),
       ...newBinaryResponses.map((response) => response?.path),
     ].filter(Boolean))];
     let hydrated = decorateConversationRowFromIdentityRecords(row, newRecords);
+    hydrated.platform_component_key = getInfo.componentKey;
+    hydrated.platform_conversation_id = getInfo.platformConversationID;
+    hydrated.conversation_type = getInfo.conversationType !== "unknown"
+      ? getInfo.conversationType
+      : hydrated.conversation_type;
+    hydrated.peer_platform_user_id = getInfo.conversationType === "direct"
+      ? (resolveDirectConversationPeer({
+        domPeerPlatformUserID: hydrated.peer_platform_user_id,
+        getInfoPeerPlatformUserID: getInfo.peerPlatformUserID,
+        selfPlatformUserID: scanContext.selfPlatformUserID,
+      }) || null)
+      : (hydrated.peer_platform_user_id || null);
+    hydrated.peer_avatar_url = getInfo.avatarURL || hydrated.peer_avatar_url || null;
+    if ((!hydrated.peer_display_name || hydrated.peer_display_name === "群聊") && getInfo.displayName) {
+      hydrated.peer_display_name = getInfo.displayName;
+    }
     hydrated.streak_days = streak.days;
-    hydrated.streak_activated_today = domStreak?.activated_today ?? null;
+    hydrated.streak_activated_today = typeof getInfo.streakActivatedToday === "boolean"
+      ? getInfo.streakActivatedToday
+      : (domStreak?.activated_today ?? null);
     hydrated = resolveRowsFromNetworkRecords([hydrated], newRecords).rows[0] || hydrated;
     const protobuf = resolveRowsFromProtobuf([hydrated], newBinaryResponses, newRecords, new Set());
     const sameID = String(hydrated.platform_conversation_id || "").trim();
@@ -2490,7 +2556,10 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
           : hydrated.peer_display_name,
         peer_platform_user_id: protobufRow.peer_platform_user_id || hydrated.peer_platform_user_id || null,
         streak_days: streak.days,
-        streak_activated_today: domStreak?.activated_today ?? null,
+        platform_component_key: getInfo.componentKey,
+        streak_activated_today: typeof getInfo.streakActivatedToday === "boolean"
+          ? getInfo.streakActivatedToday
+          : (domStreak?.activated_today ?? null),
       };
     }
     const conversationIDsForPath = (path) => newBinaryResponses
@@ -2501,44 +2570,37 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
           .filter((leaf) => leaf.kind === "string" && isConversationID(leaf.text))
           .map((leaf) => leaf.text),
       ]);
-    const clickedIdentity = selectClickedConversationIdentityFromSources(
-      hydrated.platform_conversation_id,
-      conversationIDsForPath("/v2/conversation/get_info_list"),
-      conversationIDsForPath("/v1/conversation/participants_list"),
-    );
+    const clickedIdentity = {
+      conversationID: getInfo.platformConversationID,
+      conversationType: getInfo.conversationType,
+      authoritative: true,
+    };
     const responseMatchesTitle = identityRecordsMatchDisplayName(newRecords, expectedTitle)
       || binaryResponsesMatchDisplayName(newBinaryResponses, expectedTitle);
     const responseMatchesPeer = identityRecordsMatchPeer(newRecords, row.peer_platform_user_id);
     const responseHasParticipantList = newBinaryResponses
       .some((response) => /\/v1\/conversation\/participants_list(?:\/|$)/i.test(response?.path || ""));
-    const responseIsClickedGroup = clickedIdentity.authoritative
-      && (clickedIdentity.conversationType === "group" || responseHasParticipantList);
-    const responseMatchesDOM = responseMatchesTitle || responseMatchesPeer || responseIsClickedGroup;
-    const relationshipKeys = [
-      "follow_status", "follower_status", "mate_relation", "mate_status", "new_friend_type",
-      "social_relation_type", "social_relation_sub_type", "is_block", "is_blocked",
-    ];
-    const relationshipRecords = newRecords.filter((record) =>
-      /\/aweme\/v1\/web\/user\/profile\/scene(?:\/|$)/i.test(record?.response_path || "")
-      && (identityRecordsMatchDisplayName([record], expectedTitle)
-        || identityRecordsMatchPeer([record], row.peer_platform_user_id)));
-    const relationship = {};
-    for (const key of relationshipKeys) {
-      const value = relationshipRecords
-        .map((record) => String(record?.identity?.[key] ?? "").trim())
-        .find(Boolean);
-      if (value !== undefined) relationship[key] = value;
-    }
+    const responseIsClickedGroup = clickedIdentity.conversationType === "group";
+    const responseMatchesDOM = getInfo.componentKey === expectedComponentKey;
+    const directUID = clickedIdentity.conversationType === "direct"
+      ? directConversationUIDFromComponentKey(expectedComponentKey)
+      : "";
+    const profileScene = selectProfileSceneRelationshipForUID(newRecords, directUID);
+    const relationship = profileScene.relationship;
     debugLog("conversation_peer_relationship_observed", {
       scan_pass: scanContext.scanPass,
       scan_round: scanContext.round,
       data_index: /^\d+$/.test(dataIndex) ? dataIndex : null,
       title_hash: textHash(expectedTitle),
       conversation_id_hash: textHash(clickedIdentity.conversationID || hydrated.platform_conversation_id),
-      relationship_record_count: relationshipRecords.length,
+      component_uid_present: Boolean(directUID),
+      component_uid_hash: textHash(directUID),
+      profile_uid_matched: profileScene.matched,
+      relationship_record_count: profileScene.recordCount,
       relationship,
     });
     hydrated._peer_relationship = relationship;
+    hydrated._peer_profile_uid_match = profileScene.matched;
     debugLog("conversation_clicked_response_correlation", {
       scan_pass: scanContext.scanPass,
       scan_round: scanContext.round,
@@ -2554,19 +2616,22 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
       response_matches_peer: responseMatchesPeer,
       response_has_participant_list: responseHasParticipantList,
       response_matches_dom: responseMatchesDOM,
+      component_key_hash: textHash(getInfo.componentKey),
+      get_info_response_count: getInfo.responseCount,
       get_info_conversation_id_hashes: [...new Set(conversationIDsForPath("/v2/conversation/get_info_list"))]
         .map((value) => textHash(value)).slice(0, 20),
       participant_conversation_id_hashes: [...new Set(conversationIDsForPath("/v1/conversation/participants_list"))]
         .map((value) => textHash(value)).slice(0, 20),
       response_paths: responsePaths.slice(0, 20),
     });
-    if (clickedIdentity.authoritative && responseMatchesDOM) {
+    if (responseMatchesDOM) {
       hydrated = {
         ...hydrated,
+        platform_component_key: getInfo.componentKey,
         platform_conversation_id: clickedIdentity.conversationID,
         conversation_type: responseIsClickedGroup ? "group" : clickedIdentity.conversationType,
       };
-    } else if (clickedIdentity.authoritative) {
+    } else {
       debugLog("conversation_clicked_identity_rejected", {
         data_index: /^\d+$/.test(dataIndex) ? dataIndex : null,
         reason: "response_name_mismatch",
@@ -2582,6 +2647,7 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
       ? conversationTypeFromValue(hydrated.conversation_type)
       : conversationTypeFromID(hydrated.platform_conversation_id);
     const stableIdentity = Boolean(String(hydrated.platform_conversation_id || "").trim())
+      && canonicalConversationComponentKey(hydrated.platform_component_key) === String(hydrated.platform_conversation_id || "").trim()
       && (hydratedType === "group" || Boolean(String(hydrated.peer_platform_user_id || "").trim()));
     if (!stableIdentity) {
       rejectionReason = "stable_identity_missing";
@@ -2593,6 +2659,7 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
         response_matches_peer: responseMatchesPeer,
         response_is_clicked_group: responseIsClickedGroup,
         conversation_id_present: Boolean(hydrated.platform_conversation_id),
+        component_key_present: Boolean(hydrated.platform_component_key),
         peer_id_present: Boolean(hydrated.peer_platform_user_id),
         conversation_type: hydratedType,
       });
@@ -2619,6 +2686,7 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
       source_index: Number.isInteger(Number(row?._source_index)) ? Number(row._source_index) : null,
       hydration_key_hash: textHash(hydrationKey),
       conversation_id_hash: textHash(hydrated.platform_conversation_id),
+      component_key_hash: textHash(hydrated.platform_component_key),
       conversation_id_source: hydrated._conversation_source || "response",
       title_hash: textHash(hydrated.peer_display_name),
       title_length: String(hydrated.peer_display_name || "").length,
@@ -2629,7 +2697,7 @@ async function hydrateConversationRows(page, rows, collector, clickedDataIndexes
       streak_days: hydrated.streak_days,
       streak_activated_today: hydrated.streak_activated_today ?? null,
       streak_icon_kind: domStreak?.icon_kind || "missing",
-      streak_source: streak.source,
+      streak_source: Number.isSafeInteger(getInfo.streakDays) ? getInfo.streakSource : streak.source,
       dom_streak_days: domStreakDays,
       interface_streak_candidates: [...new Set(interfaceStreakCandidates)].slice(0, 20),
       interface_streak_paths: interfaceStreakPaths.slice(0, 20),
@@ -2651,6 +2719,7 @@ async function listConversations(input) {
   const limit = Number.isInteger(input?.limit) ? Math.min(Math.max(input.limit, 1), 100) : 100;
   const cursor = input?.cursor || null;
   const groupOnly = input?.group_only === true;
+  const selfPlatformUserID = String(input?.self_platform_user_id || "").trim();
   return withSession(input, async (page) => {
     const collector = attachConversationCollector(page);
     const panelSource = await openConversationRoute(page, { groupOnly });
@@ -2669,7 +2738,8 @@ async function listConversations(input) {
     const unsupportedHydrationKeys = new Set();
     const hydrationFailureCounts = new Map();
     const hydrationCache = new Map();
-    const nonMutualDirectConversationIDs = new Set();
+    const validDirectConversationIDs = new Set();
+    const invalidDirectConversationIDs = new Set();
     const observedDataIndexes = new Set();
     const currentPassIndexState = new Map();
     const loggedDOMSlots = new Set();
@@ -2741,6 +2811,7 @@ async function listConversations(input) {
       const hydration = await hydrateConversationRows(page, scan.rows, collector, clickedDataIndexes, unsupportedHydrationKeys, {
         scanPass: scanPass + 1,
         round: round + 1,
+        selfPlatformUserID,
       });
       const hydratedRows = hydration.updates;
       for (const [key, hydrated] of hydratedRows) hydrationCache.set(key, hydrated);
@@ -2857,12 +2928,17 @@ async function listConversations(input) {
         const idType = conversationTypeFromID(row.platform_conversation_id);
         const rowType = idType !== "unknown" ? idType : declaredType;
         if (row.platform_conversation_id && (row.peer_platform_user_id || rowType === "group")) {
-          const mutualFriend = rowType === "direct"
-            ? isMutualFriendRelationship(row._peer_relationship)
-            : null;
-          if (mutualFriend === false) nonMutualDirectConversationIDs.add(String(row.platform_conversation_id).trim());
-          if (mutualFriend === true) nonMutualDirectConversationIDs.delete(String(row.platform_conversation_id).trim());
+          if (rowType === "direct") {
+            recordDirectConversationValidation(
+              validDirectConversationIDs,
+              invalidDirectConversationIDs,
+              row.platform_conversation_id,
+              row._peer_profile_uid_match,
+              row._peer_relationship,
+            );
+          }
           const clean = {
+            platform_component_key: canonicalConversationComponentKey(row.platform_component_key).slice(0, 512),
             platform_conversation_id: String(row.platform_conversation_id).trim().slice(0, 512),
             peer_platform_user_id: row.peer_platform_user_id ? String(row.peer_platform_user_id).trim().slice(0, 256) : null,
             peer_avatar_url: /^https?:\/\//i.test(String(row.peer_avatar_url || "").trim())
@@ -2878,7 +2954,9 @@ async function listConversations(input) {
               ? row.streak_activated_today
               : null,
           };
-          if (clean.platform_conversation_id && (clean.peer_platform_user_id || clean.conversation_type === "group")) {
+          if (clean.platform_component_key
+            && clean.platform_component_key === clean.platform_conversation_id
+            && (clean.peer_platform_user_id || clean.conversation_type === "group")) {
             const accepted = filterConversationRows([clean], groupOnly);
             if (accepted.length) {
               const inventoryKey = conversationRowInventoryKey(row);
@@ -3050,6 +3128,16 @@ async function listConversations(input) {
     };
     const allInventoryEntries = [...seen.entries()]
       .sort((left, right) => numericInventoryIndex(left[0]) - numericInventoryIndex(right[0]));
+    for (const [, row] of allInventoryEntries) {
+      if (conversationTypeFromValue(row?.conversation_type) !== "direct") continue;
+      recordDirectConversationValidation(
+        validDirectConversationIDs,
+        invalidDirectConversationIDs,
+        row.platform_conversation_id,
+        false,
+        {},
+      );
+    }
     const strangerConversationIDs = new Set();
     for (const response of collector.binaryResponses || []) {
       if (!/\/v1\/stranger\/get_conversation_list(?:\/|$)/i.test(response?.path || "")) continue;
@@ -3071,12 +3159,24 @@ async function listConversations(input) {
         if (isConversationID(conversationID)) strangerConversationIDs.add(conversationID);
       }
     }
-    for (const conversationID of nonMutualDirectConversationIDs) strangerConversationIDs.add(conversationID);
-    const strangerInventory = filterStrangerConversationInventory(allInventoryEntries, strangerConversationIDs);
+    for (const conversationID of invalidDirectConversationIDs) strangerConversationIDs.add(conversationID);
+    const selfInventory = filterSelfConversationInventory(allInventoryEntries, selfPlatformUserID);
+    for (const [key, row] of selfInventory.filtered) {
+      debugLog("conversation_self_filtered", {
+        scan_pass: scanPass + 1,
+        scan_round: null,
+        data_index: /^index:\d+$/.test(key) ? Number(key.slice(6)) : null,
+        conversation_id_hash: textHash(row.platform_conversation_id),
+        title_hash: textHash(row.peer_display_name),
+        title_length: String(row.peer_display_name || "").length,
+        reason: "direct_peer_is_signed_in_account",
+      });
+    }
+    const strangerInventory = filterStrangerConversationInventory(selfInventory.kept, strangerConversationIDs);
     const inventoryEntries = strangerInventory.kept;
     debugLog("conversations_stranger_identity_filter", {
       stranger_identity_count: strangerConversationIDs.size,
-      profile_non_mutual_identity_count: nonMutualDirectConversationIDs.size,
+      profile_invalid_direct_identity_count: invalidDirectConversationIDs.size,
       filtered_inventory_count: strangerInventory.filtered.length,
       retained_inventory_count: inventoryEntries.length,
       stranger_conversation_id_hashes: [...strangerConversationIDs].map((id) => textHash(id)).slice(0, 80),
@@ -3091,8 +3191,8 @@ async function listConversations(input) {
         conversation_id_hash: textHash(row.platform_conversation_id),
         peer_id_hash: textHash(row.peer_platform_user_id),
         conversation_type: conversationTypeFromValue(row.conversation_type),
-        reason: nonMutualDirectConversationIDs.has(String(row.platform_conversation_id || ""))
-          ? "profile_scene_non_mutual"
+        reason: invalidDirectConversationIDs.has(String(row.platform_conversation_id || ""))
+          ? "profile_scene_uid_or_follow_status_invalid"
           : "stranger_inventory_endpoint",
       });
     }
@@ -3214,17 +3314,7 @@ async function listConversations(input) {
 }
 
 async function clickConversation(page, conversationID, peerID) {
-  return page.evaluate(({ conversationID: wantedConversation, peerID: wantedPeer }) => {
-    const nodes = [...document.querySelectorAll("[class*='conversationConversationItem'], [data-conversation-id], [data-id]")];
-    const node = nodes.find((item) => {
-      const conversation = item.getAttribute("data-conversation-id") || item.getAttribute("data-conversationid") || item.getAttribute("data-id") || "";
-      const peer = item.getAttribute("data-user-id") || item.getAttribute("data-uid") || "";
-      return conversation === wantedConversation || (wantedPeer && peer === wantedPeer);
-    });
-    if (!node) return false;
-    node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
-    return true;
-  }, { conversationID, peerID });
+  return clickConversationListRowByIdentity(page, conversationID, peerID);
 }
 
 async function sendText(input) {
@@ -3239,22 +3329,21 @@ async function sendText(input) {
       throw protocolError("CONVERSATION_NOT_FOUND", "conversation was not found");
     }
     const editor = page.locator("[contenteditable='true'], textarea, [role='textbox']");
-    const count = Math.min(await editor.count(), 8);
     let inputBox = null;
-    for (let index = 0; index < count; index += 1) if (await editor.nth(index).isVisible().catch(() => false)) { inputBox = editor.nth(index); break; }
+    for (let attempt = 0; attempt < 10 && !inputBox; attempt += 1) {
+      const count = Math.min(await editor.count(), 8);
+      for (let index = 0; index < count; index += 1) {
+        if (await editor.nth(index).isVisible().catch(() => false)) { inputBox = editor.nth(index); break; }
+      }
+      if (!inputBox) await page.waitForTimeout(300);
+    }
     if (!inputBox) throw protocolError("BROWSER_SELECTOR_CHANGED", "message editor is unavailable");
-    await inputBox.fill(message.text.trim());
-    const sendButton = page.getByText("发送", { exact: true });
-    const sendCount = Math.min(await sendButton.count(), 5);
-    for (let index = 0; index < sendCount; index += 1) if (await sendButton.nth(index).isVisible().catch(() => false)) { await sendButton.nth(index).click({ force: true }); break; }
-    await page.waitForTimeout(1200);
-    const receipt = await page.evaluate((text) => {
-      const nodes = [...document.querySelectorAll("[data-message-id], [data-msg-id], [data-messageid]")].reverse();
-      const node = nodes.find((item) => (item.textContent || "").includes(text));
-      return node?.getAttribute("data-message-id") || node?.getAttribute("data-msg-id") || node?.getAttribute("data-messageid") || "";
-    }, message.text.trim());
-    if (!receipt) throw protocolError("ADAPTER_INCOMPATIBLE", "message receipt was not confirmed", false, { outcome: "unknown" });
-    return { confirmed: true, platform_message_id: receipt };
+    const result = await sendTextAndConfirm(page, inputBox, message.text.trim());
+    debugLog("message_send_confirmed", {
+      confirmation_source: result.confirmation_source,
+      platform_message_id_present: Boolean(result.platform_message_id),
+    });
+    return result;
   });
 }
 

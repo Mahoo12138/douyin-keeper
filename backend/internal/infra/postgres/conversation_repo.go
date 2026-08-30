@@ -42,8 +42,11 @@ func (r *ConversationRepo) ReplaceGroupBatch(ctx context.Context, accountID int6
 // changing the local index state.
 func (r *ConversationRepo) SyncBatch(ctx context.Context, accountID int64, items []conversation.SyncItem, at time.Time) error {
 	for _, item := range items {
-		if item.PlatformConversationID == "" {
+		if item.PlatformComponentKey == "" || item.PlatformConversationID == "" {
 			return fmt.Errorf("conversation sync: stable platform ids are required")
+		}
+		if item.PlatformComponentKey != item.PlatformConversationID {
+			return fmt.Errorf("conversation sync: component key does not match response conversation id")
 		}
 		conversationType := item.ConversationType
 		if conversationType == "" {
@@ -66,12 +69,13 @@ func (r *ConversationRepo) SyncBatch(ctx context.Context, accountID int64, items
 			peerID = item.PlatformUserID
 		}
 		_, err := From(ctx, r.pool).Exec(ctx, `
-			INSERT INTO conversations (public_id, account_id, friend_id, platform_conversation_id,
+			INSERT INTO conversations (public_id, account_id, friend_id, platform_component_key, platform_conversation_id,
 				conversation_type, peer_platform_user_id, peer_display_name,
 				last_message_at, streak_activated_today, last_synced_at, created_at, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10,$10)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,$11)
 			ON CONFLICT (account_id, platform_conversation_id) DO UPDATE SET
 				friend_id=EXCLUDED.friend_id,
+				platform_component_key=EXCLUDED.platform_component_key,
 				conversation_type=EXCLUDED.conversation_type,
 				peer_platform_user_id=EXCLUDED.peer_platform_user_id,
 				peer_display_name=CASE
@@ -84,7 +88,7 @@ func (r *ConversationRepo) SyncBatch(ctx context.Context, accountID int64, items
 				streak_activated_today=EXCLUDED.streak_activated_today,
 				last_synced_at=EXCLUDED.last_synced_at, updated_at=EXCLUDED.updated_at,
 				archived_at=NULL`,
-			uuid.New(), accountID, friendID, item.PlatformConversationID, conversationType,
+			uuid.New(), accountID, friendID, item.PlatformComponentKey, item.PlatformConversationID, conversationType,
 			peerID, item.DisplayName, item.LastMessageAt, item.StreakActivatedToday, at)
 		if err != nil {
 			return err

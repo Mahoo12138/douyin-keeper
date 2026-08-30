@@ -17,6 +17,8 @@ function normalizedDisplayName(value) {
 }
 
 export function conversationRowHydrationKey(row) {
+  const componentKey = String(row?.platform_component_key || "").trim();
+  if (componentKey) return `component:${componentKey}`;
   const displayName = normalizedDisplayName(row?.peer_display_name);
   // data-index is a virtual-list slot, not an identity: selecting a chat can
   // move the same named row to another slot. Douyin's visible name is the
@@ -83,6 +85,7 @@ export function applyConversationHydrationCache(rows, cache) {
       // fields that are not directly available from the current DOM snapshot.
       peer_display_name: normalizedDisplayName(row.peer_display_name)
         || normalizedDisplayName(cached.peer_display_name),
+      platform_component_key: row.platform_component_key || cached.platform_component_key,
       data_index: row.data_index,
       _row_key: row._row_key,
       _source_index: row._source_index,
@@ -111,11 +114,69 @@ export function identityRecordsMatchPeer(records, peerID) {
     .some((key) => String(record?.identity?.[key] || "").trim() === expected));
 }
 
-export function isMutualFriendRelationship(relationship) {
+export function directConversationUIDFromComponentKey(value) {
+  const parts = String(value ?? "")
+    .replace(/&#x20;?/gi, " ")
+    .trim()
+    .split(":")
+    .map((part) => part.trim());
+  if (parts.length < 4 || parts[0] !== "0" || parts[1] !== "1") return "";
+  const uid = parts.at(-1) || "";
+  return /^\d+$/.test(uid) ? uid : "";
+}
+
+export function selectProfileSceneRelationshipForUID(records, uid) {
+  const expectedUID = String(uid || "").trim();
+  if (!/^\d+$/.test(expectedUID)) return { matched: false, recordCount: 0, relationship: {} };
+  const uidKeys = ["uid", "user_id", "userid"];
+  const matches = (records || []).filter((record) =>
+    /\/aweme\/v1\/web\/user\/profile\/scene(?:\/|$)/i.test(record?.response_path || "")
+    && uidKeys.some((key) => String(record?.identity?.[key] ?? "").trim() === expectedUID));
+  if (!matches.length) return { matched: false, recordCount: 0, relationship: {} };
+
+  const relationshipKeys = [
+    "follow_status", "follower_status", "mate_relation", "mate_status", "new_friend_type",
+    "social_relation_type", "social_relation_sub_type", "is_block", "is_blocked",
+  ];
+  const relationship = {};
+  for (const key of relationshipKeys) {
+    const values = [...new Set(matches
+      .map((record) => String(record?.identity?.[key] ?? "").trim())
+      .filter(Boolean))];
+    // Conflicting values in one response set are ambiguous and must not be
+    // promoted into an eligible direct conversation.
+    if (values.length === 1) relationship[key] = values[0];
+  }
+  return { matched: true, recordCount: matches.length, relationship };
+}
+
+export function isValidDirectConversationRelationship(relationship) {
   const followStatus = String(relationship?.follow_status ?? "").trim();
-  const followerStatus = String(relationship?.follower_status ?? "").trim();
-  if (!followStatus || !followerStatus) return null;
-  return followStatus === "2" && followerStatus === "1";
+  if (!followStatus) return null;
+  return followStatus === "2";
+}
+
+export function recordDirectConversationValidation(
+  validConversationIDs,
+  invalidConversationIDs,
+  conversationID,
+  profileUIDMatched,
+  relationship,
+) {
+  const id = String(conversationID || "").trim();
+  if (!id) return false;
+  const valid = profileUIDMatched === true
+    && isValidDirectConversationRelationship(relationship) === true;
+  if (valid) {
+    validConversationIDs.add(id);
+    invalidConversationIDs.delete(id);
+    return true;
+  }
+  // A later virtual-list rescan may reuse the already hydrated row without
+  // triggering profile/scene again. Missing new evidence must not invalidate
+  // an earlier exact UID + follow_status=2 observation for the same identity.
+  if (!validConversationIDs.has(id)) invalidConversationIDs.add(id);
+  return false;
 }
 
 export function filterConversationRows(rows, groupOnly = false, authoritativeGroupIDs = null) {
@@ -139,6 +200,33 @@ export function filterStrangerConversationInventory(entries, strangerConversatio
   for (const entry of entries || []) {
     const conversationID = String(entry?.[1]?.platform_conversation_id || "").trim();
     (conversationID && strangerIDs.has(conversationID) ? filtered : kept).push(entry);
+  }
+  return { kept, filtered };
+}
+
+export function resolveDirectConversationPeer({
+  domPeerPlatformUserID,
+  getInfoPeerPlatformUserID,
+  selfPlatformUserID,
+}) {
+  const domPeer = String(domPeerPlatformUserID || "").trim();
+  const getInfoPeer = String(getInfoPeerPlatformUserID || "").trim();
+  const selfPeer = String(selfPlatformUserID || "").trim();
+  if (getInfoPeer && (!selfPeer || getInfoPeer !== selfPeer)) return getInfoPeer;
+  if (domPeer && (!selfPeer || domPeer !== selfPeer)) return domPeer;
+  return getInfoPeer || domPeer;
+}
+
+export function filterSelfConversationInventory(entries, selfPlatformUserID) {
+  const selfPeer = String(selfPlatformUserID || "").trim();
+  if (!selfPeer) return { kept: [...(entries || [])], filtered: [] };
+  const kept = [];
+  const filtered = [];
+  for (const entry of entries || []) {
+    const row = entry?.[1];
+    const isSelfDirect = conversationTypeFromValue(row?.conversation_type) === "direct"
+      && String(row?.peer_platform_user_id || "").trim() === selfPeer;
+    (isSelfDirect ? filtered : kept).push(entry);
   }
   return { kept, filtered };
 }
