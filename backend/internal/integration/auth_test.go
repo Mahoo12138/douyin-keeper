@@ -196,3 +196,33 @@ func TestLogoutAllRevokesSessions(t *testing.T) {
 		t.Fatalf("expected current session refresh to fail after logout-all")
 	}
 }
+
+func TestChangePasswordUpdatesLoginAndRevokesExistingSessions(t *testing.T) {
+	ctx := context.Background()
+	svc := newAuthSvc()
+	username := "password_" + uuid.NewString()[:8]
+	registered, err := svc.Register(ctx, username, "password123")
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	second, err := svc.Login(ctx, username, "password123", auth.ClientMini)
+	if err != nil {
+		t.Fatalf("second login: %v", err)
+	}
+
+	if err := svc.ChangePassword(ctx, registered.User.ID, "password123", "new-password-456"); err != nil {
+		t.Fatalf("change password: %v", err)
+	}
+	if _, err := svc.Login(ctx, username, "password123", auth.ClientWeb); err == nil {
+		t.Fatal("old password still authenticates")
+	}
+	if _, err := svc.Login(ctx, username, "new-password-456", auth.ClientWeb); err != nil {
+		t.Fatalf("new password login: %v", err)
+	}
+	if _, err := svc.Refresh(ctx, registered.RefreshToken, auth.ClientWeb); err == nil {
+		t.Fatal("web session remained refreshable after password change")
+	}
+	if _, err := svc.Refresh(ctx, second.RefreshToken, auth.ClientMini); err == nil {
+		t.Fatal("mini session remained refreshable after password change")
+	}
+}

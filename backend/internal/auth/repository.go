@@ -16,11 +16,14 @@ type UserRepository interface {
 	GetUserByPublicID(ctx context.Context, publicID uuid.UUID) (*User, error)
 	// GetLocalByUsername joins users with the local identity row.
 	GetLocalByUsername(ctx context.Context, username string) (*User, *AuthIdentity, error)
+	// GetLocalByUserID resolves the local credential owned by an authenticated user.
+	GetLocalByUserID(ctx context.Context, userID int64) (*AuthIdentity, error)
 	// GetWechatBySubject resolves an already-linked mini-program identity.
 	GetWechatBySubject(ctx context.Context, subject string) (*User, error)
 	// LockUserForUpdate obtains a FOR UPDATE row lock inside a tx.
 	LockUserByID(ctx context.Context, id int64) (*User, error)
 	CreateIdentity(ctx context.Context, idn *AuthIdentity) error
+	UpdateLocalCredentialHash(ctx context.Context, userID int64, credentialHash string, updatedAt time.Time) error
 }
 
 // SessionRepository covers auth_sessions + auth_refresh_tokens + link codes.
@@ -30,7 +33,7 @@ type SessionRepository interface {
 	GetSessionByID(ctx context.Context, id int64) (*AuthSession, error)
 	TouchSession(ctx context.Context, id int64, at time.Time) error
 	RevokeSession(ctx context.Context, id int64, reason string) error
-	RevokeAllSessions(ctx context.Context, userID int64) error
+	RevokeAllSessions(ctx context.Context, userID int64, reason string) error
 
 	CreateRefreshToken(ctx context.Context, t *RefreshTokenRow) error
 	// GetRefreshTokenByHashForUpdate locks the row (reuse detection).

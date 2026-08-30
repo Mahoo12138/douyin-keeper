@@ -147,6 +147,7 @@ func (s *Server) Router() http.Handler {
 			private.Use(RequireAuth(s.signingKey, s.auth))
 
 			private.Get("/me", s.handleMe)
+			private.With(RateLimitUserAndIP(5, 15*time.Minute)).Put("/me/password", s.handleChangePassword)
 			private.Post("/auth/logout", s.handleLogout)
 			private.Post("/auth/logout-all", s.handleLogoutAll)
 			private.With(RateLimitUserAndIP(10, time.Minute)).Post("/auth/link-codes", s.handleCreateLinkCode)

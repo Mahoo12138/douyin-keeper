@@ -26,6 +26,11 @@ type loginReq struct {
 	Password string `json:"password"`
 }
 
+type changePasswordReq struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
 type refreshReq struct {
 	RefreshToken *string `json:"refresh_token"`
 }
@@ -150,6 +155,25 @@ func (s *Server) handleLogoutAll(w http.ResponseWriter, r *http.Request) {
 	}
 	p := auth.MustPrincipal(r.Context())
 	if err := s.auth.LogoutAll(r.Context(), p.UserID); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	s.clearRefreshCookie(w, r)
+	writeNoContent(w)
+}
+
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	if err := validateRequestOrigin(r); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	var req changePasswordReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, r, apperr.Validation(apperr.CodeConflict, "invalid body"))
+		return
+	}
+	p := auth.MustPrincipal(r.Context())
+	if err := s.auth.ChangePassword(r.Context(), p.UserID, req.CurrentPassword, req.NewPassword); err != nil {
 		writeError(w, r, err)
 		return
 	}

@@ -1,19 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
-import { ArrowRight, Bell, Check, ShieldCheck, UserRound } from 'lucide-react'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { ArrowRight, Bell, Check, KeyRound, ShieldCheck, UserRound } from 'lucide-react'
+import { useForm } from 'react-hook-form'
+import type { UseFormRegisterReturn } from 'react-hook-form'
 import { toast } from 'sonner'
-import { getNotificationPreferences, me, updateNotificationPreferences } from '@douyin-keeper/sdk-ts'
+import { ApiError, changePassword, getNotificationPreferences, me, updateNotificationPreferences } from '@douyin-keeper/sdk-ts'
 import type { components } from '@douyin-keeper/sdk-ts'
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton } from '@douyin-keeper/ui-web'
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Skeleton } from '@douyin-keeper/ui-web'
 
-import { getToken } from '@/auth/session'
+import { getToken, setToken } from '@/auth/session'
+import { changePasswordSchema } from './password-validation'
+import type { ChangePasswordForm } from './password-validation'
 import { formatPreferenceUpdatedAt, notificationPreferenceLabel } from './settings-utils'
 
 type NotificationPreferences = components['schemas']['NotificationPreferences']
 
 export function SettingsPage() {
 	const token = getToken()
+	const navigate = useNavigate()
 	const queryClient = useQueryClient()
+	const passwordForm = useForm<ChangePasswordForm>({
+		resolver: zodResolver(changePasswordSchema),
+		defaultValues: { currentPassword: '', newPassword: '', confirmPassword: '' },
+	})
 	const identityQ = useQuery({ queryKey: ['me', token], queryFn: () => me(token as string), enabled: !!token })
 	const preferencesQ = useQuery({ queryKey: ['notification-preferences', token], queryFn: () => getNotificationPreferences(token as string), enabled: !!token })
 	const disableWechatMutation = useMutation({
@@ -21,6 +31,19 @@ export function SettingsPage() {
 		onSuccess: (data) => {
 			queryClient.setQueryData(['notification-preferences', token], data)
 			toast.success('微信通知已关闭')
+		},
+	})
+	const changePasswordMutation = useMutation({
+		mutationFn: (values: ChangePasswordForm) => changePassword(token as string, {
+			current_password: values.currentPassword,
+			new_password: values.newPassword,
+		}),
+		onSuccess: () => {
+			passwordForm.reset()
+			setToken(null)
+			queryClient.clear()
+			toast.success('密码已修改，请使用新密码重新登录')
+			void navigate({ to: '/signin', replace: true })
 		},
 	})
 
@@ -38,6 +61,22 @@ export function SettingsPage() {
 				</CardHeader>
 				<CardContent>
 					{identityQ.isPending ? <div className="space-y-3"><Skeleton className="h-5 w-48" /><Skeleton className="h-4 w-64" /></div> : identityQ.isError ? <SettingsError text="账号信息暂时不可用" onRetry={() => void identityQ.refetch()} /> : <div className="grid gap-4 sm:grid-cols-2"><InfoItem label="显示名称" value={identityQ.data?.display_name || '未设置'} /><InfoItem label="账号角色" value={identityQ.data?.role === 'admin' ? '管理员' : '普通用户'} /></div>}
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle className="flex items-center gap-2"><KeyRound className="size-5 text-primary" />修改密码</CardTitle>
+					<CardDescription>修改成功后会退出所有设备，保护账号安全。</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<form className="flex max-w-xl flex-col gap-4" onSubmit={passwordForm.handleSubmit((values) => changePasswordMutation.mutate(values))}>
+						<PasswordField id="current-password" label="当前密码" autoComplete="current-password" error={passwordForm.formState.errors.currentPassword?.message} registration={passwordForm.register('currentPassword')} />
+						<PasswordField id="new-password" label="新密码" autoComplete="new-password" hint="使用至少 8 个字符，且不要与当前密码相同。" error={passwordForm.formState.errors.newPassword?.message} registration={passwordForm.register('newPassword')} />
+						<PasswordField id="confirm-password" label="确认新密码" autoComplete="new-password" error={passwordForm.formState.errors.confirmPassword?.message} registration={passwordForm.register('confirmPassword')} />
+						{changePasswordMutation.isError ? <p className="text-sm text-destructive" role="alert">{passwordChangeError(changePasswordMutation.error)}</p> : null}
+						<div><Button type="submit" disabled={changePasswordMutation.isPending}>{changePasswordMutation.isPending ? '修改中…' : '修改密码'}</Button></div>
+					</form>
 				</CardContent>
 			</Card>
 
@@ -63,6 +102,16 @@ export function SettingsPage() {
 			</Card>
 		</div>
 	)
+}
+
+function PasswordField({ id, label, hint, error, autoComplete, registration }: { id: string; label: string; hint?: string; error?: string; autoComplete: string; registration: UseFormRegisterReturn }) {
+	return <div className="flex flex-col gap-1.5"><Label htmlFor={id}>{label}</Label><Input id={id} type="password" autoComplete={autoComplete} aria-invalid={!!error} {...registration} />{error ? <p className="text-sm text-destructive" role="alert">{error}</p> : hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}</div>
+}
+
+function passwordChangeError(error: unknown) {
+	if (error instanceof ApiError && error.code === 'INVALID_CREDENTIALS') return '当前密码不正确，请重新输入。'
+	if (error instanceof ApiError && error.code === 'CONFLICT') return '新密码不符合要求，请检查后重试。'
+	return '密码修改失败，请稍后重试。'
 }
 
 function NotificationPreference({ preferences, pending, onDisable }: { preferences: NotificationPreferences; pending: boolean; onDisable: () => void }) {

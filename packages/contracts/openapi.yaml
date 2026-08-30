@@ -17,6 +17,27 @@ paths:
                 $ref: '#/components/schemas/User'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+  /me/password:
+    put:
+      operationId: changePassword
+      description: Replace the current user's local password and revoke all existing sessions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Password changed; all sessions have been revoked
+        '400':
+          description: Invalid password input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
   /admin/users:
     get:
       operationId: listAdminUsers
@@ -3505,6 +3526,21 @@ components:
           type: string
         password:
           type: string
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - current_password
+      - new_password
+      properties:
+        current_password:
+          type: string
+          minLength: 1
+          maxLength: 256
+        new_password:
+          type: string
+          minLength: 8
+          maxLength: 256
     AuthResponse:
       type: object
       required:

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { Checkbox, Image, Input, Text, View } from '@tarojs/components'
 import Taro, { useDidHide, useDidShow } from '@tarojs/taro'
 
-import { getMe, getNotificationPreferences, listMyEntitlementGrants, listNotifications, loginPassword, loginWechatMini, logoutMini, markAllNotificationsRead, markNotificationRead, MiniApiError, myEntitlement, redeemCardCode, registerPassword, updateNotificationPreferences } from '@/lib/api'
+import { changePassword, getMe, getNotificationPreferences, listMyEntitlementGrants, listNotifications, loginPassword, loginWechatMini, logoutMini, markAllNotificationsRead, markNotificationRead, MiniApiError, myEntitlement, redeemCardCode, registerPassword, updateNotificationPreferences } from '@/lib/api'
 import { clearSession, getAccessToken, setSession } from '@/lib/session'
 import { miniAssetUrl } from '@/lib/mini-assets'
 import { entitlementGrantStatus, entitlementSourceLabel, entitlementStatus, formatEntitlementDate, normalizeRedeemCode, quotaLabel } from '@/features/entitlement/entitlement-utils'
@@ -12,6 +12,7 @@ import { helpSections, privacySections } from '@/features/help/help-content'
 import { notificationBodyLabel, notificationPriorityLabel } from '@/features/notification/notification-utils'
 import { consumeMeScreenTarget } from '@/features/navigation/mini-navigation'
 import { authConsentError, wechatMiniRuntimeError, wechatNotificationRuntimeError } from '@/features/auth/auth-validation'
+import { passwordChangeError } from '@/features/auth/password-change'
 import { MiniButton as Button } from '@/components/mini-button'
 import { MiniNavbarAction, MiniPageLayout } from '@/components/mini-navbar'
 import { MiniRemoteImage } from '@/components/mini-remote-image'
@@ -24,7 +25,7 @@ const authGuardian = miniAssetUrl('me/auth-guardian.png')
 const notificationBell = miniAssetUrl('me/notification-bell.png')
 const requestWechatSubscribe = Taro.requestSubscribeMessage as unknown as ((options: { tmplIds: string[] }) => Promise<Record<string, string>>) | undefined
 const isH5Runtime = typeof window !== 'undefined'
-type MeScreen = 'overview' | 'entitlement' | 'history' | 'notifications' | 'settings'
+type MeScreen = 'overview' | 'entitlement' | 'history' | 'notifications' | 'settings' | 'password'
 type AuthMode = 'login' | 'register'
 type OnboardingStage = 'splash' | 'welcome' | 'auth'
 
@@ -38,6 +39,9 @@ export default function Me() {
   const [registerUsername, setRegisterUsername] = useState('')
   const [registerPasswordValue, setRegisterPasswordValue] = useState('')
   const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('')
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [busy, setBusy] = useState('')
   const [message, setMessage] = useState('')
@@ -187,6 +191,39 @@ export default function Me() {
     }
   }
 
+  async function runPasswordChange() {
+    const token = getAccessToken()
+    if (!token || busy) return
+    const validationError = passwordChangeError(currentPassword, newPassword, newPasswordConfirm)
+    if (validationError) {
+      setMessage(validationError)
+      return
+    }
+    setBusy('password-change')
+    setMessage('')
+    try {
+      await changePassword(token, currentPassword, newPassword)
+      clearSession()
+      setHasToken(false)
+      setUser(null)
+      setEntitlement(null)
+      setGrantHistory([])
+      setNotifications([])
+      setUnreadCount(0)
+      setNotificationCursor(null)
+      setCurrentPassword('')
+      setNewPassword('')
+      setNewPasswordConfirm('')
+      setScreen('overview')
+      setOnboardingStage('auth')
+      await Taro.showToast({ title: '密码已修改，请重新登录', icon: 'success', duration: 2200 })
+    } catch (cause) {
+      setMessage(passwordApiError(cause))
+    } finally {
+      setBusy('')
+    }
+  }
+
   async function redeem() {
     const token = getAccessToken()
     const code = normalizeRedeemCode(redeemCode)
@@ -320,6 +357,9 @@ export default function Me() {
     setNotifications([])
     setUnreadCount(0)
     setNotificationCursor(null)
+    setCurrentPassword('')
+    setNewPassword('')
+    setNewPasswordConfirm('')
     setMessage(message)
     setScreen('overview')
     setBusy('')
@@ -327,10 +367,22 @@ export default function Me() {
 
   const feedback = message ? <MiniToast visible message={message} tone="error" onClose={() => setMessage('')} /> : null
 
+  function leaveDetailScreen() {
+    if (screen === 'password') {
+      setCurrentPassword('')
+      setNewPassword('')
+      setNewPasswordConfirm('')
+      setMessage('')
+      setScreen('settings')
+      return
+    }
+    setScreen('overview')
+  }
+
   if (!hasToken && onboardingStage === 'splash') return <SplashScreen />
   if (!hasToken && onboardingStage === 'welcome') return <WelcomeScreen onLogin={() => { Taro.setStorageSync(onboardingSeenKey, true); setAuthMode('login'); setOnboardingStage('auth') }} onRegister={() => { Taro.setStorageSync(onboardingSeenKey, true); setAuthMode('register'); setOnboardingStage('auth') }} />
   if (!hasToken) return <><AuthGate mode={authMode} username={username} password={password} registerUsername={registerUsername} registerPassword={registerPasswordValue} registerPasswordConfirm={registerPasswordConfirm} termsAccepted={termsAccepted} busy={busy} onModeChange={setAuthMode} onUsernameChange={setUsername} onPasswordChange={setPassword} onRegisterUsernameChange={setRegisterUsername} onRegisterPasswordChange={setRegisterPasswordValue} onRegisterPasswordConfirmChange={setRegisterPasswordConfirm} onTermsChange={setTermsAccepted} onPasswordLogin={() => void runPasswordLogin()} onPasswordRegister={() => void runPasswordRegister()} onLogin={() => void runWechatLogin()} onBack={() => setOnboardingStage('welcome')} />{feedback}</>
-  if (screen !== 'overview') return <><MiniPageLayout pageClassName="me-page" title={screenTitle(screen)} showBack onBack={() => setScreen('overview')}>{screen === 'entitlement' && <EntitlementScreen entitlement={entitlement} redeemCode={redeemCode} busy={busy} message={message} onRedeemCodeChange={setRedeemCode} onRedeem={() => void redeem()} onOpenHistory={() => setScreen('history')} />}{screen === 'history' && <GrantHistoryScreen grants={grantHistory} cursor={grantCursor} busy={busy} onLoadMore={() => void loadMoreGrants()} />}{screen === 'notifications' && <NotificationScreen notifications={notifications} cursor={notificationCursor} unreadCount={unreadCount} enabled={wechatNotificationsEnabled} busy={busy} message={message} onToggle={() => void toggleWechatNotifications()} onMarkRead={(id) => void markRead(id)} onMarkAll={() => void markAllRead()} onLoadMore={() => void loadMoreNotifications()} />}{screen === 'settings' && <SettingsScreen busy={busy} helpExpanded={helpExpanded} privacyExpanded={privacyExpanded} onHelp={() => setHelpExpanded((current) => !current)} onPrivacy={() => setPrivacyExpanded((current) => !current)} onLogout={() => void logout()} message={message} />}</MiniPageLayout>{feedback}</>
+  if (screen !== 'overview') return <><MiniPageLayout pageClassName="me-page" title={screenTitle(screen)} showBack onBack={leaveDetailScreen}>{screen === 'entitlement' && <EntitlementScreen entitlement={entitlement} redeemCode={redeemCode} busy={busy} message={message} onRedeemCodeChange={setRedeemCode} onRedeem={() => void redeem()} onOpenHistory={() => setScreen('history')} />}{screen === 'history' && <GrantHistoryScreen grants={grantHistory} cursor={grantCursor} busy={busy} onLoadMore={() => void loadMoreGrants()} />}{screen === 'notifications' && <NotificationScreen notifications={notifications} cursor={notificationCursor} unreadCount={unreadCount} enabled={wechatNotificationsEnabled} busy={busy} message={message} onToggle={() => void toggleWechatNotifications()} onMarkRead={(id) => void markRead(id)} onMarkAll={() => void markAllRead()} onLoadMore={() => void loadMoreNotifications()} />}{screen === 'settings' && <SettingsScreen busy={busy} helpExpanded={helpExpanded} privacyExpanded={privacyExpanded} onHelp={() => setHelpExpanded((current) => !current)} onPrivacy={() => setPrivacyExpanded((current) => !current)} onPassword={() => { setMessage(''); setScreen('password') }} onLogout={() => void logout()} message={message} />}{screen === 'password' && <PasswordScreen currentPassword={currentPassword} newPassword={newPassword} confirmPassword={newPasswordConfirm} busy={busy} onCurrentPasswordChange={setCurrentPassword} onNewPasswordChange={setNewPassword} onConfirmPasswordChange={setNewPasswordConfirm} onSubmit={() => void runPasswordChange()} />}</MiniPageLayout>{feedback}</>
 
   return <><MiniPageLayout pageClassName="me-page" align="start" title={<Text className="me-page-title">我的</Text>} action={<MiniNavbarAction ariaLabel="设置" onClick={() => setScreen('settings')}>•••</MiniNavbarAction>}><View className="profile-card"><MiniRemoteImage className="profile-avatar" name="me/avatar-profile.png" mode="aspectFill" /><View className="profile-copy"><Text className="profile-name">{user?.display_name || '小豆同学'} <Text className="profile-leaf">◆</Text></Text><Text className="profile-id">ID: {user?.id?.slice(0, 12) || 'keeper_user'}</Text><Text className="profile-note">保持专注，享受每一次连接</Text></View><Text className="me-chevron">›</Text></View><View className="entitlement-preview" onClick={() => setScreen('entitlement')}><View><Text className="entitlement-preview-label">当前权益</Text><Text className="entitlement-preview-plan">{entitlement?.plan_code || '未激活权益'}</Text><Text className="entitlement-preview-date">有效期至 {formatEntitlementDate(entitlement?.expires_at)}</Text></View><MiniRemoteImage className="mascot-small" name="me/mascot-sprout.png" mode="aspectFit" /><View className="entitlement-progress"><View style={{ width: entitlement?.active ? '72%' : '12%' }} /></View></View><View className="me-action-grid"><MeAction className="me-action-entitlement" icon="▣" title="权益与兑换" hint="查看权益与兑换卡密" onClick={() => setScreen('entitlement')} tone="green" /><MeAction className="me-action-grants" icon="▤" title="兑换记录" hint="查看历史兑换记录" onClick={() => setScreen('history')} tone="blue" /><MeAction className="me-action-notifications" icon="♧" title="通知设置" hint={`${unreadCount ? `${unreadCount} 条未读` : '管理通知偏好'}`} onClick={() => setScreen('notifications')} tone="coral" /><MeAction className="me-action-help" icon="?" title="帮助中心" hint="使用说明与安全边界" onClick={() => setScreen('settings')} tone="purple" /><MeAction className="me-action-settings" icon="⚙" title="设置" hint="通用设置与账号安全" onClick={() => setScreen('settings')} tone="teal" /><MeAction className="me-action-about" icon="i" title="关于我们" hint="了解 Douyin Keeper" onClick={() => setScreen('settings')} tone="amber" /></View></MiniPageLayout>{feedback}</>
 }
@@ -341,13 +393,14 @@ function AuthGate({ mode, username, password, registerUsername, registerPassword
 function EntitlementScreen({ entitlement, redeemCode, busy, message, onRedeemCodeChange, onRedeem, onOpenHistory }: { entitlement: Awaited<ReturnType<typeof myEntitlement>> | null; redeemCode: string; busy: string; message: string; onRedeemCodeChange: (value: string) => void; onRedeem: () => void; onOpenHistory: () => void }) { return <View>{message && <View className="me-inline-error"><Text>{message}</Text></View>}<View className="entitlement-hero"><Text className="entitlement-hero-label">当前权益 ♛</Text><Text className="entitlement-hero-plan">{entitlement?.plan_code || '未激活'}</Text><Text className="entitlement-hero-date">有效期至 {formatEntitlementDate(entitlement?.expires_at)}</Text><Image className="mascot-entitlement" src={mascotSprout} mode="aspectFit" /><Text className="entitlement-remaining">剩余 {entitlement?.active ? Math.max(0, Math.ceil((new Date(entitlement.expires_at || Date.now()).getTime() - Date.now()) / 86400000)) : 0} 天</Text></View><View className="me-panel"><Text className="me-section-title">额度概览</Text><View className="quota-grid-me"><Quota label="账号槽位" value={quotaLabel(entitlement?.usage?.accounts_used, entitlement?.account_quota)} /><Quota label="任务额度" value={quotaLabel(entitlement?.usage?.tasks_used, entitlement?.task_quota)} /><Quota label="今日已用" value={quotaLabel(entitlement?.usage?.daily_send_reserved, entitlement?.daily_send_quota)} /></View></View><View className="me-panel"><View className="me-panel-heading"><Text className="me-section-title">兑换卡密</Text><Button className="me-link-button" onClick={onOpenHistory}>查看记录 ›</Button></View><Input className="me-code-input" value={redeemCode} maxlength={128} placeholder="请输入兑换码（区分大小写）" onInput={(event) => onRedeemCodeChange(event.detail.value)} /><Button className="me-primary-button" disabled={busy !== '' || !redeemCode.trim()} onClick={onRedeem}>{busy === 'redeem' ? '兑换中…' : '立即兑换'}</Button></View></View> }
 function GrantHistoryScreen({ grants, cursor, busy, onLoadMore }: { grants: Awaited<ReturnType<typeof listMyEntitlementGrants>>['items']; cursor: string | null; busy: string; onLoadMore: () => void }) { return <View className="me-panel history-panel"><View className="history-timeline">{grants.length === 0 ? <View className="me-empty"><Text className="me-empty-title">暂无兑换记录</Text><Text className="muted">兑换成功后，会在这里保留记录。</Text></View> : grants.map((grant) => { const status = entitlementGrantStatus(grant); return <View className="grant-card-me" key={grant.id}><View className="grant-dot" /><View className="grant-card-main"><View className="grant-card-heading"><Text className="grant-card-plan">{grant.plan_code || '未命名方案'} · {daysBetween(grant.starts_at, grant.expires_at)}天</Text><Text className={`grant-status grant-status-${status.tone}`}>{status.label}</Text></View><Text className="muted">兑换时间 {formatEntitlementDate(grant.starts_at)}</Text><Text className="muted">有效期 {formatEntitlementDate(grant.starts_at)} ～ {formatEntitlementDate(grant.expires_at)}</Text><Text className="grant-source">{entitlementSourceLabel(grant.source_type)}</Text></View></View> })}</View>{cursor && <Button className="me-secondary-button" disabled={busy === 'grants'} onClick={onLoadMore}>{busy === 'grants' ? '加载中…' : '加载更多记录'}</Button>}</View> }
 function NotificationScreen({ notifications, cursor, unreadCount, enabled, busy, message, onToggle, onMarkRead, onMarkAll, onLoadMore }: { notifications: Awaited<ReturnType<typeof listNotifications>>['items']; cursor: string | null; unreadCount: number; enabled: boolean; busy: string; message: string; onToggle: () => void; onMarkRead: (id: string) => void; onMarkAll: () => void; onLoadMore: () => void }) { return <View><View className="notification-hero"><View><Text className="notification-hero-title">及时通知，不错过重要信息</Text><Text className="muted">可根据需要开启微信服务通知。</Text></View><Image className="notification-hero-image" src={notificationBell} mode="aspectFit" /></View>{message && <View className="me-inline-error"><Text>{message}</Text></View>}<View className="me-panel"><View className="me-panel-heading"><Text className="me-section-title">站内通知</Text><Text className="me-unread-label">{unreadCount ? `${unreadCount} 条未读` : '已全部读'}</Text></View><View className="notification-setting-row"><View><Text>站内消息通知</Text><Text className="muted">登录失效与任务风险会保留在这里</Text></View><Text className="notification-enabled">已开启</Text></View>{notifications.length === 0 ? <View className="me-empty"><Text className="me-empty-title">暂无通知</Text><Text className="muted">账号状态变化时，会在这里提醒你。</Text></View> : notifications.map((item) => <View className={`me-notification-row ${item.read_at ? '' : 'me-notification-unread'}`} key={item.id}><View className="me-notification-copy"><Text className="compact-notification-title">{item.title}</Text><Text className="muted">{notificationBodyLabel(item.body)}</Text></View><View><Text className={`notification-priority notification-priority-${item.priority}`}>{notificationPriorityLabel(item.priority)}</Text>{!item.read_at && <Button className="me-read-button" disabled={busy !== ''} onClick={() => onMarkRead(item.id)}>{busy === `read:${item.id}` ? '处理中…' : '已读'}</Button>}</View></View>)}{cursor && <Button className="me-link-button" disabled={busy !== ''} onClick={onLoadMore}>{busy === 'notifications-more' ? '加载中…' : '加载更多通知'}</Button>}{unreadCount > 0 && <Button className="me-link-button mark-all-button" disabled={busy !== ''} onClick={onMarkAll}>{busy === 'read-all' ? '处理中…' : '全部标为已读'}</Button>}</View><View className="me-panel"><View className="me-panel-heading"><Text className="me-section-title">微信通知</Text><Text className={`me-switch ${enabled ? 'me-switch-on' : ''}`} onClick={onToggle}>{enabled ? '开' : '关'}</Text></View><Text className="muted">授权后，登录失效和安全验证会通过微信提醒；站内通知始终保留。</Text><Button className="me-secondary-button" disabled={busy === 'notifications'} onClick={onToggle}>{busy === 'notifications' ? '处理中…' : enabled ? '关闭微信通知' : '开启微信通知'}</Button></View></View> }
-function SettingsScreen({ busy, helpExpanded, privacyExpanded, onHelp, onPrivacy, onLogout, message }: { busy: string; helpExpanded: boolean; privacyExpanded: boolean; onHelp: () => void; onPrivacy: () => void; onLogout: () => void; message: string }) { return <View><SettingGroup title="账号与安全"><SettingRow title="账号与安全" hint="修改密码、登录设备管理" /><SettingRow title="清理缓存" hint="本地临时数据" trailing="—" /></SettingGroup><SettingGroup title="帮助与支持"><SettingRow title="联系客服" hint="工作日 9:00–18:00" /><Button className="setting-toggle-row" onClick={onHelp}><Text>常见问题</Text><Text>›</Text></Button><Button className="setting-toggle-row" onClick={onPrivacy}><Text>使用帮助与安全边界</Text><Text>›</Text></Button>{helpExpanded && <HelpList sections={helpSections} />}{privacyExpanded && <HelpList sections={privacySections} />}</SettingGroup><SettingGroup title="关于我们"><SettingRow title="关于 Douyin Keeper" hint="关系维护优先于营销扩张" /><SettingRow title="版本信息" hint="当前小程序版本" trailing="v1.0.0" /></SettingGroup>{message && <View className="me-inline-error"><Text>{message}</Text></View>}<Button className="me-logout-button" disabled={busy === 'logout'} onClick={onLogout}>{busy === 'logout' ? '退出中…' : '退出登录'}</Button></View> }
+function PasswordScreen({ currentPassword, newPassword, confirmPassword, busy, onCurrentPasswordChange, onNewPasswordChange, onConfirmPasswordChange, onSubmit }: { currentPassword: string; newPassword: string; confirmPassword: string; busy: string; onCurrentPasswordChange: (value: string) => void; onNewPasswordChange: (value: string) => void; onConfirmPasswordChange: (value: string) => void; onSubmit: () => void }) { return <View className="me-panel password-panel"><Text className="me-section-title">修改登录密码</Text><Text className="muted">修改成功后，Web、小程序和其他设备都会退出登录。</Text><Input className="me-code-input" value={currentPassword} maxlength={256} password placeholder="请输入当前密码" onInput={(event) => onCurrentPasswordChange(event.detail.value)} /><Input className="me-code-input" value={newPassword} maxlength={256} password placeholder="请输入新密码（8–256 个字符）" onInput={(event) => onNewPasswordChange(event.detail.value)} /><Input className="me-code-input" value={confirmPassword} maxlength={256} password placeholder="请再次输入新密码" onInput={(event) => onConfirmPasswordChange(event.detail.value)} /><Button className="me-primary-button" disabled={busy !== '' || !currentPassword || !newPassword || !confirmPassword} onClick={onSubmit}>{busy === 'password-change' ? '修改中…' : '确认修改'}</Button></View> }
+function SettingsScreen({ busy, helpExpanded, privacyExpanded, onHelp, onPrivacy, onPassword, onLogout, message }: { busy: string; helpExpanded: boolean; privacyExpanded: boolean; onHelp: () => void; onPrivacy: () => void; onPassword: () => void; onLogout: () => void; message: string }) { return <View><SettingGroup title="账号与安全"><SettingRow title="修改密码" hint="更新登录密码并退出所有设备" onClick={onPassword} /><SettingRow title="清理缓存" hint="本地临时数据" trailing="—" /></SettingGroup><SettingGroup title="帮助与支持"><SettingRow title="联系客服" hint="工作日 9:00–18:00" /><Button className="setting-toggle-row" onClick={onHelp}><Text>常见问题</Text><Text>›</Text></Button><Button className="setting-toggle-row" onClick={onPrivacy}><Text>使用帮助与安全边界</Text><Text>›</Text></Button>{helpExpanded && <HelpList sections={helpSections} />}{privacyExpanded && <HelpList sections={privacySections} />}</SettingGroup><SettingGroup title="关于我们"><SettingRow title="关于 Douyin Keeper" hint="关系维护优先于营销扩张" /><SettingRow title="版本信息" hint="当前小程序版本" trailing="v1.0.0" /></SettingGroup>{message && <View className="me-inline-error"><Text>{message}</Text></View>}<Button className="me-logout-button" disabled={busy === 'logout'} onClick={onLogout}>{busy === 'logout' ? '退出中…' : '退出登录'}</Button></View> }
 function SettingGroup({ title, children }: { title: string; children: ReactNode }) { return <View className="setting-group"><Text className="setting-group-title">{title}</Text><View className="setting-group-card">{children}</View></View> }
-function SettingRow({ title, hint, trailing }: { title: string; hint: string; trailing?: string }) { return <View className="setting-row"><View><Text>{title}</Text><Text className="muted">{hint}</Text></View><Text className="setting-trailing">{trailing || '›'}</Text></View> }
+function SettingRow({ title, hint, trailing, onClick }: { title: string; hint: string; trailing?: string; onClick?: () => void }) { const content = <><View><Text>{title}</Text><Text className="muted">{hint}</Text></View><Text className="setting-trailing">{trailing || '›'}</Text></>; return onClick ? <Button className="setting-row" onClick={onClick}>{content}</Button> : <View className="setting-row">{content}</View> }
 function HelpList({ sections }: { sections: { title: string; body: string }[] }) { return <View className="help-list-me">{sections.map((section, index) => <View className={`help-row-me ${index === sections.length - 1 ? 'help-row-me-last' : ''}`} key={section.title}><Text className="help-row-me-title">{section.title}</Text><Text className="muted">{section.body}</Text></View>)}</View> }
 function MeAction({ className = '', icon, title, hint, onClick, tone }: { className?: string; icon: string; title: string; hint: string; onClick: () => void; tone: string }) { return <Button className={`me-action ${className}`.trim()} aria-label={title} onClick={onClick}><Text className={`me-action-icon me-action-icon-${tone}`}>{icon}</Text><View><Text className="me-action-title">{title}</Text><Text className="muted">{hint}</Text></View></Button> }
 function Quota({ label, value }: { label: string; value: string }) { return <View className="quota-item-me"><Text className="quota-value-me">{value}</Text><Text className="muted">{label}</Text></View> }
-function screenTitle(screen: MeScreen) { return { overview: '我的', entitlement: '权益与兑换', history: '兑换记录', notifications: '通知设置', settings: '设置' }[screen] }
+function screenTitle(screen: MeScreen) { return { overview: '我的', entitlement: '权益与兑换', history: '兑换记录', notifications: '通知设置', settings: '设置', password: '修改密码' }[screen] }
 function daysBetween(start: string, end: string) { return Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000)) }
 function authError(cause: unknown) {
   if (cause instanceof MiniApiError) {
@@ -356,4 +409,10 @@ function authError(cause: unknown) {
     if (cause.code === 'CONFLICT') return '用户名已存在，或账号信息冲突。'
   }
   return cause instanceof Error ? cause.message : '操作失败，请稍后重试。'
+}
+
+function passwordApiError(cause: unknown) {
+  if (cause instanceof MiniApiError && cause.code === 'INVALID_CREDENTIALS') return '当前密码不正确，请重新输入。'
+  if (cause instanceof MiniApiError && cause.code === 'CONFLICT') return '新密码不符合要求，请检查后重试。'
+  return cause instanceof Error ? cause.message : '密码修改失败，请稍后重试。'
 }

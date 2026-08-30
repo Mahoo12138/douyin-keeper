@@ -50,6 +50,14 @@ export async function me(accessToken: string) {
   return data
 }
 
+export async function changePassword(accessToken: string, body: components['schemas']['ChangePasswordRequest']) {
+  const { error } = await api.PUT('/me/password', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body,
+  })
+  if (error) throwApiError(error, 'password change failed')
+}
+
 export async function listAdminUsers(accessToken: string, options?: { limit?: number; cursor?: string }) {
   const { data, error } = await api.GET('/admin/users', {
     headers: { Authorization: `Bearer ${accessToken}` },

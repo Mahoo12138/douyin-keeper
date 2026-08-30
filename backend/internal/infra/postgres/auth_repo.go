@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -85,6 +86,19 @@ func (r *AuthUserRepo) GetLocalByUsername(ctx context.Context, username string) 
 	return u, &idn, nil
 }
 
+func (r *AuthUserRepo) GetLocalByUserID(ctx context.Context, userID int64) (*auth.AuthIdentity, error) {
+	var idn auth.AuthIdentity
+	err := From(ctx, r.pool).QueryRow(ctx, `
+		SELECT id, user_id, provider, provider_subject, credential_hash, created_at, updated_at
+		FROM auth_identities
+		WHERE provider = 'local' AND user_id = $1
+	`, userID).Scan(&idn.ID, &idn.UserID, &idn.Provider, &idn.ProviderSubject, &idn.CredentialHash, &idn.CreatedAt, &idn.UpdatedAt)
+	if err != nil {
+		return nil, mapNoRows(err, apperr.CodeNotFound, "local identity not found")
+	}
+	return &idn, nil
+}
+
 func (r *AuthUserRepo) GetWechatBySubject(ctx context.Context, subject string) (*auth.User, error) {
 	u, err := scanUser(From(ctx, r.pool).QueryRow(ctx, `
 		SELECT u.id, u.public_id, u.role, u.status, u.display_name, u.timezone,
@@ -118,6 +132,21 @@ func (r *AuthUserRepo) CreateIdentity(ctx context.Context, idn *auth.AuthIdentit
 		return apperr.Conflict(apperr.CodeConflict, "identity already exists")
 	}
 	return err
+}
+
+func (r *AuthUserRepo) UpdateLocalCredentialHash(ctx context.Context, userID int64, credentialHash string, updatedAt time.Time) error {
+	tag, err := From(ctx, r.pool).Exec(ctx, `
+		UPDATE auth_identities
+		SET credential_hash = $2, updated_at = $3
+		WHERE user_id = $1 AND provider = 'local'
+	`, userID, credentialHash, updatedAt)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return apperr.NotFound(apperr.CodeNotFound, "local identity not found")
+	}
+	return nil
 }
 
 func isUniqueViolation(err error) bool {

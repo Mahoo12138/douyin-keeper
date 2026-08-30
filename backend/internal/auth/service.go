@@ -212,7 +212,47 @@ func (s *Service) Logout(ctx context.Context, sessionID int64) error {
 
 // LogoutAll revokes every session of the user, including the current one.
 func (s *Service) LogoutAll(ctx context.Context, userID int64) error {
-	return s.sessions.RevokeAllSessions(ctx, userID)
+	return s.sessions.RevokeAllSessions(ctx, userID, "logout-all")
+}
+
+// ChangePassword verifies the current local credential, replaces it, and
+// revokes every existing session so all clients must authenticate again.
+func (s *Service) ChangePassword(ctx context.Context, userID int64, currentPassword, newPassword string) error {
+	if currentPassword == "" || len(currentPassword) > 256 {
+		return apperr.Validation(apperr.CodeConflict, "current password must be 1-256 characters")
+	}
+	if len(newPassword) < 8 || len(newPassword) > 256 {
+		return apperr.Validation(apperr.CodeConflict, "password must be 8-256 characters")
+	}
+	if currentPassword == newPassword {
+		return apperr.Validation(apperr.CodeConflict, "new password must differ from current password")
+	}
+	newHash, err := s.hasher.Hash(newPassword)
+	if err != nil {
+		return apperr.Wrap(apperr.CodeInternal, apperr.KindInternal, "password hash failed", err)
+	}
+
+	return s.tx.WithinTx(ctx, func(tctx context.Context) error {
+		user, err := s.users.LockUserByID(tctx, userID)
+		if err != nil {
+			return err
+		}
+		if !user.IsActive() {
+			return apperr.New(apperr.CodeUserDisabled, apperr.KindForbidden, "account is disabled")
+		}
+		identity, err := s.users.GetLocalByUserID(tctx, userID)
+		if err != nil || identity == nil || identity.CredentialHash == nil {
+			return apperr.Unauthorized(apperr.CodeInvalidCredentials, "current password is invalid")
+		}
+		valid, verifyErr := s.hasher.Verify(*identity.CredentialHash, currentPassword)
+		if verifyErr != nil || !valid {
+			return apperr.Unauthorized(apperr.CodeInvalidCredentials, "current password is invalid")
+		}
+		if err := s.users.UpdateLocalCredentialHash(tctx, userID, newHash, s.now()); err != nil {
+			return err
+		}
+		return s.sessions.RevokeAllSessions(tctx, userID, "password-changed")
+	})
 }
 
 // GetUserByPublicID resolves the current user for GET /me.

@@ -13,7 +13,7 @@ const API_BASE_URL = resolveApiBaseUrl(process.env.TARO_ENV, {
 
 type Collection<T> = { items: T[]; next_cursor?: string | null }
 type ApiErrorBody = { error?: { code?: string; message?: string } }
-type RequestOptions = { token?: string | null; method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; data?: unknown; headers?: Record<string, string>; skipRefresh?: boolean }
+type RequestOptions = { token?: string | null; method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; data?: unknown; headers?: Record<string, string>; skipRefresh?: boolean }
 
 export type SparkFriend = components['schemas']['Friend'] & Pick<components['schemas']['Conversation'], 'conversation_type' | 'spark_supported' | 'last_message_at' | 'archived' | 'archived_at'> & { conversation_id: components['schemas']['Conversation']['id'] }
 
@@ -85,6 +85,12 @@ export function loginPassword(username: string, password: string) {
 export function registerPassword(username: string, password: string) {
   return request<components['schemas']['AuthResponse']>('/auth/mini/register', {
     method: 'POST', data: { username, password }, skipRefresh: true,
+  })
+}
+
+export function changePassword(token: string, currentPassword: string, newPassword: string) {
+  return request<void>('/me/password', {
+    method: 'PUT', token, data: { current_password: currentPassword, new_password: newPassword },
   })
 }
 

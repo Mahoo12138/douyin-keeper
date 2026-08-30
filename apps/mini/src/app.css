@@ -436,7 +436,7 @@ page {
 .me-more-button, .me-back-button { display: flex; align-items: center; justify-content: center; margin: 0; padding: 0; border: 0; color: #1c2821; background: #fff; line-height: 1; }
 .me-more-button { width: 76rpx; height: 62rpx; border-radius: 18rpx; font-size: 26rpx; letter-spacing: 2rpx; }
 .me-back-button { width: 62rpx; height: 62rpx; justify-content: flex-start; font-size: 54rpx; font-weight: 300; }
-.me-more-button::after, .me-back-button::after, .me-action::after, .me-link-button::after, .setting-toggle-row::after { display: none; }
+.me-more-button::after, .me-back-button::after, .me-action::after, .me-link-button::after, .setting-row::after, .setting-toggle-row::after { display: none; }
 .me-detail-topbar { min-height: 76rpx; color: #1b2821; font-size: 29rpx; font-weight: 600; }
 .me-topbar-spacer { width: 62rpx; }
 .profile-card { display: flex; align-items: center; gap: 18rpx; margin-top: 26rpx; padding: 22rpx 20rpx; border: 1rpx solid #dfece5; border-radius: 24rpx; background: #fff; box-shadow: 0 12rpx 28rpx rgba(35, 86, 65, .06); }
@@ -546,6 +546,7 @@ page {
 .me-switch { padding: 5rpx 14rpx; border-radius: 999rpx; color: #82918a; background: #edf2ef; font-size: 20rpx; }
 .me-switch-on { color: #fff; background: #1abd7c; }
 .setting-group { margin-top: 22rpx; }
+.password-panel { margin-top: 22rpx; }
 .setting-group-title { display: block; margin: 0 4rpx 10rpx; color: #819087; font-size: 21rpx; }
 .setting-group-card { overflow: hidden; border: 1rpx solid #e4ece8; border-radius: 20rpx; background: #fff; box-shadow: 0 8rpx 20rpx rgba(35, 86, 65, .04); }
 .setting-row, .setting-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 18rpx; width: 100%; min-height: 78rpx; margin: 0; padding: 14rpx 20rpx; border: 0; border-bottom: 1rpx solid #edf1ef; color: #26332b; background: #fff; font-size: 24rpx; text-align: left; box-sizing: border-box; }
