@@ -193,7 +193,7 @@ function formatInputDate(value: Date | undefined) {
 }
 
 function HistoryTable({ items, onSelect }: { items: HistoryItem[]; onSelect: (item: HistoryItem) => void }) {
-  return <Table className="min-w-[760px] table-fixed"><TableHeader><TableRow><TableHead className="w-[20%] pl-5">时间</TableHead><TableHead className="w-[24%]">账号 / 会话</TableHead><TableHead className="w-[16%]">任务</TableHead><TableHead className="w-[22%]">状态</TableHead><TableHead className="w-[18%] pr-5 text-right">详情</TableHead></TableRow></TableHeader><TableBody>{items.map((item) => <HistoryRow key={item.id} item={item} onSelect={onSelect} />)}</TableBody></Table>
+  return <Table className="min-w-[760px] table-fixed"><TableHeader><TableRow><TableHead className="w-[20%] pl-5">时间</TableHead><TableHead className="w-[24%]">账号 / 会话</TableHead><TableHead className="w-[16%]">任务</TableHead><TableHead className="w-[16%]">状态</TableHead><TableHead className="w-[24%] pr-5 text-right">详情</TableHead></TableRow></TableHeader><TableBody>{items.map((item) => <HistoryRow key={item.id} item={item} onSelect={onSelect} />)}</TableBody></Table>
 }
 
 function HistoryRow({ item, onSelect }: { item: HistoryItem; onSelect: (item: HistoryItem) => void }) {
