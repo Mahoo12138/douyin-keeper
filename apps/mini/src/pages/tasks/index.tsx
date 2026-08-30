@@ -6,6 +6,7 @@ import { getAccessToken } from '@/lib/session'
 import { createMessageTemplate, createTask, deleteMessageTemplate, deleteTask, getSendJob, listAccounts, listFriends, listMessageTemplates, listSendIntents, listTasks, MiniApiError, runTaskNow, updateMessageTemplate, updateTask } from '@/lib/api'
 import { createIdempotencyKey } from '@/features/home/home-utils'
 import { jobErrorMessage } from '@/features/job-error-utils'
+import { openLoginPage } from '@/features/navigation/mini-navigation'
 import { taskCreateDraftError, taskTargetCandidates, taskTimePayload, templatePickerIndex, uniqueSparkTargets } from '@/features/spark/spark-utils'
 import { accountTabLabel } from '@/components/account-tab-utils'
 import { MiniButton as Button } from '@/components/mini-button'
@@ -70,6 +71,7 @@ export default function Tasks() {
       setState('ready')
     } catch (cause) {
       if (cause instanceof MiniApiError && cause.statusCode === 401) {
+        openLoginPage()
         setState('guest')
         return
       }

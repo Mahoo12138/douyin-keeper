@@ -7,6 +7,7 @@ import { cancelJob, getJob, listAccounts, listFriends, listMessageTemplates, lis
 import { accountTabLabel } from '@/components/account-tab-utils'
 import { createIdempotencyKey, selectAccountId } from '@/features/home/home-utils'
 import { jobErrorMessage } from '@/features/job-error-utils'
+import { openLoginPage } from '@/features/navigation/mini-navigation'
 import { replaceFriend, replaceTask, taskDraftError, taskForFriend, taskTimeInput, taskTimePayload, templatePickerIndex } from '@/features/spark/spark-utils'
 import { MiniButton as Button } from '@/components/mini-button'
 import { MiniPageLayout } from '@/components/mini-navbar'
@@ -92,6 +93,7 @@ export default function Spark() {
       setState('ready')
     } catch (cause) {
       if (cause instanceof MiniApiError && cause.statusCode === 401) {
+        openLoginPage()
         setData(null)
         setState('guest')
         return

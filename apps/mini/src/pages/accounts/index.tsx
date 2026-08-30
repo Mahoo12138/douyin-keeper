@@ -10,7 +10,7 @@ import { effectiveCapabilities } from '@/features/accounts/capability-utils'
 import { accountBindingError } from '@/features/accounts/account-error-utils'
 import { createIdempotencyKey } from '@/features/home/home-utils'
 import { jobErrorMessage } from '@/features/job-error-utils'
-import { openMeEntitlement } from '@/features/navigation/mini-navigation'
+import { openLoginPage, openMeEntitlement } from '@/features/navigation/mini-navigation'
 import { accountTabLabel } from '@/components/account-tab-utils'
 import { MiniButton as Button } from '@/components/mini-button'
 import { MiniNavbarAction, MiniPageLayout } from '@/components/mini-navbar'
@@ -73,6 +73,7 @@ export default function Accounts() {
       return accountResponse.items
     } catch (cause) {
       if (cause instanceof MiniApiError && cause.statusCode === 401) {
+        openLoginPage()
         setState('guest')
         return
       }
@@ -131,6 +132,7 @@ export default function Accounts() {
         }
       } catch (cause) {
         if (!active) return
+        if (redirectOnAuthExpired(cause)) return
         if (cause instanceof MiniApiError && cause.statusCode === 404) {
           clearPendingBinding()
           setBindingJobId('')
@@ -186,6 +188,7 @@ export default function Accounts() {
         }
       } catch (cause) {
         if (!active) return
+        if (redirectOnAuthExpired(cause)) return
         setAccountJob(null)
         setAccountJobStatus('')
         setBusy('')
@@ -238,6 +241,7 @@ export default function Accounts() {
       await load()
       setMenuOpen(false)
     } catch (cause) {
+      if (redirectOnAuthExpired(cause)) return
       setError(cause instanceof Error ? cause.message : '账号操作失败')
     } finally {
       if (!queued) setBusy('')
@@ -257,6 +261,7 @@ export default function Accounts() {
       await load()
       await Taro.showToast({ title: '账号已解除', icon: 'success' })
     } catch (cause) {
+      if (redirectOnAuthExpired(cause)) return
       setError(cause instanceof Error ? cause.message : '解除绑定失败')
     } finally {
       setBusy('')
@@ -282,6 +287,7 @@ export default function Accounts() {
       setBindingStatus('绑定任务已创建，等待后端进度')
       setScreen(bindingMethod === 'qr' ? 'qr' : 'progress')
     } catch (cause) {
+      if (redirectOnAuthExpired(cause)) return
       setError(accountBindingError(cause instanceof MiniApiError ? cause.code : '', cause instanceof Error ? cause.message : undefined))
     } finally {
       setBusy('')
@@ -346,6 +352,7 @@ export default function Accounts() {
       setBindingStatus('验证码已提交，等待登录确认')
       setBindingStep(4)
     } catch (cause) {
+      if (redirectOnAuthExpired(cause)) return
       setError(cause instanceof Error ? cause.message : '验证码提交失败')
     } finally {
       setBusy('')
@@ -364,6 +371,7 @@ export default function Accounts() {
       await load()
       setScreen('method')
     } catch (cause) {
+      if (redirectOnAuthExpired(cause)) return
       setError(cause instanceof Error ? cause.message : '取消绑定失败')
     } finally {
       setBusy('')
@@ -389,6 +397,12 @@ function AccountCard({ account, conversationCount, onSelect }: { account: Accoun
 function completionRate(account: Account) {
   const total = account.today_send_succeeded + account.today_send_failed
   return total ? Math.round(account.today_send_succeeded / total * 100) : 0
+}
+
+function redirectOnAuthExpired(cause: unknown) {
+  if (!(cause instanceof MiniApiError) || cause.statusCode !== 401) return false
+  openLoginPage()
+  return true
 }
 
 function AccountDetail({ account, conversationCount, menuOpen, busy, accountJobAction, accountJobStatus, error, onBack, onMenu, onAction, onDelete, onBind }: { account: Account; conversationCount: number; menuOpen: boolean; busy: string; accountJobAction: AccountJobAction | ''; accountJobStatus: string; error: string; onBack: () => void; onMenu: () => void; onAction: (action: 'session' | 'friends' | 'pause' | 'resume') => void; onDelete: () => void; onBind: () => void }) {

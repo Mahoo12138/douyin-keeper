@@ -7,6 +7,7 @@ import { listSendIntents, MiniApiError } from '@/lib/api'
 import { dayKey, filterHistory, localDayRange, recentDays, statusMeta, taskLabel, type HistoryFilter, type HistoryItem } from '@/features/history/history-utils'
 import { PRODUCT_TIMEZONE } from '@/features/time/time-utils'
 import { jobErrorMessage } from '@/features/job-error-utils'
+import { openLoginPage } from '@/features/navigation/mini-navigation'
 import { accountTabLabel } from '@/components/account-tab-utils'
 import { MiniButton as Button } from '@/components/mini-button'
 import { MiniPageLayout } from '@/components/mini-navbar'
@@ -34,6 +35,7 @@ export default function History() {
       setState('ready')
     } catch (cause) {
       if (cause instanceof MiniApiError && cause.statusCode === 401) {
+        openLoginPage()
         setState('guest')
         return
       }
