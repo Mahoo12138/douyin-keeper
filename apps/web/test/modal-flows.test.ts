@@ -7,6 +7,7 @@ const templates = source('../src/features/templates/message-templates-page.tsx')
 const entitlements = source('../src/features/admin/admin-entitlement-panels.tsx')
 const settings = source('../src/features/admin/admin-settings-page.tsx')
 const accounts = source('../src/features/accounts/account-binding-flow.tsx')
+const accountPanel = source('../src/features/accounts/account-binding-panel.tsx')
 const header = source('../src/components/global-header.tsx')
 const confirmDialog = source('../src/components/confirm-dialog.tsx')
 const tasks = source('../src/features/tasks/tasks-page.tsx')
@@ -25,6 +26,12 @@ test('account binding guards quota with a recoverable entitlement dialog', () =>
   assert.match(accounts, /entitlementDialogOpen/)
   assert.match(accounts, /先激活权益，再添加账号/)
   assert.match(accounts, /to="\/entitlement"/)
+})
+
+test('deployed account binding never tells the user to operate an invisible browser window', () => {
+  for (const bindingSource of [accounts, accountPanel]) {
+    assert.doesNotMatch(bindingSource, /打开的抖音窗口|新打开窗口|不要关闭窗口/)
+  }
 })
 
 test('avatar menu keeps identity, workspace actions, and sign-out discoverable', () => {

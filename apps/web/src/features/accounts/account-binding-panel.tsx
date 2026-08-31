@@ -7,6 +7,7 @@ import type { BindingState } from './account-types'
 export function AccountBindingPanel({ binding, relogin = false, onCancel, onSubmitSMSCode, submittingCode }: { binding: BindingState; relogin?: boolean; onCancel: () => void; onSubmitSMSCode?: (code: string) => Promise<void>; submittingCode?: boolean }) {
   const [codeDigits, setCodeDigits] = useState<string[]>(() => Array.from({ length: 6 }, () => ''))
   const isSMS = binding.method === 'sms'
+  const awaitingSMSCode = binding.status === 'waiting_user' && !binding.qr && !!onSubmitSMSCode
   const code = codeDigits.join('')
   useEffect(() => {
     if (binding.status !== 'waiting_user') setCodeDigits(Array.from({ length: 6 }, () => ''))
@@ -15,15 +16,15 @@ export function AccountBindingPanel({ binding, relogin = false, onCancel, onSubm
     queued: '正在排队…',
     running: '正在打开短信登录…',
     waiting_user: '验证码已发送，请输入验证码',
-    challenge_required: '请在打开的抖音窗口完成安全验证，完成后会自动继续…',
+    challenge_required: '抖音要求额外安全验证，当前流程无法自动继续',
     scanned: '已提交验证码，等待平台确认…',
     confirming: '正在验证登录状态…',
     error: `${relogin ? '重新登录' : '绑定'}失败，请重新尝试`,
   }[binding.status] : {
     queued: '正在排队…',
     running: '正在打开登录窗口…',
-    waiting_user: '请使用抖音 App 扫描二维码',
-    challenge_required: '请在打开的抖音窗口完成安全验证，完成后会自动继续…',
+    waiting_user: awaitingSMSCode ? '验证码已发送，请输入验证码' : '请使用抖音 App 扫描二维码',
+    challenge_required: '抖音要求额外安全验证，当前流程无法自动继续',
     scanned: '已扫码，等待平台确认…',
     confirming: '正在验证登录状态…',
     error: `${relogin ? '重新登录' : '绑定'}失败，请重新尝试`,
@@ -38,16 +39,15 @@ export function AccountBindingPanel({ binding, relogin = false, onCancel, onSubm
         )}
         <div className="flex items-start gap-3">
           <div className={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl ${binding.status === 'challenge_required' ? 'bg-amber-500/15 text-amber-600' : 'bg-primary/10 text-primary'}`}>
-            {isSMS && binding.status === 'waiting_user' ? <MessageSquareText className="size-4" /> : binding.status === 'challenge_required' ? <ShieldAlert className="size-4" /> : <RefreshCw className="size-4 animate-spin text-muted-foreground" />}
+            {awaitingSMSCode ? <MessageSquareText className="size-4" /> : binding.status === 'challenge_required' ? <ShieldAlert className="size-4" /> : <RefreshCw className="size-4 animate-spin text-muted-foreground" />}
           </div>
           <div className="min-w-0 flex-1 space-y-2">
             <p className="text-sm text-muted-foreground">{statusText}</p>
-            {binding.status === 'challenge_required' && <div className="max-w-md rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-xs leading-5 text-amber-900 dark:text-amber-100"><p className="font-medium">这是抖音官方安全验证</p><p className="mt-1 text-amber-900/75 dark:text-amber-100/75">不需要在本页面输入账号密码。请完成新打开窗口中的验证，不要关闭窗口，验证通过后会自动继续。</p></div>}
             {binding.expiresAt && binding.status === 'waiting_user' && (
-              <p className="text-xs text-muted-foreground">{isSMS ? '验证码' : '二维码'}有效期至 {new Date(binding.expiresAt).toLocaleTimeString('zh-CN')}</p>
+              <p className="text-xs text-muted-foreground">{awaitingSMSCode || isSMS ? '验证码' : '二维码'}有效期至 {new Date(binding.expiresAt).toLocaleTimeString('zh-CN')}</p>
             )}
             {binding.status === 'error' && <p className="text-xs text-destructive">{isSMS ? '请确认手机号和验证码后重试，原有登录态未改变。' : '请确认抖音 App 已完成扫码并重试，原有登录态未改变。'}</p>}
-            {isSMS && binding.status === 'waiting_user' && onSubmitSMSCode && (
+            {awaitingSMSCode && onSubmitSMSCode && (
               <form className="mt-4 space-y-3" onSubmit={(event) => { event.preventDefault(); if (codeDigits.every(Boolean)) void onSubmitSMSCode(code) }}>
                 <Label id="sms-verification-code-label">验证码</Label>
                 <SMSOtpInput value={codeDigits} onChange={setCodeDigits} disabled={submittingCode} />
@@ -68,7 +68,7 @@ export function AccountBindingPanel({ binding, relogin = false, onCancel, onSubm
             )}
           </div>
         </div>
-        {!isSMS || binding.status !== 'waiting_user' ? <div className="flex justify-end border-t border-border/60 pt-4">
+        {!awaitingSMSCode ? <div className="flex justify-end border-t border-border/60 pt-4">
           <Button variant="outline" size="sm" onClick={onCancel}>
             <Ban />
             {relogin ? '取消重新登录' : '取消绑定'}

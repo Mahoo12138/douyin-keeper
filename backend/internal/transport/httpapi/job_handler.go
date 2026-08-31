@@ -177,8 +177,8 @@ func (s *Server) handleSubmitSMSVerification(w http.ResponseWriter, r *http.Requ
 		writeError(w, r, err)
 		return
 	}
-	if (j.Type != "account.bind.sms" && j.Type != "account.relogin.sms") || j.Status != job.StatusWaiting {
-		writeError(w, r, apperr.Conflict(apperr.CodeConflict, "sms binding is not waiting for verification"))
+	if !jobAcceptsSMSVerification(j) {
+		writeError(w, r, apperr.Conflict(apperr.CodeConflict, "login job is not waiting for verification"))
 		return
 	}
 	if s.redis == nil {
@@ -190,4 +190,16 @@ func (s *Server) handleSubmitSMSVerification(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeAccepted(w, map[string]any{"status": "verification_submitted"})
+}
+
+func jobAcceptsSMSVerification(j *job.Job) bool {
+	if j == nil || j.Status != job.StatusWaiting {
+		return false
+	}
+	switch j.Type {
+	case "account.bind.sms", "account.relogin.sms", "account.bind.qr", "account.relogin.qr":
+		return true
+	default:
+		return false
+	}
 }

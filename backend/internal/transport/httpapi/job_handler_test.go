@@ -29,6 +29,17 @@ func TestSMSVerificationCodePattern(t *testing.T) {
 	}
 }
 
+func TestSMSVerificationAcceptsSMSAndQRBindingsWaitingForUser(t *testing.T) {
+	for _, jobType := range []string{"account.bind.sms", "account.relogin.sms", "account.bind.qr", "account.relogin.qr"} {
+		if !jobAcceptsSMSVerification(&job.Job{Type: jobType, Status: job.StatusWaiting}) {
+			t.Errorf("waiting job type %q should accept an SMS verification code", jobType)
+		}
+	}
+	if jobAcceptsSMSVerification(&job.Job{Type: "account.bind.qr", Status: job.StatusRunning}) {
+		t.Fatal("a QR job that is not waiting for the user must reject SMS verification")
+	}
+}
+
 func TestLastEventIDRejectsInvalidAndNegativeValues(t *testing.T) {
 	valid := httptest.NewRequest("GET", "/jobs/1/events", nil)
 	valid.Header.Set("Last-Event-ID", "12")

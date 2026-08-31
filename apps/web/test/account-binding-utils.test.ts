@@ -17,15 +17,13 @@ test('labels binding methods for the shared flow', () => {
 
 test('explains re-login identity mismatch without implying the old session was replaced', () => {
   assert.match(bindingErrorMessage('error', 'ACCOUNT_IDENTITY_MISMATCH'), /原有登录态未改变/)
-  assert.match(bindingErrorMessage('error', 'SESSION_EXPIRED'), /保持抖音窗口打开并重新扫码/)
-  assert.match(bindingErrorMessage('challenge_required'), /完成平台安全验证/)
-  assert.match(bindingErrorMessage('error', 'CHALLENGE_REQUIRED'), /完成平台安全验证/)
+  assert.match(bindingErrorMessage('error', 'SESSION_EXPIRED'), /重新扫码/)
+  assert.match(bindingErrorMessage('challenge_required'), /无法自动继续/)
+  assert.match(bindingErrorMessage('error', 'CHALLENGE_REQUIRED'), /无法自动继续/)
 })
 
-test('describes platform verification as a recoverable user action', () => {
-  assert.match(bindingErrorMessage('platform_challenge'), /打开的抖音窗口完成安全验证/)
-})
-
-test('describes platform verification as a recoverable user action', () => {
-  assert.match(bindingErrorMessage('platform_challenge'), /打开的抖音窗口完成安全验证/)
+test('does not tell deployed users to operate the hidden browser', () => {
+  const message = bindingErrorMessage('platform_challenge')
+  assert.match(message, /无法自动继续/)
+  assert.doesNotMatch(message, /抖音窗口|打开窗口/)
 })

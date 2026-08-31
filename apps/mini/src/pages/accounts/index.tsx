@@ -5,7 +5,7 @@ import Taro, { useDidShow } from '@tarojs/taro'
 import { accountCapabilities, cancelJob, checkAccountSession, createAccountBinding, deleteAccount, getJob, listAccounts, listFriends, MiniApiError, myEntitlement, pauseAccount, resumeAccount, streamJobEvents, submitSMSVerification, syncAccountFriends } from '@/lib/api'
 import type { JobEvent } from '@/lib/api'
 import { clearPendingBinding, getAccessToken, getPendingBinding, setPendingBinding } from '@/lib/session'
-import { bindingEventState } from '@/features/accounts/binding-events'
+import { bindingEventState, bindingSMSCodeEntryVisible } from '@/features/accounts/binding-events'
 import { effectiveCapabilities } from '@/features/accounts/capability-utils'
 import { accountBindingError } from '@/features/accounts/account-error-utils'
 import { createIdempotencyKey } from '@/features/home/home-utils'
@@ -41,6 +41,7 @@ export default function Accounts() {
   const [qrValue, setQrValue] = useState('')
   const [qrExpiresAt, setQrExpiresAt] = useState('')
   const [smsCode, setSmsCode] = useState('')
+  const [awaitingSMSCode, setAwaitingSMSCode] = useState(false)
   const [successAccount, setSuccessAccount] = useState<Account | null>(null)
   const [accountJob, setAccountJob] = useState<AccountJob | null>(null)
   const [accountJobAction, setAccountJobAction] = useState<AccountJobAction | ''>('')
@@ -89,6 +90,7 @@ export default function Accounts() {
       setBindingJobId(pending.job_id)
       setBindingMethod(pending.method)
       setBindingAccountId(pending.account_id ?? '')
+      setAwaitingSMSCode(false)
       setBindingStep(3)
       setBindingStatus('正在恢复绑定任务，请稍候')
       setScreen(pending.method === 'qr' ? 'qr' : 'progress')
@@ -109,6 +111,7 @@ export default function Accounts() {
         if (job.status === 'succeeded') {
           clearPendingBinding()
           setBindingJobId('')
+          setAwaitingSMSCode(false)
           setBindingStatus('绑定成功，正在刷新账号')
           const freshAccounts = await load()
           if (active) {
@@ -121,6 +124,7 @@ export default function Accounts() {
         } else if (job.status === 'failed' || job.status === 'cancelled') {
           clearPendingBinding()
           setBindingJobId('')
+          setAwaitingSMSCode(false)
           setBindingStatus('')
           if (active) {
             await load()
@@ -136,6 +140,7 @@ export default function Accounts() {
         if (cause instanceof MiniApiError && cause.statusCode === 404) {
           clearPendingBinding()
           setBindingJobId('')
+          setAwaitingSMSCode(false)
           setBindingStatus('')
           setError('绑定任务已失效，请重新开始。')
           setScreen('method')
@@ -209,7 +214,7 @@ export default function Accounts() {
   if (screen === 'intro') return <BindingIntro onBack={() => setScreen('list')} onStart={() => setScreen('method')} />
   if (screen === 'method') return <BindingMethodScreen method={bindingMethod} phone={bindingPhone} error={error} busy={busy} onBack={() => setScreen('intro')} onMethodChange={setBindingMethod} onPhoneChange={setBindingPhone} onStart={() => void startBinding()} />
   if (screen === 'qr') return <QRBindingScreen qrValue={qrValue} expiresAt={qrExpiresAt} status={bindingStatus} step={bindingStep} onBack={() => void cancelBinding()} onRefresh={() => void restartBinding()} />
-  if (screen === 'progress') return <BindingProgressScreen method={bindingMethod} status={bindingStatus} step={bindingStep} jobId={bindingJobId} smsCode={smsCode} busy={busy} error={error} onBack={() => void cancelBinding()} onCodeChange={setSmsCode} onSubmitCode={() => void submitVerification()} />
+  if (screen === 'progress') return <BindingProgressScreen method={bindingMethod} status={bindingStatus} step={bindingStep} jobId={bindingJobId} awaitingSMSCode={awaitingSMSCode} smsCode={smsCode} busy={busy} error={error} onBack={() => void cancelBinding()} onCodeChange={setSmsCode} onSubmitCode={() => void submitVerification()} />
   if (screen === 'success') return <BindingSuccessScreen account={successAccount} onDone={() => { setSuccessAccount(null); setScreen('list') }} onViewFriends={() => { setSuccessAccount(null); setScreen('list'); Taro.switchTab({ url: '/pages/spark/index' }) }} />
 
   async function runAccountAction(account: Account, action: 'session' | 'friends' | 'pause' | 'resume') {
@@ -279,6 +284,7 @@ export default function Accounts() {
     setError('')
     setQrValue('')
     setQrExpiresAt('')
+    setAwaitingSMSCode(false)
     setBindingStep(3)
     try {
       const job = await createAccountBinding(token, bindingMethod, { phone: bindingMethod === 'sms' ? bindingPhone.trim() : undefined, accountId: bindingAccountId || undefined, idempotencyKey: createIdempotencyKey() })
@@ -298,6 +304,7 @@ export default function Accounts() {
     setError('')
     setBindingAccountId(accountId)
     setBindingMethod('qr')
+    setAwaitingSMSCode(false)
     setBindingStep(1)
     setScreen(accountId ? 'method' : 'intro')
   }
@@ -307,6 +314,7 @@ export default function Accounts() {
     if (state) {
       setBindingStatus(state.status)
       setBindingStep(state.step)
+      setAwaitingSMSCode(state.awaitingSMSCode === true)
       if (state.error) setError(jobErrorMessage(typeof event.payload.code === 'string' ? event.payload.code : '', state.error))
       setScreen(state.screen)
     } else if (event.eventType === 'qr_ready') {
@@ -314,6 +322,7 @@ export default function Accounts() {
       setQrExpiresAt(typeof event.payload.expires_at === 'string' ? event.payload.expires_at : '')
       setBindingStatus('请使用抖音 App 扫描二维码')
       setBindingStep(3)
+      setAwaitingSMSCode(false)
     } else if (event.eventType === 'scanned') {
       setBindingStatus('二维码已扫描，正在确认登录')
       setBindingStep(4)
@@ -349,6 +358,7 @@ export default function Accounts() {
     try {
       await submitSMSVerification(token, bindingJobId, smsCode.trim())
       setSmsCode('')
+      setAwaitingSMSCode(false)
       setBindingStatus('验证码已提交，等待登录确认')
       setBindingStep(4)
     } catch (cause) {
@@ -367,6 +377,7 @@ export default function Accounts() {
       await cancelJob(token, bindingJobId)
       clearPendingBinding()
       setBindingJobId('')
+      setAwaitingSMSCode(false)
       setBindingStatus('')
       await load()
       setScreen('method')
@@ -426,8 +437,10 @@ function QRBindingScreen({ qrValue, expiresAt, status, step, onBack, onRefresh }
   return <MiniPageLayout pageClassName="account-page account-binding-page" title="扫码登录" showBack onBack={onBack}><FlowSteps current={3} /><Text className="binding-qr-title">请使用抖音 App 扫描二维码</Text><View className="binding-qr-box">{qrValue ? <Image className="binding-qr-image" src={qrValue} mode="aspectFit" /> : <View className="binding-qr-loading"><MiniRemoteImage className="binding-qr-loading-image" name="accounts/account-add-hero.png" mode="aspectFit" /><Text>正在获取二维码</Text></View>}</View><Text className="binding-qr-status">{status || '二维码准备中，请稍候'}</Text>{expiresAt && <Text className="binding-qr-expiry">二维码有效期至 {formatDate(expiresAt)}</Text>}<Button className="account-secondary-button binding-refresh-button" onClick={onRefresh}>刷新二维码</Button><Text className="binding-qr-help">无法扫码？请确认抖音 App 已更新到最新版本。</Text><Text className="binding-flow-step-note">当前进度：{step < 4 ? '等待扫码' : step === 4 ? '确认登录' : '添加账号'}</Text></MiniPageLayout>
 }
 
-function BindingProgressScreen({ method, status, step, jobId, smsCode, busy, error, onBack, onCodeChange, onSubmitCode }: { method: BindingMethod; status: string; step: number; jobId: string; smsCode: string; busy: string; error: string; onBack: () => void; onCodeChange: (code: string) => void; onSubmitCode: () => void }) {
-  return <MiniPageLayout pageClassName="account-page account-binding-page" title="添加中" showBack onBack={onBack}><FlowSteps current={4} /><View className="binding-progress-visual"><MiniRemoteImage className="binding-progress-image" name="accounts/account-add-hero.png" mode="aspectFit" /></View><Text className="binding-progress-title-large">正在添加抖音账号</Text><Text className="muted binding-progress-copy">请保持抖音 App 已登录状态</Text><View className="binding-checklist"><ProgressItem done={step >= 3} active={step === 3} label={method === 'sms' ? '短信验证' : '二维码已扫描'} /><ProgressItem done={step >= 4} active={step === 4} label="确认登录中" /><ProgressItem done={step >= 4} active={false} label="获取账号信息" /><ProgressItem done={step >= 5} active={false} label="添加账号" /></View>{method === 'sms' && jobId && step === 3 && <View className="binding-sms-entry"><Text className="binding-sms-title">请输入抖音短信验证码</Text><Input className="account-input" value={smsCode} maxlength={8} type="number" placeholder="4-8 位验证码" onInput={(event) => onCodeChange(event.detail.value)} /><Button className="account-primary-button" disabled={busy === 'verify'} onClick={onSubmitCode}>{busy === 'verify' ? '提交中…' : '确认验证码'}</Button></View>}{error && <View className="account-inline-error"><Text>{error}</Text></View>}<View className="binding-progress-note">{status || '绑定任务执行中，请不要关闭页面'}</View></MiniPageLayout>
+function BindingProgressScreen({ method, status, step, jobId, awaitingSMSCode, smsCode, busy, error, onBack, onCodeChange, onSubmitCode }: { method: BindingMethod; status: string; step: number; jobId: string; awaitingSMSCode: boolean; smsCode: string; busy: string; error: string; onBack: () => void; onCodeChange: (code: string) => void; onSubmitCode: () => void }) {
+  const verificationLabel = awaitingSMSCode || method === 'sms' ? '短信验证' : '二维码已扫描'
+  const showSMSCodeEntry = bindingSMSCodeEntryVisible(awaitingSMSCode, jobId, step)
+  return <MiniPageLayout pageClassName="account-page account-binding-page" title="添加中" showBack onBack={onBack}><FlowSteps current={4} /><View className="binding-progress-visual"><MiniRemoteImage className="binding-progress-image" name="accounts/account-add-hero.png" mode="aspectFit" /></View><Text className="binding-progress-title-large">正在添加抖音账号</Text><Text className="muted binding-progress-copy">请保持抖音 App 已登录状态</Text><View className="binding-checklist"><ProgressItem done={step >= 3} active={step === 3} label={verificationLabel} /><ProgressItem done={step >= 4} active={step === 4} label="确认登录中" /><ProgressItem done={step >= 4} active={false} label="获取账号信息" /><ProgressItem done={step >= 5} active={false} label="添加账号" /></View>{showSMSCodeEntry && <View className="binding-sms-entry"><Text className="binding-sms-title">请输入抖音短信验证码</Text><Input className="account-input" value={smsCode} maxlength={8} type="number" placeholder="4-8 位验证码" onInput={(event) => onCodeChange(event.detail.value)} /><Button className="account-primary-button" disabled={busy === 'verify'} onClick={onSubmitCode}>{busy === 'verify' ? '提交中…' : '确认验证码'}</Button></View>}{error && <View className="account-inline-error"><Text>{error}</Text></View>}<View className="binding-progress-note">{status || '绑定任务执行中，请不要关闭页面'}</View></MiniPageLayout>
 }
 
 function BindingSuccessScreen({ account, onDone, onViewFriends }: { account: Account | null; onDone: () => void; onViewFriends: () => void }) {

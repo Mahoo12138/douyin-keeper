@@ -53,8 +53,8 @@ function BindingDialog({ binding, pageMode = false, onClose }: { binding: Bindin
   const challenge = activeBinding?.status === 'challenge_required'
   const title = activeBinding ? (challenge ? `${action}需要安全验证` : `${bindingMethodLabel(activeBinding.method)}${binding.isRebinding ? '重新登录' : '绑定'}`) : (binding.isRebinding ? '选择重新登录方式' : '选择绑定方式')
   const description = challenge
-    ? '请在打开的抖音窗口完成官方安全验证，验证通过后会自动继续。'
-    : activeBinding?.status === 'waiting_user' && activeBinding.method === 'sms'
+    ? '抖音要求额外安全验证，当前流程无法自动继续，请取消后重试。'
+    : activeBinding?.status === 'waiting_user' && !activeBinding.qr
       ? '验证码已发送，请在当前窗口输入验证码完成登录。'
       : activeBinding?.status === 'waiting_user'
         ? '请使用抖音 App 扫描二维码，完成后会自动继续。'
@@ -77,7 +77,7 @@ function BindingDialog({ binding, pageMode = false, onClose }: { binding: Bindin
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
-      {activeBinding ? <AccountBindingPanel binding={activeBinding} relogin={binding.isRebinding} submittingCode={binding.submittingCode} onSubmitSMSCode={activeBinding.method === 'sms' ? binding.submitSMSCode : undefined} onCancel={onClose} /> : <BindingMethodForm binding={binding} embedded onCancel={onClose} />}
+      {activeBinding ? <AccountBindingPanel binding={activeBinding} relogin={binding.isRebinding} submittingCode={binding.submittingCode} onSubmitSMSCode={binding.submitSMSCode} onCancel={onClose} /> : <BindingMethodForm binding={binding} embedded onCancel={onClose} />}
     </DialogContent>
   </Dialog>
 }
@@ -239,7 +239,10 @@ function useAccountBinding(accountId?: string, onSuccess?: () => void) {
       const code = typeof event.payload.code === 'string' ? event.payload.code : undefined
       toast.error(bindingErrorMessage(event.event_type, code))
     }
-    if (event.event_type === 'sms_code_invalid') toast.error('验证码错误，请重新输入')
+    if (event.event_type === 'sms_code_invalid') {
+      setBinding((current) => current?.jobId === jobId ? { ...current, status: 'waiting_user', qr: null } : current)
+      toast.error('验证码错误，请重新输入')
+    }
   }
 
   async function submitSMSCode(code: string) {

@@ -59,6 +59,7 @@ type qrStartResult struct {
 
 type qrPollResult struct {
 	State           string       `json:"state"`
+	ExpiresAt       time.Time    `json:"expires_at"`
 	SessionExported bool         `json:"session_exported"`
 	Identity        bindIdentity `json:"identity"`
 }
@@ -177,6 +178,10 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 		if claimed.AccountID == nil || claimed.UserID == nil || deps.Accounts == nil || deps.Sessions == nil || deps.Sidecar == nil || deps.Redis == nil {
 			return fail(apperr.CodeInternal)
 		}
+		verificationKey := job.SMSVerificationKey(claimed.PublicID)
+		defer cleanupWorkerResource(ctx, "qr_sms_verification", func() error {
+			return deps.Redis.Del(context.Background(), verificationKey).Err()
+		})
 		acct, err := deps.Accounts.GetByID(ctx, *claimed.AccountID)
 		if err != nil || !accountMatchesUser(acct, *claimed.UserID) {
 			return fail(apperr.CodeNotFound)
@@ -302,6 +307,81 @@ func qrBindHandler(loader PayloadLoader, deps QRBindDeps) func(context.Context, 
 				return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
 			}
 			telemetry.L(ctx).Info("qr_bind_poll_state", "job_id", claimed.PublicID.String(), "state", polled.State, "session_exported", polled.SessionExported, "identity_present", polled.Identity.PlatformUserID != "" || polled.Identity.Nickname != "")
+			if polled.State == "sms_code_required" {
+				if polled.ExpiresAt.After(deadline) {
+					deadline = polled.ExpiresAt
+				}
+				if lastState != "sms_code_required" {
+					expiresAt := polled.ExpiresAt
+					if expiresAt.IsZero() {
+						expiresAt = deadline
+					}
+					if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{
+						EventType: "sms_code_required", Payload: mustJSON(map[string]any{"expires_at": expiresAt}), CreatedAt: deps.Now(),
+					}); err != nil {
+						return err
+					}
+					lastState = "sms_code_required"
+				}
+				code, getErr := deps.Redis.GetDel(ctx, verificationKey).Result()
+				if getErr != nil && getErr != redis.Nil {
+					return fail(apperr.CodeInternal)
+				}
+				if getErr == redis.Nil || strings.TrimSpace(code) == "" {
+					if err := sleepContext(ctx, deps.PollEvery); err != nil {
+						return err
+					}
+					continue
+				}
+
+				var verifyResponse *sidecar.Response
+				cancelled, callErr = callIfNotCancelledWithCleanup(ctx, deps.Jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed), func() error {
+					var err error
+					verifyResponse, err = deps.Sidecar.Call(ctx, sidecar.Request{
+						ProtocolVersion: sidecar.ProtocolVersion, RequestID: uuid.New().String(),
+						Op: sidecar.OpsLoginSMSVerify, DeadlineMS: 60_000,
+						Input: smsVerifyInput(started.LoginHandle, code, exportPath),
+					})
+					return err
+				})
+				if cancelled {
+					return callErr
+				}
+				if callErr != nil {
+					return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterUnavailable)
+				}
+				if code := sidecarErrorCode(verifyResponse); code != "" {
+					if code == sidecar.ErrSMSCodeInvalid {
+						if err := appendSMSCodeInvalidEvent(ctx, deps.Jobs, claimed.ID, deps.Now); err != nil {
+							return err
+						}
+						lastState = "sms_code_invalid"
+						continue
+					}
+					mapped := mapSidecarError(code)
+					observeWorkerHealthFailure(ctx, deps.Health, capability.AdapterBrowserConsumer, mapped, deps.Now)
+					return finishBindRiskFailure(ctx, deps, claimed, acct.ID, mapped)
+				}
+				var verified smsVerifyResult
+				if err := decodeResult(verifyResponse, &verified); err != nil {
+					return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeAdapterIncompatible)
+				}
+				if verified.State == "challenge_required" {
+					return finishBindRiskFailure(ctx, deps, claimed, acct.ID, apperr.CodeChallengeRequired)
+				}
+				if verified.State == "waiting" {
+					if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{
+						EventType: "sms_verification_pending", Payload: json.RawMessage(`{}`), CreatedAt: deps.Now(),
+					}); err != nil {
+						return err
+					}
+					lastState = "sms_verification_pending"
+					continue
+				}
+				polled.State = verified.State
+				polled.SessionExported = verified.SessionExported
+				polled.Identity = verified.Identity
+			}
 			if polled.State == "challenge_required" {
 				if lastState != "challenge_required" {
 					if err := deps.Jobs.AppendEvent(ctx, claimed.ID, job.JobEvent{

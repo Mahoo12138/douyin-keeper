@@ -184,6 +184,18 @@ func TestQRResultDecoders(t *testing.T) {
 		t.Fatalf("unexpected challenge result: %+v", challenge)
 	}
 
+	smsExpiry := time.Date(2026, 8, 25, 13, 5, 0, 0, time.UTC)
+	smsResponse := &sidecar.Response{OK: true, Result: map[string]any{
+		"state": "sms_code_required", "expires_at": smsExpiry.Format(time.RFC3339),
+	}}
+	var smsRequired qrPollResult
+	if err := decodeResult(smsResponse, &smsRequired); err != nil {
+		t.Fatal(err)
+	}
+	if smsRequired.State != "sms_code_required" || !smsRequired.ExpiresAt.Equal(smsExpiry) {
+		t.Fatalf("unexpected QR SMS result: %+v", smsRequired)
+	}
+
 	bad := &sidecar.Response{OK: false, Error: &sidecar.Error{Code: sidecar.ErrQRExpired}}
 	if got := sidecarErrorCode(bad); got != sidecar.ErrQRExpired {
 		t.Fatalf("error code = %q", got)

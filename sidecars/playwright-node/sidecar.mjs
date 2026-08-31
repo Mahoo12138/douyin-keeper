@@ -15,6 +15,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { chromium } from "playwright";
 import { isAuthenticatedPage } from "./auth-state.mjs";
 import { qrLoginState, smsLoginRequiresFreshContext, smsLoginSurfaceState } from "./login-state.mjs";
+import { fillSMSCodeInput, findSMSCodePage, isQRIdentitySMSVisible, latestLoginPage, prepareQRIdentitySMS } from "./identity-sms.mjs";
 import { decodeProtobuf, summarizeProtobuf } from "./conversation-wire.mjs";
 import {
   canonicalConversationComponentKey,
@@ -579,7 +580,7 @@ async function startQr(input) {
     }
     const handle = `qr_${randomUUID().replaceAll("-", "")}`;
     const expiresAt = new Date(nowMs() + 180000).toISOString();
-    loginSessions.set(handle, { context, page, profile, expiresAt, qrSeen: Boolean(result.qr) });
+    loginSessions.set(handle, { context, page, profile, expiresAt, qrSeen: Boolean(result.qr), kind: "qr", identitySMSRequested: false });
     debugLog("qr_start_ready", { handle: handle.slice(0, 16), state: result.challenge ? "challenge_required" : "waiting", qr_available: Boolean(result.qr), elapsed_ms: nowMs() - startedAt, url: safeURL(page) });
     return {
       login_handle: handle,
@@ -607,7 +608,25 @@ async function pollQr(input) {
     await item.context.close().catch(() => {});
     throw protocolError("QR_EXPIRED", "login QR session expired");
   }
-  if (await challengeVisible(item.page)) {
+  const identitySMS = await prepareQRIdentitySMS(item, {
+    allowClick: !item.identitySMSRequested,
+    requestPending: item.identitySMSRequested === true,
+  });
+  if (identitySMS.page) item.page = identitySMS.page;
+  if (identitySMS.clicked) item.identitySMSRequested = true;
+  if (identitySMS.state === "sms_code_required") {
+    if (!item.identitySMSExpiresExtended) {
+      item.expiresAt = new Date(nowMs() + 300000).toISOString();
+      item.identitySMSExpiresExtended = true;
+    }
+    debugLog("qr_poll_sms_code_required", { handle: String(handle).slice(0, 16), clicked: identitySMS.clicked, elapsed_ms: nowMs() - startedAt, url: safeURL(item.page) });
+    return { state: "sms_code_required", expires_at: item.expiresAt };
+  }
+  if (identitySMS.state === "sms_request_pending") {
+    debugLog("qr_poll_sms_request_pending", { handle: String(handle).slice(0, 16), clicked: identitySMS.clicked, action_text: identitySMS.actionText || "", elapsed_ms: nowMs() - startedAt, url: safeURL(item.page) });
+    return { state: "scanned" };
+  }
+  if (identitySMS.state === "challenge_required" || await challengeVisible(item.page)) {
     debugLog("qr_poll_challenge_required", { handle: String(handle).slice(0, 16), elapsed_ms: nowMs() - startedAt, url: safeURL(item.page) });
     return { state: "challenge_required" };
   }
@@ -936,18 +955,22 @@ async function verifySms(input) {
   const code = typeof input?.code === "string" ? input.code.trim() : "";
   if (!/^\d{4,8}$/.test(code)) throw protocolError("INVALID_REQUEST", "code must be 4..8 digits");
   const item = loginSessions.get(handle);
-  if (!item || item.kind !== "sms") throw protocolError("LOGIN_HANDLE_NOT_FOUND", "login handle is unavailable");
+  if (!item || (item.kind !== "sms" && item.kind !== "qr")) throw protocolError("LOGIN_HANDLE_NOT_FOUND", "login handle is unavailable");
   if (nowMs() >= Date.parse(item.expiresAt)) {
     loginSessions.delete(handle);
     await item.context.close().catch(() => {});
     throw protocolError("SMS_CODE_EXPIRED", "SMS verification session expired");
   }
   debugLog("sms_verify_begin", { handle: String(handle).slice(0, 16), elapsed_ms: nowMs() - startedAt, url: safeURL(item.page) });
-  const inputBox = await firstVisibleInFrames(item.page, SMS_CODE_SELECTORS);
+  const inputBox = item.kind === "qr"
+    ? await findSMSCodePage(item)
+    : await firstVisibleInFrames(item.page, SMS_CODE_SELECTORS);
   if (!inputBox) throw protocolError("BROWSER_SELECTOR_CHANGED", "SMS code input is unavailable");
+  if (inputBox.page) item.page = inputBox.page;
   debugLog("sms_verify_code_input_ready", { handle: String(handle).slice(0, 16), frame_index: inputBox.frameIndex, url: safeURL(item.page) });
-  await inputBox.locator.fill(code);
-  const submit = await clickSmsSubmit(item.page, inputBox) || await clickTextInFramesEventually(item.page, ["确定", "提交"], 5000);
+  const inputShape = item.kind === "qr" ? await fillSMSCodeInput(inputBox, code) : (await inputBox.locator.fill(code), "single");
+  debugLog("sms_verify_code_filled", { handle: String(handle).slice(0, 16), input_shape: inputShape, frame_index: inputBox.frameIndex, url: safeURL(item.page) });
+  const submit = await clickSmsSubmit(item.page, inputBox) || await clickTextInFramesEventually(item.page, ["验证", "下一步", "确认", "完成", "确定", "提交"], 5000);
   debugLog("sms_verify_submit_clicked", { handle: String(handle).slice(0, 16), clicked: Boolean(submit), frame_index: submit?.frameIndex ?? null, elapsed_ms: nowMs() - startedAt, url: safeURL(item.page), surface: await loginSurfaceSummary(item.page) });
   if (!submit) throw protocolError("BROWSER_SELECTOR_CHANGED", "SMS submit button is unavailable");
 
@@ -955,21 +978,26 @@ async function verifySms(input) {
   // update its error text, challenge state, and session cookies before
   // returning a non-terminal state to the worker.
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    if (await visibleText(item.page, ["验证码错误", "验证码无效", "验证码过期"])) {
+    const activePage = latestLoginPage(item);
+    if (activePage) item.page = activePage;
+    if (await visibleText(item.page, ["验证码错误", "验证码不正确", "验证码无效", "验证码已失效", "验证码失效", "验证码过期", "请输入正确的验证码", "验证码有误"])) {
+      if (item.kind === "qr") item.identitySMSRequested = false;
       debugLog("sms_verify_platform_rejected", { handle: String(handle).slice(0, 16), attempt: attempt + 1, elapsed_ms: nowMs() - startedAt, url: safeURL(item.page) });
       throw protocolError("SMS_CODE_INVALID", "SMS verification code is invalid");
     }
-    if (await challengeVisible(item.page)) {
+    const qrIdentitySMSVisible = item.kind === "qr" && await isQRIdentitySMSVisible(item);
+    if (await challengeVisible(item.page) && !qrIdentitySMSVisible) {
       debugLog("sms_verify_challenge_required", { handle: String(handle).slice(0, 16), attempt: attempt + 1, elapsed_ms: nowMs() - startedAt, url: safeURL(item.page) });
       loginSessions.delete(handle);
       await item.context.close().catch(() => {});
       return { state: "challenge_required" };
     }
     if (hasSessionCookie(await sessionCookies(item.page))) break;
-    await item.page.waitForTimeout(500);
+    await item.page.waitForTimeout(500).catch(() => {});
   }
   debugLog("sms_verify_platform_state", { handle: String(handle).slice(0, 16), session_cookie: hasSessionCookie(await sessionCookies(item.page)), elapsed_ms: nowMs() - startedAt, url: safeURL(item.page) });
-  if (await challengeVisible(item.page)) {
+  const qrIdentitySMSVisible = item.kind === "qr" && await isQRIdentitySMSVisible(item);
+  if (await challengeVisible(item.page) && !qrIdentitySMSVisible) {
     loginSessions.delete(handle);
     await item.context.close().catch(() => {});
     return { state: "challenge_required" };
