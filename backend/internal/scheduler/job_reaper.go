@@ -19,12 +19,12 @@ type expiredJobStore interface {
 
 type bindingCleanupStore interface {
 	GetByID(context.Context, int64) (*account.Account, error)
-	SetBindingStatus(context.Context, int64, account.BindingStatus) error
+	SoftDelete(context.Context, int64) error
 }
 
 // JobLeaseReaper closes generic jobs whose worker lease expired. A cancelled
 // job is finalized as cancelled; all other expired jobs fail closed with
-// OUTCOME_UNKNOWN. Binding jobs also release an account left in binding state.
+// OUTCOME_UNKNOWN. Binding jobs also remove an account left in binding state.
 // The reaper never retries a generic platform job after a worker crash.
 type JobLeaseReaper struct {
 	jobs     expiredJobStore
@@ -113,7 +113,7 @@ func (r *JobLeaseReaper) cleanupBinding(ctx context.Context, item *job.Job) erro
 		return err
 	}
 	if acct.BindingStatus == account.BindingBinding {
-		return r.accounts.SetBindingStatus(ctx, acct.ID, account.BindingUnbound)
+		return r.accounts.SoftDelete(ctx, acct.ID)
 	}
 	return nil
 }

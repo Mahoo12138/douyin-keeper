@@ -93,7 +93,10 @@ func (r *bindAccountRepoStub) SetLastFriendSyncAt(ctx context.Context, _ int64, 
 	r.operations = append(r.operations, bindOperation(ctx, "last_friend_sync"))
 	return nil
 }
-func (r *bindAccountRepoStub) SoftDelete(context.Context, int64) error                { return nil }
+func (r *bindAccountRepoStub) SoftDelete(ctx context.Context, _ int64) error {
+	r.operations = append(r.operations, bindOperation(ctx, "soft_delete"))
+	return nil
+}
 func (r *bindAccountRepoStub) CountQuotaOccupied(context.Context, int64) (int, error) { return 0, nil }
 
 type bindOutboxStub struct {
@@ -302,6 +305,50 @@ func TestRebindProtectsSessionAndAccountIdentityBoundaries(t *testing.T) {
 	}
 	if rebindIdentityMatches(legacyAcct, bindIdentity{PlatformUserID: "stable-user", Nickname: "昵称", IdentitySource: "cookie_fallback"}) {
 		t.Fatal("legacy migration must not accept another cookie fallback")
+	}
+}
+
+func TestCancelNewQRBindingRemovesPlaceholderAccount(t *testing.T) {
+	requestedAt := time.Date(2026, 8, 31, 4, 0, 0, 0, time.UTC)
+	accountID := int64(20)
+	jobs := &bindJobRepoStub{}
+	accounts := &bindAccountRepoStub{account: &account.Account{
+		ID:            20,
+		BindingStatus: account.BindingBinding,
+	}}
+	claimed := &job.Job{
+		ID:                10,
+		Type:              "account.bind.qr",
+		AccountID:         &accountID,
+		CancelRequestedAt: &requestedAt,
+	}
+	deps := QRBindDeps{Jobs: jobs, Accounts: accounts, Tx: bindTxStub{}, Now: func() time.Time { return requestedAt }}
+
+	cancelled, err := cancelIfRequestedWithCleanup(
+		context.Background(), jobs, deps.Tx, claimed, deps.Now, releaseInitialBinding(deps, claimed),
+	)
+	if err != nil || !cancelled {
+		t.Fatalf("cancelled = %t, err = %v", cancelled, err)
+	}
+	if len(accounts.operations) != 1 || accounts.operations[0] != "tx:soft_delete" {
+		t.Fatalf("account operations = %#v, want [tx:soft_delete]", accounts.operations)
+	}
+}
+
+func TestCancelQRReloginKeepsExistingAccount(t *testing.T) {
+	accountID := int64(20)
+	accounts := &bindAccountRepoStub{account: &account.Account{
+		ID:            accountID,
+		BindingStatus: account.BindingBound,
+	}}
+	claimed := &job.Job{Type: "account.relogin.qr", AccountID: &accountID}
+	deps := QRBindDeps{Accounts: accounts}
+
+	if cleanup := releaseInitialBinding(deps, claimed); cleanup != nil {
+		t.Fatal("re-login cancellation must not create an account cleanup callback")
+	}
+	if len(accounts.operations) != 0 {
+		t.Fatalf("existing account was modified: %#v", accounts.operations)
 	}
 }
 

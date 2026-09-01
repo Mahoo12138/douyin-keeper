@@ -156,7 +156,7 @@ func TestFinishBindRiskFailureKeepsChallengeEventAndRiskInJobTx(t *testing.T) {
 	}
 }
 
-func TestFinishBindRiskFailureReleasesInitialBindingReservation(t *testing.T) {
+func TestFinishBindRiskFailureRemovesInitialBindingPlaceholder(t *testing.T) {
 	j := &bindJobRepoStub{}
 	accounts := &bindAccountRepoStub{account: &account.Account{ID: 20, BindingStatus: account.BindingBinding}}
 	risk := &transactionalRiskStub{}
@@ -168,8 +168,8 @@ func TestFinishBindRiskFailureReleasesInitialBindingReservation(t *testing.T) {
 	if err := finishBindRiskFailure(context.Background(), deps, claimed, 20, "ADAPTER_UNAVAILABLE"); err != nil {
 		t.Fatal(err)
 	}
-	if len(accounts.operations) != 1 || accounts.operations[0] != "tx:binding" {
-		t.Fatalf("account operations = %#v, want transactional binding release", accounts.operations)
+	if len(accounts.operations) != 1 || accounts.operations[0] != "tx:soft_delete" {
+		t.Fatalf("account operations = %#v, want transactional placeholder removal", accounts.operations)
 	}
 }
 

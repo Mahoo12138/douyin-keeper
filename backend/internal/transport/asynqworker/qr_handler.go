@@ -637,9 +637,9 @@ func finishBindRiskFailure(ctx context.Context, deps QRBindDeps, claimed *job.Jo
 		releaseInitialBinding(deps, claimed))
 }
 
-// releaseInitialBinding gives back the quota reservation created for a new
-// binding when its terminal job fails. Re-login jobs reuse a bound account and
-// must keep the existing binding/session untouched.
+// releaseInitialBinding removes the placeholder account created for a new
+// binding when its terminal job fails or is cancelled. Re-login jobs reuse a
+// bound account and must keep the existing binding/session untouched.
 func releaseInitialBinding(deps QRBindDeps, claimed *job.Job) func(context.Context) error {
 	if claimed == nil || isRebindJob(claimed) || claimed.AccountID == nil || deps.Accounts == nil {
 		return nil
@@ -653,7 +653,7 @@ func releaseInitialBinding(deps QRBindDeps, claimed *job.Job) func(context.Conte
 			return err
 		}
 		if acct != nil && acct.BindingStatus == account.BindingBinding {
-			return deps.Accounts.SetBindingStatus(ctx, acct.ID, account.BindingUnbound)
+			return deps.Accounts.SoftDelete(ctx, acct.ID)
 		}
 		return nil
 	}

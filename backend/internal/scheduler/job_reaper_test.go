@@ -52,19 +52,19 @@ func (f *fakeExpiredJobStore) AppendEvent(_ context.Context, _ int64, event job.
 
 type fakeBindingCleanup struct {
 	account *account.Account
-	status  account.BindingStatus
+	deleted bool
 }
 
 func (f *fakeBindingCleanup) GetByID(context.Context, int64) (*account.Account, error) {
 	return f.account, nil
 }
 
-func (f *fakeBindingCleanup) SetBindingStatus(_ context.Context, _ int64, status account.BindingStatus) error {
-	f.status = status
+func (f *fakeBindingCleanup) SoftDelete(context.Context, int64) error {
+	f.deleted = true
 	return nil
 }
 
-func TestJobLeaseReaperFailsClosedAndReleasesBindingState(t *testing.T) {
+func TestJobLeaseReaperFailsClosedAndRemovesBindingPlaceholder(t *testing.T) {
 	store := &fakeExpiredJobStore{items: []*job.Job{{
 		ID: 10, PublicID: uuid.New(), Type: "account.bind.qr", AccountID: int64Ptr(20),
 		Status: job.StatusRunning,
@@ -80,8 +80,8 @@ func TestJobLeaseReaperFailsClosedAndReleasesBindingState(t *testing.T) {
 	if len(store.finished) != 1 || store.finished[0].status != job.StatusFailed || store.finished[0].code != apperr.CodeOutcomeUnknown {
 		t.Fatalf("finished=%+v", store.finished)
 	}
-	if accounts.status != account.BindingUnbound {
-		t.Fatalf("binding cleanup status=%q, want unbound", accounts.status)
+	if !accounts.deleted {
+		t.Fatal("binding placeholder was not removed")
 	}
 	if len(store.events) != 1 || store.events[0].EventType != "error" {
 		t.Fatalf("events=%+v", store.events)

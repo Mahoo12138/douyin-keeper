@@ -39,7 +39,7 @@ func (r *AccountRepo) ListOwned(ctx context.Context, userID int64) ([]*account.A
 	rows, err := From(ctx, r.pool).Query(ctx, `
 		SELECT `+accountCols+` FROM douyin_accounts a
 		JOIN users u ON u.id = a.user_id
-		WHERE a.user_id=$1 AND a.deleted_at IS NULL
+		WHERE a.user_id=$1 AND a.deleted_at IS NULL AND a.binding_status='bound'
 		ORDER BY a.id DESC`, userID)
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func (r *AccountRepo) listOwnedSummary(ctx context.Context, userID int64, limit 
 			   AND si.status = 'failed') AS today_send_failed
 		FROM douyin_accounts a
 		JOIN users u ON u.id = a.user_id
-		WHERE a.user_id=$1 AND a.deleted_at IS NULL
+		WHERE a.user_id=$1 AND a.deleted_at IS NULL AND a.binding_status='bound'
 		  AND ($2::bigint = 0 OR a.id < $2)
 		ORDER BY a.id DESC
 		LIMIT $3`, userID, afterID, limit)

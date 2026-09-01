@@ -49,9 +49,13 @@ func TestGenericJobLeaseReaperClosesExpiredBinding(t *testing.T) {
 	if err != nil || finished.Status != job.StatusFailed || finished.ErrorCode == nil || *finished.ErrorCode != apperr.CodeOutcomeUnknown {
 		t.Fatalf("finished job=%+v err=%v", finished, err)
 	}
-	cleaned, err := accounts.GetByID(ctx, accountRow.ID)
-	if err != nil || cleaned.BindingStatus != account.BindingUnbound {
-		t.Fatalf("binding account=%+v err=%v", cleaned, err)
+	var bindingStatus string
+	var deletedAt *time.Time
+	if err := queryRow(t, `SELECT binding_status, deleted_at FROM douyin_accounts WHERE id=$1`, accountRow.ID).Scan(&bindingStatus, &deletedAt); err != nil {
+		t.Fatal(err)
+	}
+	if bindingStatus != string(account.BindingReleased) || deletedAt == nil {
+		t.Fatalf("binding cleanup status=%q deleted_at=%v", bindingStatus, deletedAt)
 	}
 	events, err := jobs.ListEvents(ctx, jobRow.ID)
 	if err != nil || len(events) != 1 || events[0].EventType != "error" {

@@ -27,6 +27,14 @@ func TestAccountSummaryListCursorPageIsStableAndScoped(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	placeholder := &account.Account{
+		PublicID: uuid.New(), UserID: userID, BindingStatus: account.BindingUnbound,
+		SessionStatus: account.SessionUnknown, RiskStatus: account.RiskNormal,
+		CreatedAt: base, UpdatedAt: base,
+	}
+	if err := repo.Create(ctx, placeholder); err != nil {
+		t.Fatal(err)
+	}
 	other := &account.Account{
 		PublicID: uuid.New(), UserID: otherUserID, Nickname: "其他用户账号",
 		BindingStatus: account.BindingBound, SessionStatus: account.SessionValid,
